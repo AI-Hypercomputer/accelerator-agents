@@ -1,0 +1,1 @@
+"""Standard CLI implementation."""

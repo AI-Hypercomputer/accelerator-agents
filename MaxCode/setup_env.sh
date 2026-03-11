@@ -6,7 +6,7 @@ then
     exit
 fi
 
-VENV_DIR="$HOME/accelerator_agents_venv"
+VENV_DIR="$HOME/maxcode_venv"
 
 # Create virtual environment if it doesn't exist or is incomplete
 RECREATE_VENV=0
@@ -49,8 +49,7 @@ source "$VENV_DIR"/bin/activate
 
 # Install dependencies
 pip install --upgrade pip --index-url https://pypi.org/simple
-pip install --upgrade google-genai numpy google-adk
-pip install --upgrade absl-py faiss-cpu torch flax jax[cpu] --index-url https://pypi.org/simple
+pip install --upgrade google-genai numpy google-adk absl-py faiss-cpu torch flax jax[cpu] --index-url https://pypi.org/simple
 
 # Check for GOOGLE_API_KEY
 if [ -z "$GOOGLE_API_KEY" ]; then

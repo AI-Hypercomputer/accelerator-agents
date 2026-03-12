@@ -58,6 +58,10 @@ tests.
 
 **You do not need to start the server manually.**
 
+**Important:** When running on installations cloned from GitHub, you must run
+the `gemini` command from within the `MaxCode` directory to ensure the CLI
+can locate and launch the agent server correctly.
+
 To run tools, first start Gemini in interactive mode. We also recommend
 enabling `--debug` to get detailed logs:
 

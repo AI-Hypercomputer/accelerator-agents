@@ -6,6 +6,7 @@ import re
 
 from absl import app
 from mcp_server import adk_agents
+from google.adk.agents.llm_agent import LlmAgent as Agent
 from google.adk.runners import Runner
 from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from google.genai import types
@@ -28,17 +29,10 @@ except OSError as e:
   logging.error("Failed to configure file logging: %s", e)
 
 
-@mcp.tool()
-async def run_agent(
-    prompt: str, api_key: str = "", *, ctx: fastmcp.Context
+async def _execute_adk_agent(
+    agent: Agent, prompt: str, ctx: fastmcp.Context, api_key: str
 ) -> str:
-  """Runs the Primary Agent using ADK primitives.
-
-  Args:
-    prompt: The prompt to pass to the agent.
-    api_key: The Google AI API key to use for migration.
-    ctx: The MCP context for streaming progress.
-  """
+  """Helper function to execute an ADK agent."""
   handler_to_reset = None
   for h in logging.getLogger().handlers:
     if hasattr(h, "baseFilename") and h.baseFilename == os.path.abspath(
@@ -52,9 +46,7 @@ async def run_agent(
   logging.info("Job started, clearing agent server log.")
   if handler_to_reset:
     handler_to_reset.mode = "a"
-  logging.info(
-      "Received run_agent call. Prompt: %s, API Key: %s", prompt, api_key
-  )
+  logging.info("Received agent call. Prompt: %s, API Key: %s", prompt, api_key)
   await ctx.info("Starting ADK Agent task...")
   logging.info("Starting ADK Agent task...")
   try:
@@ -70,7 +62,7 @@ async def run_agent(
       os.environ["GOOGLE_API_KEY"] = effective_api_key
     session_service = InMemorySessionService()
     runner = Runner(
-        agent=adk_agents.master_agent,
+        agent=agent,
         app_name="maxcode",
         session_service=session_service,
     )
@@ -115,9 +107,41 @@ async def run_agent(
       IndexError,
       RuntimeError,
   ) as err:
-    logging.exception("Exception in run_agent")
+    logging.exception("Exception in agent execution")
     await ctx.error(f"Error during agent execution: {err}")
     return f"Error during agent execution: {err}"
+
+
+@mcp.tool()
+async def run_migration_workflow(
+    prompt: str, ctx: fastmcp.Context, api_key: str = ""
+) -> str:
+  """Runs the Migration Agent using ADK primitives.
+
+  Args:
+    prompt: The prompt to pass to the agent.
+    ctx: The MCP context for streaming progress.
+    api_key: The Google AI API key to use for migration.
+  """
+  return await _execute_adk_agent(
+      adk_agents.migration_agent, prompt, ctx, api_key
+  )
+
+
+@mcp.tool()
+async def run_evaluation_workflow(
+    prompt: str, ctx: fastmcp.Context, api_key: str = ""
+) -> str:
+  """Runs the Evaluation Agent using ADK primitives.
+
+  Args:
+    prompt: The prompt to pass to the agent.
+    ctx: The MCP context for streaming progress.
+    api_key: The Google AI API key to use for migration.
+  """
+  return await _execute_adk_agent(
+      adk_agents.evaluation_agent, prompt, ctx, api_key
+  )
 
 
 def main(argv):

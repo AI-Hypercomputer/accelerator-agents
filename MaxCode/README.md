@@ -33,6 +33,10 @@ Then, register the extension with the Gemini CLI:
 gemini extension link MaxCode/mcp_server
 ```
 
+**Important:** If you are running on an installation cloned from GitHub, you
+**must** run the `gemini` command from within the `MaxCode` directory. This
+is necessary for the CLI to locate and launch the agent server correctly.
+
 After linking the extension and starting `gemini-cli` for the first time,
 `gemini list extensions` may show the server for `maxcode-dev` as
 disconnected (red). If this happens, try restarting `gemini-cli`.
@@ -47,7 +51,8 @@ You can verify that the extension is registered by running:
 gemini list extensions
 ```
 
-You should see `maxcode-dev` in the list.
+You should see `maxcode-dev` in the list. If the server is
+running correctly, it should have a connected (green) status.
 
 ### Running Tools
 
@@ -57,10 +62,6 @@ toolchain needs access to packages like JAX and PyTorch to run equivalence
 tests.
 
 **You do not need to start the server manually.**
-
-**Important:** When running on installations cloned from GitHub, you must run
-the `gemini` command from within the `MaxCode` directory to ensure the CLI
-can locate and launch the agent server correctly.
 
 To run tools, first start Gemini in interactive mode. We also recommend
 enabling `--debug` to get detailed logs:
@@ -73,9 +74,10 @@ Once in interactive mode, you can run tools using `dev-server <tool_name>
 <args>`.
 
 The Gemini CLI automatically starts and manages the MCP server process. When you
-call a tool for the first time in a session (e.g., `dev-server run_agent
-"hello"`) and the server is not already running, Gemini CLI will launch it using
-the command defined in `gemini-extension.json`:
+call a tool for the first time in a session (e.g., `dev-server
+run_migration_workflow "<your prompt>"`) and the server is not already running,
+Gemini CLI will launch it using the command defined in
+`gemini-extension.json`:
 `python3.11 -m mcp_server.primary_agent_server`.
 
 The first tool call will start the server if it is not running. Subsequent tool calls will be
@@ -102,7 +104,10 @@ evaluation, and test generation) behind a single synchronous MCP tool call,
 intermediate steps and tool executions are not natively displayed in the
 `gemini-cli` UI. If you do not tail the log file as described below, no
 progress will be displayed in your terminal until the migration task is complete
-or an error occurs.
+or an error occurs. This is because `gemini-cli` waits for a tool to return
+its final response and does not display the in-progress status updates (sent
+via `ctx.info()`) that a dedicated graphical UI or streaming interface would
+show.
 
 To watch the agents work in real-time, open a separate terminal window and tail
 the FastMCP server log by running the following command:
@@ -111,32 +116,26 @@ the FastMCP server log by running the following command:
 tail -f /tmp/agent_server.log
 ```
 
-#### Agent Verification
-
-The `run_agent` tool is a placeholder for running the orchestrator agent. You
-can use it to verify that the server is running correctly:
-
-```bash
-gemini call dev-server run_agent --prompt "hello"
-```
-
-You should see output similar to: `Processing prompt: hello`
-
 #### Code Migration
 
 To migrate a Python module or package from one framework (e.g., PyTorch) to
-JAX, use the `run_agent` tool with a prompt describing the migration task. The
-agent will perform the end-to-end migration, which includes:
+JAX, use the `run_migration_workflow` tool with a prompt describing the
+migration task. The agent will perform the end-to-end migration, which
+includes:
 1.  Converting the PyTorch code to JAX.
 2.  Generating model configurations from the PyTorch code.
 3.  Generating oracle data (inputs, outputs, weights) from the PyTorch models.
 4.  Generating equivalence tests to validate the migrated JAX code against the
     oracle data.
 
-Note: While the agent can process directories, it has primarily been tested on
-single-file or small-module migrations. Migration of large repositories with
-many files has not been extensively tested. For best results, we recommend
-migrating one file or module at a time.
+**Disclaimer:** This toolchain is under active development and should be
+considered experimental. Testing has primarily focused on single-file or
+small-module migrations containing standard PyTorch layers. While it may
+attempt to process directories or more complex models, successful migration is
+not guaranteed for large repositories or highly customized PyTorch models
+(e.g., models relying heavily on custom C++ extensions or specialized
+libraries like vLLM). For best results, we recommend migrating one file or
+small module at a time.
 
 **Example:**
 
@@ -151,9 +150,9 @@ interactive mode using the following syntax:
 
 ```bash
 # From your shell:
-gemini call dev-server run_agent --prompt "Migrate /path/to/your/pytorch_module.py to /tmp/migrated_jax_mlp using API key YOUR_API_KEY."
+gemini call dev-server run_migration_workflow --prompt "Migrate /path/to/your/pytorch_module.py to /tmp/migrated_jax_mlp using API key YOUR_API_KEY."
 # From inside interactive mode:
-dev-server run_agent --prompt "Migrate /path/to/your/pytorch_module.py to /tmp/migrated_jax_mlp using API key YOUR_API_KEY."
+dev-server run_migration_workflow --prompt "Migrate /path/to/your/pytorch_module.py to /tmp/migrated_jax_mlp using API key YOUR_API_KEY."
 ```
 
 This command will create a timestamped subdirectory inside
@@ -183,10 +182,10 @@ specifically:
 
 ```bash
 # Example for generating only configs:
-dev-server run_agent --prompt "Generate model configs for PyTorch files in /path/to/torch_models and save to /path/to/model_configs.json using API key YOUR_API_KEY."
+dev-server run_evaluation_workflow --prompt "Generate model configs for PyTorch files in /path/to/torch_models and save to /path/to/model_configs.json using API key YOUR_API_KEY."
 
 # Example for generating only tests:
-dev-server run_agent --prompt "Generate an equivalence test for JAX file /path/to/jax_model.py and PyTorch file /path/to/torch_model.py, save to /path/to/test_output.py using API key YOUR_API_KEY."
+dev-server run_evaluation_workflow --prompt "Generate an equivalence test for JAX file /path/to/jax_model.py and PyTorch file /path/to/torch_model.py, save to /path/to/test_output.py using API key YOUR_API_KEY."
 ```
 
 ## Architecture

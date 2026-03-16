@@ -7,11 +7,18 @@ tools provided by the "accelerator-agents-dev" extension.
 
 The following tools are available via the "dev-server":
 
-### 1. run_agent
+### 1. run_migration_workflow
 
-*   **Purpose:** Runs the orchestrator agent with a user-provided prompt. The
-    agent can use its internal tools, like `migrate_module`, to fulfill the
-    request.
+*   **Purpose:** Runs the migration agent to migrate code from PyTorch to JAX.
 *   **Arguments:**
     *   `prompt`: A string to send to the agent.
-*   **Usage:** Use this endpoint to interact with the agent.
+*   **Usage:** Use this endpoint to migrate code from PyTorch to JAX.
+
+### 2. run_evaluation_workflow
+
+*   **Purpose:** Runs the evaluation agent to generate model configurations,
+    generate Oracle evaluation data, or write equivalence tests.
+*   **Arguments:**
+    *   `prompt`: A string to send to the agent.
+*   **Usage:** Use this endpoint to generate model configurations, generate
+    Oracle evaluation data, or write equivalence tests.

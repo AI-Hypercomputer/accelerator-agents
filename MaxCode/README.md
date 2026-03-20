@@ -184,8 +184,14 @@ specifically:
 # Example for generating only configs:
 dev-server run_evaluation_workflow --prompt "Generate model configs for PyTorch files in /path/to/torch_models and save to /path/to/model_configs.json using API key YOUR_API_KEY."
 
+# Example for generating only oracle data:
+dev-server run_evaluation_workflow --prompt "Generate oracle data for PyTorch files in /path/to/torch_models, using configs in /path/to/model_configs.json, and save data to /path/to/data_dir using API key YOUR_API_KEY."
+
 # Example for generating only tests:
 dev-server run_evaluation_workflow --prompt "Generate an equivalence test for JAX file /path/to/jax_model.py and PyTorch file /path/to/torch_model.py, save to /path/to/test_output.py using API key YOUR_API_KEY."
+
+# Example for running equivalence tests:
+dev-server run_evaluation_workflow --prompt "Run equivalence tests for migration defined in /path/to/mapping.json, using data in /path/to/data_dir and saving tests to /path/to/tests_dir, using API key YOUR_API_KEY."
 ```
 
 ## Architecture

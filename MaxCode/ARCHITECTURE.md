@@ -20,38 +20,38 @@ to start the server if it's not running, as mentioned in `README.md`.
 
 `mcp_server/primary_agent_server.py` implements the MCP (Model Calling Platform)
 server runtime using `google.adk` (Agent Development Kit) and
-`mcp.server.fastmcp`. It exposes a single tool, `run_agent`, which acts as the
-entry point for ADK's `Runner` to execute the `master_agent`.
+`mcp.server.fastmcp`. It exposes tools like `run_migration_workflow` and
+`run_evaluation_workflow`, which act as entry points for ADK's `Runner` to
+execute the `migration_agent` and `evaluation_agent`, respectively.
 
 ### 3. ADK Agent Definitions
 
-`mcp_server/adk_agents.py` defines the hierarchy of ADK agents:
+`mcp_server/adk_agents.py` defines ADK agents:
 
-*   **`master_agent`**: The top-level agent invoked by `run_agent`. Its role is to understand the user's intent and delegate to the appropriate sub-agent (e.g., `migration_agent`).
-*   **`migration_agent`**: A sub-agent responsible for migration tasks. It uses `migration_tool` to perform actions.
+*   **`migration_agent`**: Responsible for end-to-end migration tasks. It orchestrates multiple tools to perform migration and validation.
+*   **`evaluation_agent`**: Responsible for running specific evaluation tasks in isolation (e.g., only generating oracle data).
 
 ### 4. ADK Tools
 
-`tools/migration_tool.py` defines ADK `FunctionTool`s that wrap Python
-functions. `migrate_module_tool` wraps the `migrate_module` function, which
-contains the logic for orchestrating an end-to-end migration and validation
-task.
+`tools/migration_tool.py` and `tools/evaluation_tool.py` define ADK
+`FunctionTool`s that wrap specific Python functions for code conversion,
+config generation, data generation, and testing.
 
 ### 5. Migration and Validation Logic
 
-The `migrate_module` function in `tools/migration_tool.py` orchestrates the
-end-to-end migration and validation workflow:
-1.  It instantiates and runs `agents.migration.primary_agent.PrimaryAgent`,
-    which contains the core logic for repository migration (e.g.,
-    `PytorchToJaxSingleFileAgent`).
-2.  After migration, it calls
-    `tools.evaluation_tool.generate_model_configs` to generate configuration
+The `migration_agent` orchestrates the end-to-end migration and validation
+workflow by calling tools in sequence:
+1.  **`migration_tool.convert_code`**: Converts PyTorch code to JAX using
+    `agents.migration.primary_agent.PrimaryAgent`, copies the original source
+    code, and saves the results to a timestamped output directory. Returns
+    paths to the migrated code, original code, and mapping file.
+2.  **`evaluation_tool.generate_model_configs`**: Generates configuration
     files from the original PyTorch code.
-3.  It calls `evaluation.make_data.generate_data` to generate oracle data
+3.  **`evaluation_tool.generate_oracle_data`**: Generates oracle data
     (.pkl files) from the PyTorch code using the generated configurations.
-4.  It calls `tools.evaluation_tool.generate_equivalence_tests` to generate
-    test scripts for each migrated file, comparing the JAX output against the
-    PyTorch oracle data.
+4.  **`evaluation_tool.run_equivalence_tests`**: Generates test scripts
+    that compare JAX outputs against PyTorch oracle data, and then runs these
+    tests using `subprocess`.
 
 The result is a destination directory containing the migrated JAX code, a
 `mapping.json` file, and an `evaluation` subdirectory with configurations,
@@ -62,11 +62,11 @@ oracle data, and test scripts.
 The overall flow for migration is:
 
 ```
-Gemini CLI -> mcp_server:primary_agent_server -> adk_agents:master_agent -> adk_agents:migration_agent -> tools:migration_tool:migrate_module ->
-  1. agents/migration:PrimaryAgent (Migration)
-  2. tools/evaluation_tool:generate_model_configs (Config Gen)
-  3. evaluation/make_data:generate_data (Data Gen)
-  4. tools/evaluation_tool:generate_equivalence_tests (Test Gen)
+Gemini CLI -> mcp_server:primary_agent_server -> adk_agents:migration_agent ->
+  1. tools:migration_tool:convert_code (Migration)
+  2. tools:evaluation_tool:generate_model_configs (Config Gen)
+  3. tools:evaluation_tool:generate_oracle_data (Data Gen)
+  4. tools:evaluation_tool:run_equivalence_tests (Test Gen & Run)
 ```
 
 ## Agent Structure and Extension
@@ -89,9 +89,11 @@ steps:
     `profiling_tool = FunctionTool(run_profiler)`.
 3.  **Create ADK Sub-Agent:** In `mcp_server/adk_agents.py`, create a new ADK
     agent definition: `profiling_agent = Agent(..., tools=[profiling_tool])`.
-4.  **Integrate:** Add `profiling_agent` to `master_agent`'s `sub_agents` list
-    in `mcp_server/adk_agents.py` and update `master_agent`'s instructions to
-    delegate profiling tasks to `profiling_agent`.
+4.  **Integrate:** If the new agent represents a distinct workflow, expose it
+    as a new tool in `mcp_server/primary_agent_server.py` (e.g.,
+    `run_profiling_workflow`). If it's part of an existing workflow, add its
+    tool to the `tools` list of an existing agent like `migration_agent` or
+    `evaluation_agent`.
 
 ### How to Modify an Existing Capability
 To modify migration behavior, edit the implementation logic in

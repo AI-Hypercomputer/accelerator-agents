@@ -27,7 +27,7 @@ class GeminiTool:
 
   def __init__(
       self,
-      model_name: GeminiModel = GeminiModel.GEMINI_2_5_PRO,
+      model_name: GeminiModel | str = GeminiModel.GEMINI_2_5_PRO,
       system_instruction=None,
       api_key=None,
   ):
@@ -42,7 +42,16 @@ class GeminiTool:
     """
     if not api_key:
       raise ValueError("API key must be provided for GeminiTool.")
-    self.model_name = model_name
+    if isinstance(model_name, str):
+      try:
+        self.model_name = GeminiModel(model_name)
+      except ValueError as exc:
+        raise ValueError(
+            f"Invalid model name string: {model_name}. Must be one of"
+            f" {[m.value for m in GeminiModel]}"
+        ) from exc
+    else:
+      self.model_name = model_name
     self.system_instruction = system_instruction
     self.api_key = api_key
     self.endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name.value}:generateContent?key={self.api_key}"

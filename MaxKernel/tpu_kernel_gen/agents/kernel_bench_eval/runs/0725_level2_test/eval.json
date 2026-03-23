@@ -1,0 +1,62 @@
+{
+  "9": {
+    "kernel_compilation_result": null,
+    "kernel_correctness_result": null,
+    "fix_kernel_loop_iter": 0,
+    "jax_conversion_loop_iter": 0
+  },
+  "6": {
+    "kernel_compilation_result": null,
+    "kernel_correctness_result": null,
+    "fix_kernel_loop_iter": 0,
+    "jax_conversion_loop_iter": 0
+  },
+  "10": {
+    "kernel_compilation_result": "Success",
+    "kernel_correctness_result": "Success",
+    "fix_kernel_loop_iter": 5,
+    "jax_conversion_loop_iter": 2
+  },
+  "8": {
+    "kernel_compilation_result": "Traceback (most recent call last):\n  File \"/tmp/tmpxxx8ol7u.py\", line 8, in <module>\n    from jax.experimental.pallas.tpu import conv_general_dilated\nImportError: cannot import name 'conv_general_dilated' from 'jax.experimental.pallas.tpu' (/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/experimental/pallas/tpu.py)\n",
+    "kernel_correctness_result": null,
+    "fix_kernel_loop_iter": 6,
+    "jax_conversion_loop_iter": 0
+  },
+  "2": {
+    "kernel_compilation_result": "jax.errors.SimplifiedTraceback: For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/tmp/tmpxb83g8tm.py\", line 109, in <module>\n    x = pl.pallas_call(\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/pallas_call.py\", line 1656, in wrapped\n    jaxpr, consts = _trace_kernel_to_jaxpr(\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/pallas_call.py\", line 1191, in _trace_kernel_to_jaxpr\n    jaxpr, _, consts, () = pe.trace_to_jaxpr_dynamic(wrapped_kernel_fun,\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/primitives.py\", line 874, in wrap_with_transforms\n    return f(*new_args)\n  File \"/tmp/tmpxb83g8tm.py\", line 110, in <lambda>\n    lambda x_ref, kernel_ref, bias_ref, out_ref: kernel(\n  File \"/tmp/tmpxb83g8tm.py\", line 84, in kernel\n    if (h_global - kh + pad_h) % stride == 0 and \\\njax.errors.TracerBoolConversionError: Attempted boolean conversion of traced array with shape bool[].\nThe error occurred while tracing the function <lambda> at /tmp/tmpxb83g8tm.py:110 for pallas_call kernel. This value became a tracer due to JAX operations on these lines:\n\n  operation a:i32[] = convert_element_type[new_dtype=int32 weak_type=False] b\n    from line /tmp/tmpxb83g8tm.py:74 (kernel)\n\n  operation a:i32[] = convert_element_type[new_dtype=int32 weak_type=False] b\n    from line /tmp/tmpxb83g8tm.py:75 (kernel)\n\n  operation a:i32[] = convert_element_type[new_dtype=int32 weak_type=False] b\n    from line /tmp/tmpxb83g8tm.py:79 (kernel)\n\n  operation a:i32[] = convert_element_type[new_dtype=int32 weak_type=False] b\n    from line /tmp/tmpxb83g8tm.py:79 (kernel)\n\n  operation a:i32[] = convert_element_type[new_dtype=int32 weak_type=False] b\n    from line /tmp/tmpxb83g8tm.py:80 (kernel)\n\n(Additional originating lines are not shown.)\nSee https://docs.jax.dev/en/latest/errors.html#jax.errors.TracerBoolConversionError\n",
+    "kernel_correctness_result": null,
+    "fix_kernel_loop_iter": 4,
+    "jax_conversion_loop_iter": 0
+  },
+  "4": {
+    "kernel_compilation_result": "jax.errors.SimplifiedTraceback: For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/tmp/tmp3xu_zplg.py\", line 72, in <module>\n    x = pl.pallas_call(\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/pallas_call.py\", line 1656, in wrapped\n    jaxpr, consts = _trace_kernel_to_jaxpr(\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/pallas_call.py\", line 1191, in _trace_kernel_to_jaxpr\n    jaxpr, _, consts, () = pe.trace_to_jaxpr_dynamic(wrapped_kernel_fun,\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/primitives.py\", line 874, in wrap_with_transforms\n    return f(*new_args)\n  File \"/tmp/tmp3xu_zplg.py\", line 50, in kernel\n    conv_out = pl_tpu.conv(\nAttributeError: module 'jax.experimental.pallas.ops.tpu' has no attribute 'conv'\n",
+    "kernel_correctness_result": null,
+    "fix_kernel_loop_iter": 6,
+    "jax_conversion_loop_iter": 2
+  },
+  "1": {
+    "kernel_compilation_result": null,
+    "kernel_correctness_result": null,
+    "fix_kernel_loop_iter": 0,
+    "jax_conversion_loop_iter": 0
+  },
+  "7": {
+    "kernel_compilation_result": "Success",
+    "kernel_correctness_result": "Failure",
+    "fix_kernel_loop_iter": 6,
+    "jax_conversion_loop_iter": 0
+  },
+  "3": {
+    "kernel_compilation_result": "Traceback (most recent call last):\n  File \"/tmp/tmpzaqjrt0u.py\", line 142, in <module>\n    params_flat[0] = params_flat[0].transpose((0, 1, 2, 4, 3))\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/numpy/array_methods.py\", line 423, in _transpose\n    return lax_numpy.transpose(self, axis)\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/numpy/lax_numpy.py\", line 1208, in transpose\n    axes_ = [_canonicalize_axis(i, np.ndim(a)) for i in axes_]\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/numpy/lax_numpy.py\", line 1208, in <listcomp>\n    axes_ = [_canonicalize_axis(i, np.ndim(a)) for i in axes_]\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/util.py\", line 376, in canonicalize_axis\n    raise ValueError(f\"axis {axis} is out of bounds for array of dimension {num_dims}\")\nValueError: axis 1 is out of bounds for array of dimension 1\n",
+    "kernel_correctness_result": null,
+    "fix_kernel_loop_iter": 6,
+    "jax_conversion_loop_iter": 2
+  },
+  "5": {
+    "kernel_compilation_result": "jax.errors.SimplifiedTraceback: For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/tmp/tmpzou8uf0n.py\", line 109, in <module>\n    x = pl.pallas_call(\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/pallas_call.py\", line 1656, in wrapped\n    jaxpr, consts = _trace_kernel_to_jaxpr(\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/pallas_call.py\", line 1191, in _trace_kernel_to_jaxpr\n    jaxpr, _, consts, () = pe.trace_to_jaxpr_dynamic(wrapped_kernel_fun,\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/primitives.py\", line 874, in wrap_with_transforms\n    return f(*new_args)\n  File \"/tmp/tmpzou8uf0n.py\", line 75, in kernel\n    conv_out = jax.lax.conv_transpose(\nValueError: conv_general_dilated lhs feature dimension size divided by feature_group_count must equal the rhs input feature dimension size, but 32 // 1 != 16.\n",
+    "kernel_correctness_result": null,
+    "fix_kernel_loop_iter": 6,
+    "jax_conversion_loop_iter": 3
+  }
+}

@@ -1,29 +1,45 @@
-"""Compilability and shape checks for Variational Autoencoder (VAE) to compare PyTorch and JAX models."""
+"""Compilability and shape checks for Variational Autoencoder (VAE).
+
+Compares PyTorch and JAX models.
+"""
 
 import os
-import sys
+import traceback
 
 from absl import app
-from evaluation.code_agent.pytorch_references.level2.VAE import VAE as VAE_Torch
-from generated_code.code_agent.v1.Gemini_2_5_pro.VAE.models import VAE as VAE_Jax
+from absl import flags
+import evaluation.code_agent.pytorch_references.level2.VAE as VAE_Torch
+from evaluation.proto import result_pb2
+import generated_code.code_agent.v1.Gemini_2_5_pro.VAE.model as model_jax
+import immutabledict
 import jax
 import jax.numpy as jnp
 import torch
 
+from google3.net.proto2.python.public import text_format
+
 
 os.environ["JAX_PLATFORMS"] = "cpu"
 
-config = {
+FLAGS = flags.FLAGS
+
+flags.DEFINE_string(
+    "metrics_output_path",
+    None,
+    "Path to write the evaluation metrics.",
+)
+
+config = immutabledict.immutabledict({
     "input_dim": 784,
     "hidden_dim": 128,
     "latent_dim": 10,
     "batch_size": 4,
-}
+})
 
 
 def test_pytorch_independent():
   """Sanity check for PyTorch model execution."""
-  model = VAE_Torch(
+  model = VAE_Torch.VAE(
       input_dim=config["input_dim"],
       hidden_dim=config["hidden_dim"],
       latent_dim=config["latent_dim"],
@@ -53,7 +69,7 @@ def test_pytorch_independent():
 
 def test_jax_independent():
   """Sanity check for JAX model execution."""
-  model = VAE_Jax(
+  model = model_jax.VAE(
       input_dim=config["input_dim"],
       hidden_dim=config["hidden_dim"],
       latent_dim=config["latent_dim"],
@@ -89,17 +105,29 @@ def main(argv):
   # Shape and NaN checks
   try:
     test_pytorch_independent()
+    pytorch_result = result_pb2.Result(valid=True)
     print("PyTorch Model Shape: VALID (True)")
-  except AssertionError as e:
+  except (AssertionError, TypeError, ValueError) as e:
+    error_message = "".join(traceback.format_exception_only(type(e), e))
+    pytorch_result = result_pb2.Result(valid=False, error_message=error_message)
     print(f"PyTorch Model FAILED: {e}")
-    sys.exit(1)
 
   try:
     test_jax_independent()
+    jax_result = result_pb2.Result(valid=True)
     print("JAX Model Shape: VALID (True)")
-  except AssertionError as e:
+  except (AssertionError, TypeError, ValueError) as e:
+    error_message = "".join(traceback.format_exception_only(type(e), e))
+    jax_result = result_pb2.Result(valid=False, error_message=error_message)
     print(f"JAX Model FAILED: {e}")
-    sys.exit(1)
+
+  if FLAGS.metrics_output_path:
+    eval_result = result_pb2.EvaluationResult(
+        pytorch_result=pytorch_result,
+        jax_result=jax_result,
+    )
+    with open(FLAGS.metrics_output_path, "w") as f:
+      f.write(text_format.MessageToString(eval_result))
 
 
 if __name__ == "__main__":

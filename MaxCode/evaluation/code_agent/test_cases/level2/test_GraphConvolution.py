@@ -8,6 +8,7 @@ from absl import flags
 from evaluation.code_agent.pytorch_references.level2.graph_convolution import GraphConvolution as GraphConvolution_Torch
 from evaluation.proto import result_pb2
 from generated_code.code_agent.v1.Gemini_2_5_pro.GraphConvolution.layers import GraphConvolution as GraphConvolution_Jax
+import immutabledict
 import jax
 import jax.numpy as jnp
 import torch
@@ -25,11 +26,11 @@ flags.DEFINE_string(
     "Path to write the evaluation metrics.",
 )
 
-CONFIG = {
+CONFIG = immutabledict.immutabledict({
     "n_nodes": 10,
     "in_features": 5,
     "out_features": 8,
-}
+})
 
 
 def test_pytorch_independent():

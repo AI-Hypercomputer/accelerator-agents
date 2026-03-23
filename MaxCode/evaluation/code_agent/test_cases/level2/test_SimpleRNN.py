@@ -1,25 +1,36 @@
 """Compilability, Shape, and Equivalence tests for SimpleRNN."""
 
 import os
-import sys
+import traceback
 
 from absl import app
-# Correct Imports
-from evaluation.code_agent.pytorch_references.level2.simple_RNN import SimpleRNN as SimpleRNN_Torch
-from generated_code.code_agent.v1.Gemini_2_5_pro.SimpleRNN.model_corrected import SimpleRNN as SimpleRNN_Jax
+from absl import flags
+import evaluation.code_agent.pytorch_references.level2.simple_RNN as SimpleRNN_Torch
+from evaluation.proto import result_pb2
+import generated_code.code_agent.v1.Gemini_2_5_pro.SimpleRNN.model_corrected as model_jax
 from flax import core
 import jax
 import jax.numpy as jnp
 import numpy as np
 import torch
 
+from google3.net.proto2.python.public import text_format
+
 
 os.environ['JAX_PLATFORMS'] = 'cpu'
+
+FLAGS = flags.FLAGS
+
+flags.DEFINE_string(
+    'metrics_output_path',
+    None,
+    'Path to write the evaluation metrics.',
+)
 
 
 def test_pytorch_independent():
   """Sanity check for PyTorch model execution."""
-  model = SimpleRNN_Torch(
+  model = SimpleRNN_Torch.SimpleRNN(
       input_size=4, hidden_size=8, num_layers=2, output_size=3
   )
   x = torch.randn(2, 5, 4)
@@ -30,7 +41,7 @@ def test_pytorch_independent():
 
 def test_jax_independent():
   """Sanity check for JAX model execution."""
-  model = SimpleRNN_Jax(hidden_size=8, num_layers=2, output_size=3)
+  model = model_jax.SimpleRNN(hidden_size=8, num_layers=2, output_size=3)
   x = jnp.ones((2, 5, 4))
   variables = model.init(jax.random.PRNGKey(42), x)
   y = model.apply(variables, x)
@@ -41,13 +52,27 @@ def test_jax_independent():
 def test_rnn_equivalence(
     batch_size, seq_len, input_size, hidden_size, num_layers, output_size
 ):
-  """Validates that the JAX implementation matches the PyTorch implementation."""
+  """Validates JAX and PyTorch SimpleRNN equivalence.
+
+  This function checks that the JAX implementation matches the PyTorch
+  implementation by transferring weights and comparing outputs.
+
+  Args:
+    batch_size: The batch size of the input.
+    seq_len: The sequence length of the input.
+    input_size: The number of features in the input.
+    hidden_size: The number of features in the hidden state.
+    num_layers: The number of recurrent layers.
+    output_size: The size of the output.
+  """
   # --- 1. Initialize PyTorch Model ---
-  pt_model = SimpleRNN_Torch(input_size, hidden_size, num_layers, output_size)
+  pt_model = SimpleRNN_Torch.SimpleRNN(
+      input_size, hidden_size, num_layers, output_size
+  )
   pt_model.eval()
 
   # --- 2. Initialize JAX Model ---
-  jax_model = SimpleRNN_Jax(
+  jax_model = model_jax.SimpleRNN(
       hidden_size=hidden_size, num_layers=num_layers, output_size=output_size
   )
 
@@ -101,17 +126,21 @@ def main(argv):
   # validity test (shape)
   try:
     test_pytorch_independent()
+    pytorch_result = result_pb2.Result(valid=True)
     print('PyTorch Model Shape: VALID (True)')
-  except AssertionError as e:
+  except (AssertionError, TypeError, ValueError) as e:
+    error_message = ''.join(traceback.format_exception_only(type(e), e))
+    pytorch_result = result_pb2.Result(valid=False, error_message=error_message)
     print(f'PyTorch Model FAILED: {e}')
-    sys.exit(1)
 
   try:
     test_jax_independent()
+    jax_result = result_pb2.Result(valid=True)
     print('JAX Model Shape: VALID (True)')
-  except AssertionError as e:
+  except (AssertionError, TypeError, ValueError) as e:
+    error_message = ''.join(traceback.format_exception_only(type(e), e))
+    jax_result = result_pb2.Result(valid=False, error_message=error_message)
     print(f'JAX Model FAILED: {e}')
-    sys.exit(1)
 
   # numerical equivalence test
   try:
@@ -126,7 +155,14 @@ def main(argv):
     print('Equivalence Test:    VALID (True)')
   except AssertionError as e:
     print(f'Equivalence Test FAILED: {e}')
-    sys.exit(1)
+
+  if FLAGS.metrics_output_path:
+    eval_result = result_pb2.EvaluationResult(
+        pytorch_result=pytorch_result,
+        jax_result=jax_result,
+    )
+    with open(FLAGS.metrics_output_path, 'w') as f:
+      f.write(text_format.MessageToString(eval_result))
 
 
 if __name__ == '__main__':

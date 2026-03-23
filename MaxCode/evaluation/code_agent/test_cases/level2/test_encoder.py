@@ -1,14 +1,16 @@
 """Compilability, Shape, and Equivalence tests for Transformer Encoder."""
 
 import os
-import sys
 import traceback
 
 # pylint: disable=g-importing-member
 from absl import app
+from absl import flags
 from evaluation.code_agent.pytorch_references.level2.encoder import TransformerModel as Encoder_Torch
+from evaluation.proto import result_pb2
 from generated_code.code_agent.v1.Gemini_2_5_pro.TransformerModel.model_compiled import TransformerModel as Encoder_Jax
 from flax import core
+import immutabledict
 import jax
 from jax import config
 from jax import sharding
@@ -16,13 +18,24 @@ import jax.numpy as jnp
 import numpy as np
 import torch
 
+from google3.net.proto2.python.public import text_format
+
+
 Mesh = sharding.Mesh
 jax_config = config
 
 os.environ["JAX_PLATFORMS"] = "cpu"
 jax_config.update("jax_default_matmul_precision", "highest")
 
-CONFIG = {
+FLAGS = flags.FLAGS
+
+flags.DEFINE_string(
+    "metrics_output_path",
+    None,
+    "Path to write the evaluation metrics.",
+)
+
+CONFIG = immutabledict.immutabledict({
     "ntoken": 100,
     "ninp": 32,
     "nhead": 4,
@@ -30,7 +43,7 @@ CONFIG = {
     "nlayers": 2,
     "batch_size": 4,
     "seq_len": 128,
-}
+})
 
 
 def create_cpu_mesh():
@@ -301,23 +314,36 @@ def test_equivalence():
 def main(argv):
   try:
     test_pytorch_independent()
+    pytorch_result = result_pb2.Result(valid=True)
     print("PyTorch Model Shape: VALID (True)")
-  except AssertionError as e:
+  except (AssertionError, TypeError, ValueError) as e:
+    error_message = "".join(traceback.format_exception_only(type(e), e))
+    pytorch_result = result_pb2.Result(valid=False, error_message=error_message)
     print(f"PyTorch Model FAILED: {e}")
 
   try:
     test_jax_independent()
+    jax_result = result_pb2.Result(valid=True)
     print("JAX Model Shape:     VALID (True)")
-  except AssertionError as e:
+  except (AssertionError, TypeError, ValueError) as e:
+    error_message = "".join(traceback.format_exception_only(type(e), e))
+    jax_result = result_pb2.Result(valid=False, error_message=error_message)
     print(f"JAX Model FAILED: {e}")
     # Stop here if JAX fails completely
-    sys.exit(1)
   try:
     test_equivalence()
     print("Equivalence Test:    VALID (True)")
   except AssertionError as e:
     traceback.print_exc()
     print(f"Equivalence Test FAILED: {e}")
+
+  if FLAGS.metrics_output_path:
+    eval_result = result_pb2.EvaluationResult(
+        pytorch_result=pytorch_result,
+        jax_result=jax_result,
+    )
+    with open(FLAGS.metrics_output_path, "w") as f:
+      f.write(text_format.MessageToString(eval_result))
 
 
 if __name__ == "__main__":

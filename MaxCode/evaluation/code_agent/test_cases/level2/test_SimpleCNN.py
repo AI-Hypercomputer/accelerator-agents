@@ -1,25 +1,36 @@
 """Compilability, Shape, and Equivalence tests for SimpleCNN."""
 
 import os
-import sys
+import traceback
 
 from absl import app
-# Correct Imports
-from evaluation.code_agent.pytorch_references.level2.simple_CNN import SimpleCNN as SimpleCNN_Torch
-from generated_code.code_agent.v1.Gemini_2_5_pro.SimpleCNN.model import SimpleCNN as SimpleCNN_Jax
+from absl import flags
+import evaluation.code_agent.pytorch_references.level2.simple_CNN as SimpleCNN_Torch
+from evaluation.proto import result_pb2
+import generated_code.code_agent.v1.Gemini_2_5_pro.SimpleCNN.model as model_jax
 import flax
 import jax
 import jax.numpy as jnp
 import numpy as np
 import torch
 
+from google3.net.proto2.python.public import text_format
+
 
 os.environ['JAX_PLATFORMS'] = 'cpu'
+
+FLAGS = flags.FLAGS
+
+flags.DEFINE_string(
+    'metrics_output_path',
+    None,
+    'Path to write the evaluation metrics.',
+)
 
 
 def test_pytorch_model_validity():
   """Validates that the PyTorch model runs without errors."""
-  model = SimpleCNN_Torch()
+  model = SimpleCNN_Torch.SimpleCNN()
   input_tensor = torch.randn(4, 3, 32, 32)
   output = model(input_tensor)
 
@@ -32,7 +43,7 @@ def test_pytorch_model_validity():
 
 def test_jax_model_validity():
   """Validates that the JAX model runs without errors."""
-  model = SimpleCNN_Jax()
+  model = model_jax.SimpleCNN()
   key = jax.random.PRNGKey(0)
   # Flax Conv expects NHWC by default
   input_shape = (4, 32, 32, 3)
@@ -49,13 +60,17 @@ def test_jax_model_validity():
 
 
 def test_pytorch_jax_equivalence():
-  """Compares the outputs of PyTorch and JAX models given the same weights and inputs."""
+  """Compares PyTorch and JAX model outputs.
+
+  Compares the outputs of PyTorch and JAX models given the same weights and
+  inputs.
+  """
   # 1. Initialize PyTorch Model
-  torch_model = SimpleCNN_Torch()
+  torch_model = SimpleCNN_Torch.SimpleCNN()
   torch_model.eval()
 
   # 2. Initialize JAX Model
-  jax_model = SimpleCNN_Jax()
+  jax_model = model_jax.SimpleCNN()
   key = jax.random.PRNGKey(42)
 
   # JAX expects NHWC
@@ -123,17 +138,21 @@ def main(argv):
   # validity test (shape)
   try:
     test_pytorch_model_validity()
+    pytorch_result = result_pb2.Result(valid=True)
     print('PyTorch Model Shape: VALID (True)')
   except (AssertionError, RuntimeError, TypeError, ValueError) as e:
+    error_message = ''.join(traceback.format_exception_only(type(e), e))
+    pytorch_result = result_pb2.Result(valid=False, error_message=error_message)
     print(f'PyTorch Model FAILED: {e}')
-    sys.exit(1)
 
   try:
     test_jax_model_validity()
+    jax_result = result_pb2.Result(valid=True)
     print('JAX Model Shape: VALID (True)')
   except (AssertionError, RuntimeError, TypeError, ValueError) as e:
+    error_message = ''.join(traceback.format_exception_only(type(e), e))
+    jax_result = result_pb2.Result(valid=False, error_message=error_message)
     print(f'JAX Model FAILED: {e}')
-    sys.exit(1)
 
   # numerical equivalence test
   try:
@@ -141,7 +160,14 @@ def main(argv):
     print('Equivalence Test:    VALID (True)')
   except (AssertionError, RuntimeError, TypeError, ValueError) as e:
     print(f'Equivalence Test FAILED: {e}')
-    sys.exit(1)
+
+  if FLAGS.metrics_output_path:
+    eval_result = result_pb2.EvaluationResult(
+        pytorch_result=pytorch_result,
+        jax_result=jax_result,
+    )
+    with open(FLAGS.metrics_output_path, 'w') as f:
+      f.write(text_format.MessageToString(eval_result))
 
 
 if __name__ == '__main__':

@@ -1,29 +1,42 @@
 """Compilability, Shape, and Equivalence tests for SelfAttention."""
 
 import os
-import sys
+import traceback
 
 # pylint: disable=g-importing-member
 from absl import app
+from absl import flags
 from absl import logging
 from evaluation.code_agent.pytorch_references.level2.self_attention import SelfAttention as SelfAttention_Torch
+from evaluation.proto import result_pb2
 from generated_code.code_agent.v1.Gemini_2_5_pro.SelfAttention.attention_compiled import SelfAttention as SelfAttention_Jax
 from flax import core
+import immutabledict
 import jax
 import jax.numpy as jnp
 import numpy as np
 import torch
 
+from google3.net.proto2.python.public import text_format
+
 
 os.environ["JAX_PLATFORMS"] = "cpu"
 logging.set_stderrthreshold(logging.ERROR)
 
-config = {
+FLAGS = flags.FLAGS
+
+flags.DEFINE_string(
+    "metrics_output_path",
+    None,
+    "Path to write the evaluation metrics.",
+)
+
+config = immutabledict.immutabledict({
     "embed_size": 32,
     "heads": 4,
     "batch_size": 2,
     "seq_len": 10,
-}
+})
 
 
 def test_pytorch_independent():
@@ -139,17 +152,21 @@ def main(argv):
   # Shape Checks
   try:
     test_pytorch_independent()
+    pytorch_result = result_pb2.Result(valid=True)
     print("PyTorch Model Shape: VALID (True)")
-  except AssertionError as e:
+  except (AssertionError, TypeError, ValueError) as e:
+    error_message = "".join(traceback.format_exception_only(type(e), e))
+    pytorch_result = result_pb2.Result(valid=False, error_message=error_message)
     print(f"PyTorch Model FAILED: {e}")
-    sys.exit(1)
 
   try:
     test_jax_independent()
+    jax_result = result_pb2.Result(valid=True)
     print("JAX Model Shape:     VALID (True)")
-  except AssertionError as e:
+  except (AssertionError, TypeError, ValueError) as e:
+    error_message = "".join(traceback.format_exception_only(type(e), e))
+    jax_result = result_pb2.Result(valid=False, error_message=error_message)
     print(f"JAX Model FAILED: {e}")
-    sys.exit(1)
 
   # Equivalence
   try:
@@ -157,7 +174,14 @@ def main(argv):
     print("Equivalence Test:    VALID (True)")
   except AssertionError as e:
     print(f"Equivalence Test FAILED: {e}")
-    sys.exit(1)
+
+  if FLAGS.metrics_output_path:
+    eval_result = result_pb2.EvaluationResult(
+        pytorch_result=pytorch_result,
+        jax_result=jax_result,
+    )
+    with open(FLAGS.metrics_output_path, "w") as f:
+      f.write(text_format.MessageToString(eval_result))
 
 
 if __name__ == "__main__":

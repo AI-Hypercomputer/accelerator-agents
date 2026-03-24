@@ -2,10 +2,6 @@
 line-length = 120
 target-version = "py310"
 indent-width = 2
-exclude = [
-    "MaxCode",
-    "docs",
-]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]

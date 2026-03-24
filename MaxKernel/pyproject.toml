@@ -1,0 +1,28 @@
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+indent-width = 2
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+ignore = [
+    "E501", # Line too long
+    "N",    # Naming conventions
+    "W",    # Warnings
+    "E741", # Ambiguous variable name
+    "F821", # Undefined name (often in specialized kernels)
+    "F823", # Local variable referenced before assignment
+    "E722", # Bare except
+    "F841", # Local variable assigned but never used
+    "E731", # Lambda assignment
+    "E402", # Module level import not at top of file
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"] # Unused imports are common in __init__.py for re-exporting
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

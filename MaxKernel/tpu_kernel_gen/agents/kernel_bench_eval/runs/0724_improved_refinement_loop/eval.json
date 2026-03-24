@@ -1,0 +1,126 @@
+{
+  "1": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "17": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "13": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "19": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "2": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "7": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "20": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "9": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "8": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "18": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "15": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "3": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "14": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "12": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "16": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "6": {
+    "compilation_result": "jax.errors.SimplifiedTraceback: For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/tmp/tmp9uo7hrta.py\", line 49, in <module>\n    C = pl.pallas_call(\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/pallas_call.py\", line 1656, in wrapped\n    jaxpr, consts = _trace_kernel_to_jaxpr(\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/pallas_call.py\", line 1191, in _trace_kernel_to_jaxpr\n    jaxpr, _, consts, () = pe.trace_to_jaxpr_dynamic(wrapped_kernel_fun,\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/primitives.py\", line 874, in wrap_with_transforms\n    return f(*new_args)\n  File \"/tmp/tmp9uo7hrta.py\", line 41, in kernel\n    a_block = pl.load(x_ref, (i * bM + pl.dslice(bM), k * bK + pl.dslice(bK)))\nTypeError: unsupported operand type(s) for +: 'DynamicJaxprTracer' and 'Slice'\n",
+    "correctness_result": null
+  },
+  "5": {
+    "compilation_result": "jax.errors.SimplifiedTraceback: For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/tmp/tmphuoif3nz.py\", line 33, in <module>\n    C = pl.pallas_call(\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/pallas_call.py\", line 1656, in wrapped\n    jaxpr, consts = _trace_kernel_to_jaxpr(\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/pallas_call.py\", line 1191, in _trace_kernel_to_jaxpr\n    jaxpr, _, consts, () = pe.trace_to_jaxpr_dynamic(wrapped_kernel_fun,\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/primitives.py\", line 874, in wrap_with_transforms\n    return f(*new_args)\n  File \"/tmp/tmphuoif3nz.py\", line 31, in kernel\n    c_ref[...] = a_ref[...] * s\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/numpy/array_methods.py\", line 1060, in op\n    return getattr(self.aval, f\"_{name}\")(self, *args)\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/numpy/array_methods.py\", line 579, in deferring_binary_op\n    return binary_op(*args)\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/numpy/ufunc_api.py\", line 180, in __call__\n    return call(*args)\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/numpy/ufuncs.py\", line 1280, in multiply\n    return lax.mul(x, y) if x.dtype != bool else lax.bitwise_and(x, y)\nAssertionError: (ShapedArray(float32[128,128]), MemRef<None>{float32[]})\n",
+    "correctness_result": null
+  },
+  "10": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "4": {
+    "compilation_result": "jax.errors.SimplifiedTraceback: For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/tmp/tmp02ulh61k.py\", line 48, in <module>\n    C = pl.pallas_call(\njaxlib.xla_extension.XlaRuntimeError: RESOURCE_EXHAUSTED: Allocation (size=134217728) would exceed memory (size=16777216) :: #allocation2 [shape = 'u8[134217728]{0}', space=vmem, size = 0x8000000, tag = 'operand span'] :: main\n",
+    "correctness_result": null
+  },
+  "11": {
+    "compilation_result": "jax.errors.SimplifiedTraceback: For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/tmp/tmpri96z4y6.py\", line 28, in <module>\n    C = pl.pallas_call(\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/pallas_call.py\", line 1637, in wrapped\n    kernel_args, grid_mapping = pallas_core.get_grid_mapping(\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/core.py\", line 951, in get_grid_mapping\n    in_block_mappings = map(\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/core.py\", line 809, in _convert_block_spec_to_block_mapping\n    return block_spec.to_block_mapping(\n  File \"/home/gersonkroiz_google_com/.local/lib/python3.10/site-packages/jax/_src/pallas/core.py\", line 399, in to_block_mapping\n    raise ValueError(\nValueError: Block shape for args[0] (= (512, 256)) must have the same number of dimensions as the array shape (16, 256, 512, 256).\n",
+    "correctness_result": null
+  },
+  "29": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "21": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "22": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "32": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "30": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "24": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "25": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "27": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "31": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "39": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  },
+  "47": {
+    "compilation_result": "Success",
+    "correctness_result": "Success"
+  }
+}

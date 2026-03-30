@@ -1,13 +1,15 @@
 """Configuration constants for GPU to JAX conversion agent."""
 
-MODEL_NAME = "gemini-3-pro-preview"
-MAX_ITERATIONS = 5
-LLM_GEN_RETRY_COUNT = 3
-TEMPERATURE = 0.1
-TOP_P = 0.9
-TOP_K = 5
+from tpu_kernel_gen.agents.kernel_gen_agent import constants
+
+MODEL_NAME = constants.MODEL_NAME
+MAX_ITERATIONS = constants.MAX_ITERATIONS
+LLM_GEN_RETRY_COUNT = constants.LLM_GEN_RETRY_COUNT
+TEMPERATURE = constants.TEMPERATURE
+TOP_P = constants.TOP_P
+TOP_K = constants.TOP_K
 CONVERSION_TIMEOUT = 180  # Timeout for conversion attempts
-EVAL_SERVER_PORT = 1245
+EVAL_SERVER_PORT = constants.EVAL_SERVER_PORT
 NUMERICAL_TOLERANCE = 1e-5  # Tolerance for numerical correctness checks
 
 # Backend selection for evaluation

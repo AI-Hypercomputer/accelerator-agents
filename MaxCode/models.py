@@ -14,6 +14,7 @@ class GeminiModel(enum.Enum):
   GEMINI_2_5_FLASH = "gemini-2.5-flash"
   GEMINI_3_0_PRO = "gemini-3.0-pro"
   GEMINI_3_0_FLASH = "gemini-3.0-flash"
+  GEMINI_3_1_PRO_PREVIEW = "gemini-3.1-pro-preview"
 
 
 class EmbeddingModel(enum.Enum):
@@ -79,7 +80,7 @@ class GeminiTool:
       try:
         time.sleep(2 if attempt == 0 else min(30, 2 ** (attempt + 1)))
         response = requests.post(
-            self.endpoint, headers=headers, json=payload, timeout=300
+            self.endpoint, headers=headers, json=payload, timeout=600
         )
         response.raise_for_status()  # Raise HTTPError for bad responses
         json_response = response.json()

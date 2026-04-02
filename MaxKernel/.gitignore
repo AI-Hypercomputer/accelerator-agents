@@ -1,0 +1,6 @@
+__pycache__/
+.env
+*egg-info
+*.txt
+session_info
+.adk

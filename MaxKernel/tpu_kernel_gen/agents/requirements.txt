@@ -1,8 +1,0 @@
-google-adk
-pygithub
-langchain-community
-google-cloud-aiplatform[adk,agent_engines]
-cloudpickle
-xprof
-tpu-info
-pytest-asyncio

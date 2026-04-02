@@ -2,6 +2,7 @@
 
 import enum
 import logging
+import random
 import time
 import requests
 
@@ -19,6 +20,7 @@ class EmbeddingModel(enum.Enum):
   """Enum for Embedding model names."""
 
   EMBEDDING_001 = "models/embedding-001"
+  GEMINI_EMBEDDING_001 = "models/gemini-embedding-001"
   TEXT_EMBEDDING_004 = "models/text-embedding-004"
 
 
@@ -72,18 +74,29 @@ class GeminiTool:
           "parts": [{"text": self.system_instruction}]
       }
 
-    try:
-      time.sleep(2)
-      response = requests.post(self.endpoint, headers=headers, json=payload)
-      response.raise_for_status()  # Raise HTTPError for bad responses
-      json_response = response.json()
-      return json_response["candidates"][0]["content"]["parts"][0]["text"]
-    except requests.exceptions.RequestException as e:
-      logging.error("Error calling Gemini API: %s", e)
-      raise
-    except (KeyError, IndexError) as e:
-      logging.error("Error parsing Gemini API response: %s", e)
-      raise ValueError("Could not parse response from Gemini API.") from e
+    max_retries = 5
+    for attempt in range(max_retries):
+      try:
+        time.sleep(2 if attempt == 0 else min(30, 2 ** (attempt + 1)))
+        response = requests.post(
+            self.endpoint, headers=headers, json=payload, timeout=300
+        )
+        response.raise_for_status()  # Raise HTTPError for bad responses
+        json_response = response.json()
+        return json_response["candidates"][0]["content"]["parts"][0]["text"]
+      except requests.exceptions.RequestException as e:
+        status = getattr(getattr(e, "response", None), "status_code", None)
+        if status in (429, 500, 503) and attempt < max_retries - 1:
+          wait = min(60, 2 ** (attempt + 2)) + random.uniform(0, 2)
+          logging.warning("Gemini API %s, retrying in %.1fs (attempt %d/%d)...",
+                          status, wait, attempt + 1, max_retries)
+          time.sleep(wait)
+          continue
+        logging.error("Error calling Gemini API: %s", e)
+        raise
+      except (KeyError, IndexError) as e:
+        logging.error("Error parsing Gemini API response: %s", e)
+        raise ValueError("Could not parse response from Gemini API.") from e
 
   def generate(self, user_prompt: str) -> str:
     """Alias for __call__ to support agents expecting a generate method."""

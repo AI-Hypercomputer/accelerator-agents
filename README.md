@@ -1,13 +1,8 @@
-# Accelerator Agents (Preview)
-
-> **🚧 Work in Progress / Coming Soon 🚧** > This project is currently under
-> active development. The agents and features described below represent the
-> product roadmap and are not yet fully available for use. Stay tuned for our
-> initial release!
+# Accelerator Agents
 
 **Accelerator Agents** is a collection of AI-powered tools designed to
 accelerate machine learning development on Google Cloud TPUs. This repository
-will host agents that assist with code migration, kernel optimization, and
+hosts agents that assist with code migration, kernel optimization, and
 performance tuning, enabling developers to leverage the full power of TPUs with
 greater velocity.
 
@@ -22,16 +17,19 @@ hardware accelerators like TPUs becomes increasingly challenging. This project
 aims to provide a suite of "Agents"—specialized AI tools powered by Gemini—to
 automate and assist with these complex tasks.
 
-Our upcoming releases will focus on two primary agents:
+The project includes two primary agents:
 
-### 1. MaxCode (Coming Soon)
+### 1. MaxCode
 
-The **MaxCode** agent will facilitate the conversion of existing PyTorch models
+The **MaxCode** agent facilitates the conversion of existing PyTorch models
 and codebases into JAX. It is designed to help users migrate their workloads to
 run efficiently on TPUs, leveraging high-performance frameworks like
 [MaxText](https://github.com/AI-Hypercomputer/maxtext).
 
-**Planned Features:**
+*Note: MaxCode is under active development, and we are continuously
+working to improve migration quality and expand model coverage.*
+
+**Features:**
 
 *   **Automated Conversion:** Converts functional code blocks and model layers
     from PyTorch to JAX.
@@ -40,14 +38,14 @@ run efficiently on TPUs, leveraging high-performance frameworks like
 *   **Human-in-the-Loop:** Designed to draft initial implementations that
     developers can review and refine.
 
-### 2. MaxKernel (Coming Soon)
+### 2. MaxKernel
 
-The **MaxKernel** agent is a specialized tool planned for high-performance
-kernel development on TPUs. It will assist engineers in writing, optimizing, and
+The **MaxKernel** agent is a specialized tool for high-performance
+kernel development on TPUs. It assists engineers in writing, optimizing, and
 debugging custom kernels, specifically focusing on **Pallas** (JAX's kernel
 language).
 
-**Planned Features:**
+**Features:**
 
 *   **Kernel Writing:** Drafts Pallas kernels from scratch or based on JAX
     reference implementations.
@@ -60,17 +58,16 @@ language).
 
 ## Getting Started
 
-*Note: These instructions are for the future release of the agents.*
-
 ### Prerequisites
 
-*   A Google Cloud TPU VM (recommended for running MaxKernel).
+*   A Google Cloud VM. A CPU-only VM is sufficient for MaxCode, while a TPU VM
+    is recommended for MaxKernel.
 *   Python 3.11+
 *   Access to Gemini API (for agent reasoning capabilities).
 
 ### Installation
 
-Once released, you will be able to clone the repository: ```bash
+Clone the repository: ```bash
 git clone https://github.com/AI-Hypercomputer/accelerator-agents.git
 cd accelerator-agents```
 

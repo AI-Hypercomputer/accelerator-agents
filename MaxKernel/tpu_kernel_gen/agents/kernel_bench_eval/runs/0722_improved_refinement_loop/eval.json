@@ -1,6 +1,0 @@
-{
-  "20": {
-    "compilation_result": "Traceback (most recent call last):\n  File \"/tmp/tmpbv0gjrlq.py\", line 26, in <module>\n    result = pl.pallas_call(\nTypeError: pallas_call() got an unexpected keyword argument 'kernel_kwargs'\n",
-    "correctness_result": null
-  }
-}

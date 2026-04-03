@@ -1,7 +1,6 @@
 """Primary orchestration agent for repository migration."""
-
 import os
-from typing import Any, Dict
+from typing import Any
 
 import models
 from agents import base
@@ -23,7 +22,7 @@ class PrimaryAgent(base.Agent):
     )
     self._rag_agent = rag_agent.RAGAgent(
         model,
-        embedding_model_name=models.EmbeddingModel.TEXT_EMBEDDING_004,
+        embedding_model_name=models.EmbeddingModel.GEMINI_EMBEDDING_001,
         api_key=api_key,
     )
     self._single_file_agent = single_file_agent.PytorchToJaxSingleFileAgent(
@@ -33,7 +32,13 @@ class PrimaryAgent(base.Agent):
         model, self._rag_agent
     )
 
-  def run(self, repo_path: str) -> Dict[str, str]:
+  def _convert_file(self, pytorch_code: str, file_path: str) -> str:
+    """Routes a file to the appropriate conversion agent."""
+    if utils.is_model_file(pytorch_code, file_path):
+      return self._model_conversion_agent.run(pytorch_code)
+    return self._single_file_agent.run(pytorch_code)
+
+  def run(self, repo_path: str) -> dict[str, str]:
     """Orchestrates the migration of a repository from PyTorch to JAX.
 
     Args:
@@ -42,27 +47,32 @@ class PrimaryAgent(base.Agent):
     Returns:
       A dictionary mapping original file paths to converted JAX code.
     """
-    if os.path.isfile(repo_path):
-      with open(repo_path, "r") as f:
+    try:
+      with open(repo_path, "r", encoding="utf-8", errors="replace") as f:
         pytorch_code = f.read()
-      converted_code = self._single_file_agent.run(pytorch_code)
+      converted_code = self._convert_file(pytorch_code, repo_path)
       return {repo_path: converted_code}
-    elif not os.path.isdir(repo_path):
+    except OSError:
+      # If opening as a file fails, check if it's a directory.
+      if not os.path.isdir(repo_path):
+        return {
+            repo_path: f"# Error: path {repo_path} is not a file or directory."
+        }
+
+    if not os.path.isdir(repo_path):
       return {
           repo_path: f"# Error: path {repo_path} is not a file or directory."
       }
 
     graph = utils.build_dependency_graph(repo_path)
-    converted_files: Dict[str, str] = {}
-    # conversion order.
-    # model_conversion_agent for model files, single_file_agent for others).
-    # For now, convert files individually using single_file_agent.
+    ordered_files = utils.topological_sort(graph)
+    converted_files: dict[str, str] = {}
 
-    for file_rel_path in graph:
+    for file_rel_path in ordered_files:
       file_path = os.path.join(repo_path, file_rel_path)
-      with open(file_path, "r") as f:
+      with open(file_path, "r", encoding="utf-8", errors="replace") as f:
         pytorch_code = f.read()
-      converted_code = self._single_file_agent.run(pytorch_code)
+      converted_code = self._convert_file(pytorch_code, file_path)
       converted_files[file_path] = converted_code
 
     return converted_files

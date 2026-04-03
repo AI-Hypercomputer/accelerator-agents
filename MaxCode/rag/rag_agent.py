@@ -17,7 +17,7 @@ import numpy as np
 # way to get the max context length in characters, 20000 characters
 # (roughly 5000-7000 tokens) is a safe limit for models with 32k token limits,
 # when considering that the prompt sends file content in two fields.
-_MAX_CONTEXT_LENGTH = 20000
+_MAX_CONTEXT_LENGTH = 100_000
 
 
 class RAGAgent(base.Agent):
@@ -59,7 +59,7 @@ class RAGAgent(base.Agent):
         if filename.endswith(".py"):
           file_path = os.path.join(root, filename)
           try:
-            with open(file_path, "r") as f:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
               content = f.read()
             doc_name = os.path.relpath(file_path, source_path)
             print(f"Adding {doc_name} to RAG database...")
@@ -100,6 +100,8 @@ class RAGAgent(base.Agent):
       A list of dictionaries, each containing 'name', 'text', 'file',
       and 'distance' for a retrieved document.
     """
+    if self._index is None:
+      return []
     query_embedding = self._embedding_agent.embed(query)
     results = vector_db.search_embedding(
         np.array(query_embedding), self._index, self._texts, top_k=top_k

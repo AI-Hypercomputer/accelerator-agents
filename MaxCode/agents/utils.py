@@ -1,10 +1,13 @@
 """Utility functions and classes for agents."""
 
 import ast
+import collections
+from collections.abc import Mapping, Set
 import enum
+import logging
 import os
 import pathlib
-from typing import Dict, Set
+from typing import Dict
 
 
 class AgentDomain(enum.Enum):
@@ -25,7 +28,7 @@ class AgentType(enum.Enum):
   MODEL_CONVERSION = "model_conversion"
 
 
-def get_module_imports(code: str) -> Set[str]:
+def get_module_imports(code: str) -> set[str]:
   """Parses python code and returns a set of modules that are imported.
 
   E.g., 'import a.b' adds 'a.b', 'from x.y import z' adds 'x.y',
@@ -41,7 +44,7 @@ def get_module_imports(code: str) -> Set[str]:
     tree = ast.parse(code)
   except SyntaxError:
     return set()
-  imports: Set[str] = set()
+  imports: set[str] = set()
   for node in ast.walk(tree):
     if isinstance(node, ast.Import):
       for n in node.names:
@@ -56,7 +59,7 @@ def get_module_imports(code: str) -> Set[str]:
   return imports
 
 
-def build_dependency_graph(repo_path: str) -> Dict[str, Set[str]]:
+def build_dependency_graph(repo_path: str) -> Dict[str, set[str]]:
   """Builds a dependency graph of python files in a repo based on imports.
 
   The graph is an adjacency list where keys are file paths and values are
@@ -79,7 +82,7 @@ def build_dependency_graph(repo_path: str) -> Dict[str, Set[str]]:
       if filename.endswith(".py"):
         py_files_abs_set.add(pathlib.Path(root, filename).resolve())
 
-  file_imports: Dict[pathlib.Path, Set[str]] = {}
+  file_imports: Dict[pathlib.Path, set[str]] = {}
   for abs_path in py_files_abs_set:
     try:
       with open(abs_path, "r") as f:
@@ -105,7 +108,7 @@ def build_dependency_graph(repo_path: str) -> Dict[str, Set[str]]:
       potential.append(p)
     return potential
 
-  graph_abs: Dict[pathlib.Path, Set[pathlib.Path]] = {
+  graph_abs: Dict[pathlib.Path, set[pathlib.Path]] = {
       p: set() for p in py_files_abs_set
   }
   for p_abs, imports in file_imports.items():
@@ -130,7 +133,7 @@ def build_dependency_graph(repo_path: str) -> Dict[str, Set[str]]:
         if dep_path in graph_abs:
           graph_abs[p_abs].add(dep_path)
 
-  graph_rel: Dict[str, Set[str]] = {}
+  graph_rel: Dict[str, set[str]] = {}
   for p_abs, deps in graph_abs.items():
     try:
       p_rel = p_abs.relative_to(repo_root).as_posix()
@@ -140,3 +143,52 @@ def build_dependency_graph(repo_path: str) -> Dict[str, Set[str]]:
       continue
 
   return graph_rel
+
+
+def is_model_file(code: str, file_path: str) -> bool:
+  """Detects whether code contains a torch.nn.Module subclass definition."""
+  try:
+    tree = ast.parse(code)
+  except SyntaxError as e:
+    logging.warning("SyntaxError in file %s: %s", file_path, e)
+    return False
+  for node in ast.walk(tree):
+    if isinstance(node, ast.ClassDef):
+      for base_node in node.bases:
+        # Match nn.Module, torch.nn.Module, Module
+        if isinstance(base_node, ast.Attribute):
+          if base_node.attr == "Module":
+            return True
+        elif isinstance(base_node, ast.Name):
+          if base_node.id == "Module":
+            return True
+  return False
+
+
+def topological_sort(graph: Mapping[str, Set[str]]) -> list[str]:
+  """Returns files in dependency order (dependencies first) using Kahn's algorithm."""
+  in_degree = {node: 0 for node in graph}
+  for node, deps in graph.items():
+    for dep in deps:
+      if dep in in_degree:
+        in_degree[node] += 1
+
+  queue = collections.deque(node for node, deg in in_degree.items() if deg == 0)
+  result = []
+
+  while queue:
+    node = queue.popleft()
+    result.append(node)
+    # Find nodes that depend on this one and decrement their in-degree
+    for other, deps in graph.items():
+      if node in deps:
+        in_degree[other] -= 1
+        if in_degree[other] == 0:
+          queue.append(other)
+
+  # Append any remaining nodes (cycles) to avoid dropping files
+  for node in graph:
+    if node not in result:
+      result.append(node)
+
+  return result

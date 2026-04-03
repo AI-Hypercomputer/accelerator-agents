@@ -1,11 +1,22 @@
 """Agent for converting a model from PyTorch to JAX."""
 
+import re
 from typing import Any
 
 from agents import base
 from agents import utils
 from agents.migration.prompts import prompts
 from rag import rag_agent
+
+_CODE_BLOCK_PATTERN = re.compile(r"```(?:python)?\n?(.*?)\n?```", re.DOTALL)
+
+
+def _strip_markdown_formatting(text: str) -> str:
+  """Strips markdown and returns only the first Python code block."""
+  code_block_match = _CODE_BLOCK_PATTERN.search(text)
+  if code_block_match:
+    return code_block_match.group(1).strip()
+  return text
 
 
 class ModelConversionAgent(base.Agent):
@@ -35,12 +46,19 @@ class ModelConversionAgent(base.Agent):
     Returns:
       The converted JAX code.
     """
-    rag_context_list = self._rag_agent.retrieve_context(pytorch_model_code)
+    rag_context_list = self._rag_agent.retrieve_context(
+        pytorch_model_code, top_k=7
+    )
     rag_context = "\n\n".join([
         f"File: {c['file']}\n```python\n{c['text']}\n```"
         for c in rag_context_list
     ])
-    return self.generate(
-        prompts.MODEL_CONVERSION_PROMPT,
-        {"pytorch_model_code": pytorch_model_code, "rag_context": rag_context},
+    return _strip_markdown_formatting(
+        self.generate(
+            prompts.MODEL_CONVERSION_PROMPT,
+            {
+                "pytorch_model_code": pytorch_model_code,
+                "rag_context": rag_context,
+            },
+        )
     )

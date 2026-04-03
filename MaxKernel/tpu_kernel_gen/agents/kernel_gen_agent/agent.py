@@ -86,14 +86,16 @@ class CustomLlmAgent(LlmAgent):
     """Initialize CustomLlmAgent with automatic Gemini model (with retry) wrapping."""
     # If model is a string, use the pre-configured gemini_model with retry support
     if "model" in kwargs and isinstance(kwargs["model"], str):
-      gemini_model = Gemini(
-        model=MODEL_NAME,
-        retry_options=types.HttpRetryOptions(
-          initial_delay=1,
-          attempts=5,
-        ),
-      )
-      kwargs["model"] = gemini_model
+      model_str = kwargs["model"]
+      if not model_str.startswith("claude"):
+        gemini_model = Gemini(
+          model=model_str,
+          retry_options=types.HttpRetryOptions(
+            initial_delay=1,
+            attempts=5,
+          ),
+        )
+        kwargs["model"] = gemini_model
     super().__init__(*args, **kwargs)
 
   async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
@@ -278,8 +280,6 @@ base_kernel_compilation_checker = KernelCompilationChecker(
   input_key="base_kernel_code",
   output_key="base_kernel_compilation_result",
 )
-
-
 gen_base_kernel_correctness_test_agent = CustomLlmAgent(
   name="GenBaseKernelCorrectnessTestAgent",
   model=MODEL_NAME,

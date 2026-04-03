@@ -7,3 +7,4 @@ jax[tpu]
 matplotlib
 pandas
 protobuf
+anthropic[vertex]

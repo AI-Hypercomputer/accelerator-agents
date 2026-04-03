@@ -4,6 +4,11 @@ This module contains the root orchestrator that coordinates all subagents
 for the human-in-the-loop kernel generation process.
 """
 
+from google.adk.models.anthropic_llm import Claude
+from google.adk.models.registry import LLMRegistry
+
+LLMRegistry.register(Claude)
+
 from tpu_kernel_gen.agents.hitl_kernel_gen_agent.callbacks import (
   add_workdir_callback,
   get_tpu_version_callback,
@@ -13,9 +18,7 @@ from tpu_kernel_gen.agents.hitl_kernel_gen_agent.config import (
   thinking_planner,
 )
 from tpu_kernel_gen.agents.hitl_kernel_gen_agent.prompts import interactive_prompt
-from tpu_kernel_gen.agents.hitl_kernel_gen_agent.subagents.explanation import (
-  explanation_agent,
-)
+from tpu_kernel_gen.agents.hitl_kernel_gen_agent.subagents.explanation import explanation_agent
 from tpu_kernel_gen.agents.hitl_kernel_gen_agent.subagents.gpu_to_jax_agent.agent import (
   gpu_to_jax_agent,
 )
@@ -24,9 +27,7 @@ from tpu_kernel_gen.agents.hitl_kernel_gen_agent.subagents.kernel_writing import
   plan_kernel_agent,
   validate_kernel_compilation_agent,
 )
-from tpu_kernel_gen.agents.hitl_kernel_gen_agent.subagents.profiling import (
-  profile_agent,
-)
+from tpu_kernel_gen.agents.hitl_kernel_gen_agent.subagents.profiling import profile_agent
 from tpu_kernel_gen.agents.hitl_kernel_gen_agent.subagents.testing import (
   unified_test_agent,
   validated_test_generation_agent,

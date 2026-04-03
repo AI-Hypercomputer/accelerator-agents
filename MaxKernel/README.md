@@ -97,10 +97,8 @@ hitl_agent/
 │   │   ├── pallas_docs.py
 │   │   └── pallas_profiling_docs.py
 │   ├── prompts                         # Main interactive prompt
-│   │   ├── __init__.py
 │   │   └── interactive_prompt.py
 │   ├── server_utils                    # Server management utilities
-│   │   ├── __init__.py
 │   │   ├── cpu_server.py
 │   │   ├── eval_config.yaml
 │   │   ├── eval_server.py
@@ -108,18 +106,14 @@ hitl_agent/
 │   │   ├── setup.sh
 │   │   └── tpu_server.py
 │   ├── subagents                       # Specialized subagents
-│   │   ├── __init__.py
 │   │   ├── explanation                 # Explanation agent
-│   │   │   ├── __init__.py
 │   │   │   ├── agent.py
 │   │   │   └── prompts
 │   │   ├── gpu_to_jax_agent            # GPU-to-JAX conversion subagent
 │   │   │   ├── README.md
-│   │   │   ├── __init__.py
 │   │   │   ├── agent.py
 │   │   │   ├── constants.py
 │   │   │   ├── evaluators
-│   │   │   │   ├── __init__.py
 │   │   │   │   ├── compilation_checker.py
 │   │   │   │   ├── correctness_checker.py
 │   │   │   │   ├── jax_syntax_checker.py
@@ -127,22 +121,15 @@ hitl_agent/
 │   │   │   ├── prompts
 │   │   │   └── test_agent.py
 │   │   ├── kernel_writing              # Kernel planning & implementation
-│   │   │   ├── __init__.py
-│   │   │   ├── __pycache__
-│   │   │   │   ├── __init__.cpython-310.pyc
-│   │   │   │   ├── agent.cpython-310.pyc
-│   │   │   │   └── kernel_compilation.cpython-310.pyc
 │   │   │   ├── agent.py
 │   │   │   ├── kernel_compilation.py
 │   │   │   └── prompts
 │   │   ├── profiling                  # Performance profiling
-│   │   │   ├── __init__.py
 │   │   │   ├── agent.py
 │   │   │   ├── kernel_profile.py
 │   │   │   ├── offline_tools.py
 │   │   │   └── prompts
 │   │   └── testing                   # Test generation & execution
-│   │       ├── __init__.py
 │   │       ├── agent.py
 │   │       └── prompts
 │   ├── tests
@@ -150,15 +137,13 @@ hitl_agent/
 │   │   ├── test_compilation_validation_loop.py
 │   │   └── test_validate_kernel_compilation_agent.py
 │   ├── tools                         # Agent tools
-│   │   ├── __init__.py
 │   │   ├── analyze_profile.py
 │   │   ├── api_rag
-│   │   │   ├── __init__.py
 │   │   │   └── get_apis.py
 │   │   ├── search_api_tool.py
 │   │   └── tools.py
 │   └── tpu_specs.json
-├── prepare_hitl_agent.sh            # Setup script
+├── prepare_hitl_agent.sh            # Hitl agent setup script
 ├── run_hitl_agent.sh                # Launch script (CLI or UI mode)
 └── setup.py
 ```

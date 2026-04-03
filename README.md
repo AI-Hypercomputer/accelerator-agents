@@ -1,7 +1,9 @@
 # Accelerator Agents (Preview)
 
-> **🚧 Work in Progress / Coming Soon 🚧**
-> This project is currently under active development. While the broader suite of agents is still evolving—with several features marked as "Coming Soon" on our product roadmap—**MaxKernel is now fully available and ready for use!** Stay tuned for additional releases and updates.
+> **🚧 Work in Progress / Coming Soon 🚧** > This project is currently under
+> active development. The agents and features described below represent the
+> product roadmap and are not yet fully available for use. Stay tuned for our
+> initial release!
 
 **Accelerator Agents** is a collection of AI-powered tools designed to
 accelerate machine learning development on Google Cloud TPUs. This repository
@@ -38,7 +40,7 @@ run efficiently on TPUs, leveraging high-performance frameworks like
 *   **Human-in-the-Loop:** Designed to draft initial implementations that
     developers can review and refine.
 
-### 2. MaxKernel
+### 2. MaxKernel (Coming Soon)
 
 The **MaxKernel** agent is a specialized tool planned for high-performance
 kernel development on TPUs. It will assist engineers in writing, optimizing, and

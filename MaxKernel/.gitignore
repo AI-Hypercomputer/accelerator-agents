@@ -1,7 +1,0 @@
-__pycache__/
-session_info/
-.env
-*egg-info
-*.txt
-.adk
-eval_config.yaml

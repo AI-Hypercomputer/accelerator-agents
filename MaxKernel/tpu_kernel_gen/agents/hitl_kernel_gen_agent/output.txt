@@ -1,0 +1,4 @@
+usage: adk [-h] [-sid SID] [-host HOST] [-port PORT] [-key KEY] [-ds DS]
+           [-f F]
+           command
+adk: error: unrecognized arguments: --port 1430 --session_service_uri sqlite:///hitl_kernel_gen_agent/sessions.db

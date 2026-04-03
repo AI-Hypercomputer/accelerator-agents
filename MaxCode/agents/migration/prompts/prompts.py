@@ -44,6 +44,12 @@ JAX_BEST_PRACTICES = """
     ordering exactly. Reshape to [B, T, num_k_heads, per_head_size] and split
     within each group. NEVER flatten to a single dimension and do a flat split
     -- this produces wrong tensors when num_k_heads != num_v_heads.
+13. **Weight Initialization**: Match PyTorch initialization exactly.
+    MoE router: `nn.initializers.zeros_init()` (NOT normal).
+    RMSNorm (1+w): `nn.initializers.zeros_init()`.
+    RMSNorm (w): `nn.initializers.ones_init()`.
+    Dense projections: `nn.initializers.normal(stddev=config.initializer_range)`.
+    Check each nn.Parameter in the source and match its init.
 
 ## CRITICAL: Faithfulness to Source Code
 
@@ -151,6 +157,32 @@ IMPORTANT CONVERSION RULES:
    linear attention, implement BOTH modes and dispatch based on sequence length.
 5. Implement causal_conv1d as a standalone function with both prefill and
    single-step decode paths.
+6. For causal operations with decode-time state (causal conv1d, linear
+   attention), implement SEPARATE prefill and decode functions. Do NOT use
+   a single unified function with conditional branching.
+7. ALWAYS include a `@dataclasses.dataclass` Config class at the top of the
+   output file. Mirror ALL fields from the PyTorch configuration class with
+   their types and default values. Use `dataclasses.field(default_factory=...)`
+   for mutable defaults. Use the Config type (not `Any`) in module annotations.
+8. The `load_balancing_loss` function MUST accept an optional `attention_mask`
+   parameter. When the mask is provided, broadcast it to match the concatenated
+   router logits shape and use it to exclude padding tokens from mean/sum
+   statistics. See the RAG context for the full pattern.
+9. **MoE Experts: Capacity-Based Dispatch (MANDATORY)**. The Experts class MUST
+   use capacity-based dispatch with dispatch/combine tensors -- NOT per-token
+   gather of expert weights. The correct pattern is:
+   a) Compute per-expert capacity: `capacity = ceil(T * K / E) * 1.5`
+   b) Build dispatch tensor via `one_hot(selected_experts) -> cumsum -> positions
+      -> one_hot(positions, capacity)` to get `dispatch: [T, E, C]`
+   c) Build combine tensor: `combine = dispatch * routing_weights`
+   d) Route tokens to expert buffers: `expert_in = einsum('tec,th->ech', dispatch, x)`
+   e) Batched expert matmul: `expert_out = einsum('ech,ehi->eci', expert_in, W)`
+   f) Scatter back: `output = einsum('tec,ech->th', combine, expert_out)`
+   Do NOT use `weight[flat_indices]` gather or `jax.vmap` over individual experts.
+   Do NOT use `jnp.einsum('td,edh->teh')` computing all experts for all tokens.
+   The capacity-based approach is 10-50x more efficient for large E (e.g. E=64).
+   See the RAG context file `targeted_moe_capacity_routing_jax.py` for the full
+   implementation with WRONG/CORRECT examples.
 
 Please think step by step about the conversion process before generating the code.
 Then, provide the complete JAX equivalent of the entire file above.

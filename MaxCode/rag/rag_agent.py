@@ -17,7 +17,7 @@ import numpy as np
 # way to get the max context length in characters, 20000 characters
 # (roughly 5000-7000 tokens) is a safe limit for models with 32k token limits,
 # when considering that the prompt sends file content in two fields.
-_MAX_CONTEXT_LENGTH = 100000
+_MAX_CONTEXT_LENGTH = 100_000
 
 
 class RAGAgent(base.Agent):

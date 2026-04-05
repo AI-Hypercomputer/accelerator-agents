@@ -59,7 +59,7 @@ class GeminiTool:
     self.api_key = api_key
     self.endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name.value}:generateContent?key={self.api_key}"
 
-  def __call__(self, user_prompt):
+  def __call__(self, user_prompt: str):
     """Generates a response from the Gemini API based on the user prompt.
 
     Args:
@@ -82,23 +82,38 @@ class GeminiTool:
         response = requests.post(
             self.endpoint, headers=headers, json=payload, timeout=600
         )
-        response.raise_for_status()  # Raise HTTPError for bad responses
+        response.raise_for_status()
         json_response = response.json()
         return json_response["candidates"][0]["content"]["parts"][0]["text"]
       except requests.exceptions.RequestException as e:
         status = getattr(getattr(e, "response", None), "status_code", None)
         if status in (429, 500, 503) and attempt < max_retries - 1:
           wait = min(60, 2 ** (attempt + 2)) + random.uniform(0, 2)
-          logging.warning("Gemini API %s, retrying in %.1fs (attempt %d/%d)...",
-                          status, wait, attempt + 1, max_retries)
+          logging.warning(
+              "Gemini API %s, retrying in %.1fs (attempt %d/%d)...",
+              status,
+              wait,
+              attempt + 1,
+              max_retries,
+          )
           time.sleep(wait)
           continue
-        logging.error("Error calling Gemini API: %s", e)
+        logging.exception("Error calling Gemini API: %s", e)
         raise
       except (KeyError, IndexError) as e:
-        logging.error("Error parsing Gemini API response: %s", e)
+        logging.exception("Error parsing Gemini API response: %s", e)
         raise ValueError("Could not parse response from Gemini API.") from e
 
-  def generate(self, user_prompt: str) -> str:
-    """Alias for __call__ to support agents expecting a generate method."""
+  def generate(self, user_prompt: str):
+    """Generates a response from the Gemini API.
+
+    This method is an alias for `__call__` to support agents expecting a
+    `generate` method.
+
+    Args:
+      user_prompt (str): The user's prompt.
+
+    Returns:
+        str: The generated text response from the Gemini API.
+    """
     return self(user_prompt)

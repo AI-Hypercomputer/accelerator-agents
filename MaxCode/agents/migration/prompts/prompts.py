@@ -183,6 +183,33 @@ IMPORTANT CONVERSION RULES:
    The capacity-based approach is 10-50x more efficient for large E (e.g. E=64).
    See the RAG context file `targeted_moe_capacity_routing_jax.py` for the full
    implementation with WRONG/CORRECT examples.
+10. **KV Cache: Pure Functional NamedTuple (MANDATORY)**. All KV caches MUST be
+    NamedTuple objects passed as function arguments and returned as outputs.
+    Do NOT use Flax mutable variables (`self.variable('cache', ...)`).
+    Do NOT use config dicts with init flags.
+    For encoder-decoder models: use SEPARATE self_attn_cache and cross_attn_cache
+    arguments per layer. Cross-attention caches are populated once from encoder
+    output and passed through unchanged on subsequent decode steps.
+    Provide an `init_kv_caches()` helper function that pre-allocates all layer
+    caches. This replaces PyTorch's `install_kv_cache_hooks()`.
+    See the RAG context for the full encoder-decoder cache pattern.
+11. **Tied Output Projection**: When the PyTorch source computes logits via
+    `x @ self.token_embedding.weight.T`, convert it to
+    `(x @ token_embedding.embedding.T).astype(jnp.float32)`.
+    Do NOT use `token_embedding.attend(x)` -- that is for embedding lookup,
+    not linear projection, and may produce different results.
+12. **Fused QKV Projection**: When the PyTorch source uses a single
+    `in_proj_weight` of shape [3*embed_dim, embed_dim] with sliced projection
+    methods (in_proj_qkv, in_proj_q, in_proj_kv), preserve this as a SINGLE
+    parameter with sliced access in JAX. Do NOT split into 3 separate nn.Dense
+    layers. Use `self.param('in_proj_weight', init, (3*D, D))` and slice it
+    for Q [0:D], K [D:2D], V [2D:3D]. Provide in_proj_qkv(), in_proj_q(),
+    in_proj_kv() methods matching the PyTorch API.
+13. **Float32 Softmax Upcast (MANDATORY)**: When the PyTorch source uses
+    `.float()` or `dtype=torch.float32` before softmax, you MUST preserve this
+    in JAX: `jax.nn.softmax(attn_weights.astype(jnp.float32), axis=-1)` then
+    cast back with `.astype(q.dtype)`. This is critical for numerical stability
+    in bfloat16/float16. NEVER omit this upcast.
 
 Please think step by step about the conversion process before generating the code.
 Then, provide the complete JAX equivalent of the entire file above.

@@ -1,0 +1,25 @@
+task_id: flash_attention
+description: Kernel task for flash_attention
+input_gen_code: |-
+  def get_inputs():
+    import jax
+    import jax.numpy as jnp
+
+    CONFIG = {
+        'name': 'flash_attention_baseline',
+        'model': 'Baseline-MHA',
+        'operator': 'causal_mha',
+        'batch': 1,
+        'seq_len': 4096,
+        'num_heads': 32,
+        'head_dim': 128,
+    }
+    dtype = jnp.bfloat16
+    key = jax.random.PRNGKey(42)
+    k1, k2, k3 = jax.random.split(key, 3)
+    B, S = CONFIG['batch'], CONFIG['seq_len']
+    H, D = CONFIG['num_heads'], CONFIG['head_dim']
+    query = jax.random.normal(k1, (B, H, S, D), dtype=dtype)
+    key_t = jax.random.normal(k2, (B, H, S, D), dtype=dtype)
+    value = jax.random.normal(k3, (B, H, S, D), dtype=dtype)
+    return [query, key_t, value], []

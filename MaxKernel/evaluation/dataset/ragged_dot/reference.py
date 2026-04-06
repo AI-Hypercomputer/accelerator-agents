@@ -1,0 +1,30 @@
+# Imports
+import jax
+import jax.numpy as jnp
+
+
+# Initialization
+def get_inputs():
+  CONFIG = {
+    "name": "mixtral_8x7b_ragged_dot",
+    "model": "Mixtral-8x7B",
+    "operator": "ragged_dot",
+    "num_groups": 8,
+    "M": 8192,
+    "K": 4096,
+    "N": 14336,
+  }
+  dtype = jnp.bfloat16
+  key = jax.random.PRNGKey(42)
+  k1, k2 = jax.random.split(key, 2)
+  G, M, K, N = CONFIG["num_groups"], CONFIG["M"], CONFIG["K"], CONFIG["N"]
+  x = jax.random.normal(k1, (G, M // G, K), dtype=dtype)
+  weights = jax.random.normal(k2, (G, K, N), dtype=dtype) * 0.02
+  dynamic_args = [x, weights]
+  static_args = []
+  return dynamic_args, static_args
+
+
+# Computation
+def computation(x, weights):
+  return jnp.einsum("gmk,gkn->gmn", x, weights)

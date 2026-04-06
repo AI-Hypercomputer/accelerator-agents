@@ -2,8 +2,9 @@
 import argparse
 import importlib
 import inspect
-import textwrap
 import pkgutil  # <-- Switched to the more robust pkgutil for discovery
+import textwrap
+
 from docstring_parser import parse as parse_docstring
 
 # --- API Discovery (Now using pkgutil for reliability) ---
@@ -11,24 +12,24 @@ from docstring_parser import parse as parse_docstring
 
 def discover_apis(api_prefix, recursive):
   """
-    Discovers APIs. If recursive, performs a deep walk of all submodules
-    using the robust pkgutil method.
-    """
+  Discovers APIs. If recursive, performs a deep walk of all submodules
+  using the robust pkgutil method.
+  """
   if not recursive:
     try:
       resolve_api(api_prefix)
       return [api_prefix]
     except ImportError as e:
       print(
-          f"❌ Error: Could not resolve the single API '{api_prefix}'. Details: {e}"
+        f"❌ Error: Could not resolve the single API '{api_prefix}'. Details: {e}"
       )
       return []
 
   print(
-      f"🔎 Deep-recursively discovering APIs under '{api_prefix}' using pkgutil..."
+    f"🔎 Deep-recursively discovering APIs under '{api_prefix}' using pkgutil..."
   )
   found_apis = set()
-  root_package = api_prefix.split('.')[0]
+  root_package = api_prefix.split(".")[0]
 
   try:
     # Import the top-level package to get its filesystem path for pkgutil
@@ -37,7 +38,7 @@ def discover_apis(api_prefix, recursive):
     search_path = prefix_module.__path__
   except (ImportError, AttributeError):
     print(
-        f"❌ Error: '{api_prefix}' is not a valid package or could not be found."
+      f"❌ Error: '{api_prefix}' is not a valid package or could not be found."
     )
     return []
 
@@ -45,8 +46,9 @@ def discover_apis(api_prefix, recursive):
   modules_to_inspect = {api_prefix}
 
   # pkgutil.walk_packages finds all submodules recursively
-  for module_info in pkgutil.walk_packages(path=search_path,
-                                           prefix=api_prefix + '.'):
+  for module_info in pkgutil.walk_packages(
+    path=search_path, prefix=api_prefix + "."
+  ):
     modules_to_inspect.add(module_info.name)
 
   # Now, iterate through the complete list of discovered modules
@@ -54,14 +56,16 @@ def discover_apis(api_prefix, recursive):
     try:
       module = importlib.import_module(module_name)
       for member_name, member in inspect.getmembers(module):
-        if member_name.startswith('_'):
+        if member_name.startswith("_"):
           continue
 
         # Add functions or classes that belong to the root package
-        if (inspect.isfunction(member) or inspect.isclass(member)):
-          if hasattr(member, '__module__'
-                    ) and member.__module__ and member.__module__.startswith(
-                        root_package):
+        if inspect.isfunction(member) or inspect.isclass(member):
+          if (
+            hasattr(member, "__module__")
+            and member.__module__
+            and member.__module__.startswith(root_package)
+          ):
             full_api_path = f"{module_name}.{member_name}"
             found_apis.add(full_api_path)
     except Exception:
@@ -70,7 +74,7 @@ def discover_apis(api_prefix, recursive):
 
   if not found_apis:
     print(
-        f"⚠️ Warning: No public functions or classes found under '{api_prefix}'."
+      f"⚠️ Warning: No public functions or classes found under '{api_prefix}'."
     )
   else:
     print(f"✅ Found {len(found_apis)} APIs to document.")
@@ -113,9 +117,10 @@ def get_attributes(obj):
   """Gets the public attributes of a class."""
   if inspect.isclass(obj):
     return [
-        name for name, _ in inspect.getmembers(obj)
-        if not name.startswith("_") and
-        not inspect.isroutine(getattr(obj, name, None))
+      name
+      for name, _ in inspect.getmembers(obj)
+      if not name.startswith("_")
+      and not inspect.isroutine(getattr(obj, name, None))
     ]
   return []
 
@@ -131,8 +136,11 @@ def format_docstring_sections(doc):
   returns = parsed.returns
   examples = parsed.examples
 
-  param_strs = [f"  - **{p.arg_name}**: {p.description}" for p in parameters
-               ] if parameters else []
+  param_strs = (
+    [f"  - **{p.arg_name}**: {p.description}" for p in parameters]
+    if parameters
+    else []
+  )
   return_str = f"{returns.description}" if returns else ""
   example_str = "\n".join(ex.description for ex in examples) if examples else ""
   return description, param_strs, return_str, example_str
@@ -140,9 +148,9 @@ def format_docstring_sections(doc):
 
 def generate_definition(api_str):
   """
-    Resolves a JAX API, parses its documentation, and returns the
-    formatted definition as a string.
-    """
+  Resolves a JAX API, parses its documentation, and returns the
+  formatted definition as a string.
+  """
   obj = resolve_api(api_str)
   doc = inspect.getdoc(obj)
   signature = get_signature(obj)
@@ -190,22 +198,22 @@ def generate_definition(api_str):
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(
-      description="Parse JAX API definitions and write to a file.")
-  parser.add_argument(
-      "--api",
-      type=str,
-      required=True,
-      help=
-      "JAX API string (e.g., jax.numpy.dot) or prefix for recursion (e.g., jax.numpy)."
+    description="Parse JAX API definitions and write to a file."
   )
-  parser.add_argument("--output",
-                      type=str,
-                      required=True,
-                      help="Path to the output file.")
   parser.add_argument(
-      "--recursive",
-      action="store_true",
-      help="If enabled, finds all public APIs under the given --api prefix.")
+    "--api",
+    type=str,
+    required=True,
+    help="JAX API string (e.g., jax.numpy.dot) or prefix for recursion (e.g., jax.numpy).",
+  )
+  parser.add_argument(
+    "--output", type=str, required=True, help="Path to the output file."
+  )
+  parser.add_argument(
+    "--recursive",
+    action="store_true",
+    help="If enabled, finds all public APIs under the given --api prefix.",
+  )
   args = parser.parse_args()
 
   try:

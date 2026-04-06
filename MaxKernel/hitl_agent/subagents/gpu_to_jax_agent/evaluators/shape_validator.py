@@ -27,14 +27,14 @@ class ShapeValidator(BaseAgent):
 
     # Pattern 1: Shape from random/zeros/ones calls: (N, M, K)
     shape_patterns = [
-        r"random\.normal\([^,]+,\s*\(([^)]+)\)\)",
-        r"random\.uniform\([^,]+,\s*\(([^)]+)\)\)",
-        r"jnp\.zeros\(\(([^)]+)\)\)",
-        r"jnp\.ones\(\(([^)]+)\)\)",
-        r"np\.zeros\(\(([^)]+)\)\)",
-        r"np\.ones\(\(([^)]+)\)\)",
-        r"torch\.randn\(\(([^)]+)\)\)",
-        r"torch\.zeros\(\(([^)]+)\)\)",
+      r"random\.normal\([^,]+,\s*\(([^)]+)\)\)",
+      r"random\.uniform\([^,]+,\s*\(([^)]+)\)\)",
+      r"jnp\.zeros\(\(([^)]+)\)\)",
+      r"jnp\.ones\(\(([^)]+)\)\)",
+      r"np\.zeros\(\(([^)]+)\)\)",
+      r"np\.ones\(\(([^)]+)\)\)",
+      r"torch\.randn\(\(([^)]+)\)\)",
+      r"torch\.zeros\(\(([^)]+)\)\)",
     ]
 
     for pattern in shape_patterns:
@@ -63,7 +63,8 @@ class ShapeValidator(BaseAgent):
     return shapes
 
   def validate_shape_consistency(
-      self, code: str) -> Tuple[bool, List[str], List[str]]:
+    self, code: str
+  ) -> Tuple[bool, List[str], List[str]]:
     """Validate shape consistency in the code."""
     errors = []
     warnings = []
@@ -73,7 +74,7 @@ class ShapeValidator(BaseAgent):
     # Check if we found any shape information
     if not shapes["inputs"]:
       warnings.append(
-          "Could not extract shape information from code. Manual verification recommended."
+        "Could not extract shape information from code. Manual verification recommended."
       )
       return True, errors, warnings
 
@@ -85,20 +86,20 @@ class ShapeValidator(BaseAgent):
         # Look for common mistakes like (N, M) @ (N, K) instead of (N, M) @ (M, K)
         if "@" in line:
           warnings.append(
-              f"Line {i}: Found @ operator - verify matrix dimensions are compatible"
+            f"Line {i}: Found @ operator - verify matrix dimensions are compatible"
           )
 
       # Check for reshape operations that might change dimensions
       if "reshape" in line or "view" in line:
         warnings.append(
-            f"Line {i}: Found reshape operation - verify shape transformation is correct"
+          f"Line {i}: Found reshape operation - verify shape transformation is correct"
         )
 
       # Check for reduce operations that change dimensions
       if any(op in line for op in ["sum(", "mean(", "max(", "min(", "reduce("]):
         if "axis=" not in line and "dim=" not in line:
           warnings.append(
-              f"Line {i}: Found reduction operation without explicit axis - output shape may differ from expected"
+            f"Line {i}: Found reduction operation without explicit axis - output shape may differ from expected"
           )
 
     # Verify computation function signature
@@ -108,16 +109,18 @@ class ShapeValidator(BaseAgent):
         if isinstance(node, ast.FunctionDef) and node.name == "computation":
           # Check if function has type hints
           has_type_hints = any(
-              arg.annotation is not None for arg in node.args.args)
+            arg.annotation is not None for arg in node.args.args
+          )
           if not has_type_hints:
             warnings.append(
-                "computation() function missing type hints - add jnp.ndarray annotations for clarity"
+              "computation() function missing type hints - add jnp.ndarray annotations for clarity"
             )
 
           # Check return type
           if node.returns is None:
             warnings.append(
-                "computation() function missing return type annotation")
+              "computation() function missing return type annotation"
+            )
     except:
       pass
 
@@ -125,14 +128,16 @@ class ShapeValidator(BaseAgent):
     return is_valid, errors, warnings
 
   async def _run_async_impl(
-      self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
+    self, ctx: InvocationContext
+  ) -> AsyncGenerator[Event, None]:
     code = ctx.session.state.get(self.input_key, "")
     if not code:
       logging.warning(f"[{self.name}] No {self.input_key} found in context")
       yield Event(
-          author=self.name,
-          actions=EventActions(
-              state_delta={self.output_key: "No code to validate"}),
+        author=self.name,
+        actions=EventActions(
+          state_delta={self.output_key: "No code to validate"}
+        ),
       )
       return
 
@@ -150,8 +155,8 @@ class ShapeValidator(BaseAgent):
 
         logging.error(f"[{self.name}] {error_msg}")
         yield Event(
-            author=self.name,
-            actions=EventActions(state_delta={self.output_key: error_msg}),
+          author=self.name,
+          actions=EventActions(state_delta={self.output_key: error_msg}),
         )
       else:
         success_msg = "Shape Validation Passed"
@@ -165,14 +170,14 @@ class ShapeValidator(BaseAgent):
 
         logging.info(f"[{self.name}] {success_msg}")
         yield Event(
-            author=self.name,
-            actions=EventActions(state_delta={self.output_key: success_msg}),
+          author=self.name,
+          actions=EventActions(state_delta={self.output_key: success_msg}),
         )
 
     except Exception as e:
       error_msg = f"Exception during shape validation: {str(e)}"
       logging.error(f"[{self.name}] {error_msg}")
       yield Event(
-          author=self.name,
-          actions=EventActions(state_delta={self.output_key: error_msg}),
+        author=self.name,
+        actions=EventActions(state_delta={self.output_key: error_msg}),
       )

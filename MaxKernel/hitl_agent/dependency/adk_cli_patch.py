@@ -18,8 +18,9 @@ def apply_patch():
 
   # Find the ADK installation
   import google.adk
+
   adk_path = Path(google.adk.__file__).parent
-  cli_file = adk_path / 'cli' / 'cli.py'
+  cli_file = adk_path / "cli" / "cli.py"
 
   if not cli_file.exists():
     print(f"Error: Could not find {cli_file}")
@@ -114,7 +115,7 @@ async def run_cli("""
     content = content.replace(old_code_4, new_code_4)
 
   # Backup the original
-  backup_file = cli_file.with_suffix('.py.backup')
+  backup_file = cli_file.with_suffix(".py.backup")
   if not backup_file.exists():
     backup_file.write_text(cli_file.read_text())
     print(f"Backup created: {backup_file}")
@@ -128,9 +129,10 @@ async def run_cli("""
 def revert_patch():
   """Revert the patch."""
   import google.adk
+
   adk_path = Path(google.adk.__file__).parent
-  cli_file = adk_path / 'cli' / 'cli.py'
-  backup_file = cli_file.with_suffix('.py.backup')
+  cli_file = adk_path / "cli" / "cli.py"
+  backup_file = cli_file.with_suffix(".py.backup")
 
   if not backup_file.exists():
     print("No backup found!")
@@ -141,8 +143,8 @@ def revert_patch():
   return True
 
 
-if __name__ == '__main__':
-  if len(sys.argv) > 1 and sys.argv[1] == 'revert':
+if __name__ == "__main__":
+  if len(sys.argv) > 1 and sys.argv[1] == "revert":
     revert_patch()
   else:
     apply_patch()

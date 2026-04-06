@@ -1,4 +1,4 @@
-#hitl_agent/subagents/profiling/prompts/analyze_profile_prompt.py
+# hitl_agent/subagents/profiling/prompts/analyze_profile_prompt.py
 """Prompt for analyzing profiling results using offline XProf tools."""
 
 PROMPT = """

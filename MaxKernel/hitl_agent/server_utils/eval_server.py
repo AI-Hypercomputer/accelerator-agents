@@ -2,21 +2,22 @@ import asyncio
 import logging
 from enum import Enum
 from typing import Optional
-import asyncio
+
 import aiohttp
 import yaml
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+
 from hitl_agent.constants import (
-    EVAL_SERVER_PORT,
-    TPU_TIMEOUT,
+  EVAL_SERVER_PORT,
+  TPU_TIMEOUT,
 )
 from hitl_agent.server_utils.tpu_server import CodeResponse, get_tpu_version
 
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+  level=logging.INFO,
+  format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+  datefmt="%Y-%m-%d %H:%M:%S",
 )
 
 app = FastAPI(title="Agent Evaluation Server", version="1.0.0")
@@ -25,7 +26,6 @@ tpu_semaphore = asyncio.Semaphore(1)
 
 
 class Backend:
-
   def __init__(self, name: str, ip: str, port: int, backend_type: str = "tpu"):
     self.name = name
     self.ip = ip
@@ -84,7 +84,6 @@ class EvalRequest(BaseModel):
 
 
 class Evaluator:
-
   def __init__(self, cfg_path="eval_config.yaml"):
     with open(cfg_path, "r") as file:
       self.config = yaml.safe_load(file)
@@ -95,26 +94,26 @@ class Evaluator:
       logging.info("Using 'backends' configuration format")
       for backend_config in self.config["backends"]:
         backend_obj = Backend(
-            name=backend_config["name"],
-            ip=backend_config["ip"],
-            port=backend_config["port"],
-            backend_type=backend_config.get("type", "tpu"),
+          name=backend_config["name"],
+          ip=backend_config["ip"],
+          port=backend_config["port"],
+          backend_type=backend_config.get("type", "tpu"),
         )
         self.backends.append(backend_obj)
     else:
       raise ValueError(
-          "No backends configured in eval_config.yaml. Please use the 'backends' format."
+        "No backends configured in eval_config.yaml. Please use the 'backends' format."
       )
 
     logging.info(f"Evaluator initialized with backends: {self.backends}")
 
   async def get_available_backend(self, backend_type: Optional[str] = None):
     """
-        Get an available backend, optionally filtered by type.
+    Get an available backend, optionally filtered by type.
 
-        Args:
-            backend_type: If specified, only return backends of this type ("tpu" or "cpu")
-        """
+    Args:
+        backend_type: If specified, only return backends of this type ("tpu" or "cpu")
+    """
     while True:
       for backend in self.backends:
         if backend.get_status() == "available":
@@ -140,7 +139,8 @@ async def evaluate(request: EvalRequest):
   async with tpu_semaphore:
     # Get available backend, optionally filtered by requested backend type
     backend = await evaluator.get_available_backend(
-        backend_type=request.backend_type)
+      backend_type=request.backend_type
+    )
     backend_ip = backend.ip
     backend_port = backend.port
     backend_name = backend.name
@@ -149,41 +149,43 @@ async def evaluate(request: EvalRequest):
 
   try:
     # Start evaluation process
-    requested_type_msg = (f" (requested: {request.backend_type})"
-                          if request.backend_type else "")
+    requested_type_msg = (
+      f" (requested: {request.backend_type})" if request.backend_type else ""
+    )
     logging.info(
-        f"Starting evaluation on {backend_type} backend '{backend_name}' ({backend_ip}:{backend_port}) for {request.eval_type.value}{requested_type_msg}"
+      f"Starting evaluation on {backend_type} backend '{backend_name}' ({backend_ip}:{backend_port}) for {request.eval_type.value}{requested_type_msg}"
     )
 
     # Send request to backend server
     async with aiohttp.ClientSession() as session:
       async with session.post(
-          f"http://{backend_ip}:{backend_port}/{request.eval_type.value}",
-          json={
-              "eval_type": request.eval_type.value,
-              "code": request.code,
-              "timeout": request.timeout,
-          },
+        f"http://{backend_ip}:{backend_port}/{request.eval_type.value}",
+        json={
+          "eval_type": request.eval_type.value,
+          "code": request.code,
+          "timeout": request.timeout,
+        },
       ) as response:
         result = await response.json()
         logging.info(
-            f"Received response from {backend_name}: {response.status}")
+          f"Received response from {backend_name}: {response.status}"
+        )
 
         if response.status != 200:
           if response.status == 408:
             raise HTTPException(
-                status_code=408,
-                detail=
-                f"Backend evaluation timed out. Timeout was set to {TPU_TIMEOUT} seconds.",
+              status_code=408,
+              detail=f"Backend evaluation timed out. Timeout was set to {TPU_TIMEOUT} seconds.",
             )
           raise HTTPException(
-              status_code=response.status,
-              detail=result.get("detail", "Backend evaluation failed"),
+            status_code=response.status,
+            detail=result.get("detail", "Backend evaluation failed"),
           )
 
     # Mark backend as available after evaluation
     logging.info(
-        f"Evaluation completed on {backend_name}, marking as available")
+      f"Evaluation completed on {backend_name}, marking as available"
+    )
     backend.set_status("available")
 
     return result

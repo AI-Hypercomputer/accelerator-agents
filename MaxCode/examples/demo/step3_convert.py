@@ -63,6 +63,7 @@ def main():
     # Use best available model for migration
     migration_model = None
     for model_enum in [
+        models.GeminiModel.GEMINI_3_1_PRO_PREVIEW,
         models.GeminiModel.GEMINI_2_5_PRO,
         models.GeminiModel.GEMINI_2_5_FLASH,
     ]:

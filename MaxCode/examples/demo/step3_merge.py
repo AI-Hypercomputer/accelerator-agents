@@ -65,13 +65,24 @@ def merge_files(file_paths, repo_dir, output_path):
             content = f.read()
 
         section_lines = []
+        in_docstring = False
         for line in content.split("\n"):
             stripped = line.strip()
+            # Track triple-quoted strings (docstrings / multi-line comments)
+            triple_count = stripped.count('"""') + stripped.count("'''")
+            if triple_count % 2 == 1:
+                in_docstring = not in_docstring
+            # Inside a docstring, keep the line as-is
+            if in_docstring or triple_count > 0:
+                section_lines.append(line)
+                continue
             # Skip relative imports (handled by merging)
             if stripped.startswith("from .") or stripped.startswith("from .."):
                 continue
-            # Collect standard imports
-            if stripped.startswith("import ") or stripped.startswith("from "):
+            # Collect standard imports (only at top-level indentation)
+            if not line[:1].isspace() and (
+                stripped.startswith("import ") or stripped.startswith("from ")
+            ):
                 import_lines.add(line)
             else:
                 section_lines.append(line)

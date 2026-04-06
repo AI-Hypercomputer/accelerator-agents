@@ -13,7 +13,7 @@ class GeminiModel(enum.Enum):
   GEMINI_2_5_PRO = "gemini-2.5-pro"
   GEMINI_2_5_FLASH = "gemini-2.5-flash"
   GEMINI_3_0_PRO = "gemini-3.0-pro"
-  GEMINI_3_0_FLASH = "gemini-3.0-flash"
+  GEMINI_3_0_FLASH = "gemini-3-flash-preview"
   GEMINI_3_1_PRO_PREVIEW = "gemini-3.1-pro-preview"
 
 
@@ -30,7 +30,7 @@ class GeminiTool:
 
   def __init__(
       self,
-      model_name: GeminiModel | str = GeminiModel.GEMINI_2_5_PRO,
+      model_name: GeminiModel | str = GeminiModel.GEMINI_3_0_FLASH,
       system_instruction=None,
       api_key=None,
   ):

@@ -1,6 +1,7 @@
 """Base class for all agents."""
 
 import abc
+import logging
 from typing import Any, Dict, Optional
 
 from agents import utils
@@ -35,6 +36,11 @@ class Agent(abc.ABC):
       prompt = prompt_template.format(**prompt_vars)
     else:
       prompt = prompt_template
+    logging.info(
+        "--- %s PROMPT ---\n%s\n--- END PROMPT ---",
+        self.agent_type.name,
+        prompt,
+    )
     return self._model.generate(prompt)
 
   @abc.abstractmethod

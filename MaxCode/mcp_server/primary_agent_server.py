@@ -7,6 +7,7 @@ import re
 from absl import app
 from mcp_server import adk_agents
 from google.adk.agents.llm_agent import LlmAgent as Agent
+from google.adk.models.google_llm import Gemini
 from google.adk.runners import Runner
 from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from google.genai import types
@@ -60,6 +61,17 @@ async def _execute_adk_agent(
     # 1. Handle API Key (Set in env so ADK model client finds it)
     if effective_api_key:
       os.environ["GOOGLE_API_KEY"] = effective_api_key
+
+    model_match = re.search(r"model_name=([\w.-]+)", prompt, re.IGNORECASE)
+    if model_match:
+      model_name = model_match.group(1).strip().rstrip(".")
+      logging.info("Model name extracted from prompt: %s", model_name)
+      agent.model = Gemini(model=model_name)
+
+    if isinstance(agent.model, Gemini):
+      logging.info("Using model: %s", agent.model.model)
+    else:
+      logging.info("Using model: %s", agent.model)
     session_service = InMemorySessionService()
     runner = Runner(
         agent=agent,

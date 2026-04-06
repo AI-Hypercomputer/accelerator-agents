@@ -1,5 +1,6 @@
 """ADK agent definitions."""
 
+import models
 from tools import evaluation_tool
 from tools import migration_tool
 from google.adk.agents.llm_agent import LlmAgent as Agent
@@ -7,7 +8,7 @@ from google.adk.models.google_llm import Gemini
 
 migration_agent = Agent(
     name="migration_agent",
-    model=Gemini(),
+    model=Gemini(model=models.GeminiModel.GEMINI_3_0_FLASH.value),
     description=(
         "Handles end-to-end code migration tasks, such as converting PyTorch"
         " to JAX, generating oracle data, and creating equivalence tests."
@@ -43,7 +44,7 @@ Always wait for a tool to succeed before moving to the next step. If a step fail
 
 evaluation_agent = Agent(
     name="evaluation_agent",
-    model=Gemini(),
+    model=Gemini(model=models.GeminiModel.GEMINI_3_0_FLASH.value),
     description=(
         "Handles the generation of evaluation configurations and scripts."
     ),

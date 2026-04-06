@@ -1,4 +1,5 @@
 """Primary orchestration agent for repository migration."""
+import logging
 import os
 from typing import Any
 
@@ -7,19 +8,26 @@ from agents import base
 from agents import utils
 from agents.migration import model_conversion_agent
 from agents.migration import single_file_agent
+from agents.migration import validation_agent
 from rag import rag_agent
+
+logger = logging.getLogger(__name__)
 
 
 class PrimaryAgent(base.Agent):
   """Primary orchestration agent for repository migration."""
 
-  def __init__(self, model: Any, api_key: str | None = None):
+  def __init__(self, model: Any, api_key: str | None = None,
+               validate: bool = True):
     """Initializes the agent."""
     super().__init__(
         model=model,
         agent_domain=utils.AgentDomain.MIGRATION,
         agent_type=utils.AgentType.PRIMARY,
     )
+    self._model_ref = model
+    self._validate = validate
+    self._validation_results: dict[str, dict] = {}
     self._rag_agent = rag_agent.RAGAgent(
         model,
         embedding_model_name=models.EmbeddingModel.GEMINI_EMBEDDING_001,
@@ -38,6 +46,55 @@ class PrimaryAgent(base.Agent):
       return self._model_conversion_agent.run(pytorch_code)
     return self._single_file_agent.run(pytorch_code)
 
+  def _validate_and_repair(self, pytorch_code: str, converted_code: str,
+                           file_path: str) -> str:
+    """Validates converted code and repairs deviations if found.
+
+    Args:
+      pytorch_code: The original PyTorch source code.
+      converted_code: The converted JAX/Flax code.
+      file_path: The file path (used as key for storing results).
+
+    Returns:
+      The final code (repaired if deviations were found, original otherwise).
+    """
+    validator = validation_agent.ValidationAgent(self._model_ref)
+    deviations = validator.validate(pytorch_code, converted_code)
+    logger.info("Validation of %s: found %d deviations",
+                file_path, len(deviations))
+
+    result = {
+        "deviations_found": len(deviations),
+        "deviations": deviations,
+        "remaining_deviations_count": 0,
+        "remaining_deviations": [],
+    }
+
+    if deviations:
+      repaired_code = validator.repair(
+          converted_code, deviations, pytorch_code=pytorch_code
+      )
+      remaining = validator.validate(pytorch_code, repaired_code)
+      logger.info("Re-validation of %s: %d remaining deviations",
+                  file_path, len(remaining))
+      result["remaining_deviations_count"] = len(remaining)
+      result["remaining_deviations"] = remaining
+      self._validation_results[file_path] = result
+      return repaired_code
+
+    self._validation_results[file_path] = result
+    return converted_code
+
+  def get_validation_results(self) -> dict[str, dict]:
+    """Returns validation results for all processed files.
+
+    Returns:
+      A dictionary mapping file paths to their validation results, each
+      containing deviations_found, deviations, remaining_deviations_count,
+      and remaining_deviations.
+    """
+    return self._validation_results
+
   def run(self, repo_path: str) -> dict[str, str]:
     """Orchestrates the migration of a repository from PyTorch to JAX.
 
@@ -51,6 +108,10 @@ class PrimaryAgent(base.Agent):
       with open(repo_path, "r", encoding="utf-8", errors="replace") as f:
         pytorch_code = f.read()
       converted_code = self._convert_file(pytorch_code, repo_path)
+      if self._validate:
+        converted_code = self._validate_and_repair(
+            pytorch_code, converted_code, repo_path
+        )
       return {repo_path: converted_code}
     except OSError:
       # If opening as a file fails, check if it's a directory.
@@ -73,6 +134,10 @@ class PrimaryAgent(base.Agent):
       with open(file_path, "r", encoding="utf-8", errors="replace") as f:
         pytorch_code = f.read()
       converted_code = self._convert_file(pytorch_code, file_path)
+      if self._validate:
+        converted_code = self._validate_and_repair(
+            pytorch_code, converted_code, file_path
+        )
       converted_files[file_path] = converted_code
 
     return converted_files

@@ -45,13 +45,46 @@ JAX_BEST_PRACTICES = """
     within each group. NEVER flatten to a single dimension and do a flat split
     -- this produces wrong tensors when num_k_heads != num_v_heads.
 13. **Weight Initialization**: Match PyTorch initialization exactly.
-    MoE router: `nn.initializers.zeros_init()` (NOT normal).
+    When the source explicitly calls `nn.init.zeros_` on a layer, use
+    `nn.initializers.zeros_init()`. When the source uses bare `nn.Linear()`
+    with no explicit init, use the Flax default (lecun_normal) or
+    `nn.initializers.normal(stddev=config.initializer_range)` -- do NOT use
+    zeros_init unless the source explicitly initializes to zeros.
     RMSNorm (1+w): `nn.initializers.zeros_init()`.
     RMSNorm (w): `nn.initializers.ones_init()`.
-    Dense projections: `nn.initializers.normal(stddev=config.initializer_range)`.
     Check each nn.Parameter in the source and match its init.
+14. **Train/Eval Mode**: Flax modules do NOT have a `.train` attribute or
+    `.eval()` / `.train()` methods. NEVER write `model.train = True` or
+    `model.train = False` -- this does nothing in Flax and silently produces
+    incorrect behavior. Instead, pass `deterministic=False` for training and
+    `deterministic=True` for evaluation as an argument to `__call__` /
+    `model.apply()`. All stochastic layers (Dropout, router noise) must
+    check the `deterministic` flag.
+15. **Preserve ALL Source Components**: Convert EVERY class, function, and
+    method from the source. Do NOT merge base classes into subclasses, do NOT
+    drop utility classes or metric functions, and do NOT omit `get_config()`
+    or serialization methods. If the source has `ExpertBase` and `FFNExpert`,
+    convert both. If the source has a `MoEMetrics` class, convert it.
+16. **Preserve Default Values Exactly**: All default parameter values in the
+    JAX output must match the PyTorch source EXACTLY. Do NOT change any numeric
+    default -- not capacity factors, not dropout rates, not epsilon values, not
+    learning rates, not layer counts. Even if you believe a different value is
+    "better" or "more stable", use the source value. Changed defaults silently
+    alter model behavior and break reproducibility.
+17. **Preserve Exact Reduction Operations**: When the source uses `.mean()`,
+    use `jnp.mean()`. When the source uses `.sum()`, use `jnp.sum()`. NEVER
+    substitute one reduction for another. `torch.mean(x, dim=N)` maps to
+    `jnp.mean(x, axis=N)`. `torch.sum(x, dim=N)` maps to `jnp.sum(x, axis=N)`.
+    The dim/axis integer stays the same.
+18. **Preserve Method Placement**: If the source defines a method or attribute
+    on a specific class, keep it on that class in the JAX output. Do NOT
+    relocate methods between classes or replace instance methods with
+    standalone functions unless the JAX idiom requires it.
 
 ## CRITICAL: Faithfulness to Source Code
+
+This is a TRANSLATION, not a redesign. The converted code must produce
+IDENTICAL behavior to the source for the same inputs and weights.
 
 NEVER simplify complex tensor reshaping, reordering, or algorithmic patterns
 from the source code. If the PyTorch code uses a specific interleaved weight
@@ -59,6 +92,11 @@ layout, chunk-parallel algorithm, or multi-step computation, convert it
 faithfully to JAX. The RAG context shows EXAMPLES of similar patterns -- use
 them as guidance for JAX idioms, but always follow the ACTUAL source code's
 logic and structure.
+
+NEVER "improve" the source by changing default values, adding initializers
+that the source does not use, substituting reductions (.sum vs .mean), or
+dropping components you consider non-essential (logging, metrics, utility
+classes). If the source has it, the output must have it.
 """
 
 PYTORCH_TO_JAX_SINGLE_FILE_PROMPT = """You are an expert in JAX and PyTorch.
@@ -210,6 +248,20 @@ IMPORTANT CONVERSION RULES:
     in JAX: `jax.nn.softmax(attn_weights.astype(jnp.float32), axis=-1)` then
     cast back with `.astype(q.dtype)`. This is critical for numerical stability
     in bfloat16/float16. NEVER omit this upcast.
+14. **Preserve ALL Source Components (MANDATORY)**: The output MUST contain a
+    JAX equivalent for EVERY class, function, method, and utility in the source.
+    Do NOT merge base classes into subclasses. Do NOT drop get_config() or
+    serialization methods. Do NOT omit utility classes (e.g., metrics classes)
+    or standalone functions (e.g., metric computation functions). If the source
+    has N classes and M functions, the output must have N classes and M functions.
+15. **Preserve Default Values Exactly**: All constructor defaults, config
+    defaults, and hyperparameter defaults MUST match the PyTorch source exactly.
+    Do NOT change capacity_factor, dropout rates, noise epsilon, num_layers,
+    or any other default value -- even if you think a different value is better.
+16. **Train/Eval Mode in Flax**: NEVER set `model.train = True/False` or call
+    `model.eval()` / `model.train()` in training loops. Flax has no such
+    attributes. Use `deterministic=False` for training and `deterministic=True`
+    for evaluation, passed as an argument to the module's `__call__` method.
 
 Please think step by step about the conversion process before generating the code.
 Then, provide the complete JAX equivalent of the entire file above.

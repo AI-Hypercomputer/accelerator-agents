@@ -24,9 +24,12 @@ Usage:
     python step3_convert.py
 """
 
+import logging
 import os
 import time
 from config import REPO_DIR, OUTPUT_DIR, RAG_SOURCE_DIR, setup, require_api_key
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 def main():
     api_key = require_api_key()

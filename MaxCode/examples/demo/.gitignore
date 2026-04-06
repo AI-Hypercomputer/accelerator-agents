@@ -1,0 +1,6 @@
+# Cloned repos (generated at runtime)
+Multimodal-Transformer/
+
+# Generated files
+merged_model.py
+output/

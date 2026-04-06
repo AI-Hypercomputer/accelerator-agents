@@ -30,7 +30,7 @@ class GeminiTool:
 
   def __init__(
       self,
-      model_name: GeminiModel | str = GeminiModel.GEMINI_3_0_FLASH,
+      model_name: GeminiModel | str = GeminiModel.GEMINI_3_1_PRO_PREVIEW,
       system_instruction=None,
       api_key=None,
   ):

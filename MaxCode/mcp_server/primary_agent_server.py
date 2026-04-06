@@ -62,7 +62,11 @@ async def _execute_adk_agent(
     if effective_api_key:
       os.environ["GOOGLE_API_KEY"] = effective_api_key
 
-    model_match = re.search(r"model_name=([\w.-]+)", prompt, re.IGNORECASE)
+    model_match = re.search(
+        r"(?:model_name=|using model |using the )([\w.-]+)",
+        prompt,
+        re.IGNORECASE,
+    )
     if model_match:
       model_name = model_match.group(1).strip().rstrip(".")
       logging.info("Model name extracted from prompt: %s", model_name)

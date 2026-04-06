@@ -41,7 +41,17 @@ class Agent(abc.ABC):
         self.agent_type.name,
         prompt,
     )
-    return self._model.generate(prompt)
+    try:
+      response = self._model.generate(prompt)
+      logging.info(
+          "--- %s RESPONSE ---\n%s\n--- END RESPONSE ---",
+          self.agent_type.name,
+          response,
+      )
+      return response
+    except Exception as e:
+      logging.exception("LLM generation failed: %s", e)
+      raise
 
   @abc.abstractmethod
   def run(self, *args, **kwargs):

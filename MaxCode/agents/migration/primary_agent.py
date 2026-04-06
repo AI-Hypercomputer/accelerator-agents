@@ -14,7 +14,7 @@ from agents.migration import single_file_agent
 from agents.migration.prompts import prompts
 from rag import rag_agent
 
-MAX_DEBUG_ITERATIONS = 5
+MAX_DEBUG_ITERATIONS = 10
 
 
 def _strip_markdown_formatting(text: str) -> str:
@@ -143,8 +143,9 @@ class PrimaryAgent(base.Agent):
           return {repo_path: jax_code}
         else:
           traceback = output
-          print(f"Validation failed on iteration {i}. Traceback:\n{traceback}")
-          logging.info("Equivalency test failed on iteration %d.", i)
+          logging.error(
+              "Validation failed on iteration %d. Traceback:\n%s", i, traceback
+          )
           logging.info("Starting debug iteration %d.", i + 1)
           bug_analysis = self.generate(
               prompts.BUG_ANALYSIS_PROMPT,

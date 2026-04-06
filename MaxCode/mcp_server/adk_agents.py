@@ -8,13 +8,16 @@ from google.adk.models.google_llm import Gemini
 
 migration_agent = Agent(
     name="migration_agent",
-    model=Gemini(model=models.GeminiModel.GEMINI_3_0_FLASH.value),
+    model=Gemini(model=models.GeminiModel.GEMINI_3_1_PRO_PREVIEW.value),
     description=(
         "Handles end-to-end code migration tasks, such as converting PyTorch"
         " to JAX, generating oracle data, and creating equivalence tests."
     ),
     instruction="""You are the migration specialist. Your task is to perform end-to-end migrations by orchestrating tools in a STRICT sequential order.
 You must extract the `api_key` and an optional `model_name` from the user prompt. Pass `api_key` to all tools that require it. If `model_name` is provided in the prompt, pass it as the `model_name` argument to `convert_code`, `generate_model_configs`, and `run_equivalence_tests`.
+
+**Critical Naming Rule:** To avoid `flax.errors.NameInUseError`, ensure that any submodules created within a loop or list comprehension (like `CustomGRUCell` inside `nn.RNN`) have unique names that include the loop index (e.g., use an f-string like name=f'cell_index'). This applies to all layers and cells.
+
 
 Here is the sequence:
 1. Call `convert_code` with `source_path`, `destination`, and `api_key` to translate PyTorch code to JAX.
@@ -44,7 +47,7 @@ Always wait for a tool to succeed before moving to the next step. If a step fail
 
 evaluation_agent = Agent(
     name="evaluation_agent",
-    model=Gemini(model=models.GeminiModel.GEMINI_3_0_FLASH.value),
+    model=Gemini(model=models.GeminiModel.GEMINI_3_1_PRO_PREVIEW.value),
     description=(
         "Handles the generation of evaluation configurations and scripts."
     ),

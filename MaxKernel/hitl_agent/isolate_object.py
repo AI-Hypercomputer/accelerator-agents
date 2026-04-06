@@ -18,9 +18,9 @@ The script distinguishes between two types of dependencies:
    - Standard Python libraries (os, sys, typing, etc.)
    - Third-party packages installed via pip (jax, flax, numpy, torch, etc.)
    - Any module NOT found in your workspace
-   
+
    Example: "import jax.numpy as jnp" → Kept as-is in output
-   
+
    How it's detected:
    - Module name is NOT in the local_package_names list
    - AND module files don't exist in workspace directories
@@ -30,15 +30,15 @@ The script distinguishes between two types of dependencies:
    - Packages in your workspace (MaxText, tpu_commons, vllm, etc.)
    - Files in third_party/ directories
    - Custom local modules
-   
+
    Example: "from MaxText.layers import Attention" → Extracts Attention class source code
-   
+
    How it's detected:
    - Module name starts with a known local package (see local_package_names list)
    - OR module files exist in workspace paths:
      * workspace_root/module_name/
      * workspace_root/third_party/module_name/
-   
+
    What gets extracted:
    - The imported object's source code
    - All functions/classes/constants it depends on
@@ -96,17 +96,17 @@ Extract from google3:
     python isolate_object.py third_party/google3/path/to/module.py MyFunction -o output.py
 """
 
+import argparse
 import ast
 import os
 import re
 import sys
-import argparse
 import textwrap
 import warnings
-from typing import Set, List, Dict, Tuple, Optional
+from typing import List, Optional, Set, Tuple
 
 # Suppress all deprecation warnings from ast module
-warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
 class ImportCollector(ast.NodeVisitor):
@@ -122,8 +122,9 @@ class ImportCollector(ast.NodeVisitor):
   def visit_Import(self, node):
     for alias in node.names:
       name = alias.asname if alias.asname else alias.name
-      self.imports.append(f"import {alias.name}" +
-                          (f" as {alias.asname}" if alias.asname else ""))
+      self.imports.append(
+        f"import {alias.name}" + (f" as {alias.asname}" if alias.asname else "")
+      )
       self.defined_names.add(name)
       # Track alias mapping: alias -> (None, original_module_name)
       if alias.asname:
@@ -138,8 +139,9 @@ class ImportCollector(ast.NodeVisitor):
       names = []
       for alias in node.names:
         name = alias.asname if alias.asname else alias.name
-        names.append(f"{alias.name}" +
-                     (f" as {alias.asname}" if alias.asname else ""))
+        names.append(
+          f"{alias.name}" + (f" as {alias.asname}" if alias.asname else "")
+        )
         self.defined_names.add(name)
         # Track alias mapping: alias -> (module, original_name)
         if alias.asname:
@@ -174,11 +176,13 @@ class ImportCollector(ast.NodeVisitor):
           full_path = f"{module}.{original_name}.{node.attr}"
           self.module_attributes.add(full_path)
     elif isinstance(node.value, ast.Attribute) and isinstance(
-        node.value.value, ast.Name):
+      node.value.value, ast.Name
+    ):
       # Handle nested attributes like module.submodule.function
       self.used_names.add(node.value.value.id)
       self.module_attributes.add(
-          f"{node.value.value.id}.{node.value.attr}.{node.attr}")
+        f"{node.value.value.id}.{node.value.attr}.{node.attr}"
+      )
     self.generic_visit(node)
 
   def visit_FunctionDef(self, node):
@@ -218,8 +222,9 @@ class ImportOnlyCollector(ast.NodeVisitor):
   def visit_Import(self, node):
     for alias in node.names:
       name = alias.asname if alias.asname else alias.name
-      self.imports.append(f"import {alias.name}" +
-                          (f" as {alias.asname}" if alias.asname else ""))
+      self.imports.append(
+        f"import {alias.name}" + (f" as {alias.asname}" if alias.asname else "")
+      )
       self.defined_names.add(name)
     self.generic_visit(node)
 
@@ -231,8 +236,9 @@ class ImportOnlyCollector(ast.NodeVisitor):
       names = []
       for alias in node.names:
         name = alias.asname if alias.asname else alias.name
-        names.append(f"{alias.name}" +
-                     (f" as {alias.asname}" if alias.asname else ""))
+        names.append(
+          f"{alias.name}" + (f" as {alias.asname}" if alias.asname else "")
+        )
         self.defined_names.add(name)
       self.imports.append(f"from {module} import {', '.join(names)}")
     self.generic_visit(node)
@@ -251,15 +257,17 @@ class ObjectExtractor:
     if self.debug:
       print(f"[DEBUG] Opening file: {abs_path}", file=sys.stderr)
 
-    with open(filename, 'r', encoding='utf-8') as f:
+    with open(filename, "r", encoding="utf-8") as f:
       self.source = f.read()
     self.tree = ast.parse(self.source)
 
   def find_object(self, object_name: str) -> Optional[ast.AST]:
     """Find the AST node for the given object name."""
     for node in ast.walk(self.tree):
-      if isinstance(
-          node, (ast.FunctionDef, ast.ClassDef)) and node.name == object_name:
+      if (
+        isinstance(node, (ast.FunctionDef, ast.ClassDef))
+        and node.name == object_name
+      ):
         return node
       # Also search for assignments
       elif isinstance(node, ast.Assign):
@@ -267,8 +275,11 @@ class ObjectExtractor:
           if isinstance(target, ast.Name) and target.id == object_name:
             return node
       # And annotated assignments
-      elif isinstance(node, ast.AnnAssign) and isinstance(
-          node.target, ast.Name) and node.target.id == object_name:
+      elif (
+        isinstance(node, ast.AnnAssign)
+        and isinstance(node.target, ast.Name)
+        and node.target.id == object_name
+      ):
         return node
     return None
 
@@ -283,23 +294,36 @@ class ObjectExtractor:
 
     # For functions and classes with decorators, we need to start from the first decorator
     start_line = target_node.lineno - 1  # Convert to 0-indexed
-    if isinstance(target_node, (ast.FunctionDef, ast.ClassDef)) and hasattr(
-        target_node, 'decorator_list') and target_node.decorator_list:
+    if (
+      isinstance(target_node, (ast.FunctionDef, ast.ClassDef))
+      and hasattr(target_node, "decorator_list")
+      and target_node.decorator_list
+    ):
       # Find the line number of the first decorator
       first_decorator = target_node.decorator_list[0]
       start_line = first_decorator.lineno - 1  # Convert to 0-indexed
 
     # Use end_lineno if available (Python 3.8+) for all node types
-    if hasattr(target_node, 'end_lineno') and target_node.end_lineno:
+    if hasattr(target_node, "end_lineno") and target_node.end_lineno:
       end_line = target_node.end_lineno
     elif isinstance(target_node, (ast.FunctionDef, ast.ClassDef)):
       # Fallback for functions and classes: find the end by looking for the next top-level definition
       end_line = len(lines)
       for node in ast.walk(self.tree):
-        if (isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.Import,
-                              ast.ImportFrom, ast.Assign)) and
-            node.lineno > target_node.lineno and
-            node.col_offset == 0):  # Top-level only
+        if (
+          isinstance(
+            node,
+            (
+              ast.FunctionDef,
+              ast.ClassDef,
+              ast.Import,
+              ast.ImportFrom,
+              ast.Assign,
+            ),
+          )
+          and node.lineno > target_node.lineno
+          and node.col_offset == 0
+        ):  # Top-level only
           end_line = node.lineno - 1
           break
     else:
@@ -314,7 +338,7 @@ class ObjectExtractor:
       object_lines.pop()
 
     # Join the lines
-    source_code = '\n'.join(object_lines)
+    source_code = "\n".join(object_lines)
 
     # Dedent the source code to remove extra indentation (e.g., from if TYPE_CHECKING blocks)
     # Only dedent if all lines have consistent indentation
@@ -385,13 +409,24 @@ class ObjectExtractor:
           top_level_definitions[node.target.id] = node
 
     # Find names that are used but not defined in the object itself
-    external_names = object_collector.used_names - object_collector.defined_names
+    external_names = (
+      object_collector.used_names - object_collector.defined_names
+    )
 
     # Filter to only include names that are actually defined at module level
     # and exclude common built-in names and imported names
     builtin_names = {
-        'self', 'True', 'False', 'None', 'int', 'float', 'str', 'list', 'dict',
-        'tuple', 'set'
+      "self",
+      "True",
+      "False",
+      "None",
+      "int",
+      "float",
+      "str",
+      "list",
+      "dict",
+      "tuple",
+      "set",
     }
 
     # Get all imported names to exclude them from dependencies
@@ -434,15 +469,18 @@ class ObjectExtractor:
           if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
             target_name = node.targets[0].id
             if isinstance(node.value, ast.Attribute) and isinstance(
-                node.value.value, ast.Name):
+              node.value.value, ast.Name
+            ):
               # This looks like "name = module.something"
               module_ref = node.value.value.id
               attr_name = node.value.attr
 
               # Check if the module name is likely an imported module
-              external_module_patterns = ['_partitioning', '_utils', '_layers']
-              if any(pattern in module_ref.lower()
-                     for pattern in external_module_patterns):
+              external_module_patterns = ["_partitioning", "_utils", "_layers"]
+              if any(
+                pattern in module_ref.lower()
+                for pattern in external_module_patterns
+              ):
                 # Skip this assignment since it should be handled by direct imports
                 is_external_assignment = True
 
@@ -471,15 +509,17 @@ class ObjectExtractor:
     module_patterns = set()
     for attr_pattern in collector.module_attributes:
       # Extract the module name (first part before the dot)
-      module_name = attr_pattern.split('.')[0]
+      module_name = attr_pattern.split(".")[0]
       module_patterns.add(module_name)
 
     return module_patterns
 
-  def get_local_import_files(self,
-                             imports: List[str],
-                             module_usage_patterns: Set[str] = None,
-                             module_attributes: Set[str] = None) -> List[str]:
+  def get_local_import_files(
+    self,
+    imports: List[str],
+    module_usage_patterns: Set[str] = None,
+    module_attributes: Set[str] = None,
+  ) -> List[str]:
     """Get list of local Python files that are imported."""
     local_files = []
     base_dir = os.path.dirname(os.path.abspath(self.filename))
@@ -493,15 +533,15 @@ class ObjectExtractor:
     # This handles cases like: from google3.a.b.c import d as e; f = e.f
     if module_attributes:
       for attr_pattern in sorted(module_attributes):
-        parts = attr_pattern.split('.')
+        parts = attr_pattern.split(".")
         # For patterns with multiple parts, try to resolve as module paths
         # We need at least 2 parts (module.attribute), but we'll try any pattern that might resolve
         if len(parts) >= 2:  # e.g., fa_util.exp2, google3.a.b, etc.
           # Try progressively shorter module paths (e.g., a.b.c.d.f -> try a.b.c.d, a.b.c, etc.)
           for i in range(
-              len(parts) - 1, 0,
-              -1):  # Changed from 1 to 0 to try even single-part modules
-            module_path = '.'.join(parts[:i])
+            len(parts) - 1, 0, -1
+          ):  # Changed from 1 to 0 to try even single-part modules
+            module_path = ".".join(parts[:i])
 
             # Check if this looks like a local package import
             is_local = self._is_local_package(module_path, workspace_root)
@@ -509,32 +549,45 @@ class ObjectExtractor:
               possible_paths = []
 
               # Special handling for google3
-              if module_path.startswith('google3.'):
+              if module_path.startswith("google3."):
                 google3_root = self._get_google3_root()
                 if google3_root:
                   module_path_without_google3 = module_path[
-                      8:]  # Remove 'google3.'
+                    8:
+                  ]  # Remove 'google3.'
                   possible_paths.append(
-                      os.path.join(
-                          google3_root, 'google3',
-                          module_path_without_google3.replace('.', os.sep) +
-                          '.py'))
+                    os.path.join(
+                      google3_root,
+                      "google3",
+                      module_path_without_google3.replace(".", os.sep) + ".py",
+                    )
+                  )
                   possible_paths.append(
-                      os.path.join(
-                          google3_root, 'google3',
-                          module_path_without_google3.replace('.', os.sep),
-                          '__init__.py'))
+                    os.path.join(
+                      google3_root,
+                      "google3",
+                      module_path_without_google3.replace(".", os.sep),
+                      "__init__.py",
+                    )
+                  )
               else:
                 # Try standard paths
-                module_as_path = module_path.replace('.', os.sep)
-                possible_paths.extend([
-                    os.path.join(workspace_root, module_as_path + '.py'),
-                    os.path.join(workspace_root, module_as_path, '__init__.py'),
-                    os.path.join(workspace_root, 'third_party',
-                                 module_as_path + '.py'),
-                    os.path.join(workspace_root, 'third_party', module_as_path,
-                                 '__init__.py'),
-                ])
+                module_as_path = module_path.replace(".", os.sep)
+                possible_paths.extend(
+                  [
+                    os.path.join(workspace_root, module_as_path + ".py"),
+                    os.path.join(workspace_root, module_as_path, "__init__.py"),
+                    os.path.join(
+                      workspace_root, "third_party", module_as_path + ".py"
+                    ),
+                    os.path.join(
+                      workspace_root,
+                      "third_party",
+                      module_as_path,
+                      "__init__.py",
+                    ),
+                  ]
+                )
 
               for path in possible_paths:
                 if os.path.exists(path) and path not in local_files:
@@ -551,13 +604,14 @@ class ObjectExtractor:
       for module_name in sorted(module_usage_patterns):
         # Try direct paths instead of walking the entire tree
         possible_paths = [
-            os.path.join(base_dir, f"{module_name}.py"),
-            os.path.join(base_dir, f"{module_name.lower()}.py"),
-            os.path.join(workspace_root, f"{module_name}.py"),
-            os.path.join(workspace_root, f"{module_name.lower()}.py"),
-            os.path.join(workspace_root, 'third_party', f"{module_name}.py"),
-            os.path.join(workspace_root, 'third_party',
-                         f"{module_name.lower()}.py"),
+          os.path.join(base_dir, f"{module_name}.py"),
+          os.path.join(base_dir, f"{module_name.lower()}.py"),
+          os.path.join(workspace_root, f"{module_name}.py"),
+          os.path.join(workspace_root, f"{module_name.lower()}.py"),
+          os.path.join(workspace_root, "third_party", f"{module_name}.py"),
+          os.path.join(
+            workspace_root, "third_party", f"{module_name.lower()}.py"
+          ),
         ]
 
         # Only check google3 if we might actually need it (don't call g4 g4d unnecessarily)
@@ -570,23 +624,35 @@ class ObjectExtractor:
 
         # If current file is in a package, check that package
         for pkg in [
-            'google3', 'tpu_commons', 'MaxText', 'maxtext', 'JetStream',
-            'jetstream', 'vllm', 'whisper_jax', 'torchprime', 'maxdiffusion',
-            'RecML'
+          "google3",
+          "tpu_commons",
+          "MaxText",
+          "maxtext",
+          "JetStream",
+          "jetstream",
+          "vllm",
+          "whisper_jax",
+          "torchprime",
+          "maxdiffusion",
+          "RecML",
         ]:
           if pkg.lower() in file_path_lower:
             relevant_packages.append(pkg)
 
         # If no relevant packages found, don't search package-specific locations
         for pkg in relevant_packages:
-          possible_paths.extend([
+          possible_paths.extend(
+            [
               os.path.join(workspace_root, pkg, f"{module_name}.py"),
               os.path.join(workspace_root, pkg, f"{module_name.lower()}.py"),
-              os.path.join(workspace_root, 'third_party', pkg,
-                           f"{module_name}.py"),
-              os.path.join(workspace_root, 'third_party', pkg,
-                           f"{module_name.lower()}.py"),
-          ])
+              os.path.join(
+                workspace_root, "third_party", pkg, f"{module_name}.py"
+              ),
+              os.path.join(
+                workspace_root, "third_party", pkg, f"{module_name.lower()}.py"
+              ),
+            ]
+          )
 
         for path in possible_paths:
           if os.path.exists(path) and path not in local_files:
@@ -602,92 +668,124 @@ class ObjectExtractor:
               module_path = node.module
 
               # Handle relative imports (from .module import ...)
-              if module_path.startswith('.'):
+              if module_path.startswith("."):
                 module_path = module_path[1:]  # Remove leading dot
                 search_dir = base_dir
               else:
                 search_dir = workspace_root
 
               # Check if this is a local package (like tpu_commons, MaxText, etc.)
-              is_local_package = self._is_local_package(module_path,
-                                                        workspace_root)
+              is_local_package = self._is_local_package(
+                module_path, workspace_root
+              )
 
               if is_local_package:
                 # Try multiple search strategies for local files
                 possible_paths = []
 
                 # Handle google3 imports specially - ONLY call g4 g4d if we see google3
-                if module_path.startswith('google3.'):
-                  google3_root = self._get_google3_root(
+                if module_path.startswith("google3."):
+                  google3_root = (
+                    self._get_google3_root()
                   )  # Lazy: only called for google3 imports
                   if google3_root:
                     # For google3.foo.bar, look for /path/to/google3/foo/bar.py
                     module_path_without_google3 = module_path[
-                        8:]  # Remove 'google3.'
+                      8:
+                    ]  # Remove 'google3.'
                     possible_paths.append(
-                        os.path.join(
-                            google3_root, 'google3',
-                            module_path_without_google3.replace('.', os.sep) +
-                            '.py'))
+                      os.path.join(
+                        google3_root,
+                        "google3",
+                        module_path_without_google3.replace(".", os.sep)
+                        + ".py",
+                      )
+                    )
                     possible_paths.append(
-                        os.path.join(
-                            google3_root, 'google3',
-                            module_path_without_google3.replace('.', os.sep),
-                            '__init__.py'))
+                      os.path.join(
+                        google3_root,
+                        "google3",
+                        module_path_without_google3.replace(".", os.sep),
+                        "__init__.py",
+                      )
+                    )
 
                 # Direct module path conversion
                 possible_paths.append(
-                    os.path.join(search_dir,
-                                 module_path.replace('.', os.sep) + '.py'))
+                  os.path.join(
+                    search_dir, module_path.replace(".", os.sep) + ".py"
+                  )
+                )
                 possible_paths.append(
-                    os.path.join(search_dir, module_path.replace('.', os.sep),
-                                 '__init__.py'))
+                  os.path.join(
+                    search_dir, module_path.replace(".", os.sep), "__init__.py"
+                  )
+                )
 
                 # Search specifically in third_party directories
-                for third_party_root in ['third_party']:
+                for third_party_root in ["third_party"]:
                   third_party_path = os.path.join(
-                      workspace_root, third_party_root,
-                      module_path.replace('.', os.sep) + '.py')
+                    workspace_root,
+                    third_party_root,
+                    module_path.replace(".", os.sep) + ".py",
+                  )
                   possible_paths.append(third_party_path)
 
                   third_party_pkg_path = os.path.join(
-                      workspace_root, third_party_root,
-                      module_path.replace('.', os.sep), '__init__.py')
+                    workspace_root,
+                    third_party_root,
+                    module_path.replace(".", os.sep),
+                    "__init__.py",
+                  )
                   possible_paths.append(third_party_pkg_path)
 
                   # Handle packages with duplicated directory structure (e.g., third_party/pkg/pkg/...)
                   # Extract the first component of the module path
-                  first_component = module_path.split('.')[0]
+                  first_component = module_path.split(".")[0]
                   duplicated_path = os.path.join(
-                      workspace_root, third_party_root, first_component,
-                      module_path.replace('.', os.sep) + '.py')
+                    workspace_root,
+                    third_party_root,
+                    first_component,
+                    module_path.replace(".", os.sep) + ".py",
+                  )
                   possible_paths.append(duplicated_path)
 
                   duplicated_pkg_path = os.path.join(
-                      workspace_root, third_party_root, first_component,
-                      module_path.replace('.', os.sep), '__init__.py')
+                    workspace_root,
+                    third_party_root,
+                    first_component,
+                    module_path.replace(".", os.sep),
+                    "__init__.py",
+                  )
                   possible_paths.append(duplicated_pkg_path)
 
                 # For packages with different structures, try common patterns
-                package_parts = module_path.split('.')
+                package_parts = module_path.split(".")
 
                 # Special handling for google3 - DON'T search in other packages!
-                if module_path.startswith('google3.'):
+                if module_path.startswith("google3."):
                   # For google3, we already handled it above, no need to check other packages
                   known_packages = []
                 else:
                   # Determine which known packages are relevant for this module
                   # Only check packages that match the module prefix or current file location
                   all_known_packages = [
-                      'tpu_commons', 'MaxText', 'maxtext', 'JetStream',
-                      'jetstream', 'vllm', 'whisper_jax', 'torchprime',
-                      'maxdiffusion', 'RecML'
+                    "tpu_commons",
+                    "MaxText",
+                    "maxtext",
+                    "JetStream",
+                    "jetstream",
+                    "vllm",
+                    "whisper_jax",
+                    "torchprime",
+                    "maxdiffusion",
+                    "RecML",
                   ]
 
                   relevant_packages = []
                   # Check if module starts with a known package name
                   for pkg in all_known_packages:
-                    if module_path.startswith(pkg + '.') or module_path == pkg:
+                    if module_path.startswith(pkg + ".") or module_path == pkg:
                       relevant_packages.append(pkg)
 
                   # If no match, check if current file is within a known package
@@ -698,76 +796,107 @@ class ObjectExtractor:
                         relevant_packages.append(pkg)
 
                   # Use relevant packages, or fall back to first component as hint
-                  known_packages = relevant_packages if relevant_packages else [
-                      package_parts[0]
-                  ]
+                  known_packages = (
+                    relevant_packages
+                    if relevant_packages
+                    else [package_parts[0]]
+                  )
 
                 for i in range(len(package_parts)):
-                  partial_path = os.path.join(*package_parts[:i + 1])
-                  remaining_path = os.path.join(
-                      *package_parts[i +
-                                     1:]) if i + 1 < len(package_parts) else ""
+                  partial_path = os.path.join(*package_parts[: i + 1])
+                  remaining_path = (
+                    os.path.join(*package_parts[i + 1 :])
+                    if i + 1 < len(package_parts)
+                    else ""
+                  )
 
                   # Try in workspace root
                   if remaining_path:
-                    full_file_path = os.path.join(workspace_root, partial_path,
-                                                  remaining_path + '.py')
+                    full_file_path = os.path.join(
+                      workspace_root, partial_path, remaining_path + ".py"
+                    )
                     if os.path.exists(full_file_path):
                       possible_paths.append(full_file_path)
-                    full_pkg_path = os.path.join(workspace_root, partial_path,
-                                                 remaining_path, '__init__.py')
+                    full_pkg_path = os.path.join(
+                      workspace_root,
+                      partial_path,
+                      remaining_path,
+                      "__init__.py",
+                    )
                     if os.path.exists(full_pkg_path):
                       possible_paths.append(full_pkg_path)
                   else:
-                    target_file_path = os.path.join(workspace_root,
-                                                    partial_path + '.py')
+                    target_file_path = os.path.join(
+                      workspace_root, partial_path + ".py"
+                    )
                     if os.path.exists(target_file_path):
                       possible_paths.append(target_file_path)
 
                   # Try in third_party
                   if remaining_path:
-                    full_file_path = os.path.join(workspace_root, 'third_party',
-                                                  partial_path,
-                                                  remaining_path + '.py')
+                    full_file_path = os.path.join(
+                      workspace_root,
+                      "third_party",
+                      partial_path,
+                      remaining_path + ".py",
+                    )
                     if os.path.exists(full_file_path):
                       possible_paths.append(full_file_path)
-                    full_pkg_path = os.path.join(workspace_root, 'third_party',
-                                                 partial_path, remaining_path,
-                                                 '__init__.py')
+                    full_pkg_path = os.path.join(
+                      workspace_root,
+                      "third_party",
+                      partial_path,
+                      remaining_path,
+                      "__init__.py",
+                    )
                     if os.path.exists(full_pkg_path):
                       possible_paths.append(full_pkg_path)
                   else:
-                    target_file_path = os.path.join(workspace_root,
-                                                    'third_party',
-                                                    partial_path + '.py')
+                    target_file_path = os.path.join(
+                      workspace_root, "third_party", partial_path + ".py"
+                    )
                     if os.path.exists(target_file_path):
                       possible_paths.append(target_file_path)
 
                   # Try within known packages
                   for pkg in known_packages:
                     if remaining_path:
-                      full_file_path = os.path.join(workspace_root, pkg,
-                                                    partial_path,
-                                                    remaining_path + '.py')
+                      full_file_path = os.path.join(
+                        workspace_root,
+                        pkg,
+                        partial_path,
+                        remaining_path + ".py",
+                      )
                       if os.path.exists(full_file_path):
                         possible_paths.append(full_file_path)
-                      full_pkg_path = os.path.join(workspace_root, pkg,
-                                                   partial_path, remaining_path,
-                                                   '__init__.py')
+                      full_pkg_path = os.path.join(
+                        workspace_root,
+                        pkg,
+                        partial_path,
+                        remaining_path,
+                        "__init__.py",
+                      )
                       if os.path.exists(full_pkg_path):
                         possible_paths.append(full_pkg_path)
 
                       # Also try in third_party/pkg
-                      full_file_path = os.path.join(workspace_root,
-                                                    'third_party', pkg,
-                                                    partial_path,
-                                                    remaining_path + '.py')
+                      full_file_path = os.path.join(
+                        workspace_root,
+                        "third_party",
+                        pkg,
+                        partial_path,
+                        remaining_path + ".py",
+                      )
                       if os.path.exists(full_file_path):
                         possible_paths.append(full_file_path)
-                      full_pkg_path = os.path.join(workspace_root,
-                                                   'third_party', pkg,
-                                                   partial_path, remaining_path,
-                                                   '__init__.py')
+                      full_pkg_path = os.path.join(
+                        workspace_root,
+                        "third_party",
+                        pkg,
+                        partial_path,
+                        remaining_path,
+                        "__init__.py",
+                      )
                       if os.path.exists(full_pkg_path):
                         possible_paths.append(full_pkg_path)
 
@@ -778,7 +907,8 @@ class ObjectExtractor:
               else:
                 # Not recognized as local package, check for mock implementations
                 mock_file = self._find_mock_implementation(
-                    module_path, workspace_root)
+                  module_path, workspace_root
+                )
                 if mock_file:
                   local_files.append(mock_file)
 
@@ -787,63 +917,93 @@ class ObjectExtractor:
               module_name = alias.name
 
               # Check if this is a local package
-              is_local_package = self._is_local_package(module_name,
-                                                        workspace_root)
+              is_local_package = self._is_local_package(
+                module_name, workspace_root
+              )
 
               if is_local_package:
                 possible_paths = []
 
                 # Special handling for google3 - resolve and skip other package checks
-                if module_name.startswith('google3.'):
+                if module_name.startswith("google3."):
                   google3_root = self._get_google3_root()
                   if google3_root:
                     module_path_without_google3 = module_name[
-                        8:]  # Remove 'google3.'
+                      8:
+                    ]  # Remove 'google3.'
                     possible_paths.append(
-                        os.path.join(
-                            google3_root, 'google3',
-                            module_path_without_google3.replace('.', os.sep) +
-                            '.py'))
+                      os.path.join(
+                        google3_root,
+                        "google3",
+                        module_path_without_google3.replace(".", os.sep)
+                        + ".py",
+                      )
+                    )
                     possible_paths.append(
-                        os.path.join(
-                            google3_root, 'google3',
-                            module_path_without_google3.replace('.', os.sep),
-                            '__init__.py'))
+                      os.path.join(
+                        google3_root,
+                        "google3",
+                        module_path_without_google3.replace(".", os.sep),
+                        "__init__.py",
+                      )
+                    )
                   # Don't search in other packages for google3 imports
                   known_packages = []
                 else:
                   # Try to find local file for this import
                   possible_paths.append(
-                      os.path.join(base_dir,
-                                   module_name.replace('.', os.sep) + '.py'))
+                    os.path.join(
+                      base_dir, module_name.replace(".", os.sep) + ".py"
+                    )
+                  )
                   possible_paths.append(
-                      os.path.join(workspace_root,
-                                   module_name.replace('.', os.sep) + '.py'))
+                    os.path.join(
+                      workspace_root, module_name.replace(".", os.sep) + ".py"
+                    )
+                  )
                   possible_paths.append(
-                      os.path.join(workspace_root,
-                                   module_name.replace('.', os.sep),
-                                   '__init__.py'))
+                    os.path.join(
+                      workspace_root,
+                      module_name.replace(".", os.sep),
+                      "__init__.py",
+                    )
+                  )
 
                   # Search in third_party
                   possible_paths.append(
-                      os.path.join(workspace_root, 'third_party',
-                                   module_name.replace('.', os.sep) + '.py'))
+                    os.path.join(
+                      workspace_root,
+                      "third_party",
+                      module_name.replace(".", os.sep) + ".py",
+                    )
+                  )
                   possible_paths.append(
-                      os.path.join(workspace_root, 'third_party',
-                                   module_name.replace('.', os.sep),
-                                   '__init__.py'))
+                    os.path.join(
+                      workspace_root,
+                      "third_party",
+                      module_name.replace(".", os.sep),
+                      "__init__.py",
+                    )
+                  )
 
                   # Only search in relevant package directories (not all packages)
                   # Determine relevant packages based on module name or current file location
                   all_known_packages = [
-                      'tpu_commons', 'MaxText', 'maxtext', 'JetStream',
-                      'jetstream', 'vllm', 'whisper_jax', 'torchprime',
-                      'maxdiffusion', 'RecML'
+                    "tpu_commons",
+                    "MaxText",
+                    "maxtext",
+                    "JetStream",
+                    "jetstream",
+                    "vllm",
+                    "whisper_jax",
+                    "torchprime",
+                    "maxdiffusion",
+                    "RecML",
                   ]
 
                   relevant_packages = []
                   for pkg in all_known_packages:
-                    if module_name.startswith(pkg + '.') or module_name == pkg:
+                    if module_name.startswith(pkg + ".") or module_name == pkg:
                       relevant_packages.append(pkg)
 
                   # If no match, check current file location
@@ -855,21 +1015,34 @@ class ObjectExtractor:
                         break  # Only add the one we're in
 
                   # Use relevant packages or just check the module's first component
-                  known_packages = relevant_packages if relevant_packages else []
+                  known_packages = (
+                    relevant_packages if relevant_packages else []
+                  )
 
-                module_as_path = module_name.replace('.', os.sep)
+                module_as_path = module_name.replace(".", os.sep)
                 for pkg in known_packages:
                   possible_paths.append(
-                      os.path.join(workspace_root, pkg, module_as_path + '.py'))
+                    os.path.join(workspace_root, pkg, module_as_path + ".py")
+                  )
                   possible_paths.append(
-                      os.path.join(workspace_root, pkg, module_as_path,
-                                   '__init__.py'))
+                    os.path.join(
+                      workspace_root, pkg, module_as_path, "__init__.py"
+                    )
+                  )
                   possible_paths.append(
-                      os.path.join(workspace_root, 'third_party', pkg,
-                                   module_as_path + '.py'))
+                    os.path.join(
+                      workspace_root, "third_party", pkg, module_as_path + ".py"
+                    )
+                  )
                   possible_paths.append(
-                      os.path.join(workspace_root, 'third_party', pkg,
-                                   module_as_path, '__init__.py'))
+                    os.path.join(
+                      workspace_root,
+                      "third_party",
+                      pkg,
+                      module_as_path,
+                      "__init__.py",
+                    )
+                  )
 
                 # Add any existing paths
                 for path in possible_paths:
@@ -894,7 +1067,11 @@ class ObjectExtractor:
 
     # Look for common workspace markers
     markers = [
-        '.git', '.vscode', 'pyproject.toml', 'setup.py', 'requirements.txt'
+      ".git",
+      ".vscode",
+      "pyproject.toml",
+      "setup.py",
+      "requirements.txt",
     ]
 
     while current_dir != os.path.dirname(current_dir):  # Not at filesystem root
@@ -917,17 +1094,17 @@ class ObjectExtractor:
 
     try:
       import subprocess
-      result = subprocess.run(['g4', 'g4d'],
-                              capture_output=True,
-                              text=True,
-                              timeout=5)
+
+      result = subprocess.run(
+        ["g4", "g4d"], capture_output=True, text=True, timeout=5
+      )
       if result.returncode == 0:
         g4d_output = result.stdout.strip()
         # Remove the 'google3' suffix to get the parent directory
-        if g4d_output.endswith('google3'):
-          self._google3_root_cache = g4d_output[:-len('google3')].rstrip('/')
-        elif g4d_output.endswith('/google3'):
-          self._google3_root_cache = g4d_output[:-len('/google3')]
+        if g4d_output.endswith("google3"):
+          self._google3_root_cache = g4d_output[: -len("google3")].rstrip("/")
+        elif g4d_output.endswith("/google3"):
+          self._google3_root_cache = g4d_output[: -len("/google3")]
         else:
           self._google3_root_cache = None
         return self._google3_root_cache
@@ -940,14 +1117,22 @@ class ObjectExtractor:
     """Check if a module path refers to a local package in the workspace."""
 
     # Check if this is a google3 import
-    if module_path.startswith('google3.'):
+    if module_path.startswith("google3."):
       return True
 
     # List of known local packages in common ML workspaces
     local_package_names = [
-        'google3', 'tpu_commons', 'MaxText', 'maxtext', 'JetStream',
-        'jetstream', 'vllm', 'whisper_jax', 'torchprime', 'maxdiffusion',
-        'RecML'
+      "google3",
+      "tpu_commons",
+      "MaxText",
+      "maxtext",
+      "JetStream",
+      "jetstream",
+      "vllm",
+      "whisper_jax",
+      "torchprime",
+      "maxdiffusion",
+      "RecML",
     ]
 
     # Check if the module starts with any known local package
@@ -956,46 +1141,49 @@ class ObjectExtractor:
         return True
 
     # Check if there's actually a directory structure for this module in the workspace
-    module_parts = module_path.split('.')
+    module_parts = module_path.split(".")
 
     # Try various combinations to see if this could be a local module
     for i in range(len(module_parts)):
-      partial_path = os.path.join(*module_parts[:i + 1])
+      partial_path = os.path.join(*module_parts[: i + 1])
 
       # Check in common locations
       potential_locations = [
-          os.path.join(workspace_root, partial_path),
-          os.path.join(workspace_root, 'third_party', partial_path),
+        os.path.join(workspace_root, partial_path),
+        os.path.join(workspace_root, "third_party", partial_path),
       ]
 
       # Only check google3 root if the module could plausibly be in google3
       # This avoids calling g4 g4d for every single import
-      if module_path.startswith(
-          'google3') or 'google3' in self.filename.lower():
+      if (
+        module_path.startswith("google3") or "google3" in self.filename.lower()
+      ):
         google3_root = self._get_google3_root()
         if google3_root:
           potential_locations.append(
-              os.path.join(google3_root, 'google3', partial_path))
+            os.path.join(google3_root, "google3", partial_path)
+          )
 
       for location in potential_locations:
         if os.path.exists(location):
           return True
         # Also check with .py extension
-        if os.path.exists(location + '.py'):
+        if os.path.exists(location + ".py"):
           return True
 
     # If we can't find any evidence this is local, assume it's external
     return False
 
-  def _find_mock_implementation(self, module_path: str,
-                                workspace_root: str) -> Optional[str]:
+  def _find_mock_implementation(
+    self, module_path: str, workspace_root: str
+  ) -> Optional[str]:
     """Find mock implementations of external modules (e.g., vllm.logger -> tpu_commons.mock.vllm_logger)."""
     # Common mappings for mock implementations
     mock_mappings = {
-        'vllm.logger': ['tpu_commons.mock.vllm_logger', 'tpu_commons.logger'],
-        'vllm.config': ['tpu_commons.mock.vllm_config_utils'],
-        'vllm.envs': ['tpu_commons.mock.vllm_envs'],
-        'vllm.logging': ['tpu_commons.mock.vllm_logging_utils'],
+      "vllm.logger": ["tpu_commons.mock.vllm_logger", "tpu_commons.logger"],
+      "vllm.config": ["tpu_commons.mock.vllm_config_utils"],
+      "vllm.envs": ["tpu_commons.mock.vllm_envs"],
+      "vllm.logging": ["tpu_commons.mock.vllm_logging_utils"],
     }
 
     # Check if we have a known mock mapping
@@ -1007,38 +1195,48 @@ class ObjectExtractor:
           return mock_file
 
     # Try generic pattern: vllm.X -> tpu_commons.mock.vllm_X
-    if module_path.startswith('vllm.'):
-      module_suffix = module_path.split('vllm.', 1)[1]
-      mock_module = f'tpu_commons.mock.vllm_{module_suffix.replace(".", "_")}'
+    if module_path.startswith("vllm."):
+      module_suffix = module_path.split("vllm.", 1)[1]
+      mock_module = f"tpu_commons.mock.vllm_{module_suffix.replace('.', '_')}"
       mock_file = self._find_module_file(mock_module, workspace_root)
       if mock_file:
         return mock_file
 
     return None
 
-  def _find_module_file(self, module_path: str,
-                        workspace_root: str) -> Optional[str]:
+  def _find_module_file(
+    self, module_path: str, workspace_root: str
+  ) -> Optional[str]:
     """Find the file path for a given module path."""
-    module_as_path = module_path.replace('.', os.sep)
+    module_as_path = module_path.replace(".", os.sep)
 
     # Try various common locations
     possible_paths = [
-        os.path.join(workspace_root, module_as_path + '.py'),
-        os.path.join(workspace_root, module_as_path, '__init__.py'),
-        os.path.join(workspace_root, 'third_party', module_as_path + '.py'),
-        os.path.join(workspace_root, 'third_party', module_as_path,
-                     '__init__.py'),
+      os.path.join(workspace_root, module_as_path + ".py"),
+      os.path.join(workspace_root, module_as_path, "__init__.py"),
+      os.path.join(workspace_root, "third_party", module_as_path + ".py"),
+      os.path.join(
+        workspace_root, "third_party", module_as_path, "__init__.py"
+      ),
     ]
 
     # For nested packages, also try with duplicated directory structure
     # e.g., tpu_commons.mock.vllm_logger -> third_party/tpu_commons/tpu_commons/mock/vllm_logger.py
-    first_component = module_path.split('.')[0]
-    possible_paths.extend([
-        os.path.join(workspace_root, 'third_party', first_component,
-                     module_as_path + '.py'),
-        os.path.join(workspace_root, 'third_party', first_component,
-                     module_as_path, '__init__.py'),
-    ])
+    first_component = module_path.split(".")[0]
+    possible_paths.extend(
+      [
+        os.path.join(
+          workspace_root, "third_party", first_component, module_as_path + ".py"
+        ),
+        os.path.join(
+          workspace_root,
+          "third_party",
+          first_component,
+          module_as_path,
+          "__init__.py",
+        ),
+      ]
+    )
 
     for path in possible_paths:
       if os.path.exists(path):
@@ -1051,9 +1249,18 @@ class ObjectExtractor:
 
     # List of known local package patterns
     local_package_patterns = [
-        'google3', 'tpu_commons', 'MaxText', 'maxtext', 'JetStream',
-        'jetstream', 'vllm', 'whisper_jax', 'torchprime', 'maxdiffusion',
-        'RecML', 'third_party'
+      "google3",
+      "tpu_commons",
+      "MaxText",
+      "maxtext",
+      "JetStream",
+      "jetstream",
+      "vllm",
+      "whisper_jax",
+      "torchprime",
+      "maxdiffusion",
+      "RecML",
+      "third_party",
     ]
 
     # Check if the file path contains any local package patterns
@@ -1064,11 +1271,11 @@ class ObjectExtractor:
     return False
 
   def extract_from_local_file(
-      self,
-      file_path: str,
-      needed_names: Set[str],
-      module_attributes: Set[str] = None,
-      external_imports: Set[str] = None
+    self,
+    file_path: str,
+    needed_names: Set[str],
+    module_attributes: Set[str] = None,
+    external_imports: Set[str] = None,
   ) -> Tuple[List[str], List[Tuple[str, str]]]:
     """Extract needed objects from a local file."""
     if module_attributes is None:
@@ -1092,7 +1299,8 @@ class ObjectExtractor:
               if isinstance(target, ast.Name):
                 definitions[target.id] = node
           elif isinstance(node, ast.AnnAssign) and isinstance(
-              node.target, ast.Name):
+            node.target, ast.Name
+          ):
             definitions[node.target.id] = node
           # Recursively check inside if blocks (for typing.TYPE_CHECKING, etc.)
           elif isinstance(node, ast.If):
@@ -1112,15 +1320,16 @@ class ObjectExtractor:
 
       # Extract attributes that are referenced via module.attribute patterns
       for attr_pattern in module_attributes:
-        parts = attr_pattern.split('.')
+        parts = attr_pattern.split(".")
         if len(parts) >= 2:
           # Check both exact module name match and partial matches
           first_part = parts[0]
           attr_name = parts[1]
 
           # Direct module name match or file path contains the module reference
-          if (first_part == module_name or
-              first_part in file_path) and attr_name in definitions:
+          if (
+            first_part == module_name or first_part in file_path
+          ) and attr_name in definitions:
             node = definitions[attr_name]
             if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
               obj_source = extractor.get_object_source(attr_name)
@@ -1140,39 +1349,50 @@ class ObjectExtractor:
         for name, node in definitions.items():
           if isinstance(node, ast.Assign):
             # Extract all assignments that look like constants or are needed
-            if (name in needed_names or isinstance(node.value, ast.Constant) or
-                (hasattr(ast, 'Str') and isinstance(node.value, ast.Str))
-                or  # Python < 3.8 compatibility
-                (hasattr(ast, 'Num') and isinstance(node.value, ast.Num))
-                or  # Python < 3.8 compatibility
-                (isinstance(node.value, ast.Attribute) and
-                 isinstance(node.value.value, ast.Name)) or
-                (name.isupper() or '_' in name)):
+            if (
+              name in needed_names
+              or isinstance(node.value, ast.Constant)
+              or (
+                hasattr(ast, "Str") and isinstance(node.value, ast.Str)
+              )  # Python < 3.8 compatibility
+              or (
+                hasattr(ast, "Num") and isinstance(node.value, ast.Num)
+              )  # Python < 3.8 compatibility
+              or (
+                isinstance(node.value, ast.Attribute)
+                and isinstance(node.value.value, ast.Name)
+              )
+              or (name.isupper() or "_" in name)
+            ):
               # Use get_object_source to properly handle multi-line assignments
               obj_source = extractor.get_object_source(name)
-              if obj_source and not any(obj_name == name
-                                        for obj_name, _ in extracted_objects):
+              if obj_source and not any(
+                obj_name == name for obj_name, _ in extracted_objects
+              ):
                 extracted_objects.append((name, obj_source))
           elif isinstance(node, ast.AnnAssign):
             # Extract annotated assignments (type aliases) - use get_object_source for multi-line
             if name in needed_names or name.isupper():
               obj_source = extractor.get_object_source(name)
-              if obj_source and not any(obj_name == name
-                                        for obj_name, _ in extracted_objects):
+              if obj_source and not any(
+                obj_name == name for obj_name, _ in extracted_objects
+              ):
                 extracted_objects.append((name, obj_source))
           elif isinstance(node, ast.ClassDef):
             # Extract all class definitions, especially enums, if needed
             if name in needed_names:
               obj_source = extractor.get_object_source(name)
-              if obj_source and not any(obj_name == name
-                                        for obj_name, _ in extracted_objects):
+              if obj_source and not any(
+                obj_name == name for obj_name, _ in extracted_objects
+              ):
                 extracted_objects.append((name, obj_source))
           elif isinstance(node, ast.FunctionDef):
             # Extract function definitions if needed
             if name in needed_names:
               obj_source = extractor.get_object_source(name)
-              if obj_source and not any(obj_name == name
-                                        for obj_name, _ in extracted_objects):
+              if obj_source and not any(
+                obj_name == name for obj_name, _ in extracted_objects
+              ):
                 extracted_objects.append((name, obj_source))
 
         # For local package files, extract imports that are still needed
@@ -1190,22 +1410,26 @@ class ObjectExtractor:
               if isinstance(node, ast.ImportFrom) and node.module:
                 # First check if there's a mock implementation
                 mock_file = extractor._find_mock_implementation(
-                    node.module,
-                    extractor._find_workspace_root(os.path.dirname(file_path)))
+                  node.module,
+                  extractor._find_workspace_root(os.path.dirname(file_path)),
+                )
                 if mock_file:
                   has_mock_impl = True
-                  is_external_import = True  # Treat as external so it gets checked for mocks
+                  is_external_import = (
+                    True  # Treat as external so it gets checked for mocks
+                  )
                 elif extractor._is_local_package(
-                    node.module,
-                    extractor._find_workspace_root(os.path.dirname(file_path))):
+                  node.module,
+                  extractor._find_workspace_root(os.path.dirname(file_path)),
+                ):
                   is_external_import = False
                   break
               elif isinstance(node, ast.Import):
                 for alias in node.names:
                   if extractor._is_local_package(
-                      alias.name,
-                      extractor._find_workspace_root(
-                          os.path.dirname(file_path))):
+                    alias.name,
+                    extractor._find_workspace_root(os.path.dirname(file_path)),
+                  ):
                     is_external_import = False
                     break
           except:
@@ -1226,8 +1450,9 @@ class ObjectExtractor:
             node = definitions[name]
             if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
               obj_source = extractor.get_object_source(name)
-              if obj_source and not any(obj_name == name
-                                        for obj_name, _ in extracted_objects):
+              if obj_source and not any(
+                obj_name == name for obj_name, _ in extracted_objects
+              ):
                 extracted_objects.append((name, obj_source))
                 # Get imports needed by this object
                 obj_imports = extractor.get_required_imports(name)
@@ -1236,22 +1461,28 @@ class ObjectExtractor:
               # Include all assignments and annotated assignments (constants, etc.)
               # Use get_object_source to properly handle multi-line assignments
               obj_source = extractor.get_object_source(name)
-              if obj_source and not any(obj_name == name
-                                        for obj_name, _ in extracted_objects):
+              if obj_source and not any(
+                obj_name == name for obj_name, _ in extracted_objects
+              ):
                 extracted_objects.append((name, obj_source))
 
         # Also check for module.attribute patterns, but skip externally imported names
         for attr_pattern in module_attributes:
-          if '.' in attr_pattern:
-            module_part, attr_part = attr_pattern.split('.', 1)
-            if module_part == module_name and attr_part in definitions and attr_part not in external_imports:
+          if "." in attr_pattern:
+            module_part, attr_part = attr_pattern.split(".", 1)
+            if (
+              module_part == module_name
+              and attr_part in definitions
+              and attr_part not in external_imports
+            ):
               node = definitions[attr_part]
               if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
                 obj_source = extractor.get_object_source(attr_part)
                 if obj_source:
                   # Check if we haven't already added this object
                   if not any(
-                      name == attr_part for name, _ in extracted_objects):
+                    name == attr_part for name, _ in extracted_objects
+                  ):
                     extracted_objects.append((attr_part, obj_source))
                     # Get imports needed by this object
                     obj_imports = extractor.get_required_imports(attr_part)
@@ -1259,18 +1490,21 @@ class ObjectExtractor:
               elif isinstance(node, (ast.Assign, ast.AnnAssign)):
                 # Include all assignments - use get_object_source to handle multi-line
                 obj_source = extractor.get_object_source(attr_part)
-                if obj_source and not any(name == attr_part
-                                          for name, _ in extracted_objects):
+                if obj_source and not any(
+                  name == attr_part for name, _ in extracted_objects
+                ):
                   extracted_objects.append((attr_part, obj_source))
 
       return extracted_imports, extracted_objects
     except Exception as e:
-      print(f"Warning: Could not extract from {file_path}: {e}",
-            file=sys.stderr)
+      print(
+        f"Warning: Could not extract from {file_path}: {e}", file=sys.stderr
+      )
       return [], []
 
-  def _import_provides_needed_names(self, import_stmt: str,
-                                    needed_names: Set[str]) -> bool:
+  def _import_provides_needed_names(
+    self, import_stmt: str, needed_names: Set[str]
+  ) -> bool:
     """Check if an import statement provides any of the needed names."""
     try:
       import_tree = ast.parse(import_stmt)
@@ -1283,37 +1517,36 @@ class ObjectExtractor:
   def _is_complete_assignment(self, line: str) -> bool:
     """Check if a line contains a complete assignment (no unclosed parentheses, brackets, etc.)."""
     # Count opening and closing parentheses, brackets, braces
-    paren_count = line.count('(') - line.count(')')
-    bracket_count = line.count('[') - line.count(']')
-    brace_count = line.count('{') - line.count('}')
+    paren_count = line.count("(") - line.count(")")
+    bracket_count = line.count("[") - line.count("]")
+    brace_count = line.count("{") - line.count("}")
 
     # If any are not balanced, it's an incomplete assignment
     if paren_count != 0 or bracket_count != 0 or brace_count != 0:
       return False
 
     # Also check for common incomplete patterns
-    if line.endswith('(') or line.endswith('[') or line.endswith('{'):
+    if line.endswith("(") or line.endswith("[") or line.endswith("{"):
       return False
 
     return True
 
 
-def isolate_object(filename: str,
-                   object_name: str,
-                   max_depth: int = 5,
-                   debug: bool = False) -> str:
+def isolate_object(
+  filename: str, object_name: str, max_depth: int = 5, debug: bool = False
+) -> str:
   """
-    Extract an object and all its dependencies from a Python file, including recursive imports.
-    
-    Args:
-        filename: Path to the Python file
-        object_name: Name of the class or function to extract
-        max_depth: Maximum recursion depth for following imports
-        debug: If True, print debug information including file paths being opened
-        
-    Returns:
-        Complete standalone Python code as a string
-    """
+  Extract an object and all its dependencies from a Python file, including recursive imports.
+
+  Args:
+      filename: Path to the Python file
+      object_name: Name of the class or function to extract
+      max_depth: Maximum recursion depth for following imports
+      debug: If True, print debug information including file paths being opened
+
+  Returns:
+      Complete standalone Python code as a string
+  """
   extractor = ObjectExtractor(filename, debug=debug)
 
   # Get the main object source
@@ -1323,9 +1556,9 @@ def isolate_object(filename: str,
 
   # Track processed files to avoid circular dependencies and duplicates
   processed_files = set()
-  processed_file_needed_names = {
-  }  # Track what names we've extracted from each file
-  processed_objects = set(
+  processed_file_needed_names = {}  # Track what names we've extracted from each file
+  processed_objects = (
+    set()
   )  # Track (object_name, source_content) to avoid duplicates
   processed_files.add(os.path.abspath(filename))
 
@@ -1336,7 +1569,7 @@ def isolate_object(filename: str,
   def add_unique_object(name: str, source: str, file_origin: str = ""):
     """Add an object only if it hasn't been added before."""
     # Normalize the source content for comparison
-    source_lines = [line.strip() for line in source.split('\n') if line.strip()]
+    source_lines = [line.strip() for line in source.split("\n") if line.strip()]
     source_key = tuple(source_lines)
 
     object_key = (name, source_key)
@@ -1347,15 +1580,16 @@ def isolate_object(filename: str,
       return True
     return False
 
-  def process_file_recursive(file_extractor: ObjectExtractor,
-                             target_obj: str,
-                             depth: int = 0):
+  def process_file_recursive(
+    file_extractor: ObjectExtractor, target_obj: str, depth: int = 0
+  ):
     if depth >= max_depth:
       return
 
     # Get workspace root for this file
     workspace_root = file_extractor._find_workspace_root(
-        os.path.dirname(file_extractor.filename))
+      os.path.dirname(file_extractor.filename)
+    )
 
     # Get required imports for this object
     imports = file_extractor.get_required_imports(target_obj)
@@ -1386,7 +1620,8 @@ def isolate_object(filename: str,
 
     # Separate local and external imports
     local_files = file_extractor.get_local_import_files(
-        imports, module_usage_patterns, object_collector.module_attributes)
+      imports, module_usage_patterns, object_collector.module_attributes
+    )
     external_imports = []
     external_imported_names = set()
 
@@ -1404,17 +1639,21 @@ def isolate_object(filename: str,
             if isinstance(node, ast.ImportFrom) and node.module:
               # More comprehensive matching for local modules
               if self._is_local_package(
-                  node.module,
-                  file_extractor._find_workspace_root(
-                      os.path.dirname(file_extractor.filename))):
+                node.module,
+                file_extractor._find_workspace_root(
+                  os.path.dirname(file_extractor.filename)
+                ),
+              ):
                 is_local = True
                 break
             elif isinstance(node, ast.Import):
               for alias in node.names:
                 if self._is_local_package(
-                    alias.name,
-                    file_extractor._find_workspace_root(
-                        os.path.dirname(file_extractor.filename))):
+                  alias.name,
+                  file_extractor._find_workspace_root(
+                    os.path.dirname(file_extractor.filename)
+                  ),
+                ):
                   is_local = True
                   break
         except:
@@ -1429,84 +1668,114 @@ def isolate_object(filename: str,
           for node in ast.walk(import_tree):
             if isinstance(node, ast.ImportFrom) and node.module:
               mock_file = file_extractor._find_mock_implementation(
-                  node.module, workspace_root)
+                node.module, workspace_root
+              )
               if mock_file:
                 has_mock = True
                 # Extract from mock file
                 for imported_name in node.names:
-                  if imported_name.name != '*':
+                  if imported_name.name != "*":
                     try:
                       mock_extractor = ObjectExtractor(
-                          mock_file, debug=file_extractor.debug)
+                        mock_file, debug=file_extractor.debug
+                      )
                       original_name = imported_name.name
-                      alias_name = imported_name.asname if imported_name.asname else original_name
+                      alias_name = (
+                        imported_name.asname
+                        if imported_name.asname
+                        else original_name
+                      )
                       obj_source = mock_extractor.get_object_source(
-                          original_name)
+                        original_name
+                      )
                       if obj_source:
                         # Rename if aliased
                         if alias_name != original_name:
                           obj_source = re.sub(
-                              r'\bdef\s+' + re.escape(original_name) + r'\b',
-                              f'def {alias_name}', obj_source)
+                            r"\bdef\s+" + re.escape(original_name) + r"\b",
+                            f"def {alias_name}",
+                            obj_source,
+                          )
                           obj_source = re.sub(
-                              r'\bclass\s+' + re.escape(original_name) + r'\b',
-                              f'class {alias_name}', obj_source)
+                            r"\bclass\s+" + re.escape(original_name) + r"\b",
+                            f"class {alias_name}",
+                            obj_source,
+                          )
                         add_unique_object(
-                            alias_name, obj_source,
-                            f"{os.path.basename(mock_file)} (mock)")
+                          alias_name,
+                          obj_source,
+                          f"{os.path.basename(mock_file)} (mock)",
+                        )
 
                         # Get imports needed by this mock object
                         try:
                           mock_imports = mock_extractor.get_required_imports(
-                              original_name)
+                            original_name
+                          )
                           for mock_import in mock_imports:
                             # Check if import is external or has its own mock
                             is_mock_import_external = True
                             try:
                               import_tree = ast.parse(mock_import)
                               for node in ast.walk(import_tree):
-                                if isinstance(node,
-                                              ast.ImportFrom) and node.module:
+                                if (
+                                  isinstance(node, ast.ImportFrom)
+                                  and node.module
+                                ):
                                   if mock_extractor._is_local_package(
-                                      node.module, workspace_root):
+                                    node.module, workspace_root
+                                  ):
                                     is_mock_import_external = False
                                     break
                             except:
                               pass
 
-                            if is_mock_import_external and mock_import not in all_imports:
+                            if (
+                              is_mock_import_external
+                              and mock_import not in all_imports
+                            ):
                               all_imports.append(mock_import)
                         except:
                           pass
 
                         # Get dependencies
                         try:
-                          mock_additional = mock_extractor.get_additional_objects(
-                              original_name)
+                          mock_additional = (
+                            mock_extractor.get_additional_objects(original_name)
+                          )
                           for add_name, add_source in mock_additional:
                             add_unique_object(
-                                add_name, add_source,
-                                f"{os.path.basename(mock_file)} (mock)")
+                              add_name,
+                              add_source,
+                              f"{os.path.basename(mock_file)} (mock)",
+                            )
 
                             # Also get imports for each additional dependency
                             try:
                               add_imports = mock_extractor.get_required_imports(
-                                  add_name)
+                                add_name
+                              )
                               for add_import in add_imports:
                                 is_add_import_external = True
                                 try:
                                   import_tree = ast.parse(add_import)
                                   for node in ast.walk(import_tree):
-                                    if isinstance(
-                                        node, ast.ImportFrom) and node.module:
+                                    if (
+                                      isinstance(node, ast.ImportFrom)
+                                      and node.module
+                                    ):
                                       if mock_extractor._is_local_package(
-                                          node.module, workspace_root):
+                                        node.module, workspace_root
+                                      ):
                                         is_add_import_external = False
                                         break
                                 except:
                                   pass
 
-                                if is_add_import_external and add_import not in all_imports:
+                                if (
+                                  is_add_import_external
+                                  and add_import not in all_imports
+                                ):
                                   all_imports.append(add_import)
                             except:
                               pass
@@ -1514,8 +1783,9 @@ def isolate_object(filename: str,
                           pass
                     except Exception as e:
                       print(
-                          f"Warning: Could not extract {imported_name.name} from mock {mock_file}: {e}",
-                          file=sys.stderr)
+                        f"Warning: Could not extract {imported_name.name} from mock {mock_file}: {e}",
+                        file=sys.stderr,
+                      )
                 break
         except:
           pass
@@ -1565,12 +1835,14 @@ def isolate_object(filename: str,
           obj_collector.visit(obj_node)
 
           obj_module_patterns = file_extractor.get_module_usage_patterns(
-              obj_name)
+            obj_name
+          )
           obj_module_attributes = obj_collector.module_attributes
 
         # Get local files for this object's imports
         obj_local_files = file_extractor.get_local_import_files(
-            obj_imports, obj_module_patterns, obj_module_attributes)
+          obj_imports, obj_module_patterns, obj_module_attributes
+        )
 
         for obj_import in obj_imports:
           # Check if it's a local import
@@ -1580,17 +1852,21 @@ def isolate_object(filename: str,
             for node in ast.walk(import_tree):
               if isinstance(node, ast.ImportFrom) and node.module:
                 if file_extractor._is_local_package(
-                    node.module,
-                    file_extractor._find_workspace_root(
-                        os.path.dirname(file_extractor.filename))):
+                  node.module,
+                  file_extractor._find_workspace_root(
+                    os.path.dirname(file_extractor.filename)
+                  ),
+                ):
                   is_local_import = True
                   break
               elif isinstance(node, ast.Import):
                 for alias in node.names:
                   if file_extractor._is_local_package(
-                      alias.name,
-                      file_extractor._find_workspace_root(
-                          os.path.dirname(file_extractor.filename))):
+                    alias.name,
+                    file_extractor._find_workspace_root(
+                      os.path.dirname(file_extractor.filename)
+                    ),
+                  ):
                     is_local_import = True
                     break
           except:
@@ -1642,13 +1918,17 @@ def isolate_object(filename: str,
             for node in ast.walk(import_tree):
               if isinstance(node, ast.ImportFrom):
                 if node.module and file_extractor._is_local_package(
-                    node.module, workspace_root):
-                  module_as_path = node.module.replace('.', os.sep)
+                  node.module, workspace_root
+                ):
+                  module_as_path = node.module.replace(".", os.sep)
                   local_file_normalized = os.path.normpath(local_file)
-                  if (local_file_normalized.endswith(module_as_path + '.py') or
-                      local_file_normalized.endswith(
-                          os.path.join(module_as_path, '__init__.py')) or
-                      module_as_path in local_file_normalized):
+                  if (
+                    local_file_normalized.endswith(module_as_path + ".py")
+                    or local_file_normalized.endswith(
+                      os.path.join(module_as_path, "__init__.py")
+                    )
+                    or module_as_path in local_file_normalized
+                  ):
                     for alias in node.names:
                       name = alias.asname if alias.asname else alias.name
                       if name != "*":
@@ -1658,7 +1938,8 @@ def isolate_object(filename: str,
 
         # Check if there are new names
         previously_needed = processed_file_needed_names.get(
-            abs_local_file, set())
+          abs_local_file, set()
+        )
         new_names = temp_needed_names - previously_needed
         if new_names:
           should_process = True
@@ -1675,45 +1956,59 @@ def isolate_object(filename: str,
               if isinstance(node, ast.ImportFrom):
                 # Check if this import statement refers to the current local file
                 if node.module and file_extractor._is_local_package(
-                    node.module, workspace_root):
+                  node.module, workspace_root
+                ):
                   # Convert module path to file path and check if it matches current local_file
-                  module_as_path = node.module.replace('.', os.sep)
+                  module_as_path = node.module.replace(".", os.sep)
                   local_file_normalized = os.path.normpath(local_file)
 
                   # Check if this import matches the local file
                   is_match = False
 
                   # Standard checks
-                  if (local_file_normalized.endswith(module_as_path + '.py') or
-                      local_file_normalized.endswith(
-                          os.path.join(module_as_path, '__init__.py'))):
+                  if local_file_normalized.endswith(
+                    module_as_path + ".py"
+                  ) or local_file_normalized.endswith(
+                    os.path.join(module_as_path, "__init__.py")
+                  ):
                     is_match = True
 
                   # For google3 imports, also check without the google3 prefix
-                  if not is_match and node.module.startswith('google3.'):
+                  if not is_match and node.module.startswith("google3."):
                     # Remove google3. prefix and check again
                     module_without_google3 = node.module[
-                        8:]  # Remove 'google3.'
+                      8:
+                    ]  # Remove 'google3.'
                     module_as_path_no_g3 = module_without_google3.replace(
-                        '.', os.sep)
-                    if (local_file_normalized.endswith(module_as_path_no_g3 +
-                                                       '.py') or
-                        local_file_normalized.endswith(
-                            os.path.join(module_as_path_no_g3, '__init__.py'))):
+                      ".", os.sep
+                    )
+                    if local_file_normalized.endswith(
+                      module_as_path_no_g3 + ".py"
+                    ) or local_file_normalized.endswith(
+                      os.path.join(module_as_path_no_g3, "__init__.py")
+                    ):
                       is_match = True
                     # Also check if the file contains google3/ in the path
-                    if not is_match and 'google3' + os.sep in local_file_normalized:
+                    if (
+                      not is_match
+                      and "google3" + os.sep in local_file_normalized
+                    ):
                       # Extract the part after google3/
-                      google3_idx = local_file_normalized.find('google3' +
-                                                               os.sep)
+                      google3_idx = local_file_normalized.find(
+                        "google3" + os.sep
+                      )
                       if google3_idx != -1:
                         path_after_google3 = local_file_normalized[
-                            google3_idx + 8:]  # Skip 'google3/'
-                        if (path_after_google3 == module_as_path_no_g3 + '.py'
-                            or path_after_google3 == os.path.join(
-                                module_as_path_no_g3, '__init__.py') or
-                            path_after_google3.startswith(module_as_path_no_g3 +
-                                                          os.sep)):
+                          google3_idx + 8 :
+                        ]  # Skip 'google3/'
+                        if (
+                          path_after_google3 == module_as_path_no_g3 + ".py"
+                          or path_after_google3
+                          == os.path.join(module_as_path_no_g3, "__init__.py")
+                          or path_after_google3.startswith(
+                            module_as_path_no_g3 + os.sep
+                          )
+                        ):
                           is_match = True
 
                   # Fallback: check if module_as_path is contained in the file path
@@ -1729,44 +2024,57 @@ def isolate_object(filename: str,
                         needed_names.add(name)
               elif isinstance(node, ast.Import):
                 for alias in node.names:
-                  if file_extractor._is_local_package(alias.name,
-                                                      workspace_root):
+                  if file_extractor._is_local_package(
+                    alias.name, workspace_root
+                  ):
                     # For direct imports, check if the module name relates to this file
-                    module_as_path = alias.name.replace('.', os.sep)
+                    module_as_path = alias.name.replace(".", os.sep)
                     local_file_normalized = os.path.normpath(local_file)
 
                     is_match = False
 
                     # Standard checks
-                    if (local_file_normalized.endswith(module_as_path + '.py')
-                        or local_file_normalized.endswith(
-                            os.path.join(module_as_path, '__init__.py'))):
+                    if local_file_normalized.endswith(
+                      module_as_path + ".py"
+                    ) or local_file_normalized.endswith(
+                      os.path.join(module_as_path, "__init__.py")
+                    ):
                       is_match = True
 
                     # For google3 imports, also check without the google3 prefix
-                    if not is_match and alias.name.startswith('google3.'):
+                    if not is_match and alias.name.startswith("google3."):
                       module_without_google3 = alias.name[
-                          8:]  # Remove 'google3.'
+                        8:
+                      ]  # Remove 'google3.'
                       module_as_path_no_g3 = module_without_google3.replace(
-                          '.', os.sep)
-                      if (local_file_normalized.endswith(module_as_path_no_g3 +
-                                                         '.py') or
-                          local_file_normalized.endswith(
-                              os.path.join(module_as_path_no_g3,
-                                           '__init__.py'))):
+                        ".", os.sep
+                      )
+                      if local_file_normalized.endswith(
+                        module_as_path_no_g3 + ".py"
+                      ) or local_file_normalized.endswith(
+                        os.path.join(module_as_path_no_g3, "__init__.py")
+                      ):
                         is_match = True
                       # Also check if the file contains google3/ in the path
-                      if not is_match and 'google3' + os.sep in local_file_normalized:
-                        google3_idx = local_file_normalized.find('google3' +
-                                                                 os.sep)
+                      if (
+                        not is_match
+                        and "google3" + os.sep in local_file_normalized
+                      ):
+                        google3_idx = local_file_normalized.find(
+                          "google3" + os.sep
+                        )
                         if google3_idx != -1:
                           path_after_google3 = local_file_normalized[
-                              google3_idx + 8:]  # Skip 'google3/'
-                          if (path_after_google3 == module_as_path_no_g3 + '.py'
-                              or path_after_google3 == os.path.join(
-                                  module_as_path_no_g3, '__init__.py') or
-                              path_after_google3.startswith(
-                                  module_as_path_no_g3 + os.sep)):
+                            google3_idx + 8 :
+                          ]  # Skip 'google3/'
+                          if (
+                            path_after_google3 == module_as_path_no_g3 + ".py"
+                            or path_after_google3
+                            == os.path.join(module_as_path_no_g3, "__init__.py")
+                            or path_after_google3.startswith(
+                              module_as_path_no_g3 + os.sep
+                            )
+                          ):
                             is_match = True
 
                     # Fallback: check if module_as_path is contained in the file path
@@ -1787,33 +2095,44 @@ def isolate_object(filename: str,
         # Also add module attributes that might be needed
         # Sort to ensure deterministic order
         for attr_pattern in sorted(object_collector.module_attributes):
-          if '.' in attr_pattern:
-            module_part, attr_part = attr_pattern.split('.', 1)
+          if "." in attr_pattern:
+            module_part, attr_part = attr_pattern.split(".", 1)
             needed_names.add(attr_part)
 
         # Extract needed objects from the local file
         try:
-          local_extractor = ObjectExtractor(local_file,
-                                            debug=file_extractor.debug)
-          local_imports, local_objects = local_extractor.extract_from_local_file(
-              local_file, needed_names, object_collector.module_attributes,
-              external_imported_names)
+          local_extractor = ObjectExtractor(
+            local_file, debug=file_extractor.debug
+          )
+          local_imports, local_objects = (
+            local_extractor.extract_from_local_file(
+              local_file,
+              needed_names,
+              object_collector.module_attributes,
+              external_imported_names,
+            )
+          )
 
           # Track what names we extracted from this file
           extracted_names_from_file = set()
           for obj_name, _ in local_objects:
             # Extract just the base name (without file annotation)
-            base_name = obj_name.split(
-                ' (from ')[0] if ' (from ' in obj_name else obj_name
+            base_name = (
+              obj_name.split(" (from ")[0]
+              if " (from " in obj_name
+              else obj_name
+            )
             extracted_names_from_file.add(base_name)
 
           # Update the tracking dictionary
           if abs_local_file in processed_file_needed_names:
             processed_file_needed_names[abs_local_file].update(
-                extracted_names_from_file)
+              extracted_names_from_file
+            )
           else:
-            processed_file_needed_names[
-                abs_local_file] = extracted_names_from_file
+            processed_file_needed_names[abs_local_file] = (
+              extracted_names_from_file
+            )
 
           # Add imports from local file (filter external vs local)
           for local_import in local_imports:
@@ -1827,24 +2146,32 @@ def isolate_object(filename: str,
                 if isinstance(node, ast.ImportFrom) and node.module:
                   # Check for mock implementations FIRST
                   mock_file = local_extractor._find_mock_implementation(
-                      node.module, workspace_root)
+                    node.module, workspace_root
+                  )
                   if mock_file:
                     has_mock = True
                     # Extract the needed names from this mock file
                     for imported_name in node.names:
-                      if imported_name.name != '*':
+                      if imported_name.name != "*":
                         original_name = imported_name.name
-                        alias_name = imported_name.asname if imported_name.asname else original_name
+                        alias_name = (
+                          imported_name.asname
+                          if imported_name.asname
+                          else original_name
+                        )
                         mock_extractions.append(
-                            (mock_file, original_name, alias_name))
+                          (mock_file, original_name, alias_name)
+                        )
                   elif local_extractor._is_local_package(
-                      node.module, workspace_root):
+                    node.module, workspace_root
+                  ):
                     is_external = False
                     break
                 elif isinstance(node, ast.Import):
                   for alias in node.names:
                     if local_extractor._is_local_package(
-                        alias.name, workspace_root):
+                      alias.name, workspace_root
+                    ):
                       is_external = False
                       break
             except Exception as e:
@@ -1854,26 +2181,35 @@ def isolate_object(filename: str,
             if mock_extractions:
               for mock_file, original_name, alias_name in mock_extractions:
                 try:
-                  mock_extractor = ObjectExtractor(mock_file,
-                                                   debug=file_extractor.debug)
+                  mock_extractor = ObjectExtractor(
+                    mock_file, debug=file_extractor.debug
+                  )
                   obj_source = mock_extractor.get_object_source(original_name)
                   if obj_source:
                     # If there's an alias, we need to rename the function/class in the source
                     if alias_name != original_name:
                       # Simple replacement for function/class names
                       obj_source = re.sub(
-                          r'\bdef\s+' + re.escape(original_name) + r'\b',
-                          f'def {alias_name}', obj_source)
+                        r"\bdef\s+" + re.escape(original_name) + r"\b",
+                        f"def {alias_name}",
+                        obj_source,
+                      )
                       obj_source = re.sub(
-                          r'\bclass\s+' + re.escape(original_name) + r'\b',
-                          f'class {alias_name}', obj_source)
-                    add_unique_object(alias_name, obj_source,
-                                      f"{os.path.basename(mock_file)} (mock)")
+                        r"\bclass\s+" + re.escape(original_name) + r"\b",
+                        f"class {alias_name}",
+                        obj_source,
+                      )
+                    add_unique_object(
+                      alias_name,
+                      obj_source,
+                      f"{os.path.basename(mock_file)} (mock)",
+                    )
 
                     # Get imports needed by this mock object
                     try:
                       mock_imports = mock_extractor.get_required_imports(
-                          original_name)
+                        original_name
+                      )
                       for mock_import in mock_imports:
                         # Check if import is external or has its own mock
                         is_mock_import_external = True
@@ -1882,13 +2218,17 @@ def isolate_object(filename: str,
                           for node in ast.walk(import_tree):
                             if isinstance(node, ast.ImportFrom) and node.module:
                               if mock_extractor._is_local_package(
-                                  node.module, workspace_root):
+                                node.module, workspace_root
+                              ):
                                 is_mock_import_external = False
                                 break
                         except:
                           pass
 
-                        if is_mock_import_external and mock_import not in all_imports:
+                        if (
+                          is_mock_import_external
+                          and mock_import not in all_imports
+                        ):
                           all_imports.append(mock_import)
                     except:
                       pass
@@ -1896,31 +2236,41 @@ def isolate_object(filename: str,
                     # Also get dependencies of this mock object
                     try:
                       mock_additional = mock_extractor.get_additional_objects(
-                          original_name)
+                        original_name
+                      )
                       for add_name, add_source in mock_additional:
                         add_unique_object(
-                            add_name, add_source,
-                            f"{os.path.basename(mock_file)} (mock)")
+                          add_name,
+                          add_source,
+                          f"{os.path.basename(mock_file)} (mock)",
+                        )
 
                         # Also get imports for each additional dependency
                         try:
                           add_imports = mock_extractor.get_required_imports(
-                              add_name)
+                            add_name
+                          )
                           for add_import in add_imports:
                             is_add_import_external = True
                             try:
                               import_tree = ast.parse(add_import)
                               for node in ast.walk(import_tree):
-                                if isinstance(node,
-                                              ast.ImportFrom) and node.module:
+                                if (
+                                  isinstance(node, ast.ImportFrom)
+                                  and node.module
+                                ):
                                   if mock_extractor._is_local_package(
-                                      node.module, workspace_root):
+                                    node.module, workspace_root
+                                  ):
                                     is_add_import_external = False
                                     break
                             except:
                               pass
 
-                            if is_add_import_external and add_import not in all_imports:
+                            if (
+                              is_add_import_external
+                              and add_import not in all_imports
+                            ):
                               all_imports.append(add_import)
                         except:
                           pass
@@ -1928,23 +2278,26 @@ def isolate_object(filename: str,
                       pass
                 except Exception as e:
                   print(
-                      f"Warning: Could not extract {original_name} from mock {mock_file}: {e}",
-                      file=sys.stderr)
+                    f"Warning: Could not extract {original_name} from mock {mock_file}: {e}",
+                    file=sys.stderr,
+                  )
 
             if is_external and not has_mock:
               all_imports.append(local_import)
 
           # Add objects from local file
           for obj_name, obj_source in local_objects:
-            add_unique_object(obj_name, obj_source,
-                              os.path.basename(local_file))
+            add_unique_object(
+              obj_name, obj_source, os.path.basename(local_file)
+            )
 
             # Recursively process dependencies of this extracted object within the same file
             try:
               obj_additional = local_extractor.get_additional_objects(obj_name)
               for add_name, add_source in obj_additional:
-                add_unique_object(add_name, add_source,
-                                  os.path.basename(local_file))
+                add_unique_object(
+                  add_name, add_source, os.path.basename(local_file)
+                )
             except:
               pass  # Continue if we can't analyze dependencies
 
@@ -1955,8 +2308,9 @@ def isolate_object(filename: str,
               pass  # Continue if we can't process recursively
 
         except Exception as e:
-          print(f"Warning: Could not process {local_file}: {e}",
-                file=sys.stderr)
+          print(
+            f"Warning: Could not process {local_file}: {e}", file=sys.stderr
+          )
 
   # Start the recursive processing
   process_file_recursive(extractor, object_name)
@@ -1972,8 +2326,7 @@ def isolate_object(filename: str,
 
   # Filter out imports that we're already providing as extracted objects
   extracted_object_names = set()
-  extracted_from_modules = {
-  }  # Track which module each extracted object came from
+  extracted_from_modules = {}  # Track which module each extracted object came from
 
   # Include the main object being isolated
   extracted_object_names.add(object_name)
@@ -1982,12 +2335,12 @@ def isolate_object(filename: str,
   # Include all additional extracted objects
   for name, _ in all_objects:
     # Extract the base name (without the "(from file.py)" part)
-    base_name = name.split(' (from ')[0]
+    base_name = name.split(" (from ")[0]
     extracted_object_names.add(base_name)
 
     # Track which file this object came from
-    if ' (from ' in name:
-      file_part = name.split(' (from ')[1].rstrip(')')
+    if " (from " in name:
+      file_part = name.split(" (from ")[1].rstrip(")")
       extracted_from_modules[base_name] = file_part
 
   filtered_imports = []
@@ -2000,7 +2353,9 @@ def isolate_object(filename: str,
       import_collector.visit(import_tree)
 
       # Check both alias names and original names against extracted objects
-      imported_alias_names = import_collector.defined_names  # The names available after import (aliases)
+      imported_alias_names = (
+        import_collector.defined_names
+      )  # The names available after import (aliases)
 
       # Also collect the original imported names (before aliasing)
       original_imported_names = set()
@@ -2031,14 +2386,19 @@ def isolate_object(filename: str,
                 original_name = alias.name
 
                 # Keep this import if neither the alias nor original name conflicts
-                if (alias_name not in extracted_object_names and
-                    original_name not in extracted_object_names):
-                  remaining_aliases.append(f"{alias.name}" + (
-                      f" as {alias.asname}" if alias.asname else ""))
+                if (
+                  alias_name not in extracted_object_names
+                  and original_name not in extracted_object_names
+                ):
+                  remaining_aliases.append(
+                    f"{alias.name}"
+                    + (f" as {alias.asname}" if alias.asname else "")
+                  )
 
               if remaining_aliases:
                 filtered_imports.append(
-                    f"from {node.module} import {', '.join(remaining_aliases)}")
+                  f"from {node.module} import {', '.join(remaining_aliases)}"
+                )
               # If no remaining names, the entire import is filtered out
             else:
               # Keep imports without a module (shouldn't happen, but be safe)
@@ -2050,8 +2410,10 @@ def isolate_object(filename: str,
             for alias in node.names:
               name = alias.asname if alias.asname else alias.name
               if name not in extracted_object_names:
-                remaining_aliases.append(f"import {alias.name}" + (
-                    f" as {alias.asname}" if alias.asname else ""))
+                remaining_aliases.append(
+                  f"import {alias.name}"
+                  + (f" as {alias.asname}" if alias.asname else "")
+                )
             if remaining_aliases:
               filtered_imports.extend(remaining_aliases)
 
@@ -2063,20 +2425,22 @@ def isolate_object(filename: str,
   output_lines = []
 
   # Fix module attribute references in all object sources
-  fixed_object_source = fix_module_attribute_references(object_source,
-                                                        extracted_object_names)
+  fixed_object_source = fix_module_attribute_references(
+    object_source, extracted_object_names
+  )
 
   # Also fix references in all extracted objects
   fixed_all_objects = []
   for name, source in all_objects:
-    fixed_source = fix_module_attribute_references(source,
-                                                   extracted_object_names)
+    fixed_source = fix_module_attribute_references(
+      source, extracted_object_names
+    )
     fixed_all_objects.append((name, fixed_source))
 
   # After fixing references, check if any module imports are still needed
-  final_imports = filter_unused_module_imports(filtered_imports,
-                                               fixed_object_source,
-                                               fixed_all_objects)
+  final_imports = filter_unused_module_imports(
+    filtered_imports, fixed_object_source, fixed_all_objects
+  )
 
   # Sort objects by dependencies (topological sort)
   sorted_objects = topologically_sort_objects(fixed_all_objects)
@@ -2086,7 +2450,8 @@ def isolate_object(filename: str,
 
   # Add header comment
   output_lines.append(
-      f"# Isolated {object_name} from {filename} (with recursive imports)")
+    f"# Isolated {object_name} from {filename} (with recursive imports)"
+  )
   output_lines.append("")
 
   # Add final imports, filtering out any remaining google3 imports and consolidating duplicates
@@ -2095,8 +2460,11 @@ def isolate_object(filename: str,
     non_google3_imports = []
     for import_stmt in final_imports:
       # Skip any imports from google3
-      if 'from google3.' in import_stmt or 'import google3.' in import_stmt or import_stmt.strip(
-      ).startswith('import google3'):
+      if (
+        "from google3." in import_stmt
+        or "import google3." in import_stmt
+        or import_stmt.strip().startswith("import google3")
+      ):
         continue
       non_google3_imports.append(import_stmt)
 
@@ -2109,7 +2477,7 @@ def isolate_object(filename: str,
         import_tree = ast.parse(import_stmt)
         for node in ast.walk(import_tree):
           if isinstance(node, ast.ImportFrom):
-            module = node.module or ''
+            module = node.module or ""
             if module not in from_imports:
               from_imports[module] = set()
 
@@ -2160,18 +2528,19 @@ def isolate_object(filename: str,
   output_lines.append(f"# Main object: {object_name}")
   output_lines.append(fixed_object_source)
 
-  return '\n'.join(output_lines)
+  return "\n".join(output_lines)
 
 
 def topologically_sort_objects(
-    objects: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
+  objects: List[Tuple[str, str]],
+) -> List[Tuple[str, str]]:
   """Sort objects so that dependencies come before the objects that use them."""
 
   # Build a dependency graph
   # Extract just the base names for analysis
   object_names = {}
   for name, source in objects:
-    base_name = name.split(' (from ')[0]
+    base_name = name.split(" (from ")[0]
     object_names[base_name] = (name, source)
 
   # Find dependencies for each object
@@ -2182,7 +2551,6 @@ def topologically_sort_objects(
       tree = ast.parse(source)
 
       class DependencyFinder(ast.NodeVisitor):
-
         def __init__(self):
           self.local_names = set()  # Track locally defined names
 
@@ -2203,8 +2571,11 @@ def topologically_sort_objects(
           if isinstance(node.ctx, ast.Load):
             # This name is being used, check if it's one of our extracted objects
             # and not a local variable/parameter
-            if (node.id in object_names and node.id != base_name and
-                node.id not in self.local_names):
+            if (
+              node.id in object_names
+              and node.id != base_name
+              and node.id not in self.local_names
+            ):
               deps.add(node.id)
           elif isinstance(node.ctx, ast.Store):
             # This name is being defined locally
@@ -2213,9 +2584,11 @@ def topologically_sort_objects(
 
         def visit_Attribute(self, node):
           # For type annotations like model_config: ModelConfig
-          if (isinstance(node.value, ast.Name) and
-              node.value.id in object_names and
-              node.value.id not in self.local_names):
+          if (
+            isinstance(node.value, ast.Name)
+            and node.value.id in object_names
+            and node.value.id not in self.local_names
+          ):
             deps.add(node.value.id)
           self.generic_visit(node)
 
@@ -2266,8 +2639,8 @@ def topologically_sort_objects(
 
 
 def filter_unused_module_imports(
-    imports: List[str], main_source: str,
-    all_objects: List[Tuple[str, str]]) -> List[str]:
+  imports: List[str], main_source: str, all_objects: List[Tuple[str, str]]
+) -> List[str]:
   """Filter out module imports that are no longer used after fixing attribute references."""
   used_names = set()
 
@@ -2281,7 +2654,6 @@ def filter_unused_module_imports(
     tree = ast.parse(all_source_code)
 
     class NameUsageFinder(ast.NodeVisitor):
-
       def visit_Attribute(self, node):
         # Track module.attribute usage (e.g., os.path, jnp.array)
         if isinstance(node.value, ast.Name):
@@ -2339,11 +2711,12 @@ def filter_unused_module_imports(
             if used_aliases:
               if node.module:
                 final_imports.append(
-                    f"from {node.module} import {', '.join(sorted(used_aliases))}"
+                  f"from {node.module} import {', '.join(sorted(used_aliases))}"
                 )
               else:
                 final_imports.append(
-                    f"from . import {', '.join(sorted(used_aliases))}")
+                  f"from . import {', '.join(sorted(used_aliases))}"
+                )
           elif isinstance(node, ast.Import):
             # For regular imports, keep if used
             for alias in node.names:
@@ -2361,18 +2734,18 @@ def filter_unused_module_imports(
   return final_imports
 
 
-def fix_module_attribute_references(source_code: str,
-                                    extracted_names: Set[str]) -> str:
+def fix_module_attribute_references(
+  source_code: str, extracted_names: Set[str]
+) -> str:
   """
-    Fix module.attribute references when the attribute has been extracted to the same scope.
-    For example, change test_helper.helper_function() to helper_function() if helper_function is extracted.
-    But avoid replacing module.attribute in assignment statements where we're assigning from module.attribute to the same attribute name.
-    """
+  Fix module.attribute references when the attribute has been extracted to the same scope.
+  For example, change test_helper.helper_function() to helper_function() if helper_function is extracted.
+  But avoid replacing module.attribute in assignment statements where we're assigning from module.attribute to the same attribute name.
+  """
   try:
     tree = ast.parse(source_code)
 
     class AttributeReferenceFixer(ast.NodeTransformer):
-
       def visit_Assign(self, node):
         # For assignment nodes, we need to be careful not to replace the right-hand side
         # if it's assigning from module.attribute to the same attribute name
@@ -2383,10 +2756,12 @@ def fix_module_attribute_references(source_code: str,
           target_name = node.targets[0].id
 
           # Check if the value is a module.attribute where attribute matches the target
-          if (isinstance(node.value, ast.Attribute) and
-              isinstance(node.value.value, ast.Name) and
-              node.value.attr == target_name and
-              target_name in extracted_names):
+          if (
+            isinstance(node.value, ast.Attribute)
+            and isinstance(node.value.value, ast.Name)
+            and node.value.attr == target_name
+            and target_name in extracted_names
+          ):
             # Don't transform this assignment - keep the original module.attribute reference
             return node
 
@@ -2406,21 +2781,27 @@ def fix_module_attribute_references(source_code: str,
     # Convert back to source code
     try:
       import astor
+
       return astor.to_source(fixed_tree).strip()
     except ImportError:
       # astor not available, fall back to simple string replacement
-      print("Warning: astor not available, using simple string replacement",
-            file=sys.stderr)
+      print(
+        "Warning: astor not available, using simple string replacement",
+        file=sys.stderr,
+      )
       return simple_fix_module_references(source_code, extracted_names)
 
   except Exception as e:
-    print(f"Warning: Could not parse source for fixing references: {e}",
-          file=sys.stderr)
+    print(
+      f"Warning: Could not parse source for fixing references: {e}",
+      file=sys.stderr,
+    )
     return simple_fix_module_references(source_code, extracted_names)
 
 
-def simple_fix_module_references(source_code: str,
-                                 extracted_names: Set[str]) -> str:
+def simple_fix_module_references(
+  source_code: str, extracted_names: Set[str]
+) -> str:
   """Simple string-based replacement for module.attribute references."""
   import re
 
@@ -2430,12 +2811,13 @@ def simple_fix_module_references(source_code: str,
     # More sophisticated pattern to avoid replacing assignment statements
     # where we're assigning from module.name to name
     # Pattern: Don't replace if it's "name = something.name"
-    assignment_pattern = r'^(\s*' + re.escape(
-        name) + r'\s*=\s*)\w+\.' + re.escape(name) + r'\b'
+    assignment_pattern = (
+      r"^(\s*" + re.escape(name) + r"\s*=\s*)\w+\." + re.escape(name) + r"\b"
+    )
 
     # Replace patterns like "module.name" with just "name", but not in assignment statements
     # Split by lines to handle assignments carefully
-    lines = fixed_code.split('\n')
+    lines = fixed_code.split("\n")
     for i, line in enumerate(lines):
       # Check if this line is an assignment from module.name to name
       if re.match(assignment_pattern, line.strip()):
@@ -2443,10 +2825,10 @@ def simple_fix_module_references(source_code: str,
         continue
       else:
         # Apply normal replacement
-        pattern = r'\b\w+\.' + re.escape(name) + r'\b'
+        pattern = r"\b\w+\." + re.escape(name) + r"\b"
         lines[i] = re.sub(pattern, name, line)
 
-    fixed_code = '\n'.join(lines)
+    fixed_code = "\n".join(lines)
 
   return fixed_code
 
@@ -2454,34 +2836,35 @@ def simple_fix_module_references(source_code: str,
 def main():
   """Command line interface for the isolate_object function."""
   parser = argparse.ArgumentParser(
-      description=
-      'Isolate an object from a Python file with all dependencies (including recursive imports)'
+    description="Isolate an object from a Python file with all dependencies (including recursive imports)"
   )
-  parser.add_argument('filename', help='Path to the Python file')
-  parser.add_argument('object_name',
-                      help='Name of the class or function to extract')
-  parser.add_argument('-o', '--output', help='Output file (default: stdout)')
+  parser.add_argument("filename", help="Path to the Python file")
   parser.add_argument(
-      '-d',
-      '--max-depth',
-      type=int,
-      default=5,
-      help='Maximum recursion depth for following imports (default: 5)')
+    "object_name", help="Name of the class or function to extract"
+  )
+  parser.add_argument("-o", "--output", help="Output file (default: stdout)")
   parser.add_argument(
-      '--debug',
-      action='store_true',
-      help='Show debug information including exact paths of files being opened')
+    "-d",
+    "--max-depth",
+    type=int,
+    default=5,
+    help="Maximum recursion depth for following imports (default: 5)",
+  )
+  parser.add_argument(
+    "--debug",
+    action="store_true",
+    help="Show debug information including exact paths of files being opened",
+  )
 
   args = parser.parse_args()
 
   try:
-    result = isolate_object(args.filename,
-                            args.object_name,
-                            args.max_depth,
-                            debug=args.debug)
+    result = isolate_object(
+      args.filename, args.object_name, args.max_depth, debug=args.debug
+    )
 
     if args.output:
-      with open(args.output, 'w', encoding='utf-8') as f:
+      with open(args.output, "w", encoding="utf-8") as f:
         f.write(result)
       print(f"Isolated {args.object_name} written to {args.output}")
     else:

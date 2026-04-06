@@ -1,32 +1,34 @@
 """Callback utilities for HITL kernel generation agents."""
 
-import os
 import json
 import logging
+import os
 from typing import Any, Dict, Optional
-from google.adk.tools import BaseTool, ToolContext
+
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmResponse
-from hitl_agent.config import WORKDIR, TPU_VERSION
+from google.adk.tools import BaseTool, ToolContext
+
+from hitl_agent.config import TPU_VERSION, WORKDIR
 from hitl_agent.knowledge_base import pallas_docs, pallas_profiling_docs
 
 
 def create_path_saver(state_key: str):
   """
-    Factory function that creates a callback to save file paths to a specific state key.
+  Factory function that creates a callback to save file paths to a specific state key.
 
-    Args:
-        state_key: The key in tool_context.state where the file path will be saved.
+  Args:
+      state_key: The key in tool_context.state where the file path will be saved.
 
-    Returns:
-        A callback function compatible with after_tool_callback signature.
-    """
+  Returns:
+      A callback function compatible with after_tool_callback signature.
+  """
 
   def save_path(
-      tool: BaseTool,
-      args: Dict[str, Any],
-      tool_context: ToolContext,
-      tool_response: Optional[Dict],
+    tool: BaseTool,
+    args: Dict[str, Any],
+    tool_context: ToolContext,
+    tool_response: Optional[Dict],
   ) -> Optional[Dict]:
     # MCP filesystem tools may have different naming patterns
     # Check for both snake_case and potential prefixed versions
@@ -35,7 +37,7 @@ def create_path_saver(state_key: str):
       if file_path:
         tool_context.state[state_key] = file_path
         logging.info(
-            f"Saved file path to {state_key}: {file_path} (from tool: {tool.name})"
+          f"Saved file path to {state_key}: {file_path} (from tool: {tool.name})"
         )
     return None
 
@@ -43,22 +45,24 @@ def create_path_saver(state_key: str):
 
 
 def save_kernel_file_paths(
-    tool: BaseTool,
-    args: Dict[str, Any],
-    tool_context: ToolContext,
-    tool_response: Optional[Dict],
+  tool: BaseTool,
+  args: Dict[str, Any],
+  tool_context: ToolContext,
+  tool_response: Optional[Dict],
 ) -> Optional[Dict]:
   """
-    Saves kernel file paths with semantic naming based on read order.
-    First file read = base_kernel_path, Second file read = optimized_kernel_path.
-    This callback is used by agents that need to compare two kernels.
-    """
+  Saves kernel file paths with semantic naming based on read order.
+  First file read = base_kernel_path, Second file read = optimized_kernel_path.
+  This callback is used by agents that need to compare two kernels.
+  """
   if tool.name == "read_file":
     file_path = args.get("path", None)
 
     # If base_kernel_path not set, this is the first file (base)
-    if ("base_kernel_path" not in tool_context.state or
-        not tool_context.state["base_kernel_path"]):
+    if (
+      "base_kernel_path" not in tool_context.state
+      or not tool_context.state["base_kernel_path"]
+    ):
       tool_context.state["base_kernel_path"] = file_path
       logging.info(f"Set base kernel path: {file_path}")
     # Otherwise, this is the second file (optimized)
@@ -70,10 +74,10 @@ def save_kernel_file_paths(
 
 
 def save_kernel_and_plan_paths(
-    tool: BaseTool,
-    args: Dict[str, Any],
-    tool_context: ToolContext,
-    tool_response: Optional[Dict],
+  tool: BaseTool,
+  args: Dict[str, Any],
+  tool_context: ToolContext,
+  tool_response: Optional[Dict],
 ) -> Optional[Dict]:
   """Saves both optimized_kernel_path and kernel_plan_path during implementation."""
   if "read" in tool.name.lower() or "write" in tool.name.lower():
@@ -83,23 +87,23 @@ def save_kernel_and_plan_paths(
       if "plan" in file_path.lower() and file_path.endswith(".md"):
         tool_context.state["kernel_plan_path"] = file_path
         logging.info(
-            f"Saved plan path to kernel_plan_path: {file_path} (from tool: {tool.name})"
+          f"Saved plan path to kernel_plan_path: {file_path} (from tool: {tool.name})"
         )
       # Otherwise assume it's the kernel file
       else:
         tool_context.state["optimized_kernel_path"] = file_path
         logging.info(
-            f"Saved kernel path to optimized_kernel_path: {file_path} (from tool: {tool.name})"
+          f"Saved kernel path to optimized_kernel_path: {file_path} (from tool: {tool.name})"
         )
   return None
 
 
 def load_single_kernel_to_state(callback_context: CallbackContext):
   """
-    Loads a single kernel file content into state.
-    Uses kernel_file_path to find the file.
-    Stores content in 'kernel_code' for use by compilation/profiling agents.
-    """
+  Loads a single kernel file content into state.
+  Uses kernel_file_path to find the file.
+  Stores content in 'kernel_code' for use by compilation/profiling agents.
+  """
   file_path = callback_context.state.get("kernel_file_path", None)
 
   if file_path:
@@ -117,10 +121,10 @@ def load_single_kernel_to_state(callback_context: CallbackContext):
 
 def load_profiling_script_to_state(callback_context: CallbackContext):
   """
-    Loads profiling script file content into state.
-    Uses profiling_script_path to find the file.
-    Stores content in 'profiling_script' for use by profiling execution agent.
-    """
+  Loads profiling script file content into state.
+  Uses profiling_script_path to find the file.
+  Stores content in 'profiling_script' for use by profiling execution agent.
+  """
   file_path = callback_context.state.get("profiling_script_path", None)
 
   if file_path:
@@ -138,10 +142,10 @@ def load_profiling_script_to_state(callback_context: CallbackContext):
 
 def load_two_kernels_to_state(callback_context: CallbackContext):
   """
-    Loads two kernel files (base and optimized) into state for comparison.
-    Reads from base_kernel_path and optimized_kernel_path.
-    Stores contents in base_kernel_code and optimized_kernel_code.
-    """
+  Loads two kernel files (base and optimized) into state for comparison.
+  Reads from base_kernel_path and optimized_kernel_path.
+  Stores contents in base_kernel_code and optimized_kernel_code.
+  """
   base_path = callback_context.state.get("base_kernel_path", None)
   optimized_path = callback_context.state.get("optimized_kernel_path", None)
 
@@ -172,11 +176,11 @@ def load_two_kernels_to_state(callback_context: CallbackContext):
 
 def load_kernel_and_plan_to_state(callback_context: CallbackContext):
   """
-    Loads kernel file and optimization plan into state for compilation fixing.
-    Uses optimized_kernel_path and kernel_plan_path to find files.
-    Stores content in 'kernel_code' and 'kernel_plan' for use by fix agent.
-    Also formats compilation_history for better readability.
-    """
+  Loads kernel file and optimization plan into state for compilation fixing.
+  Uses optimized_kernel_path and kernel_plan_path to find files.
+  Stores content in 'kernel_code' and 'kernel_plan' for use by fix agent.
+  Also formats compilation_history for better readability.
+  """
   # Load kernel code
   kernel_path = callback_context.state.get("optimized_kernel_path", None)
   if kernel_path and os.path.exists(kernel_path):
@@ -205,7 +209,8 @@ def load_kernel_and_plan_to_state(callback_context: CallbackContext):
       callback_context.state["kernel_plan"] = None
   else:
     logging.info(
-        "No optimization plan path found (this is okay for some workflows)")
+      "No optimization plan path found (this is okay for some workflows)"
+    )
     callback_context.state["kernel_plan"] = None
 
   # Format compilation history for readability
@@ -230,10 +235,12 @@ def load_kernel_and_plan_to_state(callback_context: CallbackContext):
 
     # Store formatted version in a separate key for the prompt
     callback_context.state["compilation_history_formatted"] = "\n".join(
-        formatted_history)
+      formatted_history
+    )
   else:
     callback_context.state["compilation_history_formatted"] = (
-        "No previous attempts (this is the first attempt)")
+      "No previous attempts (this is the first attempt)"
+    )
 
 
 def get_tpu_version_callback(callback_context: CallbackContext):
@@ -251,7 +258,8 @@ def get_tpu_version_callback(callback_context: CallbackContext):
       callback_context.state["tpu_specs"] = tpu_specs[tpu_version]
     else:
       callback_context.state["tpu_specs"] = (
-          "TPU specs not found for detected version.")
+        "TPU specs not found for detected version."
+      )
     logging.info(f"Loaded TPU specs for {tpu_version}")
   except Exception as e:
     logging.error(f"Failed to load TPU specs: {e}")
@@ -264,12 +272,13 @@ def add_workdir_callback(callback_context: CallbackContext):
   logging.info(f"Set working directory to: {WORKDIR}")
 
 
-def extract_fix_summary(callback_context: CallbackContext,
-                        llm_response: LlmResponse) -> LlmResponse:
+def extract_fix_summary(
+  callback_context: CallbackContext, llm_response: LlmResponse
+) -> LlmResponse:
   """Extract the agent's response and store it as the fix summary.
 
-    This is an after_model_callback that receives the LlmResponse directly.
-    """
+  This is an after_model_callback that receives the LlmResponse directly.
+  """
   if llm_response.content is None or not llm_response.content.parts:
     logging.warning("No content in LlmResponse to extract fix summary from")
     return llm_response
@@ -298,15 +307,15 @@ def add_pallas_docs(callback_context: CallbackContext):
 
 
 __all__ = [
-    "create_path_saver",
-    "save_kernel_file_paths",
-    "save_kernel_and_plan_paths",
-    "load_single_kernel_to_state",
-    "load_profiling_script_to_state",
-    "load_two_kernels_to_state",
-    "load_kernel_and_plan_to_state",
-    "get_tpu_version_callback",
-    "add_workdir_callback",
-    "extract_fix_summary",
-    "add_pallas_docs",
+  "create_path_saver",
+  "save_kernel_file_paths",
+  "save_kernel_and_plan_paths",
+  "load_single_kernel_to_state",
+  "load_profiling_script_to_state",
+  "load_two_kernels_to_state",
+  "load_kernel_and_plan_to_state",
+  "get_tpu_version_callback",
+  "add_workdir_callback",
+  "extract_fix_summary",
+  "add_pallas_docs",
 ]

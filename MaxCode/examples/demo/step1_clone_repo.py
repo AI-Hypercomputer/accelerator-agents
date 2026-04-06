@@ -4,7 +4,7 @@ Step 1: Clone the PyTorch repository from GitHub.
 This script clones the Multimodal-Transformer repository, which implements
 a multimodal architecture combining language, audio, and vision using
 cross-modal attention in PyTorch. After cloning, it lists all Python source
-files that MaxCode will discover and convert in Step 3.
+files found in the repo.
 
 If the repo is already cloned, this step is skipped.
 
@@ -33,7 +33,7 @@ def main():
         print("  Already cloned, skipping.")
         print()
 
-    # List all Python files that MaxCode will discover
+    # List all Python files
     print("Python files in the repository:")
     total_lines = 0
     file_count = 0

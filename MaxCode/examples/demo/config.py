@@ -23,6 +23,7 @@ REPO_DIR = os.path.join(SCRIPT_DIR, "Multimodal-Transformer")
 # ---------------------------------------------------------------------------
 # Output and RAG paths
 # ---------------------------------------------------------------------------
+MERGED_FILE = os.path.join(SCRIPT_DIR, "merged_model.py")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output")
 RAG_SOURCE_DIR = os.path.join(MAXCODE_DIR, "rag", "sources")
 

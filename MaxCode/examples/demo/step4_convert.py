@@ -1,35 +1,36 @@
 """
-Step 3: Convert PyTorch code to JAX using MaxCode.
+Step 4: Convert the merged PyTorch model to JAX using MaxCode.
 
-This script runs the full MaxCode migration pipeline on the cloned repo:
+This script runs the full MaxCode migration pipeline on the merged model
+file from Step 3:
 
-  1. Auto-discovers all Python files and builds a dependency graph
-  2. Converts each file in topological order (dependencies first)
-  3. Validates each converted file against the PyTorch source
+  1. Loads the merged PyTorch source (all model files in one)
+  2. Converts it to JAX/Flax using Gemini with RAG context
+  3. Validates the output against the PyTorch source for faithfulness
   4. Auto-repairs any deviations found during validation
   5. Re-validates the repaired output
-  6. Saves all converted JAX files preserving the original directory structure
+  6. Saves the final JAX file
 
-The migration uses Gemini Pro (or Flash as fallback) with RAG context from
-the database populated in Step 2. The validation agent checks for common
-conversion errors like wrong initialization, dropped features, incorrect
-reduction operations, and missing components.
+Using a single merged file gives the LLM full context of all model
+components and their dependencies, producing higher quality output
+than converting files independently.
 
 Requires:
   - GOOGLE_API_KEY environment variable
-  - Step 1 completed (repo cloned)
   - Step 2 completed (RAG database populated)
+  - Step 3 completed (merged model file created)
 
 Usage:
-    python step3_convert.py
+    python step4_convert.py
 """
 
 import logging
 import os
 import time
-from config import REPO_DIR, OUTPUT_DIR, RAG_SOURCE_DIR, setup, require_api_key
+from config import MERGED_FILE, OUTPUT_DIR, setup, require_api_key
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
 
 def main():
     api_key = require_api_key()
@@ -40,8 +41,8 @@ def main():
     from rag import vector_db
 
     # Pre-flight checks
-    if not os.path.isdir(REPO_DIR):
-        print("ERROR: Repository not found. Run step1_clone_repo.py first.")
+    if not os.path.isfile(MERGED_FILE):
+        print("ERROR: Merged model file not found. Run step3_merge.py first.")
         raise SystemExit(1)
 
     db_path = vector_db.RAG_DB_FILE
@@ -50,9 +51,9 @@ def main():
         raise SystemExit(1)
 
     print("=" * 70)
-    print("Step 3: Convert PyTorch to JAX")
+    print("Step 4: Convert PyTorch to JAX")
     print("=" * 70)
-    print(f"  Source: {REPO_DIR}")
+    print(f"  Source: {MERGED_FILE}")
     print(f"  Output: {OUTPUT_DIR}")
     print()
 
@@ -89,44 +90,33 @@ def main():
     # Run migration
     print(f"\n  Converting (this may take several minutes)...\n")
     t0 = time.time()
-    results = agent.run(REPO_DIR)
+    results = agent.run(MERGED_FILE)
     elapsed = time.time() - t0
+    jax_code = list(results.values())[0]
 
-    print(f"\n  Converted {len(results)} files in {elapsed:.1f}s")
+    print(f"\n  Migration completed in {elapsed:.1f}s")
 
-    # Save output files
+    # Save output
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    print(f"\n  Saving output files:")
-    for src_path, jax_code in results.items():
-        rel_path = os.path.relpath(src_path, REPO_DIR)
-        out_path = os.path.join(OUTPUT_DIR, rel_path)
-        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write(jax_code)
-        lines = jax_code.count("\n") + 1
-        print(f"    {rel_path} ({lines} lines)")
+    out_path = os.path.join(OUTPUT_DIR, "multimodal_transformer_jax.py")
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(jax_code)
+    lines = jax_code.count("\n") + 1
+    print(f"  Output: {out_path} ({lines} lines)")
 
     # Validation summary
     validation_results = agent.get_validation_results()
     if validation_results:
-        print("\n  Validation summary:")
-        total_found = 0
-        total_remaining = 0
         for file_path, result in validation_results.items():
-            name = os.path.relpath(file_path, REPO_DIR)
             found = result["deviations_found"]
             remaining = result["remaining_deviations_count"]
-            total_found += found
-            total_remaining += remaining
-            status = "OK" if remaining == 0 else f"{remaining} remaining"
-            print(f"    {name}: {found} found, {status}")
-        print(f"\n  Total: {total_found} deviations found, {total_remaining} remaining after repair")
+            print(f"\n  Validation: {found} deviations found, {remaining} remaining after repair")
     else:
-        print("\n  No deviations found - all outputs are faithful!")
+        print("\n  No deviations found - output is faithful!")
 
     print("\n" + "=" * 70)
     print("Done! JAX output:")
-    print(f"  {OUTPUT_DIR}")
+    print(f"  {out_path}")
     print("=" * 70)
 
 

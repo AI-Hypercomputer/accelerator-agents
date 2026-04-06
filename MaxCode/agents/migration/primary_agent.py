@@ -107,6 +107,7 @@ class PrimaryAgent(base.Agent):
     try:
       with open(repo_path, "r", encoding="utf-8", errors="replace") as f:
         pytorch_code = f.read()
+      logger.info("Converting %s ...", repo_path)
       converted_code = self._convert_file(pytorch_code, repo_path)
       if self._validate:
         converted_code = self._validate_and_repair(
@@ -129,8 +130,10 @@ class PrimaryAgent(base.Agent):
     ordered_files = utils.topological_sort(graph)
     converted_files: dict[str, str] = {}
 
-    for file_rel_path in ordered_files:
+    for i, file_rel_path in enumerate(ordered_files, 1):
       file_path = os.path.join(repo_path, file_rel_path)
+      logger.info("Converting file %d/%d: %s ...", i, len(ordered_files),
+                  file_rel_path)
       with open(file_path, "r", encoding="utf-8", errors="replace") as f:
         pytorch_code = f.read()
       converted_code = self._convert_file(pytorch_code, file_path)

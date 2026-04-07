@@ -49,7 +49,7 @@ source "$VENV_DIR"/bin/activate
 
 # Install dependencies
 pip install --upgrade pip --index-url https://pypi.org/simple
-pip install --upgrade google-genai numpy google-adk absl-py faiss-cpu torch flax jax[cpu] --index-url https://pypi.org/simple
+pip install --upgrade google-genai numpy google-adk absl-py faiss-cpu torch flax jax[cpu] pytest --index-url https://pypi.org/simple
 
 # Check for GOOGLE_API_KEY
 if [ -z "$GOOGLE_API_KEY" ]; then

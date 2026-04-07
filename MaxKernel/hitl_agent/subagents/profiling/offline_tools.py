@@ -1,11 +1,10 @@
 """Standalone XProf tools for analyzing xplane.pb files without external services."""
 
 import gzip
-import io
 import json
-import os
 import sqlite3
-from typing import Any, Dict, List, Optional
+from typing import Optional
+
 import matplotlib.pyplot as plt
 import pandas as pd
 from tensorflow.tsl.profiler.protobuf import xplane_pb2
@@ -20,18 +19,18 @@ def _get_xplane_path(profiling_results: str) -> str:
 def load_xplane_and_query(xplane_path: str, sql_query: str) -> str:
   """Loads an xplane.pb file into an in-memory SQLite DB and runs a SQL query.
 
-    The database schema is:
-    - planes (id, name)
-    - lines (id, plane_id, display_id, name, timestamp_ns)
-    - events (plane_id, line_id, name, offset_ps, duration_ps, start_ps, end_ps)
+  The database schema is:
+  - planes (id, name)
+  - lines (id, plane_id, display_id, name, timestamp_ns)
+  - events (plane_id, line_id, name, offset_ps, duration_ps, start_ps, end_ps)
 
-    Args:
-        xplane_path: Path to the .xplane.pb file.
-        sql_query: The SQL query to execute against the loaded data.
+  Args:
+      xplane_path: Path to the .xplane.pb file.
+      sql_query: The SQL query to execute against the loaded data.
 
-    Returns:
-        A markdown-formatted table of the query results.
-    """
+  Returns:
+      A markdown-formatted table of the query results.
+  """
   try:
     # Open file (handle gz if needed)
     open_func = gzip.open if xplane_path.endswith(".gz") else open
@@ -63,8 +62,8 @@ def load_xplane_and_query(xplane_path: str, sql_query: str) -> str:
 
       for line in plane.lines:
         c.execute(
-            "INSERT INTO lines VALUES (?, ?, ?, ?, ?)",
-            (line.id, plane.id, line.display_id, line.name, line.timestamp_ns),
+          "INSERT INTO lines VALUES (?, ?, ?, ?, ?)",
+          (line.id, plane.id, line.display_id, line.name, line.timestamp_ns),
         )
 
         for event in line.events:
@@ -72,16 +71,16 @@ def load_xplane_and_query(xplane_path: str, sql_query: str) -> str:
           start_ps = event.offset_ps
           end_ps = start_ps + event.duration_ps
           c.execute(
-              "INSERT INTO events VALUES (?, ?, ?, ?, ?, ?, ?)",
-              (
-                  plane.id,
-                  line.id,
-                  name,
-                  event.offset_ps,
-                  event.duration_ps,
-                  start_ps,
-                  end_ps,
-              ),
+            "INSERT INTO events VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+              plane.id,
+              line.id,
+              name,
+              event.offset_ps,
+              event.duration_ps,
+              start_ps,
+              end_ps,
+            ),
           )
 
     conn.commit()
@@ -96,17 +95,18 @@ def load_xplane_and_query(xplane_path: str, sql_query: str) -> str:
     return f"Error executing query: {e}"
 
 
-def get_hlo_dump(xplane_path: str,
-                 hlo_module_name: Optional[str] = None) -> str:
+def get_hlo_dump(
+  xplane_path: str, hlo_module_name: Optional[str] = None
+) -> str:
   """Extracts HLO proto from xplane.pb if available.
 
-    Args:
-        xplane_path: Path to .xplane.pb file.
-        hlo_module_name: Optional name filter.
+  Args:
+      xplane_path: Path to .xplane.pb file.
+      hlo_module_name: Optional name filter.
 
-    Returns:
-        Status string indicating where HLO was saved or if not found.
-    """
+  Returns:
+      Status string indicating where HLO was saved or if not found.
+  """
   try:
     open_func = gzip.open if xplane_path.endswith(".gz") else open
     with open_func(xplane_path, "rb") as f:
@@ -125,32 +125,33 @@ def get_hlo_dump(xplane_path: str,
         # For now, returning a placeholder as true extraction requires inspecting specific metadata IDs
 
     return (
-        "HLO extraction not fully implemented in this standalone version yet"
-        " (requires metadata ID mapping). Please use `load_xplane_and_query` to"
-        " explore 'hlo' related events.")
+      "HLO extraction not fully implemented in this standalone version yet"
+      " (requires metadata ID mapping). Please use `load_xplane_and_query` to"
+      " explore 'hlo' related events."
+    )
 
   except Exception as e:
     return f"Error extracting HLO: {e}"
 
 
 def create_chart_from_xplane(
-    xplane_path: str,
-    sql_query: str,
-    chart_type: str = "bar",
-    x_col: str = "name",
-    y_col: str = "value",
-    title: str = "",
+  xplane_path: str,
+  sql_query: str,
+  chart_type: str = "bar",
+  x_col: str = "name",
+  y_col: str = "value",
+  title: str = "",
 ) -> str:
   """Generates a chart from xplane data using SQL query.
 
-    Args:
-        xplane_path: Path to .xplane.pb
-        sql_query: SQL query to get data.
-        chart_type: 'bar' or 'pie'.
-        x_col: Column for X axis (bar).
-        y_col: Column for Y axis (bar) or values (pie).
-        title: Chart title.
-    """
+  Args:
+      xplane_path: Path to .xplane.pb
+      sql_query: SQL query to get data.
+      chart_type: 'bar' or 'pie'.
+      x_col: Column for X axis (bar).
+      y_col: Column for Y axis (bar) or values (pie).
+      title: Chart title.
+  """
   try:
     # Re-use loading logic (inefficient but stateless)
     # TODO: we might want to cache the DB connection or pass it around.
@@ -179,23 +180,23 @@ def create_chart_from_xplane(
 
       for line in plane.lines:
         c.execute(
-            "INSERT INTO lines VALUES (?, ?, ?, ?, ?)",
-            (line.id, plane.id, line.display_id, line.name, line.timestamp_ns),
+          "INSERT INTO lines VALUES (?, ?, ?, ?, ?)",
+          (line.id, plane.id, line.display_id, line.name, line.timestamp_ns),
         )
         for event in line.events:
           name = get_meta_name(plane.event_metadata, event.metadata_id)
           start_ps = event.offset_ps
           c.execute(
-              "INSERT INTO events VALUES (?, ?, ?, ?, ?, ?, ?)",
-              (
-                  plane.id,
-                  line.id,
-                  name,
-                  event.offset_ps,
-                  event.duration_ps,
-                  start_ps,
-                  start_ps + event.duration_ps,
-              ),
+            "INSERT INTO events VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+              plane.id,
+              line.id,
+              name,
+              event.offset_ps,
+              event.duration_ps,
+              start_ps,
+              start_ps + event.duration_ps,
+            ),
           )
     conn.commit()
 
@@ -230,15 +231,15 @@ def create_chart_from_xplane(
 def get_overview_page_metrics(xplane_path: str) -> str:
   """Returns metrics and metadata from overview page for a given Xprof session.
 
-    Mimics the behavior of overview_page_tool.get_overview_page_metrics by
-    extracting high-level metrics from the xplane.pb file directly.
+  Mimics the behavior of overview_page_tool.get_overview_page_metrics by
+  extracting high-level metrics from the xplane.pb file directly.
 
-    Args:
-        xplane_path: Path to the .xplane.pb file.
+  Args:
+      xplane_path: Path to the .xplane.pb file.
 
-    Returns:
-        A JSON string containing metrics and metadata.
-    """
+  Returns:
+      A JSON string containing metrics and metadata.
+  """
   try:
     open_func = gzip.open if xplane_path.endswith(".gz") else open
     with open_func(xplane_path, "rb") as f:
@@ -252,8 +253,11 @@ def get_overview_page_metrics(xplane_path: str) -> str:
     device_planes = []
 
     for plane in xspace.planes:
-      if ("device" in plane.name.lower() or "tpu" in plane.name.lower() or
-          "gpu" in plane.name.lower()):
+      if (
+        "device" in plane.name.lower()
+        or "tpu" in plane.name.lower()
+        or "gpu" in plane.name.lower()
+      ):
         device_planes.append(plane)
       else:
         host_planes.append(plane)
@@ -305,8 +309,9 @@ def get_overview_page_metrics(xplane_path: str) -> str:
       # Assume full parallelism potential = device_count * total_duration
       potential_ps = len(device_planes) * total_duration_ps
       if potential_ps > 0:
-        metrics["device_duty_cycle_percent"] = (total_device_busy_ps /
-                                                potential_ps) * 100
+        metrics["device_duty_cycle_percent"] = (
+          total_device_busy_ps / potential_ps
+        ) * 100
       else:
         metrics["device_duty_cycle_percent"] = 0
 

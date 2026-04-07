@@ -52,7 +52,7 @@ class PytorchToJaxSingleFileAgent(base.Agent):
         for c in rag_context_list
     ])
     generated_code = self.generate(
-        prompts.PYTORCH_TO_JAX_SINGLE_FILE_PROMPT,
+        prompts.MIGRATE_MODULE_TO_JAX_PROMPT,
         {"pytorch_code": pytorch_code, "rag_context": rag_context},
     )
     return self._strip_markdown_formatting(generated_code)

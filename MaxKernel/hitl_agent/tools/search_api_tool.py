@@ -9,39 +9,39 @@ https://python.langchain.com/docs/integrations/document_loaders/web_base/#loader
 
 """
 
-from hitl_agent.constants import (
-    TEMPERATURE,
-    TOP_K,
-    TOP_P,
-)
-
-from google.genai import types
 from google.adk.tools import FunctionTool
+from google.genai import types
+
+from hitl_agent.constants import (
+  TEMPERATURE,
+  TOP_K,
+  TOP_P,
+)
 from hitl_agent.tools.api_rag.get_apis import generate_definition
 
 model_config = types.GenerateContentConfig(
-    temperature=TEMPERATURE,
-    top_p=TOP_P,
-    top_k=TOP_K,
+  temperature=TEMPERATURE,
+  top_p=TOP_P,
+  top_k=TOP_K,
 )
 
 
 def search_api(api_name: str) -> dict:
   """
-    Search for API documentation and generate its definition.
+  Search for API documentation and generate its definition.
 
-    This function attempts to retrieve and generate a definition for a given API name.
-    It serves as a tool for looking up API specifications and returning structured
-    information about the requested API.
+  This function attempts to retrieve and generate a definition for a given API name.
+  It serves as a tool for looking up API specifications and returning structured
+  information about the requested API.
 
-    Args:
-        api_name: The name of the API to search for and generate documentation.
+  Args:
+      api_name: The name of the API to search for and generate documentation.
 
-    Returns:
-        A dictionary containing the operation result with the following structure:
-        - If successful: {"status": "success", "message": <api_definition>}
-        - If failed: {"status": "error", "message": "API provided is not a valid API"}
-    """
+  Returns:
+      A dictionary containing the operation result with the following structure:
+      - If successful: {"status": "success", "message": <api_definition>}
+      - If failed: {"status": "error", "message": "API provided is not a valid API"}
+  """
   try:
     definition = generate_definition(api_name)
     return {"status": "success", "message": definition}

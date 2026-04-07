@@ -5,7 +5,8 @@ to clean, algorithmic JAX code, stripping hardware-specific optimizations.
 """
 
 from hitl_agent.subagents.gpu_to_jax_agent.agent import (
-    gpu_to_jax_agent,)
+  gpu_to_jax_agent,
+)
 
 __version__ = "1.0.0"
 __all__ = ["gpu_to_jax_agent"]

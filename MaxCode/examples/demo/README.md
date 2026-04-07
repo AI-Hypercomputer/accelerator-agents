@@ -57,10 +57,11 @@ Accepts an optional URL argument (defaults to Multimodal-Transformer).
 If already cloned, this step is skipped.
 
 ### Step 2 — Populate RAG Database
-Builds a vector database of 52 JAX/Flax reference documents:
-- **24 generic references**: Flax API docs, MaxText examples, attention patterns
-- **28 targeted patterns**: WRONG/CORRECT/WHY examples for common conversion mistakes
-  (detach/stop_gradient, dtype casts, dead code, initialization consistency, etc.)
+Builds a vector database of JAX/Flax reference documents:
+- **Generic references**: Flax API docs, MaxText examples, attention patterns
+- **Targeted patterns**: WRONG/CORRECT/WHY examples for common conversion mistakes
+  (detach/stop_gradient, dtype casts, dead code, initialization consistency,
+  bare-layer initializer faithfulness, sum-vs-mean reduction correctness, etc.)
 
 Each document is embedded using Gemini and stored in a local SQLite database.
 During conversion, MaxCode retrieves the most relevant documents for context.
@@ -92,11 +93,13 @@ Produces a scorecard measuring how complete and correct the conversion is:
   standalone functions between the PyTorch source and JAX output by name.
 - **Correctness** (LLM-based, optional): runs the ValidationAgent to detect
   deviations and computes a weighted score (high=5, medium=3, low=1 penalty
-  per deviation).
+  per deviation). Known false positives — low-severity `method_placement`,
+  `missing_component`, and `dropped_feature` deviations that represent
+  legitimate Flax idioms — are automatically filtered out of the score.
 
 If `GOOGLE_API_KEY` is not set, the correctness check is skipped and only
-the completeness score is reported. Results are also saved to
-`output/verification_scorecard.json`.
+the completeness score is reported. Results (including full deviation details
+and filtered false positives) are saved to `output/verification_scorecard.json`.
 
 ## Output
 

@@ -6,7 +6,7 @@ including tools for AI-powered code migration between ML frameworks.
 ## Quick Start
 
 Want to try MaxCode without the full Gemini CLI setup? The standalone demo
-converts a PyTorch repo to JAX in three commands:
+converts a PyTorch repo to JAX in five steps:
 
 ```bash
 cd MaxCode/examples/demo
@@ -17,6 +17,7 @@ python step1_clone_repo.py          # Clone a PyTorch repo from GitHub
 python step2_populate_rag.py        # Build the RAG reference database
 python step3_merge.py               # Auto-detect and merge model files
 python step4_convert.py             # Convert to JAX with validation + repair
+python step5_verify.py              # Verify conversion quality (scorecard)
 ```
 
 See [examples/demo/README.md](examples/demo/README.md) for full setup

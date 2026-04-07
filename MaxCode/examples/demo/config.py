@@ -17,8 +17,9 @@ MAXCODE_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 # ---------------------------------------------------------------------------
 # Target repo to convert
 # ---------------------------------------------------------------------------
-REPO_URL = "https://github.com/yaohungt/Multimodal-Transformer"
-REPO_DIR = os.path.join(SCRIPT_DIR, "Multimodal-Transformer")
+DEFAULT_REPO_URL = "https://github.com/yaohungt/Multimodal-Transformer"
+REPO_URL = os.environ.get("MAXCODE_REPO_URL", DEFAULT_REPO_URL)
+REPO_DIR = os.path.join(SCRIPT_DIR, REPO_URL.rstrip("/").rsplit("/", 1)[-1])
 
 # ---------------------------------------------------------------------------
 # Output and RAG paths

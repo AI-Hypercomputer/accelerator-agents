@@ -1,21 +1,34 @@
 """
 Step 1: Clone the PyTorch repository from GitHub.
 
-This script clones the Multimodal-Transformer repository, which implements
-a multimodal architecture combining language, audio, and vision using
-cross-modal attention in PyTorch. After cloning, it lists all Python source
-files found in the repo.
+This script clones a PyTorch repository so MaxCode can convert it to JAX.
+After cloning, it lists all Python source files found in the repo.
 
 If the repo is already cloned, this step is skipped.
 
 Usage:
+    python step1_clone_repo.py [REPO_URL]
+
+Examples:
     python step1_clone_repo.py
+    python step1_clone_repo.py https://github.com/yaohungt/Multimodal-Transformer
+    python step1_clone_repo.py https://github.com/openai/whisper
 """
 
 import os
-from config import REPO_URL, REPO_DIR
+import sys
+
 
 def main():
+    # Accept optional URL from command line; falls back to config default
+    if len(sys.argv) > 1:
+        repo_url = sys.argv[1]
+        # Set env var so config.py picks it up
+        os.environ["MAXCODE_REPO_URL"] = repo_url
+
+    # Import AFTER setting env var so config sees the override
+    from config import REPO_URL, REPO_DIR
+
     print("=" * 70)
     print("Step 1: Clone PyTorch Repository")
     print("=" * 70)

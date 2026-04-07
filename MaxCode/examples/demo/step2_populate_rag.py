@@ -7,7 +7,7 @@ MaxCode uses during migration. The database contains two types of documents:
   - Generic references (24 docs): JAX/Flax API docs, MaxText examples,
     flash-linear-attention implementations, and Flax attention patterns.
 
-  - Targeted patterns (22 docs): WRONG/CORRECT/WHY examples for common
+  - Targeted patterns (24 docs): WRONG/CORRECT/WHY examples for common
     conversion mistakes like incorrect cosine similarity, wrong einsum
     dimensions, missing weight initialization, and broken MoE routing.
 

@@ -177,16 +177,26 @@ def compute_completeness(source_components, output_components):
 
 SEVERITY_WEIGHTS = {"high": 5, "medium": 3, "low": 1}
 
+# Known false-positive (category, severity) pairs.  Only low-severity entries
+# qualify — these represent legitimate Flax idioms or PyTorch-only patterns
+# that the validator flags but are not real bugs.
+FALSE_POSITIVE_RULES = {
+    ("method_placement", "low"),   # helpers inlined into __call__ is idiomatic Flax
+    ("missing_component", "low"),  # reset_parameters, register_buffer, weight caching
+    ("dropped_feature", "low"),    # debug try-except blocks, intermediates tracking
+}
+
 
 def compute_correctness(source_code, output_code, api_key):
     """Run ValidationAgent and score the output.
 
     Returns:
         dict with keys:
-          "score":        float (0-100)
-          "deviations":   list of deviation dicts from the validator
-          "by_category":  {category: count, ...}
-          "by_severity":  {severity: count, ...}
+          "score":               float (0-100)
+          "deviations":          list of real deviation dicts
+          "filtered_deviations": list of false-positive deviation dicts
+          "by_category":         {category: count, ...}  (real only)
+          "by_severity":         {severity: count, ...}  (real only)
     """
     import models
     from agents.migration.validation_agent import ValidationAgent
@@ -196,16 +206,27 @@ def compute_correctness(source_code, output_code, api_key):
         api_key=api_key,
     )
     validator = ValidationAgent(model=gemini)
-    deviations = validator.validate(source_code, output_code)
+    all_deviations = validator.validate(source_code, output_code)
 
-    if not isinstance(deviations, list):
-        deviations = []
+    if not isinstance(all_deviations, list):
+        all_deviations = []
+
+    # Split into real vs. false-positive deviations
+    real = []
+    filtered = []
+    for d in all_deviations:
+        sev = d.get("severity", "low").lower()
+        cat = d.get("category", "unknown")
+        if (cat, sev) in FALSE_POSITIVE_RULES:
+            filtered.append(d)
+        else:
+            real.append(d)
 
     by_severity = {}
     by_category = {}
     penalty = 0
 
-    for d in deviations:
+    for d in real:
         sev = d.get("severity", "low").lower()
         cat = d.get("category", "unknown")
         by_severity[sev] = by_severity.get(sev, 0) + 1
@@ -216,7 +237,8 @@ def compute_correctness(source_code, output_code, api_key):
 
     return {
         "score": round(score, 1),
-        "deviations": deviations,
+        "deviations": real,
+        "filtered_deviations": filtered,
         "by_category": by_category,
         "by_severity": by_severity,
     }
@@ -262,9 +284,11 @@ def print_scorecard(completeness, correctness=None):
     if correctness is not None:
         cr = correctness
         n_dev = len(cr["deviations"])
+        n_filt = len(cr.get("filtered_deviations", []))
         print()
         print(f"  Correctness:  {cr['score']:.1f}%  "
-              f"({n_dev} deviation{'s' if n_dev != 1 else ''} found)")
+              f"({n_dev} deviation{'s' if n_dev != 1 else ''} found"
+              f"{f', {n_filt} filtered' if n_filt else ''})")
         for sev in ("high", "medium", "low"):
             count = cr["by_severity"].get(sev, 0)
             if count:
@@ -355,12 +379,13 @@ def main():
         "overall": overall,
     }
     if correctness is not None:
-        # Store summary only (deviations can be large)
         result["correctness"] = {
             "score": correctness["score"],
             "deviation_count": len(correctness["deviations"]),
             "by_category": correctness["by_category"],
             "by_severity": correctness["by_severity"],
+            "deviations": correctness["deviations"],
+            "filtered_deviations": correctness.get("filtered_deviations", []),
         }
 
     json_path = os.path.join(OUTPUT_DIR, "verification_scorecard.json")

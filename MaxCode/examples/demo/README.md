@@ -29,7 +29,7 @@ set GOOGLE_API_KEY=<your-key>             # Windows CMD
 
 ## Run the Demo
 
-The demo is split into four steps. Run them in order:
+The demo is split into five steps. Run them in order:
 
 ```bash
 # Step 1: Clone the PyTorch repo from GitHub
@@ -44,6 +44,9 @@ python step3_merge.py
 
 # Step 4: Convert to JAX with automatic validation and repair
 python step4_convert.py
+
+# Step 5: Verify conversion quality (scorecard)
+python step5_verify.py
 ```
 
 ## What Each Step Does
@@ -83,6 +86,18 @@ Runs the full migration pipeline on the merged model file:
 3. Auto-repairs any deviations (wrong init, dropped features, incorrect ops)
 4. Saves the final JAX file
 
+### Step 5 — Verify Conversion Quality
+Produces a scorecard measuring how complete and correct the conversion is:
+- **Completeness** (AST-based, no LLM): compares classes, methods, and
+  standalone functions between the PyTorch source and JAX output by name.
+- **Correctness** (LLM-based, optional): runs the ValidationAgent to detect
+  deviations and computes a weighted score (high=5, medium=3, low=1 penalty
+  per deviation).
+
+If `GOOGLE_API_KEY` is not set, the correctness check is skipped and only
+the completeness score is reported. Results are also saved to
+`output/verification_scorecard.json`.
+
 ## Output
 
 After running, the converted JAX file is saved to:
@@ -99,4 +114,5 @@ output/multimodal_transformer_jax.py
 | `step2_populate_rag.py` | Build the RAG reference database |
 | `step3_merge.py` | Auto-detect model files, filter by import graph, and merge |
 | `step4_convert.py` | Run migration + validation + repair |
+| `step5_verify.py` | Verify conversion quality (scorecard) |
 | `requirements.txt` | Python dependencies |

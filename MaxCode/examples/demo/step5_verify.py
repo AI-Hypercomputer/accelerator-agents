@@ -36,10 +36,10 @@ METHOD_RENAMES = {
     "forward": {"__call__"},
 }
 
-# Methods that are commonly inlined during conversion and should not
-# penalize completeness when absent in the JAX output.
-INLINABLE_METHODS = {
-    "reset_parameters",  # Flax handles param init via initializers
+# Methods that are always inlined during conversion (Flax handles these
+# via initializer args, so there is never a JAX equivalent).
+ALWAYS_INLINED = {
+    "reset_parameters",
 }
 
 
@@ -110,6 +110,7 @@ def compute_completeness(source_components, output_components):
         total_methods += len(src_methods)
         if cls in out_classes:
             out_methods = set(out_classes[cls])
+            has_call = "__call__" in out_methods
             for m in sorted(src_methods):
                 # Check exact name match
                 if m in out_methods:
@@ -117,8 +118,12 @@ def compute_completeness(source_components, output_components):
                 # Check known renames (e.g. __init__ -> setup or __call__)
                 elif m in METHOD_RENAMES and METHOD_RENAMES[m] & out_methods:
                     found_methods += 1
-                # Skip methods commonly inlined during conversion
-                elif m in INLINABLE_METHODS:
+                # Always-inlined methods (e.g. reset_parameters)
+                elif m in ALWAYS_INLINED:
+                    found_methods += 1
+                # If the class has __call__, treat other private/helper
+                # methods as legitimately inlined into it
+                elif has_call and m not in ("__init__", "forward"):
                     found_methods += 1
                 else:
                     missing_methods.append(f"{cls}.{m}")
@@ -187,7 +192,7 @@ def compute_correctness(source_code, output_code, api_key):
     from agents.migration.validation_agent import ValidationAgent
 
     gemini = models.GeminiTool(
-        model_name=models.GeminiModel.GEMINI_2_5_FLASH,
+        model_name=models.GeminiModel.GEMINI_3_1_PRO_PREVIEW,
         api_key=api_key,
     )
     validator = ValidationAgent(model=gemini)

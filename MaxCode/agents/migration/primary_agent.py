@@ -46,9 +46,15 @@ class PrimaryAgent(base.Agent):
       return self._model_conversion_agent.run(pytorch_code)
     return self._single_file_agent.run(pytorch_code)
 
+  _MAX_REPAIR_ITERATIONS = 3
+
   def _validate_and_repair(self, pytorch_code: str, converted_code: str,
                            file_path: str) -> str:
-    """Validates converted code and repairs deviations if found.
+    """Validates converted code and repairs deviations in a loop.
+
+    Runs up to _MAX_REPAIR_ITERATIONS rounds of validate-then-repair.
+    Exits early if no deviations remain or if the deviation count does
+    not decrease (no progress).
 
     Args:
       pytorch_code: The original PyTorch source code.
@@ -58,32 +64,73 @@ class PrimaryAgent(base.Agent):
     Returns:
       The final code (repaired if deviations were found, original otherwise).
     """
-    validator = validation_agent.ValidationAgent(self._model_ref)
-    deviations = validator.validate(pytorch_code, converted_code)
-    logger.info("Validation of %s: found %d deviations",
-                file_path, len(deviations))
+    validator = validation_agent.ValidationAgent(
+        self._model_ref, rag_agent_instance=self._rag_agent
+    )
+
+    current_code = converted_code
+    prev_count = float("inf")
+    initial_deviations = None
+    initial_count = 0
+    iteration_history = []
+    final_deviations = []
+
+    for iteration in range(1, self._MAX_REPAIR_ITERATIONS + 1):
+      deviations = validator.validate(pytorch_code, current_code)
+      count = len(deviations)
+      logger.info("Validation of %s (iteration %d): found %d deviations",
+                  file_path, iteration, count)
+
+      # Capture initial state for backward compat
+      if iteration == 1:
+        initial_deviations = deviations
+        initial_count = count
+
+      iteration_history.append({
+          "iteration": iteration,
+          "deviation_count": count,
+      })
+
+      # Clean — no deviations remain
+      if not deviations:
+        final_deviations = []
+        break
+
+      # No progress — deviation count did not decrease
+      if count >= prev_count:
+        logger.info("No progress on %s at iteration %d (prev=%d, cur=%d), "
+                    "stopping repair loop", file_path, iteration,
+                    prev_count, count)
+        final_deviations = deviations
+        break
+
+      current_code = validator.repair(
+          current_code, deviations, pytorch_code=pytorch_code
+      )
+      prev_count = count
+      final_deviations = deviations
+    else:
+      # Loop exhausted without break — run one final validation
+      final_check = validator.validate(pytorch_code, current_code)
+      final_deviations = final_check
+      iteration_history.append({
+          "iteration": self._MAX_REPAIR_ITERATIONS + 1,
+          "deviation_count": len(final_check),
+      })
+      logger.info("Final validation of %s: %d remaining deviations",
+                  file_path, len(final_check))
 
     result = {
-        "deviations_found": len(deviations),
-        "deviations": deviations,
-        "remaining_deviations_count": 0,
-        "remaining_deviations": [],
+        "deviations_found": initial_count,
+        "deviations": initial_deviations or [],
+        "remaining_deviations_count": len(final_deviations),
+        "remaining_deviations": final_deviations,
+        "iterations": len([h for h in iteration_history
+                           if h["iteration"] <= self._MAX_REPAIR_ITERATIONS]),
+        "iteration_history": iteration_history,
     }
-
-    if deviations:
-      repaired_code = validator.repair(
-          converted_code, deviations, pytorch_code=pytorch_code
-      )
-      remaining = validator.validate(pytorch_code, repaired_code)
-      logger.info("Re-validation of %s: %d remaining deviations",
-                  file_path, len(remaining))
-      result["remaining_deviations_count"] = len(remaining)
-      result["remaining_deviations"] = remaining
-      self._validation_results[file_path] = result
-      return repaired_code
-
     self._validation_results[file_path] = result
-    return converted_code
+    return current_code
 
   def get_validation_results(self) -> dict[str, dict]:
     """Returns validation results for all processed files.

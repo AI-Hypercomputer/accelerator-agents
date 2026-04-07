@@ -64,6 +64,11 @@ the source has it as a method.
 Flag any feature present in the source that was removed in the output
 (e.g., TensorBoard logging, checkpoint saving, progress bars, etc.)
 
+## IMPORTANT: Use Exact Code Snippets
+When reporting deviations, copy the relevant lines VERBATIM from the code
+above. Do NOT paraphrase or describe the code in English. Use the actual
+source and output lines so that a repair tool can find-and-replace them.
+
 ## Output Format
 
 Return a JSON array of deviations. Each deviation must have:
@@ -71,8 +76,13 @@ Return a JSON array of deviations. Each deviation must have:
   "reduction_op", "method_placement", "dropped_feature"
 - "severity": "high" (changes model output), "medium" (changes training behavior),
   or "low" (cosmetic or minor)
-- "source_line": description of what the source does
-- "output_line": description of what the output does (or "MISSING")
+- "source_snippet": copy the exact line(s) verbatim from the PyTorch source
+  (max 3 lines). For missing components, show the class/function signature.
+- "output_snippet": copy the exact line(s) verbatim from the JAX output
+  (max 3 lines). Use "MISSING" if the component does not exist.
+- "corrected_snippet": the exact replacement code that should replace
+  output_snippet to fix the deviation. Use "ADD" for missing components
+  (and put the new code in the fix field).
 - "fix": specific instruction for how to fix the deviation
 
 If there are NO deviations, return an empty array: []
@@ -94,20 +104,22 @@ faithfulness deviations that need to be fixed.
 ```python
 {jax_code}
 ```
-
+{rag_section}
 ## Deviations to Fix:
-{deviations_json}
+{deviations_text}
 
 ## CRITICAL RULES:
-1. Make MINIMAL, SURGICAL changes. Only modify the specific lines related to
-   each deviation. Do NOT restructure, reorganize, or rewrite surrounding code.
+1. For each deviation, find the EXACT output_snippet in the JAX code and
+   replace it with the corrected_snippet. If the snippets are not exact
+   matches (whitespace differences, etc.), locate the closest match and
+   apply the fix described in the instruction.
 2. NEVER remove an existing class, function, method, or import -- even if it
    seems unused or redundant. If the current JAX code has a class (e.g.,
    MoETrainer, MoEMetrics), it MUST remain in the output.
 3. NEVER convert a class into standalone functions or vice versa.
 4. NEVER remove a training loop, epoch loop, or any training utility code.
-5. If a deviation's "fix" says the current behavior is acceptable, desirable,
-   or "not recommended" to change, SKIP that deviation entirely.
+5. If a deviation's instruction says the current behavior is acceptable,
+   desirable, or "not recommended" to change, SKIP that deviation entirely.
 6. Preserve ALL existing code structure -- only change what the deviation
    specifically asks you to change.
 7. The output must have the SAME number of classes and functions (or more)
@@ -157,13 +169,20 @@ class ValidationAgent(base.Agent):
     components, altered semantics), and optionally repairs them.
     """
 
-    def __init__(self, model: Any):
-        """Initializes the agent."""
+    def __init__(self, model: Any, rag_agent_instance=None):
+        """Initializes the agent.
+
+        Args:
+            model: The LLM model to use for generation.
+            rag_agent_instance: Optional RAGAgent for retrieving context
+                during repair. If None, repair runs without RAG context.
+        """
         super().__init__(
             model=model,
             agent_domain=utils.AgentDomain.MIGRATION,
             agent_type=utils.AgentType.PRIMARY,
         )
+        self._rag_agent = rag_agent_instance
 
     def validate(self, pytorch_code: str, jax_code: str) -> list:
         """Validates the JAX output against the PyTorch source.
@@ -200,6 +219,80 @@ class ValidationAgent(base.Agent):
             actionable.append(d)
         return actionable
 
+    @staticmethod
+    def _format_deviations_for_repair(deviations: list) -> str:
+        """Formats deviations as numbered find/replace blocks for repair.
+
+        Falls back to old source_line/output_line fields if the new
+        source_snippet/output_snippet fields are absent.
+
+        Args:
+            deviations: List of deviation dicts from validate().
+
+        Returns:
+            A formatted string with numbered find/replace blocks.
+        """
+        blocks = []
+        for i, d in enumerate(deviations, 1):
+            severity = d.get("severity", "medium")
+            category = d.get("category", "unknown")
+            source = d.get("source_snippet", d.get("source_line", "N/A"))
+            output = d.get("output_snippet", d.get("output_line", "N/A"))
+            corrected = d.get("corrected_snippet", "")
+            fix = d.get("fix", "")
+
+            block = f"### Deviation {i} [{severity}] - {category}\n"
+            block += f"Source (PyTorch):   {source}\n"
+            block += f"Find in JAX:        {output}\n"
+            if corrected and corrected not in ("ADD", "MISSING"):
+                block += f"Replace with:       {corrected}\n"
+            block += f"Instruction:        {fix}"
+            blocks.append(block)
+        return "\n\n".join(blocks)
+
+    def _get_repair_rag_context(self, deviations: list) -> str:
+        """Retrieves RAG context relevant to the repair deviations.
+
+        Builds a query from deviation categories and fix text, retrieves
+        top-k documents, and returns a formatted string for the prompt.
+
+        Args:
+            deviations: List of deviation dicts from validate().
+
+        Returns:
+            A formatted RAG context string, or "" if no RAG agent.
+        """
+        if not self._rag_agent:
+            return ""
+
+        # Build query from deviation categories and fix descriptions
+        query_parts = []
+        for d in deviations:
+            category = d.get("category", "")
+            fix = d.get("fix", "")
+            if category:
+                query_parts.append(category.replace("_", " "))
+            if fix:
+                query_parts.append(fix)
+        query = " ".join(query_parts)
+        if not query.strip():
+            return ""
+
+        try:
+            docs = self._rag_agent.retrieve_context(query, top_k=3)
+        except Exception:
+            return ""
+
+        if not docs:
+            return ""
+
+        section = "\n## Reference Patterns (from RAG):\n"
+        for doc in docs:
+            name = doc.get("name", "unknown")
+            text = doc.get("text", "")
+            section += f"\n### {name}\n{text}\n"
+        return section
+
     def repair(self, jax_code: str, deviations: list,
                pytorch_code: str = "") -> str:
         """Repairs the JAX code based on identified deviations.
@@ -217,12 +310,14 @@ class ValidationAgent(base.Agent):
         if not actionable:
             return jax_code
 
-        deviations_json = json.dumps(actionable, indent=2)
+        deviations_text = self._format_deviations_for_repair(actionable)
+        rag_section = self._get_repair_rag_context(actionable)
         response = self.generate(
             REPAIR_PROMPT,
             {
                 "jax_code": jax_code,
-                "deviations_json": deviations_json,
+                "deviations_text": deviations_text,
+                "rag_section": rag_section,
                 "pytorch_code": pytorch_code,
             },
         )

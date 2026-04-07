@@ -28,6 +28,20 @@ import sys
 
 from config import MERGED_FILE, OUTPUT_DIR, setup
 
+# Standard PyTorch -> JAX/Flax method renames.
+# When a source method is renamed to its JAX equivalent, it counts as matched.
+# With @nn.compact, there is no setup() — __init__ logic lives in __call__.
+METHOD_RENAMES = {
+    "__init__": {"setup", "__call__"},
+    "forward": {"__call__"},
+}
+
+# Methods that are commonly inlined during conversion and should not
+# penalize completeness when absent in the JAX output.
+INLINABLE_METHODS = {
+    "reset_parameters",  # Flax handles param init via initializers
+}
+
 
 # ------------------------------------------------------------------
 # AST extraction
@@ -96,20 +110,34 @@ def compute_completeness(source_components, output_components):
         total_methods += len(src_methods)
         if cls in out_classes:
             out_methods = set(out_classes[cls])
-            matched = src_methods & out_methods
-            found_methods += len(matched)
-            for m in sorted(src_methods - out_methods):
-                missing_methods.append(f"{cls}.{m}")
+            for m in sorted(src_methods):
+                # Check exact name match
+                if m in out_methods:
+                    found_methods += 1
+                # Check known renames (e.g. __init__ -> setup or __call__)
+                elif m in METHOD_RENAMES and METHOD_RENAMES[m] & out_methods:
+                    found_methods += 1
+                # Skip methods commonly inlined during conversion
+                elif m in INLINABLE_METHODS:
+                    found_methods += 1
+                else:
+                    missing_methods.append(f"{cls}.{m}")
         else:
             # class itself is missing; count all its methods as missing
             for m in sorted(src_methods):
                 missing_methods.append(f"{cls}.{m}")
 
     # --- standalone functions ---
+    # A PyTorch function may become a Flax class (e.g. Linear -> nn.Module).
+    # Count it as matched if it appears as either a function or a class.
     src_funcs = set(source_components["functions"])
     out_funcs = set(output_components["functions"])
     matched_funcs = src_funcs & out_funcs
-    missing_funcs = sorted(src_funcs - out_funcs)
+    # Also match functions that were promoted to classes in the output
+    for f in src_funcs - matched_funcs:
+        if f in out_class_names:
+            matched_funcs = matched_funcs | {f}
+    missing_funcs = sorted(src_funcs - matched_funcs)
 
     # --- overall ---
     total = len(src_class_names) + total_methods + len(src_funcs)

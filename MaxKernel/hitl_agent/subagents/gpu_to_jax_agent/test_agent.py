@@ -1,11 +1,10 @@
 """Unit tests for GPU to JAX conversion agent."""
 
 import pytest
-from unittest.mock import patch
 
 from hitl_agent.subagents.gpu_to_jax_agent.evaluators import (
-    JaxSyntaxChecker,
-    ShapeValidator,
+  JaxSyntaxChecker,
+  ShapeValidator,
 )
 
 
@@ -31,9 +30,9 @@ def computation(A: jnp.ndarray) -> jnp.ndarray:
 
 result = jax.block_until_ready(computation(A))
 """
-    checker = JaxSyntaxChecker(name="TestChecker",
-                               input_key="test_code",
-                               output_key="test_results")
+    checker = JaxSyntaxChecker(
+      name="TestChecker", input_key="test_code", output_key="test_results"
+    )
 
     # Note: This is a synchronous test - in practice, you'd need to run the async method
     # For now, we just verify the checker can be instantiated
@@ -50,9 +49,9 @@ import jax
 def broken(
     return None
 """
-    checker = JaxSyntaxChecker(name="TestChecker",
-                               input_key="test_code",
-                               output_key="test_results")
+    checker = JaxSyntaxChecker(
+      name="TestChecker", input_key="test_code", output_key="test_results"
+    )
     assert checker is not None
 
 
@@ -67,9 +66,9 @@ key = random.PRNGKey(0)
 A = random.normal(key, (1024, 512))
 B = random.normal(key, (512, 256))
 """
-    validator = ShapeValidator(name="TestValidator",
-                               input_key="test_code",
-                               output_key="test_results")
+    validator = ShapeValidator(
+      name="TestValidator", input_key="test_code", output_key="test_results"
+    )
 
     shapes = validator.extract_shapes_from_code(code)
     assert "inputs" in shapes
@@ -83,9 +82,9 @@ import jax.numpy as jnp
 def computation(A: jnp.ndarray, B: jnp.ndarray) -> jnp.ndarray:
     return jnp.matmul(A, B)
 """
-    validator = ShapeValidator(name="TestValidator",
-                               input_key="test_code",
-                               output_key="test_results")
+    validator = ShapeValidator(
+      name="TestValidator", input_key="test_code", output_key="test_results"
+    )
 
     is_valid, errors, warnings = validator.validate_shape_consistency(code)
     assert isinstance(is_valid, bool)
@@ -100,7 +99,8 @@ class TestGpuToJaxAgent:
   async def test_agent_initialization(self):
     """Test that the agent can be initialized."""
     from hitl_agent.subagents.gpu_to_jax_agent.agent import (
-        gpu_to_jax_conversion_agent,)
+      gpu_to_jax_conversion_agent,
+    )
 
     assert gpu_to_jax_conversion_agent is not None
     assert gpu_to_jax_conversion_agent.name == "GpuToJaxConversionAgent"

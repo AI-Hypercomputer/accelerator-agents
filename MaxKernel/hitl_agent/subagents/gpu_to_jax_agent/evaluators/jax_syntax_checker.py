@@ -21,14 +21,16 @@ class JaxSyntaxChecker(BaseAgent):
     self.output_key = output_key
 
   async def _run_async_impl(
-      self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
+    self, ctx: InvocationContext
+  ) -> AsyncGenerator[Event, None]:
     code = ctx.session.state.get(self.input_key, "")
     if not code:
       logging.warning(f"[{self.name}] No {self.input_key} found in context")
       yield Event(
-          author=self.name,
-          actions=EventActions(
-              state_delta={self.output_key: "No code to validate"}),
+        author=self.name,
+        actions=EventActions(
+          state_delta={self.output_key: "No code to validate"}
+        ),
       )
       return
 
@@ -44,8 +46,8 @@ class JaxSyntaxChecker(BaseAgent):
       logging.error(f"[{self.name}] {error_msg}")
       errors.append(error_msg)
       yield Event(
-          author=self.name,
-          actions=EventActions(state_delta={self.output_key: error_msg}),
+        author=self.name,
+        actions=EventActions(state_delta={self.output_key: error_msg}),
       )
       return
 
@@ -64,12 +66,14 @@ class JaxSyntaxChecker(BaseAgent):
       gpu_remnants.append(".to(device) call found (should be removed in JAX)")
     if "torch.Tensor" in code:
       gpu_remnants.append(
-          "torch.Tensor reference found (should be jnp.ndarray)")
+        "torch.Tensor reference found (should be jnp.ndarray)"
+      )
     if "<<<" in code or ">>>" in code:
       gpu_remnants.append("CUDA kernel launch syntax found (<<< >>>)")
     if "__global__" in code or "__device__" in code:
       gpu_remnants.append(
-          "CUDA kernel decorators found (__global__, __device__)")
+        "CUDA kernel decorators found (__global__, __device__)"
+      )
     if "@triton.jit" in code:
       gpu_remnants.append("Triton decorator found (@triton.jit)")
 
@@ -80,17 +84,18 @@ class JaxSyntaxChecker(BaseAgent):
     if "random.normal" in code or "random.uniform" in code:
       if "random.PRNGKey" not in code and "PRNGKey" not in code:
         warnings.append(
-            "Using JAX random functions but no PRNGKey initialization found")
+          "Using JAX random functions but no PRNGKey initialization found"
+        )
 
     # Check 5: Common API mismatches
     if " dim=" in code:
       warnings.append(
-          "Found 'dim=' parameter - JAX uses 'axis=' instead (PyTorch uses 'dim=')"
+        "Found 'dim=' parameter - JAX uses 'axis=' instead (PyTorch uses 'dim=')"
       )
 
     if ".numpy()" in code or ".item()" in code:
       errors.append(
-          "Found .numpy() or .item() method call - JAX arrays don't have these methods"
+        "Found .numpy() or .item() method call - JAX arrays don't have these methods"
       )
 
     # Check 6: Verify three-section structure
@@ -111,8 +116,8 @@ class JaxSyntaxChecker(BaseAgent):
 
       logging.error(f"[{self.name}] {error_msg}")
       yield Event(
-          author=self.name,
-          actions=EventActions(state_delta={self.output_key: error_msg}),
+        author=self.name,
+        actions=EventActions(state_delta={self.output_key: error_msg}),
       )
     else:
       success_msg = "JAX Syntax Validation Passed"
@@ -123,6 +128,6 @@ class JaxSyntaxChecker(BaseAgent):
 
       logging.info(f"[{self.name}] {success_msg}")
       yield Event(
-          author=self.name,
-          actions=EventActions(state_delta={self.output_key: success_msg}),
+        author=self.name,
+        actions=EventActions(state_delta={self.output_key: success_msg}),
       )

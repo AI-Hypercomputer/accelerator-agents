@@ -1,16 +1,16 @@
 """Shared fixtures and test utilities for HITL agent tests."""
 
-import pytest
 import tempfile
-from typing import Optional, Callable, AsyncGenerator
+from typing import AsyncGenerator, Callable, Optional
 from unittest.mock import Mock
-from pydantic import PrivateAttr
 
-from google.adk.sessions import Session
+import pytest
 from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
+from google.adk.sessions import Session
 from google.genai.types import Content, Part
+from pydantic import PrivateAttr
 
 
 @pytest.fixture
@@ -23,9 +23,9 @@ def temp_workdir():
 @pytest.fixture
 def mock_session(temp_workdir):
   """Create a proper ADK session with initialized state."""
-  session = Session(id="test-session-123",
-                    user_id="test-user",
-                    appName="test-hitl-agent")
+  session = Session(
+    id="test-session-123", user_id="test-user", appName="test-hitl-agent"
+  )
   # Initialize state with test values
   session.state["workdir"] = temp_workdir
   session.state["tpu_version"] = "v5e"
@@ -123,6 +123,7 @@ def kernel(x_ref, y_ref, o_ref):
 
 class MockAgent(BaseAgent):
   """Generic mock agent for tests."""
+
   _run_func: Optional[Callable] = PrivateAttr(default=None)
   _call_count: int = PrivateAttr(default=0)
 
@@ -147,8 +148,10 @@ class MockAgent(BaseAgent):
       async for event in self._run_func(ctx):
         yield event
     else:
-      yield Event(author=self.name,
-                  content=Content(parts=[Part(text=f"Mock {self.name} run")]))
+      yield Event(
+        author=self.name,
+        content=Content(parts=[Part(text=f"Mock {self.name} run")]),
+      )
 
 
 class MockFixAgent(MockAgent):
@@ -160,6 +163,7 @@ class MockFixAgent(MockAgent):
 
 class MockCompilationChecker(BaseAgent):
   """Mock compilation checker that returns predefined results."""
+
   _output_key: str = PrivateAttr()
   _results: list = PrivateAttr()
   _call_count: int = PrivateAttr(default=0)
@@ -170,14 +174,16 @@ class MockCompilationChecker(BaseAgent):
     self._results = results if isinstance(results, list) else [results]
     self._call_count = 0
 
-  async def run_async(self,
-                      ctx: InvocationContext) -> AsyncGenerator[Event, None]:
+  async def run_async(
+    self, ctx: InvocationContext
+  ) -> AsyncGenerator[Event, None]:
     """Override run_async to directly call _run_async_impl for tests."""
     async for event in self._run_async_impl(ctx):
       yield event
 
   async def _run_async_impl(
-      self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
+    self, ctx: InvocationContext
+  ) -> AsyncGenerator[Event, None]:
     if self._call_count < len(self._results):
       result = self._results[self._call_count]
     else:
@@ -188,8 +194,10 @@ class MockCompilationChecker(BaseAgent):
     # Update state directly so the loop sees it immediately
     ctx.session.state[self._output_key] = result
 
-    yield Event(author=self.name,
-                actions=EventActions(state_delta={self._output_key: result}))
+    yield Event(
+      author=self.name,
+      actions=EventActions(state_delta={self._output_key: result}),
+    )
 
 
 class CompilationCheckerWrapper(BaseAgent):

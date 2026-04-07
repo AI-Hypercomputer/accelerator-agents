@@ -1,7 +1,10 @@
 """Primary orchestration agent for repository migration."""
 import logging
 import os
-from typing import Any
+import re
+import subprocess
+import tempfile
+from typing import Any, Tuple
 
 import models
 from agents import base
@@ -9,9 +12,19 @@ from agents import utils
 from agents.migration import model_conversion_agent
 from agents.migration import single_file_agent
 from agents.migration import validation_agent
+from agents.migration.prompts import prompts
 from rag import rag_agent
 
+MAX_DEBUG_ITERATIONS = 10
 logger = logging.getLogger(__name__)
+
+
+def _strip_markdown_formatting(text: str) -> str:
+  """Strips markdown and returns only the first python code block."""
+  code_block_match = re.search(r"```(?:python)?\n?(.*?)\n?```", text, re.DOTALL)
+  if code_block_match:
+    return code_block_match.group(1).strip()
+  return text
 
 
 class PrimaryAgent(base.Agent):
@@ -45,6 +58,35 @@ class PrimaryAgent(base.Agent):
     if utils.is_model_file(pytorch_code, file_path):
       return self._model_conversion_agent.run(pytorch_code)
     return self._single_file_agent.run(pytorch_code)
+
+  def _execute_test(
+      self, pytorch_code: str, jax_code: str, test_code: str
+  ) -> Tuple[bool, str]:
+    """Executes the test script and returns success status and output."""
+    with tempfile.TemporaryDirectory() as tempdir:
+      torch_module_path = os.path.join(tempdir, "torch_module.py")
+      jax_module_path = os.path.join(tempdir, "jax_module.py")
+      test_script_path = os.path.join(tempdir, "test_script.py")
+
+      with open(torch_module_path, "w") as f:
+        f.write(pytorch_code)
+      with open(jax_module_path, "w") as f:
+        f.write(jax_code)
+      with open(test_script_path, "w") as f:
+        f.write(test_code)
+
+      try:
+        result = subprocess.run(
+            ["python3", test_script_path],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=tempdir,
+            timeout=600,
+        )
+        return True, result.stdout
+      except subprocess.CalledProcessError as e:
+        return False, e.stderr
 
   _MAX_REPAIR_ITERATIONS = 3
 
@@ -151,7 +193,7 @@ class PrimaryAgent(base.Agent):
     Returns:
       A dictionary mapping original file paths to converted JAX code.
     """
-    try:
+    if os.path.isfile(repo_path):
       with open(repo_path, "r", encoding="utf-8", errors="replace") as f:
         pytorch_code = f.read()
       logger.info("Converting %s ...", repo_path)
@@ -161,33 +203,26 @@ class PrimaryAgent(base.Agent):
             pytorch_code, converted_code, repo_path
         )
       return {repo_path: converted_code}
-    except OSError:
-      # If opening as a file fails, check if it's a directory.
-      if not os.path.isdir(repo_path):
-        return {
-            repo_path: f"# Error: path {repo_path} is not a file or directory."
-        }
+    elif os.path.isdir(repo_path):
+      graph = utils.build_dependency_graph(repo_path)
+      ordered_files = utils.topological_sort(graph)
+      converted_files: dict[str, str] = {}
 
-    if not os.path.isdir(repo_path):
+      for i, file_rel_path in enumerate(ordered_files, 1):
+        file_path = os.path.join(repo_path, file_rel_path)
+        logger.info("Converting file %d/%d: %s ...", i, len(ordered_files),
+                    file_rel_path)
+        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+          pytorch_code = f.read()
+        converted_code = self._convert_file(pytorch_code, file_path)
+        if self._validate:
+          converted_code = self._validate_and_repair(
+              pytorch_code, converted_code, file_path
+          )
+        converted_files[file_path] = converted_code
+
+      return converted_files
+    else:
       return {
           repo_path: f"# Error: path {repo_path} is not a file or directory."
       }
-
-    graph = utils.build_dependency_graph(repo_path)
-    ordered_files = utils.topological_sort(graph)
-    converted_files: dict[str, str] = {}
-
-    for i, file_rel_path in enumerate(ordered_files, 1):
-      file_path = os.path.join(repo_path, file_rel_path)
-      logger.info("Converting file %d/%d: %s ...", i, len(ordered_files),
-                  file_rel_path)
-      with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-        pytorch_code = f.read()
-      converted_code = self._convert_file(pytorch_code, file_path)
-      if self._validate:
-        converted_code = self._validate_and_repair(
-            pytorch_code, converted_code, file_path
-        )
-      converted_files[file_path] = converted_code
-
-    return converted_files

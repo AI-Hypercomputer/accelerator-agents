@@ -6,4 +6,4 @@ All other prompts have been moved to their respective subagent directories.
 
 from . import interactive_prompt
 
-__all__ = ['interactive_prompt']
+__all__ = ["interactive_prompt"]

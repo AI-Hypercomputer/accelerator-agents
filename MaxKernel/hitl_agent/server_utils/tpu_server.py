@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -11,13 +10,14 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from hitl_agent.tools.analyze_profile import analyze_trace
+
 from hitl_agent.constants import TPU_SERVER_PORT
+from hitl_agent.tools.analyze_profile import analyze_trace
 
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+  level=logging.INFO,
+  format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+  datefmt="%Y-%m-%d %H:%M:%S",
 )
 
 app = FastAPI(title="TPU Code Execution Server", version="1.0.0")
@@ -52,9 +52,9 @@ async def health_check():
 @app.post("/compilation_test", response_model=CodeResponse)
 async def compilation_test(request: CodeRequest):
   """
-    Try to execute kernel safely in a subprocess and return the output.
-    """
-  logging.info(f"Starting compilation test")
+  Try to execute kernel safely in a subprocess and return the output.
+  """
+  logging.info("Starting compilation test")
   async with compilation_semaphore:
     try:
       # Extract code from markdown format if present
@@ -78,30 +78,32 @@ async def compilation_test(request: CodeRequest):
 
       request.code = code_content
       # Create a temporary file to store the code
-      with tempfile.NamedTemporaryFile(mode="w", suffix=".py",
-                                       delete=False) as temp_file:
+      with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".py", delete=False
+      ) as temp_file:
         temp_file.write(request.code)
         temp_file_path = temp_file.name
 
       # Execute the code in a subprocess
       process = await asyncio.create_subprocess_exec(
-          sys.executable,
-          temp_file_path,
-          stdout=asyncio.subprocess.PIPE,
-          stderr=asyncio.subprocess.PIPE,
-          cwd=tempfile.gettempdir(),
+        sys.executable,
+        temp_file_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=tempfile.gettempdir(),
       )
 
       try:
-        stdout, stderr = await asyncio.wait_for(process.communicate(),
-                                                timeout=request.timeout)
+        stdout, stderr = await asyncio.wait_for(
+          process.communicate(), timeout=request.timeout
+        )
 
         output = stdout.decode("utf-8") if stdout else ""
         error = stderr.decode("utf-8") if stderr else None
         exit_code = process.returncode
 
         logging.info(
-            f"Compilation test completed successfully with exit_code: {exit_code}"
+          f"Compilation test completed successfully with exit_code: {exit_code}"
         )
         return CodeResponse(output=output, error=error, exit_code=exit_code)
 
@@ -126,15 +128,15 @@ async def compilation_test(request: CodeRequest):
           os.unlink(temp_file_path)
         except OSError:
           pass
-      logging.info(f"Compilation test finished")
+      logging.info("Compilation test finished")
 
 
 @app.post("/correctness_test", response_model=CodeResponse)
 async def correctness_test(request: CodeRequest):
   """
-    Test the correctness of the kernel code by executing it and comparing the output.
-    """
-  logging.info(f"Starting correctness test")
+  Test the correctness of the kernel code by executing it and comparing the output.
+  """
+  logging.info("Starting correctness test")
   async with correctness_semaphore:
     try:
       # Extract code from markdown format if present
@@ -158,30 +160,32 @@ async def correctness_test(request: CodeRequest):
 
       request.code = code_content
       # Create a temporary file to store the code
-      with tempfile.NamedTemporaryFile(mode="w", suffix=".py",
-                                       delete=False) as temp_file:
+      with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".py", delete=False
+      ) as temp_file:
         temp_file.write(request.code)
         temp_file_path = temp_file.name
 
       # Execute the code in a subprocess
       process = await asyncio.create_subprocess_exec(
-          sys.executable,
-          temp_file_path,
-          stdout=asyncio.subprocess.PIPE,
-          stderr=asyncio.subprocess.PIPE,
-          cwd=tempfile.gettempdir(),
+        sys.executable,
+        temp_file_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=tempfile.gettempdir(),
       )
 
       try:
-        stdout, stderr = await asyncio.wait_for(process.communicate(),
-                                                timeout=request.timeout)
+        stdout, stderr = await asyncio.wait_for(
+          process.communicate(), timeout=request.timeout
+        )
 
         output = stdout.decode("utf-8") if stdout else ""
         error = stderr.decode("utf-8") if stderr else None
         exit_code = process.returncode
 
         logging.info(
-            f"Correctness test completed successfully with exit_code: {exit_code}"
+          f"Correctness test completed successfully with exit_code: {exit_code}"
         )
         return CodeResponse(output=output, error=error, exit_code=exit_code)
 
@@ -205,15 +209,15 @@ async def correctness_test(request: CodeRequest):
           os.unlink(temp_file_path)
         except OSError:
           pass
-      logging.info(f"Correctness test finished")
+      logging.info("Correctness test finished")
 
 
 @app.post("/performance_test", response_model=CodeResponse)
 async def performance_test(request: CodeRequest):
   """
-    Test the performance of the kernel code by executing it and measuring the execution time.
-    """
-  logging.info(f"Starting performance test")
+  Test the performance of the kernel code by executing it and measuring the execution time.
+  """
+  logging.info("Starting performance test")
   async with performance_semaphore:
     try:
       # Extract code from markdown format if present
@@ -237,30 +241,32 @@ async def performance_test(request: CodeRequest):
 
       request.code = code_content
       # Create a temporary file to store the code
-      with tempfile.NamedTemporaryFile(mode="w", suffix=".py",
-                                       delete=False) as temp_file:
+      with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".py", delete=False
+      ) as temp_file:
         temp_file.write(request.code)
         temp_file_path = temp_file.name
 
       # Execute the code in a subprocess
       process = await asyncio.create_subprocess_exec(
-          sys.executable,
-          temp_file_path,
-          stdout=asyncio.subprocess.PIPE,
-          stderr=asyncio.subprocess.PIPE,
-          cwd=tempfile.gettempdir(),
+        sys.executable,
+        temp_file_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=tempfile.gettempdir(),
       )
 
       try:
-        stdout, stderr = await asyncio.wait_for(process.communicate(),
-                                                timeout=request.timeout)
+        stdout, stderr = await asyncio.wait_for(
+          process.communicate(), timeout=request.timeout
+        )
 
         output = stdout.decode("utf-8") if stdout else ""
         error = stderr.decode("utf-8") if stderr else None
         exit_code = process.returncode
 
         logging.info(
-            f"Performance test completed successfully with exit_code: {exit_code}"
+          f"Performance test completed successfully with exit_code: {exit_code}"
         )
         return CodeResponse(output=output, error=error, exit_code=exit_code)
 
@@ -284,12 +290,12 @@ async def performance_test(request: CodeRequest):
           os.unlink(temp_file_path)
         except OSError:
           pass
-      logging.info(f"Performance test finished")
+      logging.info("Performance test finished")
 
 
 @app.post("/profile", response_model=CodeResponse)
 async def profile(request: CodeRequest):
-  logging.info(f"Starting profile")
+  logging.info("Starting profile")
   async with profile_semaphore:
     try:
       # Extract code from markdown format if present
@@ -324,22 +330,23 @@ async def profile(request: CodeRequest):
 
       # Execute the code in a subprocess
       process = await asyncio.create_subprocess_exec(
-          sys.executable,
-          temp_file_path,
-          stdout=asyncio.subprocess.PIPE,
-          stderr=asyncio.subprocess.PIPE,
-          cwd=temp_dir,
+        sys.executable,
+        temp_file_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=temp_dir,
       )
 
       try:
-        stdout, stderr = await asyncio.wait_for(process.communicate(),
-                                                timeout=request.timeout)
+        stdout, stderr = await asyncio.wait_for(
+          process.communicate(), timeout=request.timeout
+        )
 
         output = stdout.decode("utf-8") if stdout else ""
         error = stderr.decode("utf-8") if stderr else None
         exit_code = process.returncode
 
-        logging.info(f"Profile code executed, now analyzing trace.")
+        logging.info("Profile code executed, now analyzing trace.")
         # Recursively search for .xplane.pb file under temp_file_path directory
         xplane_pb_file = None
         for root, _, files in os.walk(temp_dir):
@@ -357,9 +364,7 @@ async def profile(request: CodeRequest):
             for fname in files:
               all_files.append(os.path.join(root, fname))
 
-          error_msg = (
-              "No .xplane.pb trace file found after profiling. Files in"
-              f" temp_dir: {all_files[:10]}")
+          error_msg = f"No .xplane.pb trace file found after profiling. Files in temp_dir: {all_files[:10]}"
           logging.error(error_msg)
 
           # Return the execution output/error to help diagnose
@@ -374,16 +379,14 @@ async def profile(request: CodeRequest):
 
         ratio = analyze_trace(xplane_pb_file)
 
-        logging.info("Profile analysis completed successfully with exit_code:"
-                     f" {exit_code}")
+        logging.info(
+          f"Profile analysis completed successfully with exit_code: {exit_code}"
+        )
 
         return CodeResponse(
-            output=json.dumps({
-                "ratio": ratio,
-                "xplane_path": xplane_pb_file
-            }),
-            error=error,
-            exit_code=exit_code,
+          output=json.dumps({"ratio": ratio, "xplane_path": xplane_pb_file}),
+          error=error,
+          exit_code=exit_code,
         )
 
       except asyncio.TimeoutError:
@@ -405,7 +408,7 @@ async def profile(request: CodeRequest):
       #     shutil.rmtree(temp_dir)
       # except Exception:
       #     pass
-      logging.info(f"Profile analysis finished")
+      logging.info("Profile analysis finished")
 
 
 @app.post("/get_tpu_version", response_model=GetTpuVersionResponse)
@@ -426,10 +429,9 @@ async def get_tpu_version() -> str:
   # --- Method 1: Try running the `tpu-info` command-line tool (No resource conflicts) ---
   try:
     # Run the tpu-info command
-    result = subprocess.run(["tpu-info"],
-                            capture_output=True,
-                            text=True,
-                            check=True)
+    result = subprocess.run(
+      ["tpu-info"], capture_output=True, text=True, check=True
+    )
 
     # Regex to find a pattern like "TPU v4", "TPU v5e", "TPU v3 chip", etc.
     # We search the entire output

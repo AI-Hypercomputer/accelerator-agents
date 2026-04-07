@@ -1,6 +1,7 @@
 """Base class for all agents."""
 
 import abc
+import logging
 from typing import Any, Dict, Optional
 
 from agents import utils
@@ -35,7 +36,22 @@ class Agent(abc.ABC):
       prompt = prompt_template.format(**prompt_vars)
     else:
       prompt = prompt_template
-    return self._model.generate(prompt)
+    logging.info(
+        "--- %s PROMPT ---\n%s\n--- END PROMPT ---",
+        self.agent_type.name,
+        prompt,
+    )
+    try:
+      response = self._model.generate(prompt)
+      logging.info(
+          "--- %s RESPONSE ---\n%s\n--- END RESPONSE ---",
+          self.agent_type.name,
+          response,
+      )
+      return response
+    except Exception as e:
+      logging.exception("LLM generation failed: %s", e)
+      raise
 
   @abc.abstractmethod
   def run(self, *args, **kwargs):

@@ -31,6 +31,7 @@ def convert_code(
     destination: str,
     api_key: str,
     model_name: str | None = None,
+    validate: bool = True,
 ) -> str:
   """Converts PyTorch code to JAX and saves it to the destination.
 
@@ -39,6 +40,7 @@ def convert_code(
     destination: The directory where the migrated files should be saved.
     api_key: The Google AI API key to use for migration.
     model_name: The Gemini model to use for migration.
+    validate: Whether to run validation and repair after conversion.
 
   Returns:
     A JSON string containing the destination paths for subsequent steps.
@@ -67,7 +69,7 @@ def convert_code(
   if model_name:
     model_kwargs["model_name"] = model_name
   model = models.GeminiTool(**model_kwargs)
-  agent = primary_agent.PrimaryAgent(model, api_key=api_key)
+  agent = primary_agent.PrimaryAgent(model, api_key=api_key, validate=validate)
   results = agent.run(abs_path)
 
   logging.info("Writing converted files to: %s", destination)
@@ -140,6 +142,15 @@ def convert_code(
       "mapping_path": str(mapping_path),
       "original_source_dir": str(source_copy_dir),
   }
+
+  # Write validation results if validation was enabled and produced results
+  validation_results = agent.get_validation_results()
+  if validate and validation_results:
+    validation_path = dest_path / "validation_results.json"
+    with validation_path.open("w", encoding="utf-8") as f:
+      json.dump(validation_results, f, indent=2)
+    response["validation_path"] = str(validation_path)
+
   return json.dumps(response)
 
 

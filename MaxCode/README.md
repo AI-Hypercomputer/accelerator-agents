@@ -3,6 +3,25 @@
 This extension provides development tools for the MaxCode project,
 including tools for AI-powered code migration between ML frameworks.
 
+## Quick Start
+
+Want to try MaxCode without the full Gemini CLI setup? The standalone demo
+converts a PyTorch repo to JAX in three commands:
+
+```bash
+cd MaxCode/examples/demo
+pip install -r requirements.txt
+export GOOGLE_API_KEY=<your-key>    # Windows CMD: set GOOGLE_API_KEY=<your-key>
+
+python step1_clone_repo.py          # Clone a PyTorch repo from GitHub
+python step2_populate_rag.py        # Build the RAG reference database
+python step3_merge.py               # Auto-detect and merge model files
+python step4_convert.py             # Convert to JAX with validation + repair
+```
+
+See [examples/demo/README.md](examples/demo/README.md) for full setup
+instructions and details on what each step does.
+
 ## Prerequisites
 
 This extension uses the Google AI API, which requires an API key. You can get

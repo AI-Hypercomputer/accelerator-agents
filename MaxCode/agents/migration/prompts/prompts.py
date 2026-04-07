@@ -69,8 +69,47 @@ JAX_BEST_PRACTICES = """
     - Every layer explicitly sets `use_bias=True` or `use_bias=False` to exactly match the PyTorch layer.
 17. **BatchNorm Momentum**: JAX momentum is the decay factor for old statistics (`x_new = momentum * x_old + (1 - momentum) * x_batch`), but PyTorch uses `1 - decay`. To ensure parity, you MUST set JAX momentum to `1 - pytorch_momentum`.
 18. **Data Layout**: Standardize on `NHWC` (Channels Last) for JAX performance, but include necessary `jnp.transpose` operations at input/output boundaries to match PyTorch's `NCHW` oracle outputs.
+19. **Weight Initialization**: Match PyTorch initialization exactly.
+    When the source explicitly calls `nn.init.zeros_` on a layer, use
+    `nn.initializers.zeros_init()`. When the source uses bare `nn.Linear()`
+    with no explicit init, use the Flax default (lecun_normal) or
+    `nn.initializers.normal(stddev=config.initializer_range)` -- do NOT use
+    zeros_init unless the source explicitly initializes to zeros.
+    RMSNorm (1+w): `nn.initializers.zeros_init()`.
+    RMSNorm (w): `nn.initializers.ones_init()`.
+    Check each nn.Parameter in the source and match its init.
+20. **Train/Eval Mode**: Flax modules do NOT have a `.train` attribute or
+    `.eval()` / `.train()` methods. NEVER write `model.train = True` or
+    `model.train = False` -- this does nothing in Flax and silently produces
+    incorrect behavior. Instead, pass `deterministic=False` for training and
+    `deterministic=True` for evaluation as an argument to `__call__` /
+    `model.apply()`. All stochastic layers (Dropout, router noise) must
+    check the `deterministic` flag.
+21. **Preserve ALL Source Components**: Convert EVERY class, function, and
+    method from the source. Do NOT merge base classes into subclasses, do NOT
+    drop utility classes or metric functions, and do NOT omit `get_config()`
+    or serialization methods. If the source has `ExpertBase` and `FFNExpert`,
+    convert both. If the source has a `MoEMetrics` class, convert it.
+22. **Preserve Default Values Exactly**: All default parameter values in the
+    JAX output must match the PyTorch source EXACTLY. Do NOT change any numeric
+    default -- not capacity factors, not dropout rates, not epsilon values, not
+    learning rates, not layer counts. Even if you believe a different value is
+    "better" or "more stable", use the source value. Changed defaults silently
+    alter model behavior and break reproducibility.
+23. **Preserve Exact Reduction Operations**: When the source uses `.mean()`,
+    use `jnp.mean()`. When the source uses `.sum()`, use `jnp.sum()`. NEVER
+    substitute one reduction for another. `torch.mean(x, dim=N)` maps to
+    `jnp.mean(x, axis=N)`. `torch.sum(x, dim=N)` maps to `jnp.sum(x, axis=N)`.
+    The dim/axis integer stays the same.
+24. **Preserve Method Placement**: If the source defines a method or attribute
+    on a specific class, keep it on that class in the JAX output. Do NOT
+    relocate methods between classes or replace instance methods with
+    standalone functions unless the JAX idiom requires it.
 
 ## CRITICAL: Faithfulness to Source Code
+
+This is a TRANSLATION, not a redesign. The converted code must produce
+IDENTICAL behavior to the source for the same inputs and weights.
 
 NEVER simplify complex tensor reshaping, reordering, or algorithmic patterns
 from the source code. If the PyTorch code uses a specific interleaved weight
@@ -78,6 +117,11 @@ layout, chunk-parallel algorithm, or multi-step computation, convert it
 faithfully to JAX. The RAG context shows EXAMPLES of similar patterns -- use
 them as guidance for JAX idioms, but always follow the ACTUAL source code's
 logic and structure.
+
+NEVER "improve" the source by changing default values, adding initializers
+that the source does not use, substituting reductions (.sum vs .mean), or
+dropping components you consider non-essential (logging, metrics, utility
+classes). If the source has it, the output must have it.
 """
 
 MIGRATE_MODULE_TO_JAX_PROMPT = """
@@ -357,6 +401,73 @@ IMPORTANT CONVERSION RULES:
    linear attention, implement BOTH modes and dispatch based on sequence length.
 5. Implement causal_conv1d as a standalone function with both prefill and
    single-step decode paths.
+6. For causal operations with decode-time state (causal conv1d, linear
+   attention), implement SEPARATE prefill and decode functions. Do NOT use
+   a single unified function with conditional branching.
+7. ALWAYS include a `@dataclasses.dataclass` Config class at the top of the
+   output file. Mirror ALL fields from the PyTorch configuration class with
+   their types and default values. Use `dataclasses.field(default_factory=...)`
+   for mutable defaults. Use the Config type (not `Any`) in module annotations.
+8. The `load_balancing_loss` function MUST accept an optional `attention_mask`
+   parameter. When the mask is provided, broadcast it to match the concatenated
+   router logits shape and use it to exclude padding tokens from mean/sum
+   statistics. See the RAG context for the full pattern.
+9. **MoE Experts: Capacity-Based Dispatch (MANDATORY)**. The Experts class MUST
+   use capacity-based dispatch with dispatch/combine tensors -- NOT per-token
+   gather of expert weights. The correct pattern is:
+   a) Compute per-expert capacity: `capacity = ceil(T * K / E) * 1.5`
+   b) Build dispatch tensor via `one_hot(selected_experts) -> cumsum -> positions
+      -> one_hot(positions, capacity)` to get `dispatch: [T, E, C]`
+   c) Build combine tensor: `combine = dispatch * routing_weights`
+   d) Route tokens to expert buffers: `expert_in = einsum('tec,th->ech', dispatch, x)`
+   e) Batched expert matmul: `expert_out = einsum('ech,ehi->eci', expert_in, W)`
+   f) Scatter back: `output = einsum('tec,ech->th', combine, expert_out)`
+   Do NOT use `weight[flat_indices]` gather or `jax.vmap` over individual experts.
+   Do NOT use `jnp.einsum('td,edh->teh')` computing all experts for all tokens.
+   The capacity-based approach is 10-50x more efficient for large E (e.g. E=64).
+   See the RAG context file `targeted_moe_capacity_routing_jax.py` for the full
+   implementation with WRONG/CORRECT examples.
+10. **KV Cache: Pure Functional NamedTuple (MANDATORY)**. All KV caches MUST be
+    NamedTuple objects passed as function arguments and returned as outputs.
+    Do NOT use Flax mutable variables (`self.variable('cache', ...)`).
+    Do NOT use config dicts with init flags.
+    For encoder-decoder models: use SEPARATE self_attn_cache and cross_attn_cache
+    arguments per layer. Cross-attention caches are populated once from encoder
+    output and passed through unchanged on subsequent decode steps.
+    Provide an `init_kv_caches()` helper function that pre-allocates all layer
+    caches. This replaces PyTorch's `install_kv_cache_hooks()`.
+    See the RAG context for the full encoder-decoder cache pattern.
+11. **Tied Output Projection**: When the PyTorch source computes logits via
+    `x @ self.token_embedding.weight.T`, convert it to
+    `(x @ token_embedding.embedding.T).astype(jnp.float32)`.
+    Do NOT use `token_embedding.attend(x)` -- that is for embedding lookup,
+    not linear projection, and may produce different results.
+12. **Fused QKV Projection**: When the PyTorch source uses a single
+    `in_proj_weight` of shape [3*embed_dim, embed_dim] with sliced projection
+    methods (in_proj_qkv, in_proj_q, in_proj_kv), preserve this as a SINGLE
+    parameter with sliced access in JAX. Do NOT split into 3 separate nn.Dense
+    layers. Use `self.param('in_proj_weight', init, (3*D, D))` and slice it
+    for Q [0:D], K [D:2D], V [2D:3D]. Provide in_proj_qkv(), in_proj_q(),
+    in_proj_kv() methods matching the PyTorch API.
+13. **Float32 Softmax Upcast (MANDATORY)**: When the PyTorch source uses
+    `.float()` or `dtype=torch.float32` before softmax, you MUST preserve this
+    in JAX: `jax.nn.softmax(attn_weights.astype(jnp.float32), axis=-1)` then
+    cast back with `.astype(q.dtype)`. This is critical for numerical stability
+    in bfloat16/float16. NEVER omit this upcast.
+14. **Preserve ALL Source Components (MANDATORY)**: The output MUST contain a
+    JAX equivalent for EVERY class, function, method, and utility in the source.
+    Do NOT merge base classes into subclasses. Do NOT drop get_config() or
+    serialization methods. Do NOT omit utility classes (e.g., metrics classes)
+    or standalone functions (e.g., metric computation functions). If the source
+    has N classes and M functions, the output must have N classes and M functions.
+15. **Preserve Default Values Exactly**: All constructor defaults, config
+    defaults, and hyperparameter defaults MUST match the PyTorch source exactly.
+    Do NOT change capacity_factor, dropout rates, noise epsilon, num_layers,
+    or any other default value -- even if you think a different value is better.
+16. **Train/Eval Mode in Flax**: NEVER set `model.train = True/False` or call
+    `model.eval()` / `model.train()` in training loops. Flax has no such
+    attributes. Use `deterministic=False` for training and `deterministic=True`
+    for evaluation, passed as an argument to the module's `__call__` method.
 
 Please think step by step about the conversion process before generating the code.
 Then, provide the complete JAX equivalent of the entire file above.

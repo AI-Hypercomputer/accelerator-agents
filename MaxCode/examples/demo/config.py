@@ -18,7 +18,23 @@ MAXCODE_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 # Target repo to convert
 # ---------------------------------------------------------------------------
 DEFAULT_REPO_URL = "https://github.com/yaohungt/Multimodal-Transformer"
-REPO_URL = os.environ.get("MAXCODE_REPO_URL", DEFAULT_REPO_URL)
+_REPO_URL_FILE = os.path.join(SCRIPT_DIR, ".repo_url")
+
+
+def _resolve_repo_url():
+    """Resolve repo URL: env var > .repo_url file > default."""
+    from_env = os.environ.get("MAXCODE_REPO_URL")
+    if from_env:
+        return from_env
+    if os.path.isfile(_REPO_URL_FILE):
+        with open(_REPO_URL_FILE, "r") as f:
+            saved = f.read().strip()
+        if saved:
+            return saved
+    return DEFAULT_REPO_URL
+
+
+REPO_URL = _resolve_repo_url()
 REPO_DIR = os.path.join(SCRIPT_DIR, REPO_URL.rstrip("/").rsplit("/", 1)[-1])
 
 # ---------------------------------------------------------------------------

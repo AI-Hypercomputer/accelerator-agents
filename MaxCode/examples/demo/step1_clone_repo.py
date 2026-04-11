@@ -27,7 +27,11 @@ def main():
         os.environ["MAXCODE_REPO_URL"] = repo_url
 
     # Import AFTER setting env var so config sees the override
-    from config import REPO_URL, REPO_DIR
+    from config import REPO_URL, REPO_DIR, _REPO_URL_FILE
+
+    # Persist the repo URL so step3/step4/step5 use the same repo
+    with open(_REPO_URL_FILE, "w") as f:
+        f.write(REPO_URL)
 
     print("=" * 70)
     print("Step 1: Clone PyTorch Repository")

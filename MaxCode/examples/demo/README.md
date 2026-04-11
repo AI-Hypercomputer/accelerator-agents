@@ -54,7 +54,9 @@ python step5_verify.py
 ### Step 1 — Clone Repository
 Clones the target PyTorch repo and lists all Python files found.
 Accepts an optional URL argument (defaults to Multimodal-Transformer).
-If already cloned, this step is skipped.
+The chosen URL is saved to `.repo_url` so subsequent steps (3-5)
+automatically use the same repo without needing to set an environment
+variable. If already cloned, this step is skipped.
 
 ### Step 2 — Populate RAG Database
 Builds a vector database of JAX/Flax reference documents:
@@ -103,16 +105,18 @@ and filtered false positives) are saved to `output/verification_scorecard.json`.
 
 ## Output
 
-After running, the converted JAX file is saved to:
+After running, the converted JAX file is saved to `output/<repo_name>_jax.py`.
+For example:
 ```
-output/multimodal_transformer_jax.py
+output/Multimodal_Transformer_jax.py            # default repo
+output/time_series_forecasting_pytorch_jax.py   # custom repo
 ```
 
 ## File Overview
 
 | File | Purpose |
 |------|---------|
-| `config.py` | Shared paths and setup (supports URL override via env var) |
+| `config.py` | Shared paths and setup (resolves repo URL from env var, `.repo_url` file, or default) |
 | `step1_clone_repo.py` | Clone any PyTorch repo (accepts optional URL argument) |
 | `step2_populate_rag.py` | Build the RAG reference database |
 | `step3_merge.py` | Auto-detect model files, filter by import graph, and merge |

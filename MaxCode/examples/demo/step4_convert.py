@@ -27,7 +27,7 @@ Usage:
 import logging
 import os
 import time
-from config import MERGED_FILE, OUTPUT_DIR, setup, require_api_key
+from config import MERGED_FILE, OUTPUT_DIR, REPO_URL, setup, require_api_key
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -96,9 +96,10 @@ def main():
 
     print(f"\n  Migration completed in {elapsed:.1f}s")
 
-    # Save output
+    # Save output — derive filename from repo URL
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    out_path = os.path.join(OUTPUT_DIR, "multimodal_transformer_jax.py")
+    repo_name = REPO_URL.rstrip("/").rsplit("/", 1)[-1].replace("-", "_")
+    out_path = os.path.join(OUTPUT_DIR, f"{repo_name}_jax.py")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(jax_code)
     lines = jax_code.count("\n") + 1

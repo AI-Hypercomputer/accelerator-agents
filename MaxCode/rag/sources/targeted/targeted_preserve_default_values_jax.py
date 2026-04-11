@@ -82,6 +82,15 @@ reproducibility between PyTorch and JAX versions.
         kernel_init=nn.initializers.zeros_init(),
     )(x)
 
+## Note on _init_weights and constructor defaults:
+
+When the source's `_init_weights` method explicitly zero-initializes a layer
+(e.g., router weights via `nn.init.zeros_`), use `zeros_init()` in the Flax
+conversion. This IS matching the source, since `_init_weights` overrides the
+constructor default. The rule "match the source default" means match the
+EFFECTIVE default after all initialization code runs, not just the bare
+constructor signature.
+
 ## Why preserving defaults matters:
 
 1. **Reproducibility**: Changed defaults mean the JAX model behaves differently

@@ -1,11 +1,11 @@
 """
 TARGETED JAX PATTERN: Tied Output Projection (Weight Tying)
 
-CRITICAL: When the PyTorch source ties the output projection to the token
-embedding weight (e.g., `x @ self.token_embedding.weight.T`), the JAX
-conversion MUST use explicit matrix multiplication with the embedding table.
-Do NOT use Flax's `.attend()` method -- it performs embedding lookup, not
-matrix multiplication.
+When the PyTorch source uses explicit `x @ weight.T` for output projection,
+the JAX conversion must use explicit matmul, not `.attend()`. Flax's
+`nn.Embed.attend()` and framework-specific attend() methods (e.g., MaxText's
+`Embed.attend()`) may internally match the matmul behavior, but explicit
+`x @ embedding.T` guarantees numerical equivalence with the PyTorch source.
 
 ## WRONG approach (attend() -- DO NOT DO THIS):
 

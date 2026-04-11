@@ -1,9 +1,9 @@
 """
 TARGETED JAX PATTERN: Triangular Masking for Causal Attention
 
-Use ADDITIVE masking with large negative values, NOT multiplicative boolean masks.
-Multiplicative masks cause issues with softmax (masked positions become 0 instead
-of being suppressed to near-zero probability).
+For standard attention scores before softmax, use ADDITIVE masking with large negative
+values, NOT multiplicative boolean masks. Multiplicative masks cause issues with
+softmax (masked positions become 0 instead of being suppressed to near-zero probability).
 
 ## WRONG: Multiplicative boolean mask (DO NOT DO THIS):
 

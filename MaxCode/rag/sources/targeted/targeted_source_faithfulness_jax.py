@@ -36,6 +36,11 @@ CORRECT: Use the Flax default init (lecun_normal) to match "bare nn.Linear".
     #   nn.init.normal_(self.fc.weight, std=0.02) => kernel_init=nn.initializers.normal(stddev=0.02)
     #   nn.init.xavier_uniform_(self.fc.weight)   => kernel_init=nn.initializers.xavier_uniform()
 
+    # Exception: MoE router layers -- when the model's `_init_weights` method
+    # explicitly zeros the router (common in Switch Transformer, Qwen3-Next),
+    # use `zeros_init()` even though the router is constructed as bare `nn.Linear`.
+    # The `_init_weights` override IS the source's explicit init.
+
 
 ## Principle 2: Preserve Exact Default Parameter Values
 
@@ -142,6 +147,29 @@ CORRECT: Convert ALL components, including logging and metrics.
                 os.makedirs(tensorboard_dir, exist_ok=True)
                 from tensorboardX import SummaryWriter
                 self.writer = SummaryWriter(tensorboard_dir)
+
+
+## Approved Deviations from Literal Translation:
+
+The following JAX-specific changes are acceptable even though they differ from the
+literal PyTorch code, because they preserve numerical equivalence while adapting to
+JAX's programming model:
+
+    # (a) f32 upcast before softmax/norm -- even if PyTorch relies on AMP autocast,
+    #     JAX should explicitly upcast to f32 for numerical stability.
+
+    # (b) lax.scan replacing Python for-loops over layers -- semantically identical,
+    #     but enables XLA loop optimization and reduces compilation time.
+
+    # (c) solve_triangular replacing Neumann-series for-loops -- numerically
+    #     equivalent but more efficient and stable in JAX.
+
+    # (d) Separate prefill/decode functions replacing if/else branching -- JAX's
+    #     tracing requires static control flow; separate functions are the idiomatic
+    #     equivalent of PyTorch's runtime if/else on cache state.
+
+    # (e) Additive masking replacing boolean masking -- numerically equivalent for
+    #     standard attention (see targeted_triangular_masking_jax.py for details).
 
 
 ## Why faithfulness matters:

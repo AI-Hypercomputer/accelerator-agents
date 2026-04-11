@@ -1,10 +1,13 @@
 """
 TARGETED JAX PATTERN: KV Cache — Pure Functional with Pre-Allocated Buffers
 
-CRITICAL: Do NOT use Flax mutable variables (`self.variable('cache', ...)`) or
-growing arrays (`jnp.concatenate`) for KV cache. Use pre-allocated fixed-size
-buffers with `dynamic_update_slice` for writes and `dynamic_slice` for reads,
-passed as function arguments and returned as outputs.
+For migration output, use pre-allocated NamedTuple buffers instead of Flax mutable
+variables. NamedTuples are framework-agnostic, JIT-safe with static shapes, and
+beam-search friendly. Flax's `self.variable('cache', ...)` is the standard Flax API
+and works for Flax-only codebases, but couples the conversion to Flax internals.
+Do NOT use growing arrays (`jnp.concatenate`) -- they change shape each step and
+break jax.jit. Use `dynamic_update_slice` for writes and `dynamic_slice` for reads,
+with cache buffers passed as function arguments and returned as outputs.
 
 ## WRONG approach 1 (Flax mutable variables -- DO NOT DO THIS):
 

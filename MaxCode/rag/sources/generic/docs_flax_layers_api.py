@@ -51,6 +51,7 @@ Embed(num_embeddings, features, dtype=None, param_dtype=float32,
 
     # attend() method for output projection (weight tying):
     logits = layer.attend(hidden_states)  # [batch, seq_len, num_embeddings]
+    # Note: For exact PyTorch weight-tying equivalence, prefer explicit matmul: x @ embed.embedding.T
 
 Normalization Layers
 ---------------------
@@ -117,6 +118,8 @@ MultiHeadDotProductAttention(num_heads, dtype=None, qkv_features=None,
     layer = nn.MultiHeadDotProductAttention(num_heads=8, decode=True)
     variables = layer.init(jax.random.key(0), x)
     # variables['cache'] contains cached keys and values
+    # Note: For PyTorch->JAX migrations, prefer pre-allocated NamedTuple buffers
+    # over Flax's decode=True mutable cache (see targeted_kvcache_prefill_decode_jax.py)
 
     Key parameters:
     - decode=True: enables autoregressive KV caching

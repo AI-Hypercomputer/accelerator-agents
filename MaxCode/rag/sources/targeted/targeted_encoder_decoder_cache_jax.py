@@ -1,13 +1,16 @@
 """
 TARGETED JAX PATTERN: Encoder-Decoder KV Cache with NamedTuple
 
-CRITICAL: When converting encoder-decoder models (e.g., Whisper, T5, BART),
-the decoder has TWO types of KV cache:
+When converting encoder-decoder models (e.g., Whisper, T5, BART), the decoder
+has TWO types of KV cache:
   1. Self-attention cache: grows with each decode step (like decoder-only models)
   2. Cross-attention cache: computed ONCE from encoder output, reused every step
 
-Both MUST be pure functional NamedTuple caches passed as arguments and returned
-as outputs. Do NOT use Flax mutable variables or init-flag protocols.
+For migration output, use pure functional NamedTuple caches passed as arguments
+and returned as outputs. Flax mutable variables (`self.variable('cache', ...)`)
+are Flax's built-in approach but are not recommended for migration output because
+they couple the code to Flax's variable management and complicate beam search.
+Do NOT use init-flag protocols.
 
 ## WRONG approach (Flax mutable variables with init flag -- DO NOT DO THIS):
 

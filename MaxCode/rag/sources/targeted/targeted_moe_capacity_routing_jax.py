@@ -28,7 +28,7 @@ weight gathering or dense all-experts einsum.
 
     class Experts(nn.Module):
         config: Qwen3NextConfig
-        capacity_factor: float = 1.5
+        capacity_factor: float = 1.5  # Match source model's default -- this is an example value
 
         @nn.compact
         def __call__(self, hidden_states, top_k_indices, top_k_weights):
@@ -110,8 +110,13 @@ weight gathering or dense all-experts einsum.
 
 ## Router weight initialization:
 
-CRITICAL: The router (gate) weight MUST be initialized with zeros:
+The router (gate) weight should be zero-initialized when the source model explicitly
+zero-initializes it (e.g., Qwen3-Next, Switch Transformer, GShard). If the source uses
+a different explicit init, match the source. If the source uses bare `nn.Linear` with
+no custom init, use the Flax default (`lecun_normal`).
+
+    # When source's _init_weights zeros the router:
     weight = self.param('weight', nn.initializers.zeros_init(), (num_experts, hidden_dim))
 
-NOT with normal initialization. Zero-init ensures uniform routing at start of training.
+Zero-init ensures uniform routing at start of training.
 """

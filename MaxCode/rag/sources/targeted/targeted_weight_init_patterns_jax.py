@@ -7,11 +7,15 @@ has a specific initializer -- do NOT use a single default for everything.
 
 ## PyTorch to Flax Initializer Mapping Table:
 
+This table applies to models with `_init_weights` methods (e.g., HuggingFace-style).
+When no `_init_weights` exists and the source uses bare `nn.Linear`, use the Flax
+default (`lecun_normal`) as the closest match to PyTorch's default Kaiming uniform.
+
 | PyTorch Layer / Init              | Flax Initializer                                         |
 |-----------------------------------|----------------------------------------------------------|
 | nn.Linear (general Dense)         | nn.initializers.normal(stddev=config.initializer_range)  |
 | nn.Embedding                      | nn.initializers.normal(stddev=1.0)                       |
-| MoE Router / Gate                 | nn.initializers.zeros_init()                             |
+| MoE Router / Gate                 | nn.initializers.zeros_init() (when source explicitly zero-inits) |
 | RMSNorm weight (1 + w formulation)| nn.initializers.zeros_init()                             |
 | RMSNorm weight (w formulation)    | nn.initializers.ones_init()                              |
 | LayerNorm weight                  | nn.initializers.ones_init()                              |
@@ -97,6 +101,15 @@ has a specific initializer -- do NOT use a single default for everything.
     # Usage for log-decay parameters:
     log_decay = self.param('log_decay', log_uniform_init(1.0, 16.0), (num_heads,))
     decay = jnp.exp(-jnp.exp(log_decay))
+
+## Additional notes:
+
+Note: RMSNorm epsilon defaults vary by model (1e-6 in Flax, 1e-5 in FLA/PyTorch).
+Always match the source model's epsilon value.
+
+Note: Flax names norm weights 'scale'; PyTorch uses 'weight'. Checkpoint loading
+must handle this mapping (e.g., rename 'weight' -> 'scale' when loading PyTorch
+weights into Flax).
 
 ## Why initialization matters:
 

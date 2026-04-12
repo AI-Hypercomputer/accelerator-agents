@@ -279,7 +279,7 @@ class ValidationAgent(base.Agent):
             return ""
 
         try:
-            docs = self._rag_agent.retrieve_context(query, top_k=3)
+            docs = self._rag_agent.retrieve_context(query, top_k=15)
         except Exception:
             return ""
 

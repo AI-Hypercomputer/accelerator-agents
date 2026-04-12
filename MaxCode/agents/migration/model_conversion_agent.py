@@ -47,7 +47,7 @@ class ModelConversionAgent(base.Agent):
       The converted JAX code.
     """
     rag_context_list = self._rag_agent.retrieve_context(
-        pytorch_model_code, top_k=7
+        pytorch_model_code, top_k=15
     )
     rag_context = "\n\n".join([
         f"File: {c['file']}\n```python\n{c['text']}\n```"

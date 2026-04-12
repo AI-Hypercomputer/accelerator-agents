@@ -18,9 +18,10 @@ Usage:
 """
 
 import ast
+import fnmatch
 import os
 from collections import deque
-from config import REPO_DIR, MERGED_FILE
+from config import REPO_DIR, MERGED_FILE, MERGE_EXCLUDE_PATHS, MERGE_EXCLUDE_CLASSES
 
 
 def is_model_file(file_path):
@@ -263,6 +264,254 @@ def merge_files(file_paths, repo_dir, output_path):
     return merged
 
 
+# ---------------------------------------------------------------------------
+# Smart filtering helpers
+# ---------------------------------------------------------------------------
+
+# Infrastructure packages whose presence signals a file wraps HW-specific libs
+_INFRA_PACKAGES = {
+    "apex",
+    "transformer_engine", "te",
+    "deepspeed.pipe", "deepspeed.runtime",
+}
+
+# Base classes that are never convertible to JAX
+_INFRA_BASES = {
+    "torch.autograd.Function",
+    "autograd.Function",
+    "PipelineModule",
+    "enum.Enum",
+    "Enum",
+}
+
+
+def _base_to_str(base_node):
+    """Convert an AST base-class node to a dotted string."""
+    if isinstance(base_node, ast.Name):
+        return base_node.id
+    if isinstance(base_node, ast.Attribute):
+        parts = []
+        node = base_node
+        while isinstance(node, ast.Attribute):
+            parts.append(node.attr)
+            node = node.value
+        if isinstance(node, ast.Name):
+            parts.append(node.id)
+        return ".".join(reversed(parts))
+    return ""
+
+
+def detect_infrastructure_imports(file_path):
+    """Return set of known infrastructure package names imported by *file_path*."""
+    try:
+        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+            tree = ast.parse(f.read())
+    except SyntaxError:
+        return set()
+
+    found = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                top = alias.name.split(".")[0]
+                if alias.name in _INFRA_PACKAGES or top in _INFRA_PACKAGES:
+                    found.add(top)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                top = node.module.split(".")[0]
+                if node.module in _INFRA_PACKAGES or top in _INFRA_PACKAGES:
+                    found.add(top)
+    return found
+
+
+def _is_infra_base(base_str):
+    """Return True if *base_str* is a known infrastructure base class."""
+    if base_str in _INFRA_BASES:
+        return True
+    # te.pytorch.* (TransformerEngine wrappers)
+    if base_str.startswith("te.pytorch.") or base_str.startswith("transformer_engine.pytorch."):
+        return True
+    return False
+
+
+def classify_file_classes(file_path):
+    """Return list of class info dicts for every ClassDef in *file_path*.
+
+    Each dict has keys: name, bases (list[str]), is_infra (bool).
+    """
+    try:
+        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+            tree = ast.parse(f.read())
+    except SyntaxError:
+        return []
+
+    classes = []
+    for node in ast.iter_child_nodes(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        bases = [_base_to_str(b) for b in node.bases]
+        is_infra = bool(bases) and all(_is_infra_base(b) for b in bases)
+        classes.append({"name": node.name, "bases": bases, "is_infra": is_infra})
+    return classes
+
+
+def filter_files(model_files, repo_dir):
+    """Apply file-level filters to the raw model file list.
+
+    Returns (kept_files, [(removed_path, reason), ...]).
+    """
+    kept = []
+    removed = []
+
+    for full_path in model_files:
+        rel = os.path.relpath(full_path, repo_dir).replace("\\", "/")
+        basename = os.path.basename(full_path)
+
+        # 1. Config exclude patterns
+        excluded = False
+        for pat in MERGE_EXCLUDE_PATHS:
+            if fnmatch.fnmatch(rel, pat):
+                removed.append((full_path, f"matches exclude pattern '{pat}'"))
+                excluded = True
+                break
+        if excluded:
+            continue
+
+        # 2. Fused kernel heuristic
+        if fnmatch.fnmatch(basename, "fused_*.py"):
+            removed.append((full_path, "fused kernel file"))
+            continue
+
+        # 3. All-infrastructure file: every class is infra AND file has infra imports
+        classes = classify_file_classes(full_path)
+        infra_imports = detect_infrastructure_imports(full_path)
+        if classes and all(c["is_infra"] for c in classes) and infra_imports:
+            pkg_names = ", ".join(sorted(infra_imports))
+            removed.append((full_path, f"all classes are {pkg_names} wrappers"))
+            continue
+
+        kept.append(full_path)
+
+    return kept, removed
+
+
+def should_exclude_class(node, exclude_patterns):
+    """Check if a ClassDef *node* should be excluded from the merged output.
+
+    Returns (should_exclude: bool, reason: str).
+    """
+    bases = [_base_to_str(b) for b in node.bases]
+
+    # 1. Config class-name patterns
+    for pat in exclude_patterns:
+        if fnmatch.fnmatch(node.name, pat):
+            return True, f"matches exclude pattern '{pat}'"
+
+    # 2. autograd.Function subclass
+    for b in bases:
+        if b in ("torch.autograd.Function", "autograd.Function"):
+            return True, "autograd.Function subclass"
+
+    # 3. PipelineModule subclass
+    if "PipelineModule" in bases:
+        return True, "PipelineModule subclass"
+
+    # 4. TransformerEngine wrapper
+    for b in bases:
+        if b.startswith("te.pytorch.") or b.startswith("transformer_engine.pytorch."):
+            return True, "TransformerEngine wrapper"
+
+    # 5. Pipeline wrapper convention (name ends with Pipe)
+    if node.name.endswith("Pipe"):
+        return True, "pipeline wrapper -- name ends with Pipe"
+
+    # 6. enum.Enum subclass
+    for b in bases:
+        if b in ("enum.Enum", "Enum"):
+            return True, "enum.Enum subclass"
+
+    return False, ""
+
+
+def filter_classes_from_code(code, exclude_patterns):
+    """Remove infrastructure classes from merged source code.
+
+    Uses line-range deletion to preserve formatting and comments.
+    Returns (filtered_code, [(class_name, reason), ...]).
+    """
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as e:
+        print(f"    WARNING: merged code has syntax error (line {e.lineno}), "
+              "skipping class filtering")
+        return code, []
+
+    lines = code.split("\n")
+    # Collect line ranges to remove (1-indexed, inclusive)
+    ranges_to_remove = []
+    removed_classes = []
+
+    top_level_nodes = list(ast.iter_child_nodes(tree))
+    for i, node in enumerate(top_level_nodes):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        exclude, reason = should_exclude_class(node, exclude_patterns)
+        if not exclude:
+            continue
+
+        start = node.lineno  # 1-indexed
+        end = node.end_lineno  # 1-indexed, inclusive
+
+        # Extend to include decorator lines above the class
+        if node.decorator_list:
+            start = min(d.lineno for d in node.decorator_list)
+
+        # Extend to include blank lines between this class and the next node
+        # (so we don't leave big gaps)
+        next_start = None
+        for j in range(i + 1, len(top_level_nodes)):
+            nxt = top_level_nodes[j]
+            if hasattr(nxt, "lineno"):
+                next_start = nxt.lineno
+                break
+        if next_start is not None:
+            # Remove trailing blank lines up to the next node
+            while end + 1 < next_start and lines[end].strip() == "":
+                end += 1
+
+        ranges_to_remove.append((start, end))
+        removed_classes.append((node.name, reason))
+
+    if not ranges_to_remove:
+        return code, []
+
+    # Build set of lines to remove (convert to 0-indexed)
+    remove_set = set()
+    for start, end in ranges_to_remove:
+        for ln in range(start - 1, end):  # start-1 because lines list is 0-indexed
+            remove_set.add(ln)
+
+    filtered_lines = [line for idx, line in enumerate(lines) if idx not in remove_set]
+    return "\n".join(filtered_lines), removed_classes
+
+
+def _count_module_classes(code):
+    """Count nn.Module subclasses in source code."""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return -1  # signal parse failure
+    count = 0
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            for base in node.bases:
+                base_str = _base_to_str(base)
+                if base_str in ("nn.Module", "Module") or base_str.endswith(".Module"):
+                    count += 1
+                    break
+    return count
+
+
 def main():
     if not os.path.isdir(REPO_DIR):
         print("ERROR: Repository not found. Run step1_clone_repo.py first.")
@@ -286,18 +535,29 @@ def main():
 
     # Detect model files
     model_files = find_model_files(REPO_DIR)
+    print(f"  Detected {len(model_files)} files containing nn.Module classes")
+    print()
 
-    print("  All model files detected (contain nn.Module):")
+    # --- File-level filtering (BEFORE import graph) ---
+    print("  Filtering files...")
+    model_files, removed_files = filter_files(model_files, REPO_DIR)
+
+    for full_path, reason in removed_files:
+        rel = os.path.relpath(full_path, REPO_DIR)
+        print(f"    SKIP  {rel:<45s} ({reason})")
     for full_path in model_files:
         rel = os.path.relpath(full_path, REPO_DIR)
-        lines = sum(1 for _ in open(full_path, encoding="utf-8"))
-        print(f"    {rel} ({lines} lines)")
+        print(f"    KEEP  {rel}")
 
-    skipped = len(all_py) - len(model_files)
-    print(f"\n  Skipped {skipped} non-model files (datasets, training, utils, etc.)")
+    if removed_files:
+        print(f"  Filtered: {len(removed_files)} files removed, "
+              f"{len(model_files)} files remaining")
+    else:
+        print("  Filtered: no files removed")
+    print()
 
     # Build import graph and filter to transitively-imported files only
-    print("\n  Building import graph...")
+    print("  Building import graph...")
     graph = build_import_graph(model_files, REPO_DIR)
 
     for src, deps in sorted(graph.items(), key=lambda x: x[0]):
@@ -336,7 +596,32 @@ def main():
     print(f"\n  Merging into: {MERGED_FILE}")
     merged = merge_files(required, REPO_DIR, MERGED_FILE)
     merged_lines = merged.count("\n") + 1
-    print(f"  Merged file: {merged_lines} lines, {len(merged)} chars")
+    print(f"  Merged file: {merged_lines} lines")
+
+    # --- Class-level filtering (AFTER merge) ---
+    print("\n  Filtering infrastructure classes from merged code...")
+    filtered, removed_classes = filter_classes_from_code(merged, MERGE_EXCLUDE_CLASSES)
+
+    if removed_classes:
+        for cls_name, reason in removed_classes:
+            print(f"    SKIP  {cls_name:<40s} ({reason})")
+        print(f"  Filtered: {len(removed_classes)} classes removed")
+
+        # Write filtered output
+        with open(MERGED_FILE, "w", encoding="utf-8") as f:
+            f.write(filtered)
+        merged = filtered
+    else:
+        print("    (no infrastructure classes found)")
+
+    final_lines = merged.count("\n") + 1
+    final_modules = _count_module_classes(merged)
+    if final_modules >= 0:
+        print(f"\n  Final merged file: {final_lines} lines, "
+              f"{final_modules} nn.Module classes")
+    else:
+        print(f"\n  Final merged file: {final_lines} lines "
+              "(nn.Module count unavailable -- syntax error in merged code)")
 
     print("\nStep 3 complete.")
 

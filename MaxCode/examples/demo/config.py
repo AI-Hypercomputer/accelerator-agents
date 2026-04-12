@@ -44,6 +44,18 @@ MERGED_FILE = os.path.join(SCRIPT_DIR, "merged_model.py")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output")
 RAG_SOURCE_DIR = os.path.join(MAXCODE_DIR, "rag", "sources")
 
+# ---------------------------------------------------------------------------
+# Merge filtering (step3)
+# ---------------------------------------------------------------------------
+
+# Glob patterns (relative to repo root) for files to exclude from merge.
+# Example: ["megatron/model/fused_*.py", "megatron/model/mamba/*"]
+MERGE_EXCLUDE_PATHS = []
+
+# Class name patterns to exclude from merged output.
+# Supports '*' wildcard.  Example: ["*Pipe", "ColumnParallelLinear"]
+MERGE_EXCLUDE_CLASSES = []
+
 
 def setup():
     """Common setup: add MaxCode to sys.path and ensure HOME is set."""

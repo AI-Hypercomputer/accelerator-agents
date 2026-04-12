@@ -26,7 +26,7 @@ import json
 import os
 import sys
 
-from config import MERGED_FILE, OUTPUT_DIR, setup
+from config import MERGED_FILE, OUTPUT_DIR, REPO_URL, setup
 
 # Standard PyTorch -> JAX/Flax method renames.
 # When a source method is renamed to its JAX equivalent, it counts as matched.
@@ -321,9 +321,20 @@ def print_scorecard(completeness, correctness=None):
 # ------------------------------------------------------------------
 
 def _find_jax_output():
-    """Return the path to the JAX output file inside OUTPUT_DIR."""
+    """Return the path to the JAX output file inside OUTPUT_DIR.
+
+    Looks for <repo_name>_jax.py first (matching step4's output name).
+    Falls back to the first *_jax.py file found.
+    """
     if not os.path.isdir(OUTPUT_DIR):
         return None
+    # Prefer the file matching the current repo
+    repo_name = REPO_URL.rstrip("/").rsplit("/", 1)[-1].replace("-", "_")
+    expected = f"{repo_name}_jax.py"
+    expected_path = os.path.join(OUTPUT_DIR, expected)
+    if os.path.isfile(expected_path):
+        return expected_path
+    # Fallback: first *_jax.py found
     for name in os.listdir(OUTPUT_DIR):
         if name.endswith("_jax.py"):
             return os.path.join(OUTPUT_DIR, name)

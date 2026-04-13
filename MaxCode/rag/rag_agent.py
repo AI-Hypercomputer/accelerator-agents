@@ -170,11 +170,11 @@ class RAGAgent(base.Agent):
       top_k_per_component: int = 3,
       max_total: int = 15,
   ) -> List[Dict[str, Any]]:
-    """Retrieves RAG context with per-component queries for better relevance.
+    """Retrieves RAG context using a hybrid full-file + per-component strategy.
 
-    Instead of embedding the entire source as one query (which dilutes the
-    embedding), this extracts each top-level class/function, builds a
-    focused query string, and retrieves targeted results.
+    Combines broad domain context from the full source code query with
+    targeted results from per-component queries. This ensures the LLM gets
+    both the overall architectural patterns AND component-specific examples.
 
     Args:
       source_code: The full Python source code to retrieve context for.
@@ -191,6 +191,12 @@ class RAGAgent(base.Agent):
       logger.info("Per-component extraction failed, falling back to single query")
       return self.retrieve_context(source_code, top_k=max_total)
 
+    # Start with full-file query for broad domain context
+    best_by_file: Dict[str, Dict[str, Any]] = {}
+    full_results = self.retrieve_context(source_code, top_k=max_total)
+    for doc in full_results:
+      best_by_file[doc["file"]] = doc
+
     # If >12 components, batch into groups of 3-4 to cap embedding calls
     if len(signatures) > 12:
       batched = []
@@ -200,11 +206,10 @@ class RAGAgent(base.Agent):
     else:
       queries = signatures
 
-    logger.info("Per-component RAG: %d queries from %d components",
+    logger.info("Per-component RAG: %d queries from %d components (+ full-file)",
                 len(queries), len(signatures))
 
-    # Collect results, deduplicate by file path (keep best distance)
-    best_by_file: Dict[str, Dict[str, Any]] = {}
+    # Add per-component results, keeping best distance per file
     for query in queries:
       results = self.retrieve_context(query, top_k=top_k_per_component)
       for doc in results:

@@ -1,5 +1,7 @@
 """Tool for performing retrieval augmented generation."""
 
+import ast
+import logging
 import os
 import sqlite3
 from typing import Any, Dict, List
@@ -11,6 +13,8 @@ from rag import prompts
 from rag import vector_db
 import numpy as np
 
+logger = logging.getLogger(__name__)
+
 
 # We use a hardcoded character limit for the full code context to avoid
 # exceeding the model's token limit. While the Gemini API does not provide a
@@ -18,6 +22,50 @@ import numpy as np
 # (roughly 5000-7000 tokens) is a safe limit for models with 32k token limits,
 # when considering that the prompt sends file content in two fields.
 _MAX_CONTEXT_LENGTH = 100_000
+
+
+def _extract_component_signatures(code: str) -> list[str]:
+  """Extracts focused query strings per top-level class/function using AST.
+
+  For classes: "JAX Flax {ClassName} {base_classes} {method_names} {init_params}"
+  For functions: "JAX Flax {func_name} {param_names}"
+
+  Args:
+    code: Python source code to parse.
+
+  Returns:
+    A list of query strings, one per top-level component.
+  """
+  try:
+    tree = ast.parse(code)
+  except SyntaxError:
+    return []
+
+  signatures = []
+  for node in ast.iter_child_nodes(tree):
+    if isinstance(node, ast.ClassDef):
+      bases = [
+          ast.unparse(b) if hasattr(ast, "unparse") else getattr(b, "id", "")
+          for b in node.bases
+      ]
+      methods = [
+          n.name for n in ast.iter_child_nodes(node)
+          if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+      ]
+      init_params = []
+      for n in ast.iter_child_nodes(node):
+        if isinstance(n, ast.FunctionDef) and n.name == "__init__":
+          init_params = [
+              a.arg for a in n.args.args if a.arg != "self"
+          ]
+          break
+      parts = ["JAX Flax", node.name] + bases + methods + init_params
+      signatures.append(" ".join(parts))
+    elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+      params = [a.arg for a in node.args.args if a.arg != "self"]
+      parts = ["JAX Flax", node.name] + params
+      signatures.append(" ".join(parts))
+  return signatures
 
 
 class RAGAgent(base.Agent):
@@ -115,6 +163,58 @@ class RAGAgent(base.Agent):
           "distance": distance,
       })
     return retrieved_context
+
+  def retrieve_per_component_context(
+      self,
+      source_code: str,
+      top_k_per_component: int = 3,
+      max_total: int = 15,
+  ) -> List[Dict[str, Any]]:
+    """Retrieves RAG context with per-component queries for better relevance.
+
+    Instead of embedding the entire source as one query (which dilutes the
+    embedding), this extracts each top-level class/function, builds a
+    focused query string, and retrieves targeted results.
+
+    Args:
+      source_code: The full Python source code to retrieve context for.
+      top_k_per_component: Number of results per component query.
+      max_total: Maximum total results to return after deduplication.
+
+    Returns:
+      A deduplicated, distance-sorted list of retrieved documents.
+    """
+    signatures = _extract_component_signatures(source_code)
+
+    # Fall back to single-query if AST parsing yielded nothing
+    if not signatures:
+      logger.info("Per-component extraction failed, falling back to single query")
+      return self.retrieve_context(source_code, top_k=max_total)
+
+    # If >12 components, batch into groups of 3-4 to cap embedding calls
+    if len(signatures) > 12:
+      batched = []
+      for i in range(0, len(signatures), 4):
+        batched.append(" ".join(signatures[i:i + 4]))
+      queries = batched
+    else:
+      queries = signatures
+
+    logger.info("Per-component RAG: %d queries from %d components",
+                len(queries), len(signatures))
+
+    # Collect results, deduplicate by file path (keep best distance)
+    best_by_file: Dict[str, Dict[str, Any]] = {}
+    for query in queries:
+      results = self.retrieve_context(query, top_k=top_k_per_component)
+      for doc in results:
+        fpath = doc["file"]
+        if fpath not in best_by_file or doc["distance"] < best_by_file[fpath]["distance"]:
+          best_by_file[fpath] = doc
+
+    # Sort by distance, truncate to max_total
+    sorted_docs = sorted(best_by_file.values(), key=lambda d: d["distance"])
+    return sorted_docs[:max_total]
 
   def run(self, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
     """Runs RAG to retrieve context for a query."""

@@ -138,6 +138,10 @@ def _strip_markdown_formatting(text: str) -> str:
     code_block_match = _CODE_BLOCK_PATTERN.search(text)
     if code_block_match:
         return code_block_match.group(1).strip()
+    # Strip triple-quote wrappers the LLM may use instead of backticks.
+    stripped = text.strip()
+    if stripped.startswith('"""') and stripped.endswith('"""'):
+        return stripped[3:-3].strip()
     return text
 
 
@@ -244,6 +248,8 @@ class ValidationAgent(base.Agent):
             block = f"### Deviation {i} [{severity}] - {category}\n"
             block += f"Source (PyTorch):   {source}\n"
             block += f"Find in JAX:        {output}\n"
+            if output == "MISSING":
+                block += f"Source to convert:  {source}\n"
             if corrected and corrected not in ("ADD", "MISSING"):
                 block += f"Replace with:       {corrected}\n"
             block += f"Instruction:        {fix}"

@@ -187,8 +187,24 @@ FALSE_POSITIVE_RULES = {
 }
 
 
-def compute_correctness(source_code, output_code, api_key):
+def compute_correctness(source_code, output_code, api_key, total_components=0):
     """Run ValidationAgent and score the output.
+
+    The score is ratio-based: penalty is normalized against the total number
+    of source components so that larger codebases aren't penalized unfairly.
+
+        score = max(0, (1 - penalty / budget) * 100)
+
+    where budget = total_components * medium_severity_weight.  This makes the
+    score symmetric with the completeness metric (both are ratios).
+
+    Args:
+        source_code: The PyTorch source code.
+        output_code: The converted JAX output code.
+        api_key: Google API key for the LLM.
+        total_components: Number of source components (classes + methods +
+            functions) from the completeness check.  If 0, falls back to
+            counting top-level classes and functions from source_code via AST.
 
     Returns:
         dict with keys:
@@ -233,10 +249,29 @@ def compute_correctness(source_code, output_code, api_key):
         by_category[cat] = by_category.get(cat, 0) + 1
         penalty += SEVERITY_WEIGHTS.get(sev, 1)
 
-    score = max(0.0, 100.0 - penalty)
+    # Fallback: count top-level classes + functions from source AST
+    if total_components <= 0:
+        try:
+            tree = ast.parse(source_code)
+            total_components = sum(
+                1 for n in ast.iter_child_nodes(tree)
+                if isinstance(n, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+            )
+        except SyntaxError:
+            total_components = 0
+
+    # Ratio-based scoring: budget scales with codebase size.
+    # Each component contributes a "correctness budget" equal to the medium
+    # severity weight.  A medium-severity deviation on every component = 0%.
+    budget = total_components * SEVERITY_WEIGHTS["medium"]
+    if budget > 0:
+        score = max(0.0, (1.0 - penalty / budget) * 100.0)
+    else:
+        score = 100.0 if penalty == 0 else 0.0
 
     return {
         "score": round(score, 1),
+        "deviation_count": len(real),
         "deviations": real,
         "filtered_deviations": filtered,
         "by_category": by_category,
@@ -374,7 +409,10 @@ def main():
             source_code = f.read()
         with open(jax_path, "r", encoding="utf-8") as f:
             output_code = f.read()
-        correctness = compute_correctness(source_code, output_code, api_key)
+        correctness = compute_correctness(
+            source_code, output_code, api_key,
+            total_components=completeness["total"],
+        )
     else:
         print("\n  GOOGLE_API_KEY not set -- skipping correctness check.")
 

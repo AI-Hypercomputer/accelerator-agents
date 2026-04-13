@@ -26,8 +26,16 @@ def _strip_markdown_formatting(text: str) -> str:
   code_block_match = re.search(r"```(?:python)?\n?(.*?)\n?```", text, re.DOTALL)
   if code_block_match:
     return code_block_match.group(1).strip()
-  # Strip triple-quote wrappers the LLM may use instead of backticks.
+  # Handle truncated responses: opening ``` present but closing ``` missing
   stripped = text.strip()
+  if stripped.startswith("```"):
+    first_nl = stripped.find("\n")
+    if first_nl != -1:
+      stripped = stripped[first_nl + 1:]
+    if stripped.endswith("```"):
+      stripped = stripped[:-3]
+    return stripped.strip()
+  # Strip triple-quote wrappers the LLM may use instead of backticks.
   if stripped.startswith('"""') and stripped.endswith('"""'):
     return stripped[3:-3].strip()
   return text
@@ -334,9 +342,13 @@ class PrimaryAgent(base.Agent):
     response = self.generate(prompt)
     repaired = _strip_markdown_formatting(response)
 
-    # Only accept if result is a reasonable-length complete file
+    # Only accept if result is a reasonable-length complete file that parses
     if repaired and len(repaired.strip()) > len(jax_code) * 0.5:
-      return repaired
+      try:
+        ast.parse(repaired)
+        return repaired
+      except SyntaxError:
+        logger.warning("Stub-filled code has syntax errors, keeping original")
     return jax_code
 
   def _execute_test(

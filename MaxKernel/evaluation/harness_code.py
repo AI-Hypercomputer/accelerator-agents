@@ -9,6 +9,7 @@ import importlib
 import importlib.util
 import os
 import traceback
+import xprof_utils
 
 
 def load_module_from_path(module_name, file_path):
@@ -20,14 +21,47 @@ def load_module_from_path(module_name, file_path):
   return module
 
 
-def benchmark(func, args, static_argnums, num_runs=20, num_warmups=5):
+def benchmark(func, args, static_argnums, trace_dir=None, num_runs=20, num_warmups=5):
   # 1. Identify dynamic args for the compiled function call.
   dynamic_args = tuple(
       arg for i, arg in enumerate(args) if i not in static_argnums)
 
+  def benchmark_func(*f_args):
+    with jax.named_scope('benchmark_func'):
+      res = func(*f_args)
+      return jax.block_until_ready(res)
+
   # 2. Compile the function to an executable to eliminate dispatch overhead.
-  compiled_func = jax.jit(func,
-                          static_argnums=static_argnums).lower(*args).compile()
+  # Attempt to use proper sharding if available
+  try:
+    from jax.experimental import layout as jax_layout
+    in_shardings = jax_layout.Format(jax_layout.Layout.AUTO)
+    out_shardings = jax_layout.Format(jax_layout.Layout.AUTO)
+    compiled_func = jax.jit(
+        benchmark_func,
+        static_argnums=static_argnums,
+        in_shardings=in_shardings,
+        out_shardings=out_shardings
+    ).lower(*args).compile()
+
+    # Layout Alignment Trick
+    if hasattr(compiled_func, 'input_formats'):
+      arg_formats, _ = compiled_func.input_formats
+      
+      @jax.jit
+      def enforce_layout(*xs):
+        return xs
+        
+      # Compile helper with desired output formats
+      enforce_layout_compiled = jax.jit(
+        enforce_layout,
+        out_shardings=arg_formats
+      ).lower(*dynamic_args).compile()
+      
+      # Apply alignment
+      dynamic_args = enforce_layout_compiled(*dynamic_args)
+  except ImportError:
+    compiled_func = jax.jit(benchmark_func, static_argnums=static_argnums).lower(*args).compile()
 
   # 3. Warm up
   for _ in range(num_warmups):
@@ -35,13 +69,33 @@ def benchmark(func, args, static_argnums, num_runs=20, num_warmups=5):
   jax.block_until_ready(res)
 
   # 4. Benchmark
-  start = time.perf_counter()
-  for _ in range(num_runs):
-    res = compiled_func(*dynamic_args)
-  jax.block_until_ready(res)
-  end = time.perf_counter()
+  def run_wall_time():
+    start = time.perf_counter()
+    for _ in range(num_runs):
+      res = compiled_func(*dynamic_args)
+    jax.block_until_ready(res)
+    end = time.perf_counter()
+    return (end - start) / num_runs
+  
+  def run_xprof():
+    with jax.profiler.trace(trace_dir):
+      for _ in range(num_runs):
+        res = compiled_func(*dynamic_args)
+        jax.block_until_ready(res)
+        # Inject dummy op to separate trace events
+        jnp.sum(jax.random.normal(jax.random.key(0), (128, 128), jnp.float32)).block_until_ready()
 
-  return (end - start) / num_runs
+  avg_wall_time = run_wall_time()
+
+  xprof_time = 0.0
+  if trace_dir:
+    run_xprof()
+    try:
+      xprof_time = xprof_utils.extract_xprof_time(trace_dir, 'benchmark_func')
+    except Exception as e:
+      raise RuntimeError(f"Failed to extract xprof time: {e}")
+
+  return avg_wall_time, xprof_time
 
 
 def main():
@@ -57,16 +111,14 @@ def main():
     input_gen_code = task_data.get("input_gen_code")
 
     if input_gen_code:
-      exec_globals = {"jax": jax, "jnp": jnp, "__builtins__": __builtins__}
       ldict = {}
       try:
-        exec(input_gen_code, exec_globals, ldict)
+        exec(input_gen_code, globals(), ldict)
       except Exception as e:
         raise RuntimeError(f"Failed to execute input_gen_code: {e}")
 
       if "get_inputs" not in ldict:
         raise RuntimeError("input_gen_code must define get_inputs()")
-      dynamic_args, static_args = ldict["get_inputs"]()
 
       try:
         inputs = ldict["get_inputs"]()
@@ -128,9 +180,8 @@ def main():
         json.dump(result, f)
       return
 
-    # 2. Speed Benchmark
-    time_base = benchmark(base_mod.computation, args, static_argnums)
-    time_optimized = benchmark(optimized_mod.computation, args, static_argnums)
+    time_base, xprof_time_base = benchmark(base_mod.computation, args, static_argnums, trace_dir="trace_base")
+    time_optimized, xprof_time_optimized = benchmark(optimized_mod.computation, args, static_argnums, trace_dir="trace_opt")
 
     result = {
         "compiled_successfully": True,
@@ -139,6 +190,8 @@ def main():
         "max_rel_diff": max_rel_diff,
         "reference_time_ms": time_base * 1000,
         "optimized_time_ms": time_optimized * 1000,
+        "xprof_reference_time_ms": xprof_time_base,
+        "xprof_optimized_time_ms": xprof_time_optimized,
     }
     with open("result.json", "w", encoding="utf-8") as f:
       json.dump(result, f)

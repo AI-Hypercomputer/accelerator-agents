@@ -76,6 +76,8 @@ class TestJAXKernelEvaluator(unittest.TestCase):
       "numerically_correct": True,
       "reference_time_ms": 10.0,
       "optimized_time_ms": 5.0,
+      "xprof_reference_time_ms": 8.0,
+      "xprof_optimized_time_ms": 4.0,
     }
 
     with patch("builtins.open", mock_open(read_data=json.dumps(result_data))):
@@ -88,6 +90,8 @@ class TestJAXKernelEvaluator(unittest.TestCase):
     self.assertTrue(result.compiled_successfully)
     self.assertTrue(result.numerically_correct)
     self.assertEqual(result.speedup, 2.0)
+    self.assertEqual(result.xprof_reference_time_ms, 8.0)
+    self.assertEqual(result.xprof_optimized_time_ms, 4.0)
     mock_subproc.assert_called_once()
     mock_shutil.rmtree.assert_called_once_with("/fake/dir", ignore_errors=True)
 
@@ -172,7 +176,7 @@ class TestJAXKernelEvaluator(unittest.TestCase):
     mock_client_instance.tpu_name = "test-tpu"
 
     mock_cat_result = MagicMock()
-    mock_cat_result.stdout = '{"compiled_successfully": true, "numerically_correct": true, "reference_time_ms": 15.0, "optimized_time_ms": 10.0}'
+    mock_cat_result.stdout = '{"compiled_successfully": true, "numerically_correct": true, "reference_time_ms": 15.0, "optimized_time_ms": 10.0, "xprof_reference_time_ms": 12.0, "xprof_optimized_time_ms": 8.0}'
     mock_client_instance.execute_ssh_command.side_effect = [
       MagicMock(),  # mkdir
       MagicMock(),  # run script
@@ -203,6 +207,8 @@ class TestJAXKernelEvaluator(unittest.TestCase):
     self.assertTrue(result.compiled_successfully)
     self.assertTrue(result.numerically_correct)
     self.assertEqual(result.speedup, 1.5)
+    self.assertEqual(result.xprof_reference_time_ms, 12.0)
+    self.assertEqual(result.xprof_optimized_time_ms, 8.0)
     self.assertEqual(mock_client_instance.execute_ssh_command.call_count, 4)
     mock_client_instance.upload_file.assert_called()
 
@@ -237,7 +243,7 @@ class TestJAXKernelEvaluator(unittest.TestCase):
     with (
       patch.object(evaluator, "_build_task_json"),
       patch.object(evaluator, "_build_harness_code"),
-      patch("jax_kernel_evaluator.time.sleep"),
+      patch("evaluation.jax_kernel_evaluator.time.sleep"),
     ):  # Mock sleep to avoid delay
       result = evaluator._evaluate_remote("ref.py", "opt.py", "task.yaml")
 

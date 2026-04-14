@@ -11,6 +11,8 @@ class EvaluationResult:
   max_rel_diff: Optional[float] = None
   reference_time_ms: float = 0.0
   optimized_time_ms: float = 0.0
+  xprof_reference_time_ms: float = 0.0
+  xprof_optimized_time_ms: float = 0.0
   error_trace: Optional[str] = None
 
   @property

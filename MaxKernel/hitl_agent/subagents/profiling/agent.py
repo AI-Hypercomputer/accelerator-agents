@@ -82,8 +82,8 @@ summarize_profile_agent = CustomLlmAgent(
     offline_tools.get_hlo_dump,
     offline_tools.create_chart_from_xplane,
     offline_tools.get_overview_page_metrics,
-    vertex_ai_rag_tool,
-  ],
+  ]
+  + ([vertex_ai_rag_tool] if vertex_ai_rag_tool else []),
 )
 
 # Main profiling orchestrator agent

@@ -27,7 +27,7 @@ from config import REPO_DIR, MERGED_FILE, MERGE_EXCLUDE_PATHS, MERGE_EXCLUDE_CLA
 def is_model_file(file_path):
     """Detect if a Python file defines any nn.Module subclass."""
     try:
-        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+        with open(file_path, "r", encoding="utf-8-sig", errors="replace") as f:
             code = f.read()
         tree = ast.parse(code)
     except SyntaxError:
@@ -64,7 +64,7 @@ def get_local_imports(file_path, repo_dir):
     actually exist under repo_dir.
     """
     try:
-        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+        with open(file_path, "r", encoding="utf-8-sig", errors="replace") as f:
             code = f.read()
         tree = ast.parse(code)
     except SyntaxError:
@@ -262,7 +262,7 @@ def merge_files(file_paths, repo_dir, output_path):
 
     for full_path in file_paths:
         rel = os.path.relpath(full_path, repo_dir)
-        with open(full_path, "r", encoding="utf-8") as f:
+        with open(full_path, "r", encoding="utf-8-sig") as f:
             content = f.read()
 
         section_lines = []
@@ -363,7 +363,7 @@ def _base_to_str(base_node):
 def detect_infrastructure_imports(file_path):
     """Return set of known infrastructure package names imported by *file_path*."""
     try:
-        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+        with open(file_path, "r", encoding="utf-8-sig", errors="replace") as f:
             tree = ast.parse(f.read())
     except SyntaxError:
         return set()
@@ -399,7 +399,7 @@ def classify_file_classes(file_path):
     Each dict has keys: name, bases (list[str]), is_infra (bool).
     """
     try:
-        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+        with open(file_path, "r", encoding="utf-8-sig", errors="replace") as f:
             tree = ast.parse(f.read())
     except SyntaxError:
         return []
@@ -647,7 +647,7 @@ def main():
     total_lines = 0
     for f in required:
         rel = os.path.relpath(f, REPO_DIR)
-        lines = sum(1 for _ in open(f, encoding="utf-8"))
+        lines = sum(1 for _ in open(f, encoding="utf-8-sig"))
         total_lines += lines
         print(f"    {rel} ({lines} lines)")
 

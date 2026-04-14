@@ -21,6 +21,24 @@ pollute the routing statistics and destabilize MoE training.
     # the mean, which dilutes the expert frequency statistics. In batched
     # inference with variable-length sequences, this makes the loss meaningless.
 
+## WRONG: Collapsing the top_k dimension with axis=(0, 1)
+
+    # expert_mask shape: [num_tokens, top_k, num_experts]
+    # PyTorch source: torch.mean(expert_mask.float(), dim=0)
+    #   -> result shape: [top_k, num_experts]
+
+    # WRONG! axis=(0, 1) reduces BOTH token AND top_k dimensions.
+    # Result shape becomes [num_experts] instead of [top_k, num_experts].
+    tokens_per_expert = jnp.mean(expert_mask, axis=(0, 1))  # WRONG SHAPE!
+
+    # WRONG! Flattening before reducing also collapses top_k.
+    expert_mask_flat = expert_mask.reshape(-1, num_experts)
+    tokens_per_expert = jnp.mean(expert_mask_flat, axis=0)  # WRONG SHAPE!
+
+    # WHY THIS IS WRONG: PyTorch dim=0 reduces ONLY the first dimension.
+    # The top_k dimension must be preserved. Collapsing it changes the loss
+    # value and breaks expert routing during training.
+
 ## CORRECT: With attention_mask support
 
     def load_balancing_loss(

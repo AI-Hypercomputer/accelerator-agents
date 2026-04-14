@@ -26,7 +26,7 @@ import json
 import os
 import sys
 
-from config import MERGED_FILE, OUTPUT_DIR, REPO_URL, setup
+from config import MERGED_FILE, MERGED_UTILS_FILE, OUTPUT_DIR, REPO_URL, setup
 
 # Standard PyTorch -> JAX/Flax method renames.
 # When a source method is renamed to its JAX equivalent, it counts as matched.
@@ -419,6 +419,43 @@ def main():
     # -- Print scorecard --
     overall = print_scorecard(completeness, correctness)
 
+    # -- Utility file verification --
+    utils_completeness = None
+    repo_name = REPO_URL.rstrip("/").rsplit("/", 1)[-1].replace("-", "_")
+    utils_jax_path = os.path.join(OUTPUT_DIR, f"{repo_name}_utils_jax.py")
+
+    if os.path.isfile(MERGED_UTILS_FILE) and os.path.isfile(utils_jax_path):
+        print()
+        print("-" * 50)
+        print("  Utility File Verification")
+        print("-" * 50)
+        print(f"  Source: {MERGED_UTILS_FILE}")
+        print(f"  Output: {utils_jax_path}")
+
+        utils_src = extract_components(MERGED_UTILS_FILE)
+        utils_out = extract_components(utils_jax_path)
+        utils_completeness = compute_completeness(utils_src, utils_out)
+
+        u = utils_completeness
+        print(f"\n  Utility Completeness: {u['score']:.1f}%  "
+              f"({u['found']}/{u['total']} components)")
+        print(f"    Classes:    {u['classes']['found']}/{u['classes']['total']}", end="")
+        if u["classes"]["missing"]:
+            print(f"  (missing: {', '.join(u['classes']['missing'])})", end="")
+        print()
+        print(f"    Functions:  {u['functions']['found']}/{u['functions']['total']}", end="")
+        if u["functions"]["missing"]:
+            shown = u["functions"]["missing"][:5]
+            extra = len(u["functions"]["missing"]) - len(shown)
+            print(f"  (missing: {', '.join(shown)}", end="")
+            if extra > 0:
+                print(f" +{extra} more", end="")
+            print(")", end="")
+        print()
+    elif os.path.isfile(MERGED_UTILS_FILE):
+        print("\n  Utility JAX output not found -- skipping utility verification.")
+    # (if no MERGED_UTILS_FILE, utilities were not discovered -- nothing to verify)
+
     # -- Save JSON --
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     result = {
@@ -436,6 +473,8 @@ def main():
             "deviations": correctness["deviations"],
             "filtered_deviations": correctness.get("filtered_deviations", []),
         }
+    if utils_completeness is not None:
+        result["utils_completeness"] = utils_completeness
 
     json_path = os.path.join(OUTPUT_DIR, "verification_scorecard.json")
     with open(json_path, "w", encoding="utf-8") as f:

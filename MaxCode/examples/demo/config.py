@@ -41,6 +41,7 @@ REPO_DIR = os.path.join(SCRIPT_DIR, REPO_URL.rstrip("/").rsplit("/", 1)[-1])
 # Output and RAG paths
 # ---------------------------------------------------------------------------
 MERGED_FILE = os.path.join(SCRIPT_DIR, "merged_model.py")
+MERGED_UTILS_FILE = os.path.join(SCRIPT_DIR, "merged_utils.py")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output")
 RAG_SOURCE_DIR = os.path.join(MAXCODE_DIR, "rag", "sources")
 
@@ -55,6 +56,14 @@ MERGE_EXCLUDE_PATHS = []
 # Class name patterns to exclude from merged output.
 # Supports '*' wildcard.  Example: ["*Pipe", "ColumnParallelLinear"]
 MERGE_EXCLUDE_CLASSES = []
+
+# Glob patterns for files to exclude from utility merge.
+MERGE_EXCLUDE_UTILS = [
+    "setup.py",
+    "**/test_*.py",
+    "**/tests/**",
+    "**/*_test.py",
+]
 
 
 def setup():

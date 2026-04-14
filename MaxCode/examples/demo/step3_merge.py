@@ -21,7 +21,10 @@ import ast
 import fnmatch
 import os
 from collections import deque
-from config import REPO_DIR, MERGED_FILE, MERGE_EXCLUDE_PATHS, MERGE_EXCLUDE_CLASSES
+from config import (
+    REPO_DIR, MERGED_FILE, MERGED_UTILS_FILE,
+    MERGE_EXCLUDE_PATHS, MERGE_EXCLUDE_CLASSES, MERGE_EXCLUDE_UTILS,
+)
 
 
 def is_model_file(file_path):
@@ -571,6 +574,157 @@ def _count_module_classes(code):
     return count
 
 
+# ---------------------------------------------------------------------------
+# Utility file discovery and merging
+# ---------------------------------------------------------------------------
+
+def find_all_local_dependencies(model_files, repo_dir):
+    """BFS from model files through ALL local imports (not just model files).
+
+    Returns the set of utility files (local .py files that are transitively
+    imported by model files but are NOT themselves model files).
+    """
+    model_set = set(os.path.normpath(f) for f in model_files)
+    visited = set(model_set)
+    queue = deque(model_set)
+
+    while queue:
+        current = queue.popleft()
+        for dep in get_local_imports(current, repo_dir):
+            dep_norm = os.path.normpath(dep)
+            if dep_norm not in visited:
+                visited.add(dep_norm)
+                queue.append(dep_norm)
+
+    # Return only the non-model files
+    return visited - model_set
+
+
+def classify_utility_file(file_path, repo_dir):
+    """Classify a utility file into a category.
+
+    Returns one of:
+      - "init_reexport": __init__.py that only has imports — skip
+      - "cuda_kernel": uses load()/load_inline() with .cu/.cpp refs — skip
+      - "torch_autograd": has autograd.Function — keep (Python fallback)
+      - "torch_utility": imports torch — keep
+      - "pure_python": no torch dependency — keep
+    """
+    basename = os.path.basename(file_path)
+    try:
+        with open(file_path, "r", encoding="utf-8-sig", errors="replace") as f:
+            code = f.read()
+        tree = ast.parse(code)
+    except SyntaxError:
+        return "pure_python"
+
+    # Check if __init__.py with only imports/assignments (re-export)
+    if basename == "__init__.py":
+        body_types = set(type(n).__name__ for n in ast.iter_child_nodes(tree))
+        # Only imports, assignments, and expressions (docstrings)
+        reexport_types = {"Import", "ImportFrom", "Assign", "Expr"}
+        if body_types <= reexport_types:
+            return "init_reexport"
+
+    # Check for CUDA kernel loader patterns
+    has_cu_ref = ".cu" in code or ".cpp" in code
+    has_load_call = False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            # load() or load_inline() calls
+            if isinstance(func, ast.Name) and func.id in ("load", "load_inline"):
+                has_load_call = True
+            elif isinstance(func, ast.Attribute) and func.attr in ("load", "load_inline"):
+                has_load_call = True
+    if has_cu_ref and has_load_call:
+        return "cuda_kernel"
+
+    # Check for autograd.Function
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            for base in node.bases:
+                base_str = _base_to_str(base)
+                if base_str in ("torch.autograd.Function", "autograd.Function"):
+                    return "torch_autograd"
+
+    # Check for torch imports
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "torch" or alias.name.startswith("torch."):
+                    return "torch_utility"
+        elif isinstance(node, ast.ImportFrom):
+            if node.module and (node.module == "torch" or node.module.startswith("torch.")):
+                return "torch_utility"
+
+    return "pure_python"
+
+
+def filter_utility_files(utility_files, repo_dir):
+    """Apply exclusion patterns and classification to utility files.
+
+    Returns (kept, removed_with_reasons, category_map).
+    """
+    kept = []
+    removed = []
+    category_map = {}
+
+    for full_path in utility_files:
+        rel = os.path.relpath(full_path, repo_dir).replace("\\", "/")
+
+        # Check exclude patterns
+        excluded = False
+        for pat in MERGE_EXCLUDE_UTILS:
+            if fnmatch.fnmatch(rel, pat) or fnmatch.fnmatch(os.path.basename(full_path), pat):
+                removed.append((full_path, f"matches exclude pattern '{pat}'"))
+                excluded = True
+                break
+        if excluded:
+            continue
+
+        category = classify_utility_file(full_path, repo_dir)
+        category_map[full_path] = category
+
+        if category == "init_reexport":
+            removed.append((full_path, "re-export __init__.py (inlined by merge)"))
+        elif category == "cuda_kernel":
+            removed.append((full_path, "CUDA kernel loader (no JAX equivalent)"))
+        else:
+            kept.append(full_path)
+
+    return kept, removed, category_map
+
+
+def order_utility_files(utility_files, repo_dir):
+    """Topologically sort utility files by their import dependencies.
+
+    Dependencies come first so definitions precede usage.
+    """
+    file_set = set(os.path.normpath(f) for f in utility_files)
+    graph = {}
+    for f in utility_files:
+        f_norm = os.path.normpath(f)
+        all_imports = get_local_imports(f, repo_dir)
+        graph[f_norm] = {imp for imp in all_imports if imp in file_set}
+
+    visited = set()
+    order = []
+
+    def dfs(node):
+        if node in visited:
+            return
+        visited.add(node)
+        for dep in graph.get(node, set()):
+            dfs(dep)
+        order.append(node)
+
+    for f in sorted(file_set):
+        dfs(f)
+
+    return order
+
+
 def main():
     if not os.path.isdir(REPO_DIR):
         print("ERROR: Repository not found. Run step1_clone_repo.py first.")
@@ -681,6 +835,45 @@ def main():
     else:
         print(f"\n  Final merged file: {final_lines} lines "
               "(nn.Module count unavailable -- syntax error in merged code)")
+
+    # ---------------------------------------------------------------
+    # Step 3b: Discover and merge utility files
+    # ---------------------------------------------------------------
+    print()
+    print("=" * 70)
+    print("Step 3b: Discover and Merge Utility Files")
+    print("=" * 70)
+
+    util_files = find_all_local_dependencies(required, REPO_DIR)
+    print(f"\n  Discovered {len(util_files)} utility file(s) transitively imported by model files")
+
+    if util_files:
+        kept_utils, removed_utils, cat_map = filter_utility_files(
+            sorted(util_files), REPO_DIR
+        )
+
+        if removed_utils:
+            print(f"\n  Filtered out {len(removed_utils)} utility file(s):")
+            for full_path, reason in removed_utils:
+                rel = os.path.relpath(full_path, REPO_DIR)
+                print(f"    SKIP  {rel:<45s} ({reason})")
+
+        if kept_utils:
+            print(f"\n  Keeping {len(kept_utils)} utility file(s):")
+            for full_path in kept_utils:
+                rel = os.path.relpath(full_path, REPO_DIR)
+                cat = cat_map.get(full_path, "unknown")
+                print(f"    KEEP  {rel:<45s} [{cat}]")
+
+            ordered_utils = order_utility_files(kept_utils, REPO_DIR)
+            print(f"\n  Merging {len(ordered_utils)} utility files into: {MERGED_UTILS_FILE}")
+            utils_merged = merge_files(ordered_utils, REPO_DIR, MERGED_UTILS_FILE)
+            utils_lines = utils_merged.count("\n") + 1
+            print(f"  Merged utility file: {utils_lines} lines")
+        else:
+            print("\n  No utility files remaining after filtering.")
+    else:
+        print("  No utility files found.")
 
     print("\nStep 3 complete.")
 

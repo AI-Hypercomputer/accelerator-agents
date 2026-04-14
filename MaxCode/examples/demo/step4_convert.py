@@ -27,7 +27,7 @@ Usage:
 import logging
 import os
 import time
-from config import MERGED_FILE, OUTPUT_DIR, REPO_URL, setup, require_api_key
+from config import MERGED_FILE, MERGED_UTILS_FILE, OUTPUT_DIR, REPO_URL, setup, require_api_key
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -104,6 +104,33 @@ def main():
         f.write(jax_code)
     lines = jax_code.count("\n") + 1
     print(f"  Output: {out_path} ({lines} lines)")
+
+    # ------------------------------------------------------------------
+    # Convert utility files (if any)
+    # ------------------------------------------------------------------
+    if os.path.isfile(MERGED_UTILS_FILE):
+        print("\n" + "-" * 70)
+        print("  Converting utility files...")
+        print(f"  Source: {MERGED_UTILS_FILE}")
+        with open(MERGED_UTILS_FILE, "r", encoding="utf-8") as f:
+            utils_code = f.read()
+        utils_lines_in = utils_code.count("\n") + 1
+        print(f"  Input: {utils_lines_in} lines")
+
+        t1 = time.time()
+        utils_jax = agent._single_file_agent.run(utils_code)
+        utils_jax = agent._fill_missing_components(utils_code, utils_jax)
+        utils_elapsed = time.time() - t1
+
+        print(f"  Utility conversion completed in {utils_elapsed:.1f}s")
+
+        utils_out_path = os.path.join(OUTPUT_DIR, f"{repo_name}_utils_jax.py")
+        with open(utils_out_path, "w", encoding="utf-8") as f:
+            f.write(utils_jax)
+        utils_lines_out = utils_jax.count("\n") + 1
+        print(f"  Output: {utils_out_path} ({utils_lines_out} lines)")
+    else:
+        print("\n  No merged utility file found — skipping utility conversion.")
 
     # Validation summary
     validation_results = agent.get_validation_results()

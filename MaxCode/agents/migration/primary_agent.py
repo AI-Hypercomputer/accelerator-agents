@@ -198,6 +198,7 @@ class PrimaryAgent(base.Agent):
     self._model_ref = model
     self._validate = validate
     self._validation_results: dict[str, dict] = {}
+    self._merge_result = None  # Set when running on a directory
     self._rag_agent = rag_agent.RAGAgent(
         model,
         embedding_model_name=models.EmbeddingModel.GEMINI_EMBEDDING_001,
@@ -476,6 +477,10 @@ class PrimaryAgent(base.Agent):
     """
     return self._validation_results
 
+  def get_merge_result(self):
+    """Returns the MergeResult from the last directory run, or None."""
+    return self._merge_result
+
   def run(self, repo_path: str) -> dict[str, str]:
     """Orchestrates the migration of a repository from PyTorch to JAX.
 
@@ -499,27 +504,40 @@ class PrimaryAgent(base.Agent):
         )
       return {repo_path: converted_code}
     elif os.path.isdir(repo_path):
-      graph = utils.build_dependency_graph(repo_path)
-      ordered_files = utils.topological_sort(graph)
-      converted_files: dict[str, str] = {}
+      from agents.migration.merge_agent import MergeAgent
 
-      for i, file_rel_path in enumerate(ordered_files, 1):
-        file_path = os.path.join(repo_path, file_rel_path)
-        logger.info("Converting file %d/%d: %s ...", i, len(ordered_files),
-                    file_rel_path)
-        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-          pytorch_code = f.read()
-        converted_code = self._convert_file(pytorch_code, file_path)
-        converted_code = self._fill_missing_components(
-            pytorch_code, converted_code
+      merger = MergeAgent()
+      merge_result = merger.run(repo_path)
+      self._merge_result = merge_result
+      results = {}
+
+      # Convert model code
+      logger.info("Converting merged model code (%d files, %d chars)...",
+                  len(merge_result.model_files), len(merge_result.model_code))
+      model_jax = self._convert_file(
+          merge_result.model_code, "merged_model.py"
+      )
+      model_jax = self._fill_missing_components(
+          merge_result.model_code, model_jax
+      )
+      if self._validate:
+        model_jax = self._validate_and_repair(
+            merge_result.model_code, model_jax, "merged_model.py"
         )
-        if self._validate:
-          converted_code = self._validate_and_repair(
-              pytorch_code, converted_code, file_path
-          )
-        converted_files[file_path] = converted_code
+      results["model"] = model_jax
 
-      return converted_files
+      # Convert utility code (if any)
+      if merge_result.utility_code:
+        logger.info("Converting merged utility code (%d files, %d chars)...",
+                    len(merge_result.utility_files),
+                    len(merge_result.utility_code))
+        utils_jax = self._single_file_agent.run(merge_result.utility_code)
+        utils_jax = self._fill_missing_components(
+            merge_result.utility_code, utils_jax
+        )
+        results["utils"] = utils_jax
+
+      return results
     else:
       return {
           repo_path: f"# Error: path {repo_path} is not a file or directory."

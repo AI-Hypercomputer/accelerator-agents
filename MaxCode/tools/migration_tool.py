@@ -93,21 +93,49 @@ def convert_code(
         "error": f"Failed to copy source files to destination: {e}",
     })
 
+  # Handle two result formats:
+  # - Merge path (directory): keys are "model" and optionally "utils"
+  # - Single-file / legacy path: keys are file paths
+  is_merge_result = "model" in results
   written_files = []
   mapping_log = []
-  for file_path, code in results.items():
-    if is_dir:
-      relative_path = pathlib.Path(file_path).relative_to(p)
-    else:
-      relative_path = pathlib.Path(file_path).name
-    output_path = dest_path / relative_path
-    _write_artifact(output_path, code)
-    written_files.append(output_path)
+
+  if is_merge_result:
+    # Write model output
+    model_output = dest_path / "model_jax.py"
+    _write_artifact(model_output, results["model"])
+    written_files.append(model_output)
     mapping_log.append({
-        "source_file": file_path,
-        "generated_file": str(output_path),
+        "source_file": abs_path,
+        "generated_file": str(model_output),
+        "component": "model",
         "status": "success",
     })
+    # Write utils output (if present)
+    if "utils" in results:
+      utils_output = dest_path / "utils_jax.py"
+      _write_artifact(utils_output, results["utils"])
+      written_files.append(utils_output)
+      mapping_log.append({
+          "source_file": abs_path,
+          "generated_file": str(utils_output),
+          "component": "utils",
+          "status": "success",
+      })
+  else:
+    for file_path, code in results.items():
+      if is_dir:
+        relative_path = pathlib.Path(file_path).relative_to(p)
+      else:
+        relative_path = pathlib.Path(file_path).name
+      output_path = dest_path / relative_path
+      _write_artifact(output_path, code)
+      written_files.append(output_path)
+      mapping_log.append({
+          "source_file": file_path,
+          "generated_file": str(output_path),
+          "status": "success",
+      })
 
   # Create __init__.py files for all directories containing migrated files.
   dirs_in_results = set(f.parent for f in written_files)
@@ -150,6 +178,54 @@ def convert_code(
     with validation_path.open("w", encoding="utf-8") as f:
       json.dump(validation_results, f, indent=2)
     response["validation_path"] = str(validation_path)
+
+  # Auto-verify converted files
+  try:
+    from agents.migration.verification_agent import VerificationAgent
+    verifier = VerificationAgent()
+    scorecard = {}
+
+    if is_merge_result:
+      # Use cached merge result from PrimaryAgent to avoid re-running merge
+      cached_merge = agent.get_merge_result()
+      if cached_merge:
+        source_code_map = {"model": cached_merge.model_code}
+        if cached_merge.utility_code:
+          source_code_map["utils"] = cached_merge.utility_code
+      else:
+        with open(abs_path, "r", encoding="utf-8", errors="replace") as f:
+          source_code_map = {"model": f.read()}
+
+      for component, jax_code in results.items():
+        if component in source_code_map:
+          vr = verifier.verify(source_code_map[component], jax_code)
+          scorecard[component] = {
+              "completeness": vr.completeness,
+              "overall": vr.overall,
+          }
+    else:
+      for file_path, jax_code in results.items():
+        try:
+          with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+            src = f.read()
+          vr = verifier.verify(src, jax_code)
+          scorecard[file_path] = {
+              "completeness": vr.completeness,
+              "overall": vr.overall,
+          }
+        except OSError:
+          pass
+
+    if scorecard:
+      scorecard_path = dest_path / "verification_scorecard.json"
+      with scorecard_path.open("w", encoding="utf-8") as f:
+        json.dump(scorecard, f, indent=2)
+      response["verification_scorecard_path"] = str(scorecard_path)
+      response["verification_summary"] = {
+          k: v["overall"] for k, v in scorecard.items()
+      }
+  except Exception as e:
+    logging.warning("Auto-verification failed: %s", e)
 
   return json.dumps(response)
 

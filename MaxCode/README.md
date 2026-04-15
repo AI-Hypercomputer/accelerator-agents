@@ -15,9 +15,9 @@ export GOOGLE_API_KEY=<your-key>    # Windows CMD: set GOOGLE_API_KEY=<your-key>
 
 python step1_clone_repo.py          # Clone a PyTorch repo from GitHub
 python step2_populate_rag.py        # Build the RAG reference database
-python step3_merge.py               # Auto-detect and merge model files
+python step3_merge.py               # Merge model + utility files (MergeAgent)
 python step4_convert.py             # Convert to JAX with validation + repair
-python step5_verify.py              # Verify conversion quality (scorecard)
+python step5_verify.py              # Verify conversion quality (VerificationAgent)
 ```
 
 See [examples/demo/README.md](examples/demo/README.md) for full setup
@@ -216,6 +216,15 @@ dev-server run_evaluation_workflow --prompt "Run equivalence tests for migration
 
 ## Architecture
 
-Agents are organized by domain (e.g., migration, kernel) within the `agents/`
-directory. For more details on the project architecture and agent structure, see
+The migration pipeline: **Clone -> Index -> Merge -> Convert -> Verify**.
+
+Key agents in `agents/migration/`:
+- **MergeAgent** — Pure-logic preprocessing: file discovery, filtering, import
+  graph analysis, and merging (no LLM calls).
+- **PrimaryAgent** — Orchestrates conversion: routes to model or utility
+  conversion agents, fills missing components, validates and repairs.
+- **VerificationAgent** — Post-processing quality scoring: AST-based
+  completeness + optional LLM-based correctness.
+
+For more details on the project architecture and agent structure, see
 [ARCHITECTURE.md](ARCHITECTURE.md).

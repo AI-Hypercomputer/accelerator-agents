@@ -35,6 +35,18 @@ class PytorchToJaxSingleFileAgent(base.Agent):
     )
     if code_block_match:
       return code_block_match.group(1).strip()
+    # Handle truncated responses: opening ``` present but closing ``` missing
+    stripped = text.strip()
+    if stripped.startswith("```"):
+      first_nl = stripped.find("\n")
+      if first_nl != -1:
+        stripped = stripped[first_nl + 1:]
+      if stripped.endswith("```"):
+        stripped = stripped[:-3]
+      return stripped.strip()
+    # Strip triple-quote wrappers the LLM may use instead of backticks.
+    if stripped.startswith('"""') and stripped.endswith('"""'):
+      return stripped[3:-3].strip()
     return text
 
   def run(self, pytorch_code: str) -> str:
@@ -46,7 +58,7 @@ class PytorchToJaxSingleFileAgent(base.Agent):
     Returns:
       The converted JAX code.
     """
-    rag_context_list = self._rag_agent.retrieve_context(pytorch_code, top_k=7)
+    rag_context_list = self._rag_agent.retrieve_per_component_context(pytorch_code)
     rag_context = "\n\n".join([
         f"File: {c['file']}\n```python\n{c['text']}\n```"
         for c in rag_context_list

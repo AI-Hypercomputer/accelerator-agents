@@ -60,7 +60,7 @@ def benchmark(func, args, static_argnums, trace_dir=None, num_runs=20, num_warmu
       
       # Apply alignment
       dynamic_args = enforce_layout_compiled(*dynamic_args)
-  except ImportError:
+  except Exception as e:
     compiled_func = jax.jit(benchmark_func, static_argnums=static_argnums).lower(*args).compile()
 
   # 3. Warm up

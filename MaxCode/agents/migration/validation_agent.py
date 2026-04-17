@@ -1,4 +1,4 @@
-"""Agent for validating faithfulness of PyTorch-to-JAX conversions."""
+"""Agent for validating faithfulness of PyTorch-to-target conversions."""
 
 import json
 import re
@@ -6,6 +6,7 @@ from typing import Any
 
 from agents import base
 from agents import utils
+from agents.migration.prompts import prompts
 
 
 VALIDATION_PROMPT = """You are an expert code reviewer specializing in PyTorch-to-JAX
@@ -24,7 +25,7 @@ nn.Module -> nn.Module with @nn.compact, self.training -> deterministic flag).
 
 ## Converted JAX Output:
 ```python
-{jax_code}
+{target_code}
 ```
 
 ## Check each of the following categories:
@@ -102,7 +103,7 @@ faithfulness deviations that need to be fixed.
 
 ## Current JAX Code:
 ```python
-{jax_code}
+{target_code}
 ```
 {rag_section}
 ## Deviations to Fix:
@@ -166,20 +167,23 @@ def _parse_json_response(text: str) -> list:
 
 
 class ValidationAgent(base.Agent):
-    """Agent for validating faithfulness of PyTorch-to-JAX conversions.
+    """Agent for validating faithfulness of PyTorch-to-target conversions.
 
-    This agent takes the original PyTorch source and the converted JAX output,
+    This agent takes the original PyTorch source and the converted output,
     identifies faithfulness deviations (changed defaults, wrong init, missing
-    components, altered semantics), and optionally repairs them.
+    components, altered semantics), and optionally repairs them. The prompt
+    pair is selected based on the configured `target` ("jax" or "maxtext").
     """
 
-    def __init__(self, model: Any, rag_agent_instance=None):
+    def __init__(self, model: Any, rag_agent_instance=None, target: str = "jax"):
         """Initializes the agent.
 
         Args:
             model: The LLM model to use for generation.
             rag_agent_instance: Optional RAGAgent for retrieving context
                 during repair. If None, repair runs without RAG context.
+            target: Conversion target ("jax" or "maxtext"). Selects which
+                validation/repair prompt is used.
         """
         super().__init__(
             model=model,
@@ -187,21 +191,47 @@ class ValidationAgent(base.Agent):
             agent_type=utils.AgentType.PRIMARY,
         )
         self._rag_agent = rag_agent_instance
+        self._target = target
 
-    def validate(self, pytorch_code: str, jax_code: str) -> list:
-        """Validates the JAX output against the PyTorch source.
+    def _validation_prompt(self) -> str:
+        """Returns the validation prompt template for the active target."""
+        prompt = prompts.get_prompt("VALIDATION_PROMPT", self._target)
+        if prompt is None:
+            return VALIDATION_PROMPT
+        return prompt
+
+    def _repair_prompt(self) -> str:
+        """Returns the repair prompt template for the active target."""
+        prompt = prompts.get_prompt("REPAIR_PROMPT", self._target)
+        if prompt is None:
+            return REPAIR_PROMPT
+        return prompt
+
+    def validate(self, pytorch_code: str, target_code: str = None,
+                 jax_code: str = None) -> list:
+        """Validates the converted output against the PyTorch source.
 
         Args:
             pytorch_code: The original PyTorch source code.
-            jax_code: The converted JAX/Flax code.
+            target_code: The converted code in the target framework. The
+                deprecated `jax_code` keyword is accepted as an alias for
+                one release.
+            jax_code: Deprecated alias for `target_code`.
 
         Returns:
             A list of deviation dicts, each with category, severity,
-            source_line, output_line, and fix fields.
+            source_snippet, output_snippet, corrected_snippet, and fix fields.
         """
+        if target_code is None:
+            target_code = jax_code
+        if target_code is None:
+            raise TypeError(
+                "ValidationAgent.validate requires `target_code` (or the"
+                " deprecated `jax_code`) argument."
+            )
         response = self.generate(
-            VALIDATION_PROMPT,
-            {"pytorch_code": pytorch_code, "jax_code": jax_code},
+            self._validation_prompt(),
+            {"pytorch_code": pytorch_code, "target_code": target_code},
         )
         return _parse_json_response(response)
 
@@ -247,7 +277,7 @@ class ValidationAgent(base.Agent):
 
             block = f"### Deviation {i} [{severity}] - {category}\n"
             block += f"Source (PyTorch):   {source}\n"
-            block += f"Find in JAX:        {output}\n"
+            block += f"Find in output:     {output}\n"
             if output == "MISSING":
                 block += f"Source to convert:  {source}\n"
             if corrected and corrected not in ("ADD", "MISSING"):
@@ -299,29 +329,41 @@ class ValidationAgent(base.Agent):
             section += f"\n### {name}\n{text}\n"
         return section
 
-    def repair(self, jax_code: str, deviations: list,
-               pytorch_code: str = "") -> str:
-        """Repairs the JAX code based on identified deviations.
+    def repair(self, target_code: str = None, deviations: list = None,
+               pytorch_code: str = "", jax_code: str = None) -> str:
+        """Repairs the converted code based on identified deviations.
 
         Args:
-            jax_code: The converted JAX/Flax code to repair.
+            target_code: The converted code (JAX or MaxText) to repair. The
+                deprecated `jax_code` keyword is accepted for one release.
             deviations: List of deviation dicts from validate().
             pytorch_code: The original PyTorch source for reference.
+            jax_code: Deprecated alias for `target_code`.
 
         Returns:
-            The repaired JAX code.
+            The repaired code in the target framework.
         """
+        if target_code is None:
+            target_code = jax_code
+        if target_code is None:
+            raise TypeError(
+                "ValidationAgent.repair requires `target_code` (or the"
+                " deprecated `jax_code`) argument."
+            )
+        if deviations is None:
+            deviations = []
+
         # Filter to only actionable deviations
         actionable = self._filter_actionable(deviations)
         if not actionable:
-            return jax_code
+            return target_code
 
         deviations_text = self._format_deviations_for_repair(actionable)
         rag_section = self._get_repair_rag_context(actionable)
         response = self.generate(
-            REPAIR_PROMPT,
+            self._repair_prompt(),
             {
-                "jax_code": jax_code,
+                "target_code": target_code,
                 "deviations_text": deviations_text,
                 "rag_section": rag_section,
                 "pytorch_code": pytorch_code,
@@ -329,24 +371,29 @@ class ValidationAgent(base.Agent):
         )
         repaired = _strip_markdown_formatting(response)
         # If the repair returned empty or very short, return original
-        if len(repaired) < len(jax_code) * 0.5:
-            return jax_code
+        if len(repaired) < len(target_code) * 0.5:
+            return target_code
         return repaired
 
-    def run(self, pytorch_code: str, jax_code: str) -> tuple:
+    def run(self, pytorch_code: str, target_code: str = None,
+            jax_code: str = None) -> tuple:
         """Validates and optionally repairs the conversion.
 
         Args:
             pytorch_code: The original PyTorch source code.
-            jax_code: The converted JAX/Flax code.
+            target_code: The converted code (JAX or MaxText).
+            jax_code: Deprecated alias for `target_code`.
 
         Returns:
             Tuple of (repaired_code, deviations_list).
         """
-        deviations = self.validate(pytorch_code, jax_code)
+        if target_code is None:
+            target_code = jax_code
+        deviations = self.validate(pytorch_code, target_code=target_code)
         if deviations:
             repaired_code = self.repair(
-                jax_code, deviations, pytorch_code=pytorch_code
+                target_code=target_code, deviations=deviations,
+                pytorch_code=pytorch_code,
             )
             return repaired_code, deviations
-        return jax_code, []
+        return target_code, []

@@ -49,14 +49,18 @@ class VerificationAgent:
     weighted scoring.
     """
 
-    def __init__(self, model=None):
+    def __init__(self, model=None, target: str = "jax"):
         """Initialize the verification agent.
 
         Args:
             model: Optional LLM model instance for correctness checks.
                 If None, correctness scoring is skipped.
+            target: Conversion target ("jax" or "maxtext"). Threaded
+                through to the inner ValidationAgent so the correctness
+                check uses the right validation prompt.
         """
         self._model = model
+        self._target = target
 
     @staticmethod
     def extract_components(code):
@@ -160,16 +164,18 @@ class VerificationAgent:
 
     @staticmethod
     def compute_correctness(source_code, output_code, api_key,
-                            total_components=0, model=None):
+                            total_components=0, model=None, target: str = "jax"):
         """Run ValidationAgent and score the output.
 
         Args:
             source_code: The PyTorch source code.
-            output_code: The converted JAX output code.
+            output_code: The converted output code (JAX or MaxText).
             api_key: Google API key for the LLM.
             total_components: Number of source components for budget scaling.
             model: Optional pre-configured LLM model instance. If None,
                 creates a new GeminiTool with the given api_key.
+            target: Conversion target ("jax" or "maxtext"). Selects which
+                validation prompt the inner ValidationAgent uses.
 
         Returns:
             dict with score, deviation_count, deviations, filtered_deviations,
@@ -183,7 +189,7 @@ class VerificationAgent:
                 model_name=models.GeminiModel.GEMINI_3_1_PRO_PREVIEW,
                 api_key=api_key,
             )
-        validator = ValidationAgent(model=model)
+        validator = ValidationAgent(model=model, target=target)
         all_deviations = validator.validate(source_code, output_code)
 
         if not isinstance(all_deviations, list):
@@ -258,6 +264,7 @@ class VerificationAgent:
                 api_key=api_key,
                 total_components=completeness["total"],
                 model=self._model,
+                target=self._target,
             )
 
         if correctness is not None:

@@ -11,6 +11,7 @@ from typing import Any, Tuple
 import models
 from agents import base
 from agents import utils
+from agents.migration import maxtext_conversion_agent
 from agents.migration import model_conversion_agent
 from agents.migration import single_file_agent
 from agents.migration import validation_agent
@@ -188,8 +189,18 @@ class PrimaryAgent(base.Agent):
   """Primary orchestration agent for repository migration."""
 
   def __init__(self, model: Any, api_key: str | None = None,
-               validate: bool = True):
-    """Initializes the agent."""
+               validate: bool = True, target: str = "jax"):
+    """Initializes the agent.
+
+    Args:
+      model: The LLM model to use.
+      api_key: API key for embedding/auth (passed through to the RAG agent).
+      validate: Whether to run validation/repair after conversion.
+      target: Conversion target — "jax" (default) or "maxtext". When
+        target="maxtext", the model conversion stage is replaced by the
+        staged `MaxTextConversionAgent` and the per-file utility conversion
+        is skipped (MaxText supplies its own training/CLI utilities).
+    """
     super().__init__(
         model=model,
         agent_domain=utils.AgentDomain.MIGRATION,
@@ -197,19 +208,29 @@ class PrimaryAgent(base.Agent):
     )
     self._model_ref = model
     self._validate = validate
+    self._target = target
     self._validation_results: dict[str, dict] = {}
     self._merge_result = None  # Set when running on a directory
+    self._maxtext_run_result = None  # Set when target=="maxtext"
     self._rag_agent = rag_agent.RAGAgent(
         model,
         embedding_model_name=models.EmbeddingModel.GEMINI_EMBEDDING_001,
         api_key=api_key,
+        target=target,
     )
-    self._single_file_agent = single_file_agent.PytorchToJaxSingleFileAgent(
-        model, self._rag_agent
+    self._single_file_agent = single_file_agent.PytorchSingleFileAgent(
+        model, self._rag_agent, target=target
     )
-    self._model_conversion_agent = model_conversion_agent.ModelConversionAgent(
-        model, self._rag_agent
-    )
+    if target == "maxtext":
+      self._model_conversion_agent = (
+          maxtext_conversion_agent.MaxTextConversionAgent(
+              model, self._rag_agent
+          )
+      )
+    else:
+      self._model_conversion_agent = model_conversion_agent.ModelConversionAgent(
+          model, self._rag_agent, target=target
+      )
 
   def _convert_file(self, pytorch_code: str, file_path: str) -> str:
     """Routes a file to the appropriate conversion agent."""
@@ -400,7 +421,8 @@ class PrimaryAgent(base.Agent):
       The final code (repaired if deviations were found, original otherwise).
     """
     validator = validation_agent.ValidationAgent(
-        self._model_ref, rag_agent_instance=self._rag_agent
+        self._model_ref, rag_agent_instance=self._rag_agent,
+        target=self._target,
     )
 
     current_code = converted_code
@@ -481,6 +503,59 @@ class PrimaryAgent(base.Agent):
     """Returns the MergeResult from the last directory run, or None."""
     return self._merge_result
 
+  def get_maxtext_result(self):
+    """Returns the MaxTextRunResult from the last MaxText run, or None."""
+    return self._maxtext_run_result
+
+  def _model_name_from_path(self, repo_path: str) -> str:
+    """Picks a sensible filename stem for MaxText artifacts."""
+    base = os.path.basename(os.path.normpath(repo_path))
+    if base.endswith(".py"):
+      base = base[:-3]
+    return re.sub(r"[^A-Za-z0-9_]+", "_", base) or "model"
+
+  def _run_maxtext(self, repo_path: str) -> dict[str, str]:
+    """MaxText path: produce YAML + optional layers + optional ckpt converter.
+
+    Returns an empty dict — MaxText artifacts are persisted via
+    `get_maxtext_result()` rather than the per-file converted-code map.
+    """
+    if os.path.isfile(repo_path):
+      with open(repo_path, "r", encoding="utf-8", errors="replace") as f:
+        pytorch_code = f.read()
+      model_name = self._model_name_from_path(repo_path)
+    elif os.path.isdir(repo_path):
+      from agents.migration.merge_agent import MergeAgent
+
+      merger = MergeAgent()
+      merge_result = merger.run(repo_path)
+      self._merge_result = merge_result
+      pytorch_code = merge_result.model_code
+      model_name = self._model_name_from_path(repo_path)
+      logger.info("MaxText: merged model code from %d files (%d chars)",
+                  len(merge_result.model_files), len(merge_result.model_code))
+    else:
+      return {
+          repo_path: f"# Error: path {repo_path} is not a file or directory."
+      }
+
+    logger.info("Running MaxTextConversionAgent on %s ...", repo_path)
+    self._maxtext_run_result = self._model_conversion_agent.run(
+        pytorch_code, model_name=model_name
+    )
+
+    # Optionally run validation on the layers file (custom decoder block only).
+    if (self._validate and self._maxtext_run_result.layers_py
+        and self._maxtext_run_result.decoder_block == "custom"):
+      validated = self._validate_and_repair(
+          pytorch_code,
+          self._maxtext_run_result.layers_py,
+          f"MaxText/layers/{model_name}.py",
+      )
+      self._maxtext_run_result.layers_py = validated
+
+    return {}
+
   def run(self, repo_path: str) -> dict[str, str]:
     """Orchestrates the migration of a repository from PyTorch to JAX.
 
@@ -488,8 +563,13 @@ class PrimaryAgent(base.Agent):
       repo_path: The path to the repository file or directory.
 
     Returns:
-      A dictionary mapping original file paths to converted JAX code.
+      A dictionary mapping original file paths to converted code. For
+      `target="maxtext"` the dict is empty; the artifacts are accessed via
+      `get_maxtext_result()`.
     """
+    if self._target == "maxtext":
+      return self._run_maxtext(repo_path)
+
     if os.path.isfile(repo_path):
       with open(repo_path, "r", encoding="utf-8", errors="replace") as f:
         pytorch_code = f.read()

@@ -476,3 +476,384 @@ models in JAX, such as using pure functions and handling random number
 generation correctly with JAX's PRNG keys.
 Only return the Python code block for the JAX implementation.
 """ + JAX_BEST_PRACTICES
+
+
+# ─────────────────────────────────────────────────────────────────────
+# MaxText prompts (target="maxtext")
+# ─────────────────────────────────────────────────────────────────────
+
+MAXTEXT_BEST_PRACTICES = """
+## MaxText Best Practices (MUST follow)
+
+You are emitting code/config for **MaxText**, Google's reference LLM training
+library on JAX (the canonical TPU stack). The single rule that subsumes all
+others is: **do not reimplement what MaxText already provides — import and
+configure its primitives instead.**
+
+### Reuse these MaxText primitives (NEVER reimplement)
+
+- `maxtext.layers.attentions.Attention` — multi-head, GQA, MLA, paged. Do NOT
+  hand-roll `softmax(QK^T / sqrt(d))`, scaled dot-product, or paged-KV logic.
+- `maxtext.layers.embeddings.Embed` / `embed_as_linen` — token + tied
+  output projection. Do NOT write a custom `nn.Embed` wrapper.
+- `maxtext.layers.embeddings.PositionalEmbedding`, RoPE helpers — do NOT
+  hand-roll `apply_rotary_pos_emb`, `rotate_half`, sin/cos table generation.
+- `maxtext.layers.normalizations.RMSNorm` (and Qwen3-Next variants) — do NOT
+  write `x * rsqrt(mean(x^2) + eps) * weight` yourself.
+- `maxtext.layers.linears.DenseGeneral`, `MlpBlock` — use these instead of
+  `flax.linen.Dense`. They handle sharding/partitioning automatically.
+- `maxtext.layers.moe.RoutedMoE` — capacity-based dispatch is built in. Do
+  NOT write per-token gather, manual top-k routing, or custom dispatch
+  tensors.
+- `maxtext.layers.decoders.Decoder` / `nnx_decoders.NNXDecoder` — the
+  generic decoder stack. Most models only need a YAML overlay that selects a
+  `decoder_block` rather than a brand-new layers file.
+- `maxtext.layers.quantizations.AqtQuantization` — quantization is a
+  configuration concern, not a per-model implementation.
+
+### Anti-patterns (REJECT these in any output)
+
+- Reimplementing attention / softmax / RoPE / RMSNorm / dropout from scratch.
+- Hand-rolled training loops, optimizer steps, gradient clipping, learning
+  rate schedules. MaxText ships its own `train.py` / `train_compile.py` —
+  the user invokes them via the CLI on the YAML config.
+- `from flax.linen import Dense` — use `DenseGeneral` from
+  `maxtext.layers.linears` so sharding annotations apply.
+- Manual KV cache management with mutable Flax variables. Use
+  `maxtext.inference.kvcache` and `page_manager`.
+- Custom dataset/dataloader code: MaxText reads input pipelines from its
+  own data layer.
+- Hand-written checkpoint save/restore: use `maxtext.utils.max_utils` and
+  Orbax via the existing converter helpers.
+
+### Decoder-block taxonomy
+
+The classification stage picks one of the canonical `decoder_block` values
+recognized by MaxText:
+
+  llama2, llama3, llama4, gemma, gemma2, gemma3, mistral, mixtral, qwen3,
+  qwen3_next, deepseek2, deepseek3, gpt_oss, kimi, default
+
+If the source PyTorch model deviates materially from all of the above —
+e.g. a novel attention variant, a non-standard MoE router, a hybrid
+architecture — return `custom`, and only then emit a layers `.py` file.
+
+### YAML config conventions
+
+- Always inherit semantics from `MaxText/configs/base.yml` — only override
+  the fields that differ. Do NOT re-declare every base field.
+- Required fields for any model overlay: `decoder_block`, `base_emb_dim`,
+  `base_num_query_heads`, `base_num_kv_heads`, `base_mlp_dim`,
+  `base_num_decoder_layers`, `head_dim`, `vocab_size`,
+  `enable_dropout`, `logits_via_embedding`, `normalization_layer_epsilon`.
+- For MoE models add: `num_experts`, `num_experts_per_tok`,
+  `megablox`, `capacity_factor`, `load_balance_loss_weight`.
+- Use the same key naming as existing MaxText configs (snake_case, prefixed
+  with `base_` for dimensions that scale with model size).
+
+### Layers file conventions (only for `decoder_block: custom`)
+
+- Imports: only `jax`, `jax.numpy`, `flax.linen`, `flax.nnx`, and
+  `maxtext.layers.*` / `maxtext.common.common_types`. No `torch`,
+  `transformers`, or `numpy` (use `jnp`).
+- Compose existing primitives — your file should be glue code, not a
+  re-implementation. A "custom decoder block" is a class that wires together
+  `Attention`, `RMSNorm`, `MlpBlock`, etc.
+- Follow the `Qwen3DecoderLayer` pattern from
+  `maxtext_models_qwen3.py` in the RAG corpus: dataclass `config: Config`,
+  `mesh: Mesh`, `quant: Quant`, optional `model_mode`, then `setup()` /
+  `__call__`.
+
+### Checkpoint converter conventions
+
+- Output a standalone `convert_<name>_ckpt.py` script with a `__main__`
+  block that takes `--base_model_path` and `--maxtext_model_path`.
+- Map the HuggingFace / PyTorch state-dict keys to MaxText's nested
+  parameter tree, then save via `orbax.checkpoint`.
+- Reuse helpers from `maxtext.utils.max_utils` where possible.
+- Preserve exact dtype and tensor shapes — Q/K/V splits, MoE expert stacking,
+  RoPE weight ordering must all match what the chosen `decoder_block`
+  expects.
+"""
+
+
+MAXTEXT_CLASSIFY_PROMPT = """You are an expert on MaxText's decoder block
+taxonomy. Look at the following PyTorch model code and decide which existing
+MaxText `decoder_block` it most closely resembles.
+
+Choices: llama2, llama3, llama4, gemma, gemma2, gemma3, mistral, mixtral,
+qwen3, qwen3_next, deepseek2, deepseek3, gpt_oss, kimi, default, custom.
+
+Pick `custom` ONLY when the architecture differs materially from every
+listed family — a novel attention variant, an unusual MoE router, a hybrid
+SSM/attention stack, etc. When in doubt, prefer the closest standard family
+and rely on the YAML overlay to capture the differences.
+
+Reference signals to consider:
+- Attention type: standard MHA, GQA (num_kv_heads != num_heads), MLA,
+  sliding-window, hybrid linear/full.
+- Normalization: pre-norm vs post-norm, RMSNorm vs LayerNorm, Qwen3-style
+  q/k norms.
+- MLP: vanilla MLP vs SwiGLU vs MoE (and which router).
+- Positional encoding: RoPE (and which variant), ALiBi, none.
+- Tied vs untied output projection.
+
+## Reference snippets (RAG):
+{rag_context}
+
+## PyTorch source:
+```python
+{pytorch_code}
+```
+
+Return ONLY a single JSON object with this exact shape — no markdown:
+{{"decoder_block": "<one of the listed values>", "justification": "<one
+sentence>"}}
+"""
+
+
+MAXTEXT_YAML_PROMPT = """You are an expert MaxText configuration author.
+Emit a YAML config overlay that drops into `MaxText/configs/models/` and
+selects the chosen `decoder_block`.
+
+Follow these rules:
+- The file inherits semantics from `MaxText/configs/base.yml`. ONLY emit
+  fields that override the base.
+- Use snake_case keys, exactly matching MaxText's existing model overlays.
+- All dimension fields are prefixed `base_` (e.g. `base_emb_dim`,
+  `base_num_query_heads`).
+- Required keys: `decoder_block`, `base_emb_dim`, `base_num_query_heads`,
+  `base_num_kv_heads`, `base_mlp_dim`, `base_num_decoder_layers`, `head_dim`,
+  `vocab_size`. Add MoE keys when applicable.
+- Numeric values must be derived faithfully from the source PyTorch config
+  — do NOT round, do NOT substitute "reasonable" defaults.
+- No comments other than a single header line giving the model name.
+
+## Classification result
+decoder_block: {decoder_block}
+justification: {justification}
+
+## Reference MaxText configs (RAG):
+{rag_context}
+
+## PyTorch source:
+```python
+{pytorch_code}
+```
+
+## Source-derived hints (may be incomplete; cross-check against the source):
+{dim_hints}
+
+Return ONLY the YAML content — no markdown fences, no explanation.
+"""
+
+
+MAXTEXT_LAYERS_PROMPT = """You are an expert MaxText layers author. The
+classifier judged this model to be `custom` — the existing MaxText decoder
+blocks are not a close enough fit, so you must emit a small `.py` file
+under `MaxText/layers/` that defines the new decoder block.
+
+CRITICAL RULES — non-negotiable:
+1. NEVER reimplement attention, RoPE, RMSNorm, softmax, dropout, an MoE
+   router, or a training loop. Import them from `maxtext.layers.*`.
+2. The only allowed imports are: `jax`, `jax.numpy as jnp`, `flax.linen as
+   nn`, `flax.nnx`, and `maxtext.*`. No `torch`, no `transformers`, no
+   bare `numpy` for compute.
+3. Use `maxtext.layers.linears.DenseGeneral` (or `MlpBlock`) — never
+   `flax.linen.Dense` directly. Sharding annotations live on `DenseGeneral`.
+4. Mirror the structure of `Qwen3DecoderLayer` in the RAG context: dataclass
+   fields `config: Config`, `mesh: Mesh`, `quant: Quant`, optional
+   `model_mode`, then `setup()` and `__call__`.
+5. Your file should be small glue code that composes primitives — measured
+   in dozens of lines, not hundreds. If you find yourself writing more than
+   ~150 lines, you are almost certainly reimplementing something.
+
+{maxtext_best_practices}
+
+## Classification result
+decoder_block: custom
+justification: {justification}
+
+## Reference MaxText layer files (RAG):
+{rag_context}
+
+## PyTorch source:
+```python
+{pytorch_code}
+```
+
+Return ONLY the Python code for the new layers file — no markdown fences,
+no explanation.
+"""
+
+
+MAXTEXT_CKPT_CONVERTER_PROMPT = """You are an expert at writing MaxText
+checkpoint converters. Emit a standalone Python script that maps a
+HuggingFace / PyTorch checkpoint into MaxText's Orbax format for the chosen
+`decoder_block`.
+
+Conventions:
+- File is named `convert_<name>_ckpt.py` and lives under `MaxText/utils/`.
+- Has a `__main__` block accepting `--base_model_path` and
+  `--maxtext_model_path` (and any other flags MaxText's existing converters
+  use).
+- Reuse helpers from `maxtext.utils.max_utils` and `orbax.checkpoint`.
+- The key mapping must respect the chosen decoder block's parameter tree
+  exactly — Q/K/V splits, MoE expert stacking, RoPE inverse-frequency
+  ordering, embedding tie/untie, etc.
+- Preserve dtype and shape; do NOT silently cast to float32.
+
+This is a best-effort artifact. If the source does not provide enough
+information to write a faithful converter, emit a skeleton with TODOs at
+the unresolved points rather than guessing.
+
+## Classification result
+decoder_block: {decoder_block}
+
+## Reference MaxText converters (RAG):
+{rag_context}
+
+## PyTorch source:
+```python
+{pytorch_code}
+```
+
+## YAML config overlay just emitted:
+```yaml
+{yaml_config}
+```
+
+Return ONLY the Python code for the converter — no markdown fences, no
+explanation.
+"""
+
+
+MAXTEXT_VALIDATION_PROMPT = """You are an expert MaxText reviewer. Compare
+the ORIGINAL PyTorch source with a CONVERTED MaxText artifact (a YAML
+config or a layers `.py` file) and identify every faithfulness deviation
+or MaxText anti-pattern.
+
+A deviation is any place where the MaxText output:
+- Changes a numeric value, default, dimension, or layer count from the source.
+- Drops a feature the source has.
+- Reimplements a MaxText primitive (attention, RoPE, RMSNorm, softmax, MoE
+  router, KV cache) instead of importing it from `maxtext.layers.*`.
+- Imports from `torch`, `transformers`, or any non-MaxText / non-JAX
+  library.
+- Uses `flax.linen.Dense` where `maxtext.layers.linears.DenseGeneral` is
+  required.
+- Embeds a custom training loop or optimizer step.
+
+## Original PyTorch Source:
+```python
+{pytorch_code}
+```
+
+## Converted MaxText Output:
+```python
+{target_code}
+```
+
+## Categories to flag:
+- "default_value", "missing_component", "reimplemented_primitive",
+  "forbidden_import", "wrong_layer_class", "custom_training_loop",
+  "dimension_mismatch", "dropped_feature".
+
+Severity:
+- "high" — model wiring is wrong or a primitive was reimplemented.
+- "medium" — a default/dimension was changed.
+- "low" — cosmetic.
+
+Use exact verbatim snippets (max 3 lines) for `source_snippet` and
+`output_snippet`. Use "MISSING" if the output lacks the component.
+
+Return ONLY a JSON array of deviations. Empty array if none. No markdown.
+Each deviation has keys: category, severity, source_snippet, output_snippet,
+corrected_snippet, fix.
+"""
+
+
+MAXTEXT_REPAIR_PROMPT = """You are an expert MaxText developer. You have
+been given a converted MaxText artifact (YAML or layers `.py`) along with a
+list of faithfulness deviations and anti-pattern flags.
+
+## Original PyTorch Source (for reference):
+```python
+{pytorch_code}
+```
+
+## Current MaxText Output:
+```python
+{target_code}
+```
+{rag_section}
+## Deviations to Fix:
+{deviations_text}
+
+## CRITICAL RULES:
+1. NEVER reimplement a MaxText primitive — fix by importing from
+   `maxtext.layers.*` instead.
+2. NEVER introduce `torch`, `transformers`, or `flax.linen.Dense`.
+3. NEVER add a custom training loop, optimizer step, or dataloader.
+4. Preserve EVERY existing class/function/import that is correct. Only
+   change what the deviation specifies.
+5. If a deviation says the current behaviour is acceptable or recommended,
+   skip it.
+6. For YAML overlays: keep the same field ordering and the same set of
+   keys; only edit values that the deviation explicitly identifies.
+
+Return ONLY the complete fixed artifact (Python or YAML). No markdown fences,
+no explanation.
+"""
+
+
+# Selector mapping: prompt name -> {target -> prompt template}.
+_PROMPT_REGISTRY = {
+    "MIGRATE_MODULE_TO_JAX_PROMPT": {
+        "jax": MIGRATE_MODULE_TO_JAX_PROMPT,
+    },
+    "MODEL_CONVERSION_PROMPT": {
+        "jax": MODEL_CONVERSION_PROMPT,
+    },
+    "VALIDATION_PROMPT": {
+        # JAX validation prompt lives in validation_agent.py for historical
+        # reasons; the selector returns the MaxText variant only.
+        "maxtext": MAXTEXT_VALIDATION_PROMPT,
+    },
+    "REPAIR_PROMPT": {
+        "maxtext": MAXTEXT_REPAIR_PROMPT,
+    },
+    "MAXTEXT_CLASSIFY_PROMPT": {
+        "maxtext": MAXTEXT_CLASSIFY_PROMPT,
+    },
+    "MAXTEXT_YAML_PROMPT": {
+        "maxtext": MAXTEXT_YAML_PROMPT,
+    },
+    "MAXTEXT_LAYERS_PROMPT": {
+        "maxtext": MAXTEXT_LAYERS_PROMPT,
+    },
+    "MAXTEXT_CKPT_CONVERTER_PROMPT": {
+        "maxtext": MAXTEXT_CKPT_CONVERTER_PROMPT,
+    },
+}
+
+
+def get_prompt(name: str, target: str = "jax") -> str | None:
+  """Selects a prompt template by (name, target).
+
+  Args:
+    name: The logical prompt identifier (e.g. "MIGRATE_MODULE_TO_JAX_PROMPT",
+      "VALIDATION_PROMPT", "MAXTEXT_YAML_PROMPT").
+    target: The conversion target — "jax" (default) or "maxtext".
+
+  Returns:
+    The prompt template string, or None if no entry matches. Callers that
+    need a hard requirement should check for None and raise.
+  """
+  by_target = _PROMPT_REGISTRY.get(name)
+  if not by_target:
+    return None
+  if target in by_target:
+    return by_target[target]
+  # Fall back to JAX for any name registered there.
+  return by_target.get("jax")

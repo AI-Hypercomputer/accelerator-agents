@@ -1,0 +1,26 @@
+task_id: retnet_retention
+description: Kernel task for retnet_retention
+input_gen_code: |-
+  def get_inputs():
+    import jax
+    import jax.numpy as jnp
+
+    CONFIG = {
+        'name': 'retnet_6_7b_retention',
+        'model': 'RetNet-6.7B',
+        'operator': 'multi_scale_retention',
+        'batch': 1,
+        'seq_len': 2048,
+        'num_heads': 16,
+        'head_dim': 256,
+        'd_model': 4096,
+    }
+    dtype=jnp.bfloat16
+    key = jax.random.PRNGKey(42)
+    keys = jax.random.split(key, 3)
+    B, S = CONFIG['batch'], CONFIG['seq_len']
+    H, D = CONFIG['num_heads'], CONFIG['head_dim']
+    query = jax.random.normal(keys[0], (B, H, S, D), dtype=dtype)
+    key_t = jax.random.normal(keys[1], (B, H, S, D), dtype=dtype)
+    value = jax.random.normal(keys[2], (B, H, S, D), dtype=dtype)
+    return ([query, key_t, value], [])

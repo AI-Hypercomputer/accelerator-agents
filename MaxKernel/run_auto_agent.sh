@@ -12,6 +12,7 @@ set -e
 
 UI_MODE=false
 RESET_MODE=false
+STOP_MODE=false
 OUTPUT_FILE="output.txt"
 UI_PORT=1430
 SESSION_ID=""
@@ -28,16 +29,21 @@ while [[ $# -gt 0 ]]; do
             RESET_MODE=true
             shift
             ;;
+        --stop)
+            STOP_MODE=true
+            shift
+            ;;
         --session)
             SESSION_ID="$2"
             shift 2
             ;;
         -h|--help)
-            echo "Usage: $0 [--ui] [--reset] [--session <session_id>]"
+            echo "Usage: $0 [--ui] [--reset] [--stop] [--session <session_id>]"
             echo ""
             echo "Options:"
             echo "  --ui              Start with web UI on port $UI_PORT"
             echo "  --reset           Kill existing instances and restart"
+            echo "  --stop            Kill existing instances and exit"
             echo "  --session <id>    Specify session ID to resume (CLI mode only)"
             echo "  --help            Show this help message"
             echo ""
@@ -70,7 +76,21 @@ kill_existing_processes() {
     pkill -9 -f "adk web" || true
     pkill -9 -f "adk run" || true
     
+    # Stop servers
+    echo "Stopping background servers..."
+    bash auto_agent/server_utils/setup.sh --end || true
+    
     echo "Existing processes terminated."
+}
+
+start_background_servers() {
+    echo "Starting background servers (CPU, TPU, Eval)..."
+    
+    # Run the setup script to start all servers
+    bash auto_agent/server_utils/setup.sh --start-all
+    
+    echo "Waiting for servers to initialize..."
+    sleep 5 # Give them a few seconds to bind to ports
 }
 
 # Function to select or manage session
@@ -215,12 +235,22 @@ echo "Mode: $([ "$UI_MODE" = true ] && echo "UI" || echo "CLI")"
 echo "Reset: $([ "$RESET_MODE" = true ] && echo "Yes" || echo "No")"
 echo ""
 
+# Stop all processes if requested
+if [ "$STOP_MODE" = true ]; then
+    kill_existing_processes
+    echo "All processes stopped."
+    exit 0
+fi
+
 # Kill existing processes if reset is requested
 if [ "$RESET_MODE" = true ]; then
     kill_existing_processes
     kill_existing_processes
     echo ""
 fi
+
+# Start the background servers
+start_background_servers
 
 # Start the appropriate mode
 if [ "$UI_MODE" = true ]; then

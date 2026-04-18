@@ -20,9 +20,6 @@ from auto_agent.callbacks import create_path_saver
 from auto_agent.config import model_config, thinking_planner
 from auto_agent.constants import EVAL_SERVER_PORT, MODEL_NAME
 from auto_agent.custom_types import CustomLlmAgent
-from auto_agent.server_utils.server_manager_mixin import (
-  ServerManagerMixin,
-)
 from auto_agent.subagents.testing.prompts import (
   fix_test_script,
   gen_test_file,
@@ -39,19 +36,13 @@ MOCK_EXECUTION_TIMEOUT = 60 * 3
 TEST_EXECUTION_TIMEOUT = 60 * 5
 
 
-class TestRunner(ServerManagerMixin, BaseAgent):
+class TestRunner(BaseAgent):
   """Executes pytest on a generated test file and captures results with full tracebacks.
-
-  Automatically manages eval server lifecycle:
-  - Starts TPU and eval servers if not running
-  - Runs tests
-  - Always tears down servers after completion
   """
 
   input_key: Optional[str] = None
   output_key: Optional[str] = None
   before_agent_callback: Optional[Callable] = None
-  auto_manage_servers: bool = True
 
   def __init__(
     self,
@@ -59,13 +50,10 @@ class TestRunner(ServerManagerMixin, BaseAgent):
     input_key: str,
     output_key: str,
     before_agent_callback: Optional[Callable] = None,
-    auto_manage_servers: bool = True,
   ):
     super().__init__(name=name, before_agent_callback=before_agent_callback)
     self.input_key = input_key
     self.output_key = output_key
-    self.auto_manage_servers = auto_manage_servers
-    self._servers_started = []
 
   async def _run_async_impl(
     self, ctx: InvocationContext
@@ -107,22 +95,6 @@ class TestRunner(ServerManagerMixin, BaseAgent):
       return
 
     try:
-      servers_ok, error_msg = await self._ensure_servers_running()
-      if not servers_ok:
-        yield Event(
-          author=self.name,
-          actions=EventActions(
-            state_delta={
-              self.output_key: {
-                "exit_code": -1,
-                "output": f"Server startup failed: {error_msg}",
-                "success": False,
-              }
-            }
-          ),
-        )
-        return
-
       logging.info(
         f"[{self.name}] Dispatching pytest on {test_file_path} to eval server"
       )
@@ -195,8 +167,7 @@ class TestRunner(ServerManagerMixin, BaseAgent):
           }
         ),
       )
-    finally:
-      await self._cleanup_servers()
+
 
 
 class SyntaxValidationAgent(BaseAgent):

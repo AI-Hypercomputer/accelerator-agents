@@ -11,26 +11,15 @@ from auto_agent.constants import (
   REQUEST_TIMEOUT,
   TPU_TIMEOUT,
 )
-from auto_agent.server_utils.server_manager_mixin import (
-  ServerManagerMixin,
-)
 
 
-class KernelCompilationChecker(ServerManagerMixin, BaseAgent):
+class KernelCompilationChecker(BaseAgent):
   """Checks whether kernel compiles and escalates to stop the loop if grade is 'pass'.
-
-  Automatically manages eval server lifecycle:
-  - Starts TPU and eval servers if not running
-  - Runs compilation check
-  - Tears down servers after completion if auto_manage_servers is True
   """
 
   input_key: Optional[str] = None
   output_key: Optional[str] = None
   before_agent_callback: Optional[Callable] = None
-  auto_manage_servers: bool = (
-    False  # Default to False to preserve existing behavior
-  )
 
   def __init__(
     self,
@@ -38,13 +27,10 @@ class KernelCompilationChecker(ServerManagerMixin, BaseAgent):
     input_key: str,
     output_key: str,
     before_agent_callback: Optional[Callable] = None,
-    auto_manage_servers: bool = False,
   ):
     super().__init__(name=name, before_agent_callback=before_agent_callback)
     self.input_key = input_key
     self.output_key = output_key
-    self.auto_manage_servers = auto_manage_servers
-    self._servers_started = []  # Track which servers we started
 
   async def _run_async_impl(
     self, ctx: InvocationContext
@@ -59,17 +45,7 @@ class KernelCompilationChecker(ServerManagerMixin, BaseAgent):
       return
 
     try:
-      # Ensure servers are running before compilation check
-      servers_ok, error_msg = await self._ensure_servers_running()
-      if not servers_ok:
-        logging.error(f"[{self.name}] Server startup failed: {error_msg}")
-        yield Event(
-          author=self.name,
-          actions=EventActions(
-            state_delta={self.output_key: f"Server startup failed: {error_msg}"}
-          ),
-        )
-        return
+
       # Call the TPU server to execute the code
       logging.info(f"[{self.name}] Running code")
       async with aiohttp.ClientSession(
@@ -142,6 +118,4 @@ class KernelCompilationChecker(ServerManagerMixin, BaseAgent):
         f"Exception during code execution: {str(e)}"
       )
       yield Event(author=self.name)
-    finally:
-      # Cleanup servers if we started them
-      await self._cleanup_servers()
+

@@ -11,27 +11,16 @@ from auto_agent.constants import (
   REQUEST_TIMEOUT,
   TPU_TIMEOUT,
 )
-from auto_agent.server_utils.server_manager_mixin import (
-  ServerManagerMixin,
-)
 
 
-class KernelProfiler(ServerManagerMixin, BaseAgent):
+class KernelProfiler(BaseAgent):
   """Profiles the kernel to identify performance bottlenecks.
-
-  Automatically manages eval server lifecycle:
-  - Starts TPU and eval servers if not running
-  - Runs profiling
-  - Tears down servers after completion if auto_manage_servers is True
   """
 
   input_key: Optional[str] = None
   output_key: Optional[str] = None
   before_agent_callback: Optional[Callable] = None
   raise_exception_upon_success: bool = True
-  auto_manage_servers: bool = (
-    False  # Default to False to preserve existing behavior
-  )
 
   def __init__(
     self,
@@ -40,14 +29,11 @@ class KernelProfiler(ServerManagerMixin, BaseAgent):
     output_key: str,
     before_agent_callback: Optional[Callable] = None,
     raise_exception_upon_success: bool = True,
-    auto_manage_servers: bool = False,
   ):
     super().__init__(name=name, before_agent_callback=before_agent_callback)
     self.input_key = input_key
     self.output_key = output_key
     self.raise_exception_upon_success = raise_exception_upon_success
-    self.auto_manage_servers = auto_manage_servers
-    self._servers_started = []  # Track which servers we started
 
   async def _run_async_impl(
     self, ctx: InvocationContext
@@ -62,17 +48,7 @@ class KernelProfiler(ServerManagerMixin, BaseAgent):
       return
 
     try:
-      # Ensure servers are running before profiling
-      servers_ok, error_msg = await self._ensure_servers_running()
-      if not servers_ok:
-        logging.error(f"[{self.name}] Server startup failed: {error_msg}")
-        yield Event(
-          author=self.name,
-          actions=EventActions(
-            state_delta={self.output_key: f"Server startup failed: {error_msg}"}
-          ),
-        )
-        return
+
       # Call the TPU server to execute the code
       logging.info(f"[{self.name}] Running code")
       async with aiohttp.ClientSession(
@@ -188,6 +164,4 @@ class KernelProfiler(ServerManagerMixin, BaseAgent):
           }
         ),
       )
-    finally:
-      # Cleanup servers if we started them
-      await self._cleanup_servers()
+

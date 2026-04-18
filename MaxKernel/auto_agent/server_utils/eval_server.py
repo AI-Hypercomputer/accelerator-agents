@@ -25,7 +25,7 @@ logging.basicConfig(
 
 app = FastAPI(title="Agent Evaluation Server", version="1.0.0")
 
-tpu_semaphore = asyncio.Semaphore(1)
+backend_semaphore = asyncio.Semaphore(1)
 
 
 class Backend:
@@ -111,19 +111,15 @@ class Evaluator:
 
     logging.info(f"Evaluator initialized with backends: {self.backends}")
 
-  async def get_available_backend(self, backend_type: Optional[str] = None):
+  def get_available_backend(self, backend_type: Optional[str] = None):
     """
-    Get an available backend, optionally filtered by type.
-
-    Args:
-        backend_type: If specified, only return backends of this type ("tpu" or "cpu")
+    Get an available backend without blocking, optionally filtered by type.
     """
-    while True:
-      for backend in self.backends:
-        if backend.get_status() == "available":
-          if backend_type is None or backend.backend_type == backend_type:
-            return backend
-      await asyncio.sleep(0.1)
+    for backend in self.backends:
+      if backend.get_status() == "available":
+        if backend_type is None or backend.backend_type == backend_type:
+          return backend
+    return None
 
 
 evaluator = Evaluator()
@@ -139,17 +135,20 @@ async def evaluate(request: EvalRequest):
   if request.eval_type not in EvalTypes:
     raise HTTPException(status_code=400, detail="Invalid evaluation type")
 
-  # Acquire semaphore to ensure backend availability
-  async with tpu_semaphore:
-    # Get available backend, optionally filtered by requested backend type
-    backend = await evaluator.get_available_backend(
-      backend_type=request.backend_type
-    )
-    backend_ip = backend.ip
-    backend_port = backend.port
-    backend_name = backend.name
-    backend_type = backend.backend_type
-    backend.set_status("busy")
+  # Acquire backend, retry if busy
+  while True:
+    async with backend_semaphore:
+      backend = evaluator.get_available_backend(
+        backend_type=request.backend_type
+      )
+      if backend:
+        backend.set_status("busy")
+        backend_ip = backend.ip
+        backend_port = backend.port
+        backend_name = backend.name
+        backend_type = backend.backend_type
+        break
+    await asyncio.sleep(0.1)
 
   try:
     # Start evaluation process

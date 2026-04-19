@@ -69,7 +69,12 @@ class GeminiTool:
         str: The generated text response from the Gemini API.
     """
     headers = {"Content-Type": "application/json"}
-    payload = {"contents": [{"parts": [{"text": user_prompt}], "role": "user"}]}
+    payload = {
+        "contents": [{"parts": [{"text": user_prompt}], "role": "user"}],
+        "generationConfig": {
+            "maxOutputTokens": 65536,
+        },
+    }
     if self.system_instruction:
       payload["system_instruction"] = {
           "parts": [{"text": self.system_instruction}]

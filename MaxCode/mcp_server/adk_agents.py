@@ -3,6 +3,7 @@
 import models
 from tools import evaluation_tool
 from tools import migration_tool
+from tools import verification_tool
 from google.adk.agents.llm_agent import LlmAgent as Agent
 from google.adk.models.google_llm import Gemini
 
@@ -39,6 +40,7 @@ You MUST parse this JSON to get the paths for the next steps.
 Always wait for a tool to succeed before moving to the next step. If a step fails, report the error immediately and stop.""",
     tools=[
         migration_tool.convert_code_tool,
+        verification_tool.verify_conversion_tool,
         evaluation_tool.generate_model_configs_tool,
         evaluation_tool.generate_oracle_data_tool,
         evaluation_tool.run_equivalence_tests_tool,
@@ -66,5 +68,6 @@ evaluation_agent = Agent(
         evaluation_tool.generate_oracle_data_tool,
         evaluation_tool.generate_equivalence_tests_tool,
         evaluation_tool.run_equivalence_tests_tool,
+        verification_tool.verify_conversion_tool,
     ],
 )

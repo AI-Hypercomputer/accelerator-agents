@@ -361,7 +361,6 @@ kernel_compilation_checker_for_validation = KernelCompilationChecker(
   input_key="kernel_code",
   output_key="compilation_results",
   before_agent_callback=load_single_kernel_to_state,
-  auto_manage_servers=True,
 )
 
 kernel_compilation_validation_loop = KernelCompilationValidationLoop(

@@ -67,7 +67,6 @@ eval_profile_agent = KernelProfiler(
   name="ProfileEvalAgent",
   input_key="profiling_script",
   output_key="profiling_results",
-  auto_manage_servers=True,
 )
 
 

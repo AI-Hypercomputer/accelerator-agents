@@ -180,7 +180,7 @@ install_dependencies() {
     fi
     
     # Check if the package is already installed in editable mode
-    if pip show auto_agent >/dev/null 2>&1; then
+    if pip show hitl-agent >/dev/null 2>&1; then
         print_info "Repo package already installed, skipping..."
     else
         print_info "Installing package in editable mode..."

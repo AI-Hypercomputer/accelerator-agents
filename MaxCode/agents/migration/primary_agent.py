@@ -523,6 +523,17 @@ class PrimaryAgent(base.Agent):
     if os.path.isfile(repo_path):
       with open(repo_path, "r", encoding="utf-8", errors="replace") as f:
         pytorch_code = f.read()
+      # Look for a companion utils file (e.g. merged_utils.py beside merged_model.py)
+      base, ext = os.path.splitext(repo_path)
+      for utils_candidate in [
+          base.replace("_model", "_utils") + ext,
+          base + "_utils" + ext,
+      ]:
+        if utils_candidate != repo_path and os.path.isfile(utils_candidate):
+          with open(utils_candidate, "r", encoding="utf-8", errors="replace") as f:
+            pytorch_code += "\n\n" + f.read()
+          logger.info("MaxText: appended companion utils from %s", utils_candidate)
+          break
       model_name = self._model_name_from_path(repo_path)
     elif os.path.isdir(repo_path):
       from agents.migration.merge_agent import MergeAgent
@@ -531,6 +542,8 @@ class PrimaryAgent(base.Agent):
       merge_result = merger.run(repo_path)
       self._merge_result = merge_result
       pytorch_code = merge_result.model_code
+      if merge_result.utility_code:
+        pytorch_code += "\n\n" + merge_result.utility_code
       model_name = self._model_name_from_path(repo_path)
       logger.info("MaxText: merged model code from %d files (%d chars)",
                   len(merge_result.model_files), len(merge_result.model_code))

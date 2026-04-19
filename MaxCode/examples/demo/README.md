@@ -44,6 +44,8 @@ python step3_merge.py
 
 # Step 4: Convert to JAX with automatic validation and repair
 python step4_convert.py
+# -- OR convert to MaxText (YAML config + JAX layers + checkpoint converter) --
+python step4_convert_maxtext.py
 
 # Step 5: Verify conversion quality (scorecard)
 python step5_verify.py
@@ -89,6 +91,17 @@ Runs the full migration pipeline on the merged model file:
 3. Auto-repairs any deviations (wrong init, dropped features, incorrect ops)
 4. Saves the final JAX file
 
+### Step 4 (MaxText) — Convert to MaxText
+An alternative to the plain JAX path that targets Google's
+[MaxText](https://github.com/AI-Hypercomputer/maxtext) TPU training stack.
+Produces up to three artifacts:
+- **YAML config overlay** — always emitted; maps model dimensions onto MaxText's
+  config schema.
+- **JAX layers file** — emitted when the architecture is `custom` or belongs to
+  a known family that lacks a built-in MaxText implementation (e.g. `qwen3_next`).
+- **Checkpoint converter** — best-effort script to convert HuggingFace / PyTorch
+  weights into an Orbax checkpoint consumable by MaxText.
+
 ### Step 5 — Verify Conversion Quality
 Produces a scorecard measuring how complete and correct the conversion is:
 - **Completeness** (AST-based, no LLM): compares classes, methods, and
@@ -105,11 +118,18 @@ and filtered false positives) are saved to `output/verification_scorecard.json`.
 
 ## Output
 
-After running, the converted JAX file is saved to `output/<repo_name>_jax.py`.
-For example:
+After running, results are saved to a timestamped subdirectory under `output/`.
+
+**JAX path** (`step4_convert.py`):
 ```
-output/Multimodal_Transformer_jax.py            # default repo
-output/time_series_forecasting_pytorch_jax.py   # custom repo
+output/<timestamp>/<repo_name>_jax.py
+```
+
+**MaxText path** (`step4_convert_maxtext.py`):
+```
+output/<timestamp>/MaxText/configs/models/<model>.yml    # YAML config overlay
+output/<timestamp>/MaxText/layers/<model>.py             # JAX layers (when applicable)
+output/<timestamp>/utils/convert_<model>_ckpt.py         # checkpoint converter
 ```
 
 ## File Overview
@@ -121,5 +141,6 @@ output/time_series_forecasting_pytorch_jax.py   # custom repo
 | `step2_populate_rag.py` | Build the RAG reference database |
 | `step3_merge.py` | Auto-detect model files, filter by import graph, and merge |
 | `step4_convert.py` | Run migration + validation + repair |
+| `step4_convert_maxtext.py` | Convert to MaxText (YAML + layers + ckpt converter) |
 | `step5_verify.py` | Verify conversion quality (scorecard) |
 | `requirements.txt` | Python dependencies |

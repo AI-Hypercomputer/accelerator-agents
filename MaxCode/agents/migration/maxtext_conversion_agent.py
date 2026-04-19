@@ -38,6 +38,10 @@ _KNOWN_DECODER_BLOCKS = (
     "default", "custom",
 )
 
+# Decoder blocks classified as known families but lacking a built-in
+# MaxText JAX implementation. These always get a layers file emitted.
+_FORCE_LAYERS_BLOCKS = frozenset({"qwen3_next"})
+
 
 @dataclass
 class MaxTextArtifacts:
@@ -125,6 +129,11 @@ def _extract_dim_hints(pytorch_code: str) -> Dict[str, Any]:
         # Don't overwrite an earlier sighting — first wins (usually the
         # default-bearing assignment).
         hints.setdefault(tgt.attr, node.value.value)
+    # Dataclass-style class-level annotations: `hidden_size: int = 2048`
+    if isinstance(node, ast.AnnAssign):
+      if isinstance(node.target, ast.Name) and node.target.id in interesting:
+        if node.value and isinstance(node.value, ast.Constant):
+          hints.setdefault(node.target.id, node.value.value)
   return hints
 
 
@@ -340,7 +349,7 @@ class MaxTextConversionAgent(base.Agent):
     yaml_config = self._emit_yaml(pytorch_code, decoder_block, justification)
 
     layers_py: Optional[str] = None
-    if decoder_block == "custom":
+    if decoder_block == "custom" or decoder_block in _FORCE_LAYERS_BLOCKS:
       layers_py = self._emit_layers(pytorch_code, justification)
 
     ckpt_converter_py = self._emit_ckpt_converter(

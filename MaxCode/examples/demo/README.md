@@ -49,6 +49,8 @@ python step4_convert_maxtext.py
 
 # Step 5: Verify conversion quality (scorecard)
 python step5_verify.py
+# -- OR verify MaxText conversion quality --
+python step5_verify_maxtext.py
 ```
 
 ## What Each Step Does
@@ -124,6 +126,17 @@ If `GOOGLE_API_KEY` is not set, the correctness check is skipped and only
 the completeness score is reported. Results (including full deviation details
 and filtered false positives) are saved to `output/verification_scorecard.json`.
 
+### Step 5 (MaxText) — Verify MaxText Conversion Quality
+The MaxText counterpart of `step5_verify.py`. Automatically finds the most
+recent timestamped output directory containing MaxText artifacts and compares
+the generated layers file against the PyTorch source. Uses the same
+completeness and correctness metrics.
+
+If the run produced only a YAML config overlay (known block with a built-in
+MaxText implementation, so no layers file was emitted), the script reports
+that verification is not applicable and exits cleanly. Results are saved to
+`verification_maxtext_scorecard.json` inside the timestamped output directory.
+
 ## Output
 
 After running, results are saved to a timestamped subdirectory under `output/`.
@@ -151,4 +164,5 @@ output/<timestamp>/utils/convert_<model>_ckpt.py         # checkpoint converter
 | `step4_convert.py` | Run migration + validation + repair |
 | `step4_convert_maxtext.py` | Convert to MaxText (YAML + layers + ckpt converter) |
 | `step5_verify.py` | Verify conversion quality (scorecard) |
+| `step5_verify_maxtext.py` | Verify MaxText conversion quality (scorecard) |
 | `requirements.txt` | Python dependencies |

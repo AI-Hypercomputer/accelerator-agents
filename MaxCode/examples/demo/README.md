@@ -97,8 +97,16 @@ An alternative to the plain JAX path that targets Google's
 Produces up to three artifacts:
 - **YAML config overlay** — always emitted; maps model dimensions onto MaxText's
   config schema.
-- **JAX layers file** — emitted when the architecture is `custom` or belongs to
-  a known family that lacks a built-in MaxText implementation (e.g. `qwen3_next`).
+- **JAX layers file** — whether this file is emitted depends on the classifier
+  result:
+  - *Known block with built-in MaxText implementation* (e.g. `llama3`, `gemma2`):
+    **not emitted** — MaxText already has the JAX code, so the YAML overlay alone
+    is enough.
+  - *Known block without a built-in implementation* (e.g. `qwen3_next`):
+    **emitted** — the block is recognised but MaxText has no JAX code for it yet,
+    so a layers file is generated.
+  - *No known block matches*: **emitted** — the architecture is novel, so a full
+    custom layers file is generated.
 - **Checkpoint converter** — best-effort script to convert HuggingFace / PyTorch
   weights into an Orbax checkpoint consumable by MaxText.
 

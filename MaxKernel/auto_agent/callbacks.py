@@ -98,6 +98,29 @@ def save_kernel_and_plan_paths(
   return None
 
 
+def save_base_kernel_and_plan_paths(
+  tool: BaseTool,
+  args: Dict[str, Any],
+  tool_context: ToolContext,
+  tool_response: Optional[Dict],
+) -> Optional[Dict]:
+  """Saves both base_kernel_path and kernel_plan_path during planning."""
+  if "read" in tool.name.lower() or "write" in tool.name.lower():
+    file_path = args.get("path", None)
+    if file_path:
+      if "plan" in file_path.lower() and file_path.endswith(".md"):
+        tool_context.state["kernel_plan_path"] = file_path
+        logging.info(
+          f"Saved plan path to kernel_plan_path: {file_path} (from tool: {tool.name})"
+        )
+      else:
+        tool_context.state["base_kernel_path"] = file_path
+        logging.info(
+          f"Saved base kernel path to base_kernel_path: {file_path} (from tool: {tool.name})"
+        )
+  return None
+
+
 def load_single_kernel_to_state(callback_context: CallbackContext):
   """
   Loads a single kernel file content into state.

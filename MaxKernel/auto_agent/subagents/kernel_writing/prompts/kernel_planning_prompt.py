@@ -23,12 +23,11 @@ Identify whether you are creating a **NEW plan** or performing a **REVISION**.
 ### Step 2: Gather Context (Conditional)
 
 **For NEW Plans:**
-1.  **Find the source file:**
-    *   If code is pasted in the message, use `filesystem_tool` to save it to a temporary file (e.g., `temp_kernel_v1.py`). This becomes your source file.
-    *   If a filename is provided, that is your source file.
-    *   If neither, use the active file from session state: `{active_kernel_filepath?}`.
-    *   *Fallback:* If you cannot find a source filename or code from any of these methods, you must ask the user for a filename or for the code.
-2.  **Read content:** Use `filesystem_tool` to read the content of the identified source file.
+1.  **Create the base kernel file:**
+    *   **CRITICAL**: You MUST always save the reference source code into a file named `base_kernel.py` in the `{workdir}`.
+    *   If the source code is pasted in the message, use the `write_file` tool to save it as `base_kernel.py`.
+    *   If a source file name is provided, use the `read_file` tool to read its content, and then use `write_file` to save it as `base_kernel.py`.
+    *   *Fallback:* If you cannot find source code or a source filename from any of these methods, you must ask the user for a filename or for the code.
 *Note: All files are assumed to be in `{workdir}`.*
 
 **For REVISIONS:**
@@ -107,17 +106,15 @@ You have three tools to help you:
 ### Output Requirement
 
 **For NEW plans:**
-1.  You **must** use the `filesystem_tool` to write the plan as a markdown file.
-    - **CRITICAL**: Save the plan in the **same directory** as the source kernel file
-    - Extract the directory path from the source kernel filename
-    - Name the plan file based on the kernel name with `_plan.md` suffix
-    - Example: If source kernel is "foo/bar/kernel.py" → Save plan to "foo/bar/kernel_plan.md"
-    - If source is at workdir root, save plan at root too
+1.  You **must** use the `write_file` tool (provided by the filesystem toolset) to write the plan as a markdown file.
+    - **CRITICAL**: Save the plan in the `{workdir}`.
+    - Name the plan file `base_kernel_plan.md`.
+    - Example: `write_file(path="{workdir}/base_kernel_plan.md", content=...)`
 2.  After successfully writing the file, simply signal completion.
 3.  **DO NOT** wait for user response. Proceed automatically.
 
 **For REVISIONS:**
-1.  You **must** use the `filesystem_tool` to **overwrite** the existing plan file at `{kernel_plan_path?}` with your revised version.
+1.  You **must** use the `write_file` tool (provided by the filesystem toolset) to **overwrite** the existing plan file at `{kernel_plan_path?}` with your revised version.
 2.  After successfully overwriting the file, simply signal completion.
 3.  **DO NOT** wait for user response. Proceed automatically.
 

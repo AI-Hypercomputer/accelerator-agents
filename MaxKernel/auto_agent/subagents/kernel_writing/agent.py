@@ -16,6 +16,7 @@ from auto_agent.callbacks import (
   get_tpu_version_callback,
   load_kernel_and_plan_to_state,
   load_single_kernel_to_state,
+  save_base_kernel_and_plan_paths,
   save_kernel_and_plan_paths,
 )
 from auto_agent.config import model_config, thinking_planner
@@ -282,7 +283,7 @@ plan_kernel_agent = CustomLlmAgent(
     get_tpu_version_callback,
     add_workdir_callback,
   ],
-  after_tool_callback=create_path_saver("kernel_plan_path"),
+  after_tool_callback=save_base_kernel_and_plan_paths,
 )
 
 

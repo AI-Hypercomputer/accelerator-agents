@@ -85,6 +85,7 @@ class EvalRequest(BaseModel):
   code: str
   timeout: Optional[int] = 30
   backend_type: Optional[str] = None  # "tpu", "cpu", or None for any available
+  dependencies: Optional[dict] = None
 
 
 class Evaluator:
@@ -167,6 +168,7 @@ async def evaluate(request: EvalRequest):
           "eval_type": request.eval_type.value,
           "code": request.code,
           "timeout": request.timeout,
+          "dependencies": request.dependencies,
         },
       ) as response:
         result = await response.json()

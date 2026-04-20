@@ -102,11 +102,24 @@ class TestRunner(BaseAgent):
       with open(test_file_path, "r") as f:
         code_content = f.read()
 
+      base_kernel_path = ctx.session.state.get("base_kernel_path", "")
+      optimized_kernel_path = ctx.session.state.get("optimized_kernel_path", "")
+      dependencies = {}
+      
+      if base_kernel_path and os.path.exists(base_kernel_path):
+        with open(base_kernel_path, "r") as f:
+          dependencies[os.path.basename(base_kernel_path)] = f.read()
+          
+      if optimized_kernel_path and os.path.exists(optimized_kernel_path):
+        with open(optimized_kernel_path, "r") as f:
+          dependencies[os.path.basename(optimized_kernel_path)] = f.read()
+
       payload = {
         "eval_type": "unified_test",
         "code": code_content,
         "timeout": TEST_EXECUTION_TIMEOUT,
         "backend_type": "tpu",
+        "dependencies": dependencies,
       }
 
       async with aiohttp.ClientSession() as session:
@@ -593,11 +606,18 @@ from unittest.mock import MagicMock
         with open(tmp_test_path, "r") as f:
           mock_code_content = f.read()
 
+        base_kernel_path = ctx.session.state.get("base_kernel_path", "")
+        dependencies = {}
+        if base_kernel_path and os.path.exists(base_kernel_path):
+          with open(base_kernel_path, "r") as f:
+            dependencies[os.path.basename(base_kernel_path)] = f.read()
+
         payload = {
           "eval_type": "unified_test",
           "code": mock_code_content,
           "timeout": MOCK_EXECUTION_TIMEOUT,
           "backend_type": "cpu",
+          "dependencies": dependencies,
         }
 
         async with aiohttp.ClientSession() as session:

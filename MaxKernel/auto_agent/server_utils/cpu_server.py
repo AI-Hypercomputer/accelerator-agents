@@ -30,6 +30,7 @@ profile_semaphore = asyncio.Semaphore(1)
 class CodeRequest(BaseModel):
   code: str
   timeout: Optional[int] = 30
+  dependencies: Optional[dict] = None
 
 
 class CodeResponse(BaseModel):
@@ -87,12 +88,19 @@ async def compilation_test(request: CodeRequest):
         code_content = "\n".join(lines)
 
       request.code = code_content
-      # Create a temporary file to store the code
-      with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", delete=False
-      ) as temp_file:
-        temp_file.write(request.code)
-        temp_file_path = temp_file.name
+      # Create a temporary directory to store the code and dependencies
+      temp_dir = tempfile.mkdtemp()
+      temp_file_path = os.path.join(temp_dir, "run_code.py")
+      
+      if request.dependencies:
+        for filename, content in request.dependencies.items():
+          file_path = os.path.join(temp_dir, filename)
+          os.makedirs(os.path.dirname(file_path), exist_ok=True)
+          with open(file_path, "w") as f:
+            f.write(content)
+            
+      with open(temp_file_path, "w") as f:
+        f.write(request.code)
 
       # Execute the code in a subprocess with CPU-only environment
       process = await asyncio.create_subprocess_exec(
@@ -100,7 +108,7 @@ async def compilation_test(request: CodeRequest):
         temp_file_path,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        cwd=tempfile.gettempdir(),
+        cwd=temp_dir,
         env=get_cpu_env(),  # Force CPU backend
       )
 
@@ -133,11 +141,12 @@ async def compilation_test(request: CodeRequest):
       raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
     finally:
-      # Clean up the temporary file
-      if "temp_file_path" in locals():
+      # Clean up the temporary directory
+      if "temp_dir" in locals():
+        import shutil
         try:
-          os.unlink(temp_file_path)
-        except OSError:
+          shutil.rmtree(temp_dir)
+        except Exception:
           pass
       logging.info("Compilation test finished")
 
@@ -170,12 +179,19 @@ async def correctness_test(request: CodeRequest):
         code_content = "\n".join(lines)
 
       request.code = code_content
-      # Create a temporary file to store the code
-      with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", delete=False
-      ) as temp_file:
-        temp_file.write(request.code)
-        temp_file_path = temp_file.name
+      # Create a temporary directory to store the code and dependencies
+      temp_dir = tempfile.mkdtemp()
+      temp_file_path = os.path.join(temp_dir, "run_code.py")
+      
+      if request.dependencies:
+        for filename, content in request.dependencies.items():
+          file_path = os.path.join(temp_dir, filename)
+          os.makedirs(os.path.dirname(file_path), exist_ok=True)
+          with open(file_path, "w") as f:
+            f.write(content)
+            
+      with open(temp_file_path, "w") as f:
+        f.write(request.code)
 
       # Execute the code in a subprocess with CPU-only environment
       process = await asyncio.create_subprocess_exec(
@@ -183,7 +199,7 @@ async def correctness_test(request: CodeRequest):
         temp_file_path,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        cwd=tempfile.gettempdir(),
+        cwd=temp_dir,
         env=get_cpu_env(),  # Force CPU backend
       )
 
@@ -215,11 +231,12 @@ async def correctness_test(request: CodeRequest):
       raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
     finally:
-      # Clean up the temporary file
-      if "temp_file_path" in locals():
+      # Clean up the temporary directory
+      if "temp_dir" in locals():
+        import shutil
         try:
-          os.unlink(temp_file_path)
-        except OSError:
+          shutil.rmtree(temp_dir)
+        except Exception:
           pass
       logging.info("Correctness test finished")
 
@@ -252,12 +269,19 @@ async def performance_test(request: CodeRequest):
         code_content = "\n".join(lines)
 
       request.code = code_content
-      # Create a temporary file to store the code
-      with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", delete=False
-      ) as temp_file:
-        temp_file.write(request.code)
-        temp_file_path = temp_file.name
+      # Create a temporary directory to store the code and dependencies
+      temp_dir = tempfile.mkdtemp()
+      temp_file_path = os.path.join(temp_dir, "run_code.py")
+      
+      if request.dependencies:
+        for filename, content in request.dependencies.items():
+          file_path = os.path.join(temp_dir, filename)
+          os.makedirs(os.path.dirname(file_path), exist_ok=True)
+          with open(file_path, "w") as f:
+            f.write(content)
+            
+      with open(temp_file_path, "w") as f:
+        f.write(request.code)
 
       # Execute the code in a subprocess with CPU-only environment
       process = await asyncio.create_subprocess_exec(
@@ -265,7 +289,7 @@ async def performance_test(request: CodeRequest):
         temp_file_path,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        cwd=tempfile.gettempdir(),
+        cwd=temp_dir,
         env=get_cpu_env(),  # Force CPU backend
       )
 
@@ -297,11 +321,12 @@ async def performance_test(request: CodeRequest):
       raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
     finally:
-      # Clean up the temporary file
-      if "temp_file_path" in locals():
+      # Clean up the temporary directory
+      if "temp_dir" in locals():
+        import shutil
         try:
-          os.unlink(temp_file_path)
-        except OSError:
+          shutil.rmtree(temp_dir)
+        except Exception:
           pass
       logging.info("Performance test finished")
 
@@ -332,18 +357,27 @@ async def unified_test(request: CodeRequest):
         code_content = "\n".join(lines)
 
       request.code = code_content
-      with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", delete=False
-      ) as temp_file:
-        temp_file.write(request.code)
-        temp_file_path = temp_file.name
+      # Create a temporary directory to store the code and dependencies
+      temp_dir = tempfile.mkdtemp()
+      temp_file_path = os.path.join(temp_dir, "run_code.py")
+      
+      if request.dependencies:
+        for filename, content in request.dependencies.items():
+          file_path = os.path.join(temp_dir, filename)
+          os.makedirs(os.path.dirname(file_path), exist_ok=True)
+          with open(file_path, "w") as f:
+            f.write(content)
+            
+      with open(temp_file_path, "w") as f:
+        f.write(request.code)
 
+      # Execute the code in a subprocess with CPU-only environment
       process = await asyncio.create_subprocess_exec(
         sys.executable,
         temp_file_path,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        cwd=tempfile.gettempdir(),
+        cwd=temp_dir,
         env=get_cpu_env(),
       )
 
@@ -374,10 +408,12 @@ async def unified_test(request: CodeRequest):
       raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
     finally:
-      if "temp_file_path" in locals():
+      # Clean up the temporary directory
+      if "temp_dir" in locals():
+        import shutil
         try:
-          os.unlink(temp_file_path)
-        except OSError:
+          shutil.rmtree(temp_dir)
+        except Exception:
           pass
       logging.info("Unified test finished")
 
@@ -411,6 +447,13 @@ async def profile(request: CodeRequest):
 
       temp_dir = tempfile.mkdtemp()
       logging.info("temp_dir: " + str(temp_dir))
+
+      if request.dependencies:
+        for filename, content in request.dependencies.items():
+          file_path = os.path.join(temp_dir, filename)
+          os.makedirs(os.path.dirname(file_path), exist_ok=True)
+          with open(file_path, "w") as f:
+            f.write(content)
 
       # Create a temporary file to store the code within temp_dir
       temp_file_path = os.path.join(temp_dir, "profile_code.py")

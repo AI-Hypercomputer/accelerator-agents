@@ -1,4 +1,4 @@
 .pytest_cache/
 .env
-*functional_test.py
+*_test.py
 test_data/*

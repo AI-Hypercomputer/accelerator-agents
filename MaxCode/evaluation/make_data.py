@@ -11,9 +11,19 @@ import logging
 import os
 import pickle
 import sys
+from typing import Any
 
 import torch
 from torch import nn
+
+
+def _get_forward_hook(hook_name: str, dest_dict: dict[str, Any]):
+  """Returns a forward hook to capture intermediate activations."""
+
+  def hook(unused_module, unused_input, output):
+    dest_dict[hook_name] = output
+
+  return hook
 
 
 def generate_data(
@@ -82,6 +92,15 @@ def generate_data(
           torch.manual_seed(42)
           input_shape = config["input_shape"]
 
+          # Capture intermediate activations
+          intermediates = {}
+
+          for mod_name, mod in model.named_modules():
+            if mod_name:
+              mod.register_forward_hook(
+                  _get_forward_hook(mod_name, intermediates)
+              )
+
           # Generate dummy input(s)
           if isinstance(input_shape[0], list):
             dummy_input = tuple(torch.randn(*shape) for shape in input_shape)
@@ -92,7 +111,12 @@ def generate_data(
 
           # Extraction & Serialization
           weights = model.state_dict()
-          data = {"input": dummy_input, "output": output, "state_dict": weights}
+          data = {
+              "input": dummy_input,
+              "output": output,
+              "state_dict": weights,
+              "intermediates": intermediates,
+          }
 
           with open(output_path, "wb") as f:
             pickle.dump(data, f)

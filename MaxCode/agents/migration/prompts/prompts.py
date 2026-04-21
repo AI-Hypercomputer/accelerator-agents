@@ -69,6 +69,7 @@ JAX_BEST_PRACTICES = """
     - Every layer explicitly sets `use_bias=True` or `use_bias=False` to exactly match the PyTorch layer.
 17. **BatchNorm Momentum**: JAX momentum is the decay factor for old statistics (`x_new = momentum * x_old + (1 - momentum) * x_batch`), but PyTorch uses `1 - decay`. To ensure parity, you MUST set JAX momentum to `1 - pytorch_momentum`.
 18. **Data Layout**: Standardize on `NHWC` (Channels Last) for JAX performance, but include necessary `jnp.transpose` operations at input/output boundaries to match PyTorch's `NCHW` oracle outputs.
+19. **Activation Tracking**: To facilitate equivalence testing, you MUST instrument the JAX model to capture intermediate activations. For every major layer or block (e.g., after a Conv, Dense, or Attention block), use `self.sow('intermediates', 'name_of_activation', activation_tensor)` to record the output.
 
 ## CRITICAL: Faithfulness to Source Code
 
@@ -99,6 +100,7 @@ The rest of the repository files can be ignored.
 ---
 
 Guidelines:
+- **Mandatory Activation Parity**: The JAX model must be structured to allow verification of intermediate results. Use Flax's `sow` mechanism to capture activations for every significant layer, using names that clearly correspond to the PyTorch module's attributes.
 - Preserve the original code structure (functions, classes, variable names) unless modification is necessary for compatibility.
 - Think step-by-step before generating code: first, identify all PyTorch layers, operations, and data transformations; second, determine their JAX/Flax counterparts; and finally, generate the equivalent JAX code based on this analysis.
 - Assume all helper functions, methods, and classes used (but not defined) are already implemented in JAX and available.
@@ -147,6 +149,7 @@ Guidelines:
   - For GRU layers, PyTorch's `nn.GRU` uses separate `bias_ih_l` and `bias_hh_l`. When mapping to Flax, these biases MUST remain separate and be assigned to the correct kernel transformations (e.g. input and hidden transformations) to ensure correct gating: n_t = tanh(W_in*x_t + b_in + r_t * (W_hn*h_{{t-1}} + b_hh)). Unlike LSTM, GRU input and hidden biases MUST NOT be summed.
   - For LSTM layers, PyTorch's `nn.LSTM` concatenates gate weights (i, f, g, o) in `weight_ih_l` and `weight_hh_l`, while Flax's `LSTMCell` may store them as separate parameters (e.g., `ii/kernel`, `if/kernel`, `ig/kernel`, `io/kernel` for input weights and `hi/kernel`, `hf/kernel`, `hg/kernel`, `ho/kernel` for recurrent weights). When mapping PyTorch `state_dict` to JAX parameters for equivalence testing, you MUST split the PyTorch weights into 4 parts for each gate and assign them to the corresponding Flax parameters. For a hidden size `H`, slice PyTorch weights like `weight_ih_l[0:H, :]`, `weight_ih_l[H:2*H, :]`, etc. for gates i, f, g, o respectively. PyTorch's `bias_ih_l` and `bias_hh_l` must also be split into 4 slices each, and the corresponding slices must be SUMMED (`bias_ih_l_gate + bias_hh_l_gate`) to form the single bias parameter for each JAX gate. If `flax.linen.RNN` or `nn.scan` is used with `LSTMCell`, parameters may be nested inside a `scan` scope (e.g., `params['lstm']['scan(LSTMCell_0)']['...']`); ensure parameter mapping accounts for this nesting by inspecting the parameter tree via `jax.tree_util.tree_map(lambda x: x.shape, variables['params'])` and adjusting the mapping logic accordingly. If the assumed mapping structure doesn't match the initialized JAX model, raise an error.
   - For Transformer layers (`nn.MultiheadAttention`), PyTorch combines weights into `in_proj_weight`. You MUST generate test code that correctly splits and reshapes this combined weight into the separate `query`, `key`, and `value` kernels and biases expected by Flax's `MultiHeadDotProductAttention` for weight mapping.
+  - Hierarchical Logic Verification: Generate `absltest` cases that verify functional equivalence at the layer level. Use the `mutable=['intermediates']` capability in Flax (e.g., `model.apply(..., mutable=['intermediates'])`) or `sow` to capture JAX activations and compare them numerically against the 'intermediates' from the PyTorch oracle using `np.testing.assert_allclose`. You MUST pass the `err_msg` parameter (e.g., `err_msg=f"Mismatch in layer: {{layer_name}}"`) to `assert_allclose` so the user can easily see which specific sublayer failed.
 - Dynamic Parameter Inspection:
   - The generated test script MUST first initialize the JAX model and print its parameter structure using `jax.tree_util.tree_map(lambda x: x.shape, variables['params'])`.
   - Use this structure to dynamically verify that the paths used in the weight mapping actually exist. For multi-layer models, check for both `params['rnn_{{i}}']` and `params['layer_{{i}}']` patterns.
@@ -283,6 +286,9 @@ File content:
 {pytorch_code}
 ```
 
+Guidelines:
+- **Mandatory Activation Parity**: The JAX model must be structured to allow verification of intermediate results. Use Flax's `sow` mechanism to capture activations for every significant layer, using names that clearly correspond to the PyTorch module's attributes.
+
 Please think step by step about the conversion process before generating the code.
 Then, provide the JAX equivalent of the file content above.
 Ensure that the JAX code is idiomatic and follows best practices, such as using
@@ -310,6 +316,9 @@ The code is as follows:
 ```python
 {code}
 ```
+
+Guidelines:
+- **Mandatory Activation Parity**: The JAX model must be structured to allow verification of intermediate results. Use Flax's `sow` mechanism to capture activations for every significant layer, using names that clearly correspond to the PyTorch module's attributes.
 
 Please think step by step about the conversion process before generating the code.
 Then, provide the JAX equivalent of the code above, using JAX libraries like
@@ -357,6 +366,7 @@ IMPORTANT CONVERSION RULES:
    linear attention, implement BOTH modes and dispatch based on sequence length.
 5. Implement causal_conv1d as a standalone function with both prefill and
    single-step decode paths.
+6. **Mandatory Activation Parity**: The JAX model must be structured to allow verification of intermediate results. Use Flax's `sow` mechanism to capture activations for every significant layer, using names that clearly correspond to the PyTorch module's attributes.
 
 Please think step by step about the conversion process before generating the code.
 Then, provide the complete JAX equivalent of the entire file above.

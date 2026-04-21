@@ -10,7 +10,7 @@ You will be given the JAX/Flax code and the original PyTorch code. You need to g
 1. The JAX model can be instantiated and run with dummy inputs.
 2. The JAX model, when loaded with weights from the PyTorch model, produces numerically close outputs given the same inputs.
 
-You should use `absl.flags` to allow the user to specify the path to a pickle file containing a dictionary with keys 'input', 'output', and 'state_dict', generated from the original PyTorch model.
+You should use `absl.flags` to allow the user to specify the path to a pickle file containing a dictionary with keys 'input', 'output', 'state_dict', and 'intermediates', generated from the original PyTorch model.
 
 The JAX code is:
 ```python
@@ -31,7 +31,7 @@ Follow these instructions to generate the test file:
     *   Run `model.init()` and `model.apply()` with the dummy input.
     *   Assert that the output has the expected shape and contains no NaNs.
 4.  **Test 2: `test_equivalence()`**:
-    *   Load the pickle file specified by `_PICKLE_PATH.value`. The pickle file contains a dictionary with keys 'input', 'output', and 'state_dict'.
+    *   Load the pickle file specified by `_PICKLE_PATH.value`. The pickle file contains a dictionary with keys 'input', 'output', 'state_dict', and 'intermediates'.
     *   If PyTorch input is a tuple, use the first element.
     *   Convert PyTorch input tensor to a Numpy array using `.detach().numpy()`. If it's 4D (NCHW), transpose it to NHWC format for JAX `(0, 2, 3, 1)`.
     *   Instantiate the JAX model.
@@ -40,8 +40,8 @@ Follow these instructions to generate the test file:
         *   Linear weights: PyTorch `(Out, In)` -> Flax `(In, Out)`. Transpose with `(1, 0)`.
         *   Copy biases and other parameters without transpose.
         *   The JAX params structure may be nested, e.g., `{{'params': {{'Conv_0': {{'kernel': ..., 'bias': ...}}}}}}`. Map PyTorch weights to the correct Flax names and structure.
-    *   Run JAX `model.apply()` using the converted parameters and input.
-    *   Assert `np.testing.assert_allclose(jax_output, torch_output.detach().numpy(), atol=1e-5)` to check for numerical equivalence.
+    *   **Numerical Verification of Intermediates**: The test MUST use `model.apply(..., mutable=['intermediates'])` to extract captured JAX activations. It must then iterate through the `intermediates` dictionary provided in the oracle data (captured via PyTorch hooks) and use `np.testing.assert_allclose` to verify each JAX intermediate against its PyTorch counterpart. Ensure `err_msg=f"Mismatch in layer: {{layer_name}}"` is used for precise error reporting.
+    *   Assert `np.testing.assert_allclose(jax_output, torch_output.detach().numpy(), atol=1e-5)` to check for numerical equivalence of the final output.
 5.  Include `absltest.main()` runner block.
 
 Output **only** the Python code block for the test file. Do not include any text before or after the code.

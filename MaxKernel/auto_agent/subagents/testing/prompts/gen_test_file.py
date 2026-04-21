@@ -142,7 +142,7 @@ class TestPerformance:
         pass
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v", "--tb=short"])
+    sys.exit(pytest.main([__file__, "-v", "--tb=short"]))
 ```
 
 ### Important Guidelines

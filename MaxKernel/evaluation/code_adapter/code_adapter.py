@@ -8,8 +8,7 @@ from evaluation.code_adapter.prompts import (
   adapt_reference_prompt,
 )
 from evaluation.custom_types.kernel_task import KernelTask
-
-GEMINI_MODEL = "gemini-2.5-flash"
+from hitl_agent.constants import MODEL_NAME
 
 logging.basicConfig(
   level=logging.INFO,
@@ -60,7 +59,7 @@ class CodeAdapter:
     while attempt < self.max_retries:
       try:
         response = self.client.models.generate_content(
-          model=GEMINI_MODEL, contents=prompt, config=config
+          model=MODEL_NAME, contents=prompt, config=config
         )
         code = response.text.strip()
         if code.startswith("```python"):

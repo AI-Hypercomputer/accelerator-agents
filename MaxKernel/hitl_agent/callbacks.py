@@ -268,8 +268,11 @@ def get_tpu_version_callback(callback_context: CallbackContext):
 
 def add_workdir_callback(callback_context: CallbackContext):
   """Add working directory to state."""
-  callback_context.state["workdir"] = WORKDIR
-  logging.info(f"Set working directory to: {WORKDIR}")
+  session_id = callback_context.session.id
+  session_dir = os.path.join(WORKDIR, session_id)
+  os.makedirs(session_dir, exist_ok=True)
+  callback_context.state["workdir"] = session_dir
+  logging.info(f"Set working directory to: {session_dir}")
 
 
 def extract_fix_summary(

@@ -177,8 +177,7 @@ if __name__ == "__main__":
 ## Output Format
 When you have generated the test file:
 1. **Write the complete test file to disk** using the write_file tool.
-2. The file should be named: `test_{optimized_kernel_filename?}.py`
-3. Place it in the same directory as the kernel files (extract from {optimized_kernel_path?}).
+2. The file MUST be written to the exact path specified in session state: `{test_file_path?}`
 
 Generate a complete, runnable pytest test file now.
 """

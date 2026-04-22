@@ -85,6 +85,22 @@ class AutonomousPipelineAgent(BaseAgent):
         f"[{self.name}] Set kernel_plan_path: {ctx.session.state['kernel_plan_path']}"
       )
 
+    if "test_file_path" not in ctx.session.state:
+      ctx.session.state["test_file_path"] = os.path.join(
+        session_dir, "test_optimized_kernel.py"
+      )
+      logging.info(
+        f"[{self.name}] Set test_file_path: {ctx.session.state['test_file_path']}"
+      )
+
+    if "profiling_script_path" not in ctx.session.state:
+      ctx.session.state["profiling_script_path"] = os.path.join(
+        session_dir, "profile_optimized_kernel.py"
+      )
+      logging.info(
+        f"[{self.name}] Set profiling_script_path: {ctx.session.state['profiling_script_path']}"
+      )
+
     # Yield an event to publish the explicit path state updates to the framework
     yield Event(
       author=self.name,
@@ -94,6 +110,8 @@ class AutonomousPipelineAgent(BaseAgent):
           "base_kernel_path": ctx.session.state["base_kernel_path"],
           "optimized_kernel_path": ctx.session.state["optimized_kernel_path"],
           "kernel_plan_path": ctx.session.state["kernel_plan_path"],
+          "test_file_path": ctx.session.state["test_file_path"],
+          "profiling_script_path": ctx.session.state["profiling_script_path"],
         }
       ),
     )

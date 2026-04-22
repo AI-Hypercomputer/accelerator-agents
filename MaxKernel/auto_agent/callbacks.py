@@ -50,12 +50,13 @@ def create_path_saver(state_key: str):
           and "profile" in basename
         ):
           should_save = True
-        elif state_key == "optimized_kernel_path" and file_path.endswith(".py"):
-          if "test" not in basename and "profile" not in basename:
-            should_save = True
-        elif state_key == "base_kernel_path" and file_path.endswith(".py"):
-          if "test" not in basename and "profile" not in basename:
-            should_save = True
+        elif (
+          state_key == "optimized_kernel_path"
+          and basename == "optimized_kernel.py"
+        ):
+          should_save = True
+        elif state_key == "base_kernel_path" and basename == "base_kernel.py":
+          should_save = True
         elif (
           state_key == "kernel_plan_path"
           and file_path.endswith(".md")
@@ -93,11 +94,7 @@ def save_optimized_kernel_and_plan_paths(
           f"Saved plan path to kernel_plan_path: {file_path} (from tool: {tool.name})"
         )
       # Otherwise assume it's the kernel file
-      elif (
-        file_path.endswith(".py")
-        and "test" not in basename
-        and "profile" not in basename
-      ):
+      elif basename == "optimized_kernel.py":
         tool_context.state["optimized_kernel_path"] = file_path
         logging.info(
           f"Saved kernel path to optimized_kernel_path: {file_path} (from tool: {tool.name})"
@@ -121,11 +118,7 @@ def save_base_kernel_and_plan_paths(
         logging.info(
           f"Saved plan path to kernel_plan_path: {file_path} (from tool: {tool.name})"
         )
-      elif (
-        file_path.endswith(".py")
-        and "test" not in basename
-        and "profile" not in basename
-      ):
+      elif basename == "base_kernel.py":
         tool_context.state["base_kernel_path"] = file_path
         logging.info(
           f"Saved base kernel path to base_kernel_path: {file_path} (from tool: {tool.name})"

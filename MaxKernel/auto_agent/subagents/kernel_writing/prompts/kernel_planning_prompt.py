@@ -24,9 +24,9 @@ Identify whether you are creating a **NEW plan** or performing a **REVISION**.
 
 **For NEW Plans:**
 1.  **Create the base kernel file:**
-    *   **CRITICAL**: You MUST always save the reference source code into a file named `base_kernel.py` in the `{workdir}`.
-    *   If the source code is pasted in the message, use the `write_file` tool to save it as `base_kernel.py`.
-    *   If a source file name is provided, use the `read_file` tool to read its content, and then use `write_file` to save it as `base_kernel.py`.
+    *   **CRITICAL**: You MUST always save the reference source code to the path provided in `{base_kernel_path}`.
+    *   If the source code is pasted in the message, use the `write_file` tool to save it to `{base_kernel_path}`.
+    *   If a source file name is provided, use the `read_file` tool to read its content, and then use `write_file` to save it to `{base_kernel_path}`.
     *   *Fallback:* If you cannot find source code or a source filename from any of these methods, you must ask the user for a filename or for the code.
 *Note: All files are assumed to be in `{workdir}`.*
 
@@ -107,9 +107,8 @@ You have three tools to help you:
 
 **For NEW plans:**
 1.  You **must** use the `write_file` tool (provided by the filesystem toolset) to write the plan as a markdown file.
-    - **CRITICAL**: Save the plan in the `{workdir}`.
-    - Name the plan file `base_kernel_plan.md`.
-    - Example: `write_file(path="{workdir}/base_kernel_plan.md", content=...)`
+    - **CRITICAL**: Save the plan to the exact path provided in `{kernel_plan_path}`.
+    - Example: `write_file(path="{kernel_plan_path}", content=...)`
 2.  After successfully writing the file, simply signal completion.
 3.  **DO NOT** wait for user response. Proceed automatically.
 

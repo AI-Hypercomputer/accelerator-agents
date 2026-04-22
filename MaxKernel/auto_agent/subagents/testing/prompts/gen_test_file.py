@@ -121,6 +121,10 @@ from base_kernel_file import kernel_function_name as base_kernel
 # from optimized_kernel_file import kernel_function_name as optimized_kernel
 optimized_kernel = base_kernel  # Use baseline during validation
 
+def report_perf_metrics(execution_time_ms):
+    import sys
+    sys.__stdout__.write("PERF_METRICS: " + str(execution_time_ms) + "\n")
+
 class TestCompilation:
     def test_optimized_kernel_compiles(self):
         # Test implementation
@@ -142,7 +146,7 @@ class TestPerformance:
         pass
 
 if __name__ == "__main__":
-    sys.exit(pytest.main([__file__, "-v", "--tb=short"]))
+    sys.exit(pytest.main([__file__, "-v", "-s", "--tb=short"]))
 ```
 
 ### Important Guidelines
@@ -168,6 +172,7 @@ if __name__ == "__main__":
    - Report speedup ratios
    - Include warmup iterations
    - Use multiple runs for statistical stability
+   - **Structured Output**: At the end of the performance test, you MUST call the `report_perf_metrics(execution_time_ms)` helper function provided in the template to report the final average execution time of the optimized kernel. Do not use standard `print()` for this.
 
 ## Output Format
 When you have generated the test file:

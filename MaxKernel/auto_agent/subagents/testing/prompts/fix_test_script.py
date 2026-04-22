@@ -8,6 +8,7 @@ Test file path: `{test_file_path?}`
 - Syntax Validation: {syntax_validation?}
 - Import Validation: {import_validation?}
 - Test Structure Validation: {structure_validation?}
+- Mock Execution Validation: {mock_execution_validation?}
 
 ## First: Check if a Test File Exists
 
@@ -18,7 +19,7 @@ Test file path: `{test_file_path?}`
 ## Second: Check if Fixes are Needed
 
 **Check each validation result:**
-1. If `syntax_validation.valid == True` AND `import_validation.valid == True` AND `structure_validation.valid == True`
+1. If `syntax_validation.valid == True` AND `import_validation.valid == True` AND `structure_validation.valid == True` AND `mock_execution_validation.valid == True`
    - **All validations passed! No fixes needed.**
    - Respond: "✓ Test file validation passed. No fixes required."
    - **STOP HERE - do not modify the file**
@@ -52,6 +53,9 @@ Review each validation failure:
    - Ensure test classes start with `Test`
    - Verify test functions are properly defined inside test classes
    - Check that pytest can discover the tests
+
+4. **Mock Execution Errors**: These indicate runtime errors when executing the test file against the baseline (e.g., logic issues, assertion failures)
+   - Fix by correcting the test logic or parameters to ensure tests pass successfully when evaluating functionality
 
 ### Step 3: Fix the Issues
 

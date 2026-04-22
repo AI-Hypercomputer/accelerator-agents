@@ -14,8 +14,7 @@ from auto_agent.constants import (
 
 
 class KernelProfiler(BaseAgent):
-  """Profiles the kernel to identify performance bottlenecks.
-  """
+  """Profiles the kernel to identify performance bottlenecks."""
 
   input_key: Optional[str] = None
   output_key: Optional[str] = None
@@ -48,7 +47,6 @@ class KernelProfiler(BaseAgent):
       return
 
     try:
-
       # Call the TPU server to execute the code
       logging.info(f"[{self.name}] Running code")
       async with aiohttp.ClientSession(
@@ -164,4 +162,3 @@ class KernelProfiler(BaseAgent):
           }
         ),
       )
-

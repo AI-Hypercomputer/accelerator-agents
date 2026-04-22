@@ -81,14 +81,14 @@ async def compilation_test(request: CodeRequest):
       # Create a temporary directory to store the code and dependencies
       temp_dir = tempfile.mkdtemp()
       temp_file_path = os.path.join(temp_dir, "run_code.py")
-      
+
       if request.dependencies:
         for filename, content in request.dependencies.items():
           file_path = os.path.join(temp_dir, filename)
           os.makedirs(os.path.dirname(file_path), exist_ok=True)
           with open(file_path, "w") as f:
             f.write(content)
-            
+
       with open(temp_file_path, "w") as f:
         f.write(request.code)
 
@@ -133,6 +133,7 @@ async def compilation_test(request: CodeRequest):
       # Clean up the temporary directory
       if "temp_dir" in locals():
         import shutil
+
         try:
           shutil.rmtree(temp_dir)
         except Exception:
@@ -171,14 +172,14 @@ async def correctness_test(request: CodeRequest):
       # Create a temporary directory to store the code and dependencies
       temp_dir = tempfile.mkdtemp()
       temp_file_path = os.path.join(temp_dir, "run_code.py")
-      
+
       if request.dependencies:
         for filename, content in request.dependencies.items():
           file_path = os.path.join(temp_dir, filename)
           os.makedirs(os.path.dirname(file_path), exist_ok=True)
           with open(file_path, "w") as f:
             f.write(content)
-            
+
       with open(temp_file_path, "w") as f:
         f.write(request.code)
 
@@ -222,6 +223,7 @@ async def correctness_test(request: CodeRequest):
       # Clean up the temporary directory
       if "temp_dir" in locals():
         import shutil
+
         try:
           shutil.rmtree(temp_dir)
         except Exception:
@@ -260,14 +262,14 @@ async def performance_test(request: CodeRequest):
       # Create a temporary directory to store the code and dependencies
       temp_dir = tempfile.mkdtemp()
       temp_file_path = os.path.join(temp_dir, "run_code.py")
-      
+
       if request.dependencies:
         for filename, content in request.dependencies.items():
           file_path = os.path.join(temp_dir, filename)
           os.makedirs(os.path.dirname(file_path), exist_ok=True)
           with open(file_path, "w") as f:
             f.write(content)
-            
+
       with open(temp_file_path, "w") as f:
         f.write(request.code)
 
@@ -311,6 +313,7 @@ async def performance_test(request: CodeRequest):
       # Clean up the temporary directory
       if "temp_dir" in locals():
         import shutil
+
         try:
           shutil.rmtree(temp_dir)
         except Exception:
@@ -347,14 +350,14 @@ async def unified_test(request: CodeRequest):
       # Create a temporary directory to store the code and dependencies
       temp_dir = tempfile.mkdtemp()
       temp_file_path = os.path.join(temp_dir, "run_code.py")
-      
+
       if request.dependencies:
         for filename, content in request.dependencies.items():
           file_path = os.path.join(temp_dir, filename)
           os.makedirs(os.path.dirname(file_path), exist_ok=True)
           with open(file_path, "w") as f:
             f.write(content)
-            
+
       with open(temp_file_path, "w") as f:
         f.write(request.code)
 
@@ -397,6 +400,7 @@ async def unified_test(request: CodeRequest):
       # Clean up the temporary directory
       if "temp_dir" in locals():
         import shutil
+
         try:
           shutil.rmtree(temp_dir)
         except Exception:

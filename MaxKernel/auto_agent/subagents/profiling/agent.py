@@ -3,9 +3,7 @@
 import logging
 from typing import AsyncGenerator
 
-
 from google.adk.agents import SequentialAgent
-
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 
@@ -24,7 +22,11 @@ from auto_agent.subagents.profiling.prompts import (
   read_file_prompt,
   read_profiling_script_prompt,
 )
-from auto_agent.tools.tools import filesystem_tool_r, filesystem_tool_rw, vertex_ai_rag_tool
+from auto_agent.tools.tools import (
+  filesystem_tool_r,
+  filesystem_tool_rw,
+  vertex_ai_rag_tool,
+)
 
 # Read file agent for profiling
 read_file_for_profiling_agent = CustomLlmAgent(
@@ -85,6 +87,7 @@ class SummarizeProfileAgent(CustomLlmAgent):
     # 3. Parse the decision from the summary
     needs_improvement = True  # Default fallback
     import re
+
     match = re.search(
       r"NEEDS[-_\s]?IMPROVEMENT\s*[:=]\s*(TRUE|FALSE|YES|NO)",
       summary,

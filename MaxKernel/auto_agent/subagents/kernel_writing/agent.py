@@ -17,7 +17,7 @@ from auto_agent.callbacks import (
   load_kernel_and_plan_to_state,
   load_single_kernel_to_state,
   save_base_kernel_and_plan_paths,
-  save_kernel_and_plan_paths,
+  save_optimized_kernel_and_plan_paths,
 )
 from auto_agent.config import model_config, thinking_planner
 from auto_agent.constants import MODEL_NAME
@@ -385,7 +385,7 @@ implement_kernel_agent = CustomLlmAgent(
     if vertex_ai_rag_tool
     else [search_api_tool, filesystem_tool_rw]
   ),
-  after_tool_callback=save_kernel_and_plan_paths,
+  after_tool_callback=save_optimized_kernel_and_plan_paths,
 )
 
 __all__ = [

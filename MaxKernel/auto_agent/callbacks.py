@@ -35,45 +35,47 @@ def create_path_saver(state_key: str):
     if "read" in tool.name.lower() or "write" in tool.name.lower():
       file_path = args.get("path", None)
       if file_path:
-        tool_context.state[state_key] = file_path
-        logging.info(
-          f"Saved file path to {state_key}: {file_path} (from tool: {tool.name})"
-        )
+        basename = os.path.basename(file_path).lower()
+        should_save = False
+
+        if (
+          state_key == "test_file_path"
+          and file_path.endswith(".py")
+          and "test" in basename
+        ):
+          should_save = True
+        elif (
+          state_key == "profiling_script_path"
+          and file_path.endswith(".py")
+          and "profile" in basename
+        ):
+          should_save = True
+        elif state_key == "optimized_kernel_path" and file_path.endswith(".py"):
+          if "test" not in basename and "profile" not in basename:
+            should_save = True
+        elif state_key == "base_kernel_path" and file_path.endswith(".py"):
+          if "test" not in basename and "profile" not in basename:
+            should_save = True
+        elif (
+          state_key == "kernel_plan_path"
+          and file_path.endswith(".md")
+          and "plan" in basename
+        ):
+          should_save = True
+
+        if should_save:
+          tool_context.state[state_key] = file_path
+          logging.info(
+            f"Saved file path to {state_key}: {file_path} (from tool: {tool.name})"
+          )
+        else:
+          logging.info(f"file path {file_path} does not match {state_key}")
     return None
 
   return save_path
 
 
-def save_kernel_file_paths(
-  tool: BaseTool,
-  args: Dict[str, Any],
-  tool_context: ToolContext,
-  tool_response: Optional[Dict],
-) -> Optional[Dict]:
-  """
-  Saves kernel file paths with semantic naming based on read order.
-  First file read = base_kernel_path, Second file read = optimized_kernel_path.
-  This callback is used by agents that need to compare two kernels.
-  """
-  if tool.name == "read_file":
-    file_path = args.get("path", None)
-
-    # If base_kernel_path not set, this is the first file (base)
-    if (
-      "base_kernel_path" not in tool_context.state
-      or not tool_context.state["base_kernel_path"]
-    ):
-      tool_context.state["base_kernel_path"] = file_path
-      logging.info(f"Set base kernel path: {file_path}")
-    # Otherwise, this is the second file (optimized)
-    else:
-      tool_context.state["optimized_kernel_path"] = file_path
-      logging.info(f"Set optimized kernel path: {file_path}")
-
-  return None
-
-
-def save_kernel_and_plan_paths(
+def save_optimized_kernel_and_plan_paths(
   tool: BaseTool,
   args: Dict[str, Any],
   tool_context: ToolContext,
@@ -83,6 +85,7 @@ def save_kernel_and_plan_paths(
   if "read" in tool.name.lower() or "write" in tool.name.lower():
     file_path = args.get("path", None)
     if file_path:
+      basename = os.path.basename(file_path).lower()
       # Check if this is a plan file based on filename or path
       if "plan" in file_path.lower() and file_path.endswith(".md"):
         tool_context.state["kernel_plan_path"] = file_path
@@ -90,7 +93,11 @@ def save_kernel_and_plan_paths(
           f"Saved plan path to kernel_plan_path: {file_path} (from tool: {tool.name})"
         )
       # Otherwise assume it's the kernel file
-      else:
+      elif (
+        file_path.endswith(".py")
+        and "test" not in basename
+        and "profile" not in basename
+      ):
         tool_context.state["optimized_kernel_path"] = file_path
         logging.info(
           f"Saved kernel path to optimized_kernel_path: {file_path} (from tool: {tool.name})"
@@ -108,12 +115,17 @@ def save_base_kernel_and_plan_paths(
   if "read" in tool.name.lower() or "write" in tool.name.lower():
     file_path = args.get("path", None)
     if file_path:
+      basename = os.path.basename(file_path).lower()
       if "plan" in file_path.lower() and file_path.endswith(".md"):
         tool_context.state["kernel_plan_path"] = file_path
         logging.info(
           f"Saved plan path to kernel_plan_path: {file_path} (from tool: {tool.name})"
         )
-      else:
+      elif (
+        file_path.endswith(".py")
+        and "test" not in basename
+        and "profile" not in basename
+      ):
         tool_context.state["base_kernel_path"] = file_path
         logging.info(
           f"Saved base kernel path to base_kernel_path: {file_path} (from tool: {tool.name})"
@@ -334,8 +346,7 @@ def add_pallas_docs(callback_context: CallbackContext):
 
 __all__ = [
   "create_path_saver",
-  "save_kernel_file_paths",
-  "save_kernel_and_plan_paths",
+  "save_optimized_kernel_and_plan_paths",
   "load_single_kernel_to_state",
   "load_profiling_script_to_state",
   "load_two_kernels_to_state",

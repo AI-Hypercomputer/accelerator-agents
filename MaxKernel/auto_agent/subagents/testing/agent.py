@@ -583,6 +583,25 @@ class MockTestExecutionAgent(BaseAgent):
         return
 
       mock_content = test_content
+      
+      # Programmatically comment out optimized_kernel import if uncommented
+      mock_content = re.sub(
+          r"^([ \t]*from\s+optimized_kernel\s+import\s+.+)",
+          r"# \1",
+          mock_content,
+          flags=re.MULTILINE
+      )
+      mock_content = re.sub(
+          r"^([ \t]*import\s+optimized_kernel)",
+          r"# \1",
+          mock_content,
+          flags=re.MULTILINE
+      )
+      
+      # Ensure optimized_kernel is aliased to base_kernel for the mock run
+      if "optimized_kernel = base_kernel" not in mock_content:
+          mock_content = "import base_kernel\noptimized_kernel = base_kernel\n" + mock_content
+
       mock_prefix = """
 # Mock setup: Temporarily disable kernel imports to test with baseline
 import sys

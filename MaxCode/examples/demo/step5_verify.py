@@ -68,6 +68,10 @@ def print_scorecard(completeness, correctness=None):
         print(f"  (missing: {', '.join(c['functions']['missing'])})", end="")
     print()
 
+    if c.get("delegated"):
+        d = c["delegated"]
+        print(f"    Delegated:  {d['count']} components handled by MaxText built-ins")
+
     if correctness is not None:
         cr = correctness
         n_dev = cr["deviation_count"]

@@ -8,7 +8,9 @@ Produces a scorecard with two metrics:
 """
 
 import ast
+import re
 from dataclasses import dataclass, field
+from fnmatch import fnmatchcase
 
 
 @dataclass
@@ -40,6 +42,46 @@ FALSE_POSITIVE_RULES = {
     ("dropped_feature", "low"),
 }
 
+# MaxText submodule → source component patterns delegated to built-ins.
+_MAXTEXT_DELEGATION_MAP = {
+    "attentions": {
+        "classes": ["*Attention*", "*RotaryEmbedding*"],
+        "functions": ["rotate_half", "apply_rotary_pos_emb", "repeat_kv",
+                       "*_attention_forward", "l2norm"],
+    },
+    "normalizations": {
+        "classes": ["*RMSNorm*", "*LayerNorm*", "*GroupNorm*"],
+        "functions": [],
+    },
+    "linears": {
+        "classes": ["*MLP*", "*FeedForward*", "*FFN*"],
+        "functions": [],
+    },
+    "embeddings": {
+        "classes": ["*Embedding*"],
+        "functions": [],
+    },
+    "moe": {
+        "classes": ["*Expert*", "*Router*", "*MoE*"],
+        "functions": ["load_balancing_loss_func", "*_balancing_loss*"],
+    },
+    "decoders": {
+        "classes": ["*Model"],
+        "functions": [],
+    },
+}
+
+# Infrastructure classes always excluded for MaxText targets.
+_INFRASTRUCTURE_PATTERNS = [
+    "*PreTrainedModel", "*ForCausalLM", "*ForSequenceClassification",
+    "*ForTokenClassification", "*ForQuestionAnswering",
+    "*ForMultipleChoice", "*ForMaskedLM", "*ForConditionalGeneration",
+    "*Model",
+]
+
+# PyTorch-specific function patterns always excluded for MaxText targets.
+_PYTORCH_FUNC_PATTERNS = ["torch_*"]
+
 
 class VerificationAgent:
     """Scores the quality of a PyTorch-to-JAX conversion.
@@ -61,6 +103,83 @@ class VerificationAgent:
         """
         self._model = model
         self._target = target
+
+    @staticmethod
+    def filter_maxtext_delegated(src_components, output_code):
+        """Remove source components delegated to MaxText built-in primitives.
+
+        Parses the output code for ``from maxtext.layers.<sub>`` and
+        ``import maxtext.layers.<sub>`` statements, then uses
+        ``_MAXTEXT_DELEGATION_MAP`` to identify which source classes and
+        functions are handled by those built-ins.  Infrastructure classes
+        and PyTorch-specific functions are always excluded.
+
+        Args:
+            src_components: dict with "classes" (name -> [methods]) and
+                "functions" (list) as returned by ``extract_components``.
+            output_code: The generated MaxText code string.
+
+        Returns:
+            (filtered_components, delegated_info) where
+            *filtered_components* is a copy of *src_components* with delegated
+            entries removed, and *delegated_info* is a dict with keys
+            "classes", "functions", and "count".
+        """
+        # 1. Detect which maxtext.layers submodules are imported.
+        imported_subs = set(re.findall(
+            r"(?:from\s+maxtext\.layers\s+import\s+|"
+            r"from\s+maxtext\.layers\.)"
+            r"(\w+)",
+            output_code,
+        ))
+        # Also catch `import maxtext.layers.<sub>` form.
+        imported_subs |= set(re.findall(
+            r"import\s+maxtext\.layers\.(\w+)",
+            output_code,
+        ))
+
+        # 2. Collect glob patterns for delegated classes/functions.
+        class_patterns = list(_INFRASTRUCTURE_PATTERNS)
+        func_patterns = list(_PYTORCH_FUNC_PATTERNS)
+        for sub in imported_subs:
+            entry = _MAXTEXT_DELEGATION_MAP.get(sub)
+            if entry:
+                class_patterns.extend(entry["classes"])
+                func_patterns.extend(entry["functions"])
+
+        def _matches(name, patterns):
+            return any(fnmatchcase(name, pat) for pat in patterns)
+
+        # 3. Partition classes.
+        kept_classes = {}
+        delegated_classes = []
+        delegated_method_count = 0
+        for cls_name, methods in src_components["classes"].items():
+            if _matches(cls_name, class_patterns):
+                delegated_classes.append(cls_name)
+                delegated_method_count += len(methods)
+            else:
+                kept_classes[cls_name] = methods
+
+        # 4. Partition functions.
+        kept_funcs = []
+        delegated_funcs = []
+        for fn in src_components["functions"]:
+            if _matches(fn, func_patterns):
+                delegated_funcs.append(fn)
+            else:
+                kept_funcs.append(fn)
+
+        filtered = {
+            "classes": kept_classes,
+            "functions": kept_funcs,
+        }
+        delegated_info = {
+            "classes": delegated_classes,
+            "functions": delegated_funcs,
+            "count": len(delegated_classes) + delegated_method_count + len(delegated_funcs),
+        }
+        return filtered, delegated_info
 
     @staticmethod
     def extract_components(code):
@@ -255,7 +374,17 @@ class VerificationAgent:
         """
         src_components = self.extract_components(source_code)
         out_components = self.extract_components(output_code)
+
+        delegated = None
+        if self._target == "maxtext":
+            src_components, delegated = self.filter_maxtext_delegated(
+                src_components, output_code,
+            )
+
         completeness = self.compute_completeness(src_components, out_components)
+
+        if delegated:
+            completeness["delegated"] = delegated
 
         correctness = None
         if api_key or self._model:

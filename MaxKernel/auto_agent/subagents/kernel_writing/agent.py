@@ -122,8 +122,6 @@ class KernelCompilationValidationLoop(BaseAgent):
         f"[{self.name}] Compilation validation attempt {retry_count + 1}/{self.max_retries}"
       )
 
-      # Set kernel_file_path for the compilation checker to use
-      ctx.session.state["kernel_file_path"] = kernel_path
 
       # Run compilation check
       async for event in self.compilation_checker.run_async(ctx):

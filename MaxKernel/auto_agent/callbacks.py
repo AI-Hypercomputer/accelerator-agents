@@ -127,7 +127,7 @@ def load_single_kernel_to_state(callback_context: CallbackContext):
   Uses kernel_file_path to find the file.
   Stores content in 'kernel_code' for use by compilation/profiling agents.
   """
-  file_path = callback_context.state.get("kernel_file_path", None)
+  file_path = callback_context.state.get("optimized_kernel_path", None)
 
   if file_path:
     try:

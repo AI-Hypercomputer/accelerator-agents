@@ -9,7 +9,6 @@ from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 
 
-
 class AutonomousPipelineAgent(BaseAgent):
   """Chains kernel generation sub-agents automatically with an improvement loop."""
 
@@ -176,19 +175,25 @@ class AutonomousPipelineAgent(BaseAgent):
         }
       ),
     )
+
   def _extract_latency(self, test_output: str):
     """Extracts execution time from test results output."""
     if not test_output:
       return None
     try:
       import re
-      match = re.search(r'PERF_METRICS:\s*([\d.]+)', test_output)
+
+      match = re.search(r"PERF_METRICS:\s*([\d.]+)", test_output)
       if match:
         latency = float(match.group(1))
-        logging.info(f"[{self.name}] Extracted execution time from test results: {latency} ms")
+        logging.info(
+          f"[{self.name}] Extracted execution time from test results: {latency} ms"
+        )
         return latency
     except Exception as e:
-      logging.error(f"[{self.name}] Failed to parse execution time from test output: {e}")
+      logging.error(
+        f"[{self.name}] Failed to parse execution time from test output: {e}"
+      )
     return None
 
   async def _apply_best_solution(self, ctx: InvocationContext):

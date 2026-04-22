@@ -19,6 +19,8 @@ import jax
 import jax.numpy as jnp
 import jax.random as random
 from jax.experimental import pallas as pl
+from functools import partial
+import functools
 
 # Initialization
 N = 2048
@@ -65,6 +67,8 @@ import jax
 import jax.numpy as jnp
 import jax.random as random
 from jax.experimental import pallas as pl
+from functools import partial
+import functools
 
 # Initialization
 N = 2048

@@ -24,7 +24,7 @@ from auto_agent.subagents.profiling.prompts import (
   read_file_prompt,
   read_profiling_script_prompt,
 )
-from auto_agent.tools.tools import filesystem_tool_rw, vertex_ai_rag_tool
+from auto_agent.tools.tools import filesystem_tool_r, filesystem_tool_rw, vertex_ai_rag_tool
 
 # Read file agent for profiling
 read_file_for_profiling_agent = CustomLlmAgent(
@@ -34,7 +34,7 @@ read_file_for_profiling_agent = CustomLlmAgent(
   planner=thinking_planner,
   instruction=read_file_prompt.PROMPT,
   description="Reads the kernel file mentioned by the user for profiling analysis.",
-  tools=[filesystem_tool_rw],
+  tools=[filesystem_tool_r],
 )
 
 # Profiling script generation agent - writes profiling script to file

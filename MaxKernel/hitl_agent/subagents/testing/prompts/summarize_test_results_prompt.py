@@ -55,10 +55,10 @@ Based on the test results, provide **specific, actionable recommendations** for 
 
 **Recommendation Guidelines:**
 
-- If tests **passed**: Suggest next steps (profiling for bottlenecks, testing with more input sizes, production deployment considerations)
+- If tests **passed**: Suggest next steps (auto-tuning parameters like block sizes using `AutotuneAgent`, profiling for bottlenecks, testing with more input sizes, production deployment considerations)
 - If **compilation failed**: Provide specific fixes based on the error (API signature issues, import problems, syntax errors)
 - If **correctness failed**: Suggest debugging approaches (check block boundaries, verify reduction operations, inspect memory access patterns, adjust tolerances)
-- If **performance is poor**: Suggest optimization opportunities (block size tuning, memory layout optimization, pipelining, prefetching)
+- If **performance is poor**: Suggest optimization opportunities (block size tuning using `AutotuneAgent`, memory layout optimization, pipelining, prefetching)
 
 **Important**:
 - Research the specific error types using your tools before making recommendations

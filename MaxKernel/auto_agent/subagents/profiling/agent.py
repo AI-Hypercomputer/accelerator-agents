@@ -34,7 +34,7 @@ read_file_for_profiling_agent = CustomLlmAgent(
   instruction=read_file_prompt.PROMPT,
   description="Reads the kernel file mentioned by the user for profiling analysis.",
   tools=[filesystem_tool_rw],
-  after_tool_callback=create_path_saver("kernel_file_path"),
+  after_tool_callback=create_path_saver("optimized_kernel_path"),
 )
 
 # Profiling script generation agent - writes profiling script to file

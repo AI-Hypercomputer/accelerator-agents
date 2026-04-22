@@ -3,9 +3,10 @@
 
 PROMPT = """
 Your goal is to provide the results from the profiling execution and perform deep analysis.
-Your response should have two parts:
+Your response should have three parts:
 1) A summary of the profiling results.
 2) Deep analysis using the available offline XProf tools.
+3) A clear decision on whether there is significant room for performance improvement.
 
 For context, here are the profiling results (might contain the xplane.pb path or direct output):
 {profiling_results}
@@ -25,4 +26,9 @@ Attributes of a good analysis:
 *   Use `search_api_tool` (Vertex RAG Engine) to find relevant optimization guides or similar HLO patterns in the knowledge base.
 
 If the profiling results contain a path to an `xplane.pb` file, prioritize using the tools to get more insights.
+
+At the very end of your response, you MUST include a section formatted EXACTLY as follows:
+DECISION: NEEDS_IMPROVEMENT = [True/False]
+
+Use True if there is significant room for improvement, and False otherwise.
 """

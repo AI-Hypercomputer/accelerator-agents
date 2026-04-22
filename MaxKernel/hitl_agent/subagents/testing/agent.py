@@ -30,6 +30,11 @@ from hitl_agent.subagents.testing.prompts import (
 from hitl_agent.tools.search_api_tool import search_api_tool
 from hitl_agent.tools.tools import filesystem_tool_rw, vertex_ai_rag_tool
 
+# Timeout specifications (in seconds)
+COMPILE_VALIDATION_TIMEOUT = 60 * 1
+MOCK_EXECUTION_TIMEOUT = 60 * 3
+TEST_EXECUTION_TIMEOUT = 60 * 5
+
 
 class TestRunner(BaseAgent):
   """Executes pytest on a generated test file and captures results with full tracebacks.
@@ -222,7 +227,7 @@ class TestRunner(BaseAgent):
         capture_output=True,
         text=True,
         cwd=os.path.dirname(test_file_path),
-        timeout=300,
+        timeout=TEST_EXECUTION_TIMEOUT,
       )
 
       full_output = f"STDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}"
@@ -402,7 +407,7 @@ class ImportValidationAgent(BaseAgent):
         capture_output=True,
         text=True,
         cwd=os.path.dirname(test_file_path),
-        timeout=30,
+        timeout=COMPILE_VALIDATION_TIMEOUT,
       )
 
       if result.returncode == 0:
@@ -700,7 +705,7 @@ from unittest.mock import MagicMock
           capture_output=True,
           text=True,
           cwd=os.path.dirname(test_file_path),
-          timeout=60,
+          timeout=MOCK_EXECUTION_TIMEOUT,
         )
 
         if result.returncode == 0:
@@ -750,7 +755,9 @@ from unittest.mock import MagicMock
           logging.warning(f"Failed to clean up temporary test file: {e}")
 
     except subprocess.TimeoutExpired:
-      error_msg = "Mock test execution timed out after 60 seconds"
+      error_msg = (
+        f"Mock test execution timed out after {MOCK_EXECUTION_TIMEOUT} seconds"
+      )
       logging.error(f"[{self.name}] {error_msg}")
       yield Event(
         author=self.name,

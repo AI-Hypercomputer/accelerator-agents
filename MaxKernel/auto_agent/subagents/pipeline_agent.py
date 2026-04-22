@@ -141,7 +141,16 @@ class AutonomousPipelineAgent(BaseAgent):
         "latency": latency,
         "summary": ctx.session.state.get("profiling_summary", ""),
       }
-      ctx.session.state["history"].append(snapshot)
+      current_history = ctx.session.state.get("history", [])
+      updated_history = current_history + [snapshot]
+      ctx.session.state["history"] = updated_history  # Ensure local consistency within the loop
+      
+      yield Event(
+        author=self.name,
+        actions=EventActions(
+          state_delta={"history": updated_history}
+        ),
+      )
       logging.info(f"[{self.name}] Saved snapshot for iteration {iteration}")
 
       # Step 7: Check if improvement is needed

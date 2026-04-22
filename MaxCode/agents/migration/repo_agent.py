@@ -43,7 +43,7 @@ class PytorchToJaxRepoAgent(base.Agent):
           try:
             with open(file_path, "r") as f:
               pytorch_code = f.read()
-            rag_context_list = self._rag_agent.retrieve_context(pytorch_code)
+            rag_context_list = self._rag_agent.retrieve_per_component_context(pytorch_code)
             rag_context = "\\n\\n".join([
                 f"File: {c['file']}\\n```python\\n{c['text']}\\n```"
                 for c in rag_context_list

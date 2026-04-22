@@ -16,7 +16,6 @@ from google.adk.agents import BaseAgent, SequentialAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 
-from auto_agent.callbacks import create_path_saver
 from auto_agent.config import model_config, thinking_planner
 from auto_agent.constants import EVAL_SERVER_PORT, MODEL_NAME
 from auto_agent.custom_types import CustomLlmAgent
@@ -37,8 +36,7 @@ TEST_EXECUTION_TIMEOUT = 60 * 5
 
 
 class TestRunner(BaseAgent):
-  """Executes pytest on a generated test file and captures results with full tracebacks.
-  """
+  """Executes pytest on a generated test file and captures results with full tracebacks."""
 
   input_key: Optional[str] = None
   output_key: Optional[str] = None
@@ -105,11 +103,11 @@ class TestRunner(BaseAgent):
       base_kernel_path = ctx.session.state.get("base_kernel_path", "")
       optimized_kernel_path = ctx.session.state.get("optimized_kernel_path", "")
       dependencies = {}
-      
+
       if base_kernel_path and os.path.exists(base_kernel_path):
         with open(base_kernel_path, "r") as f:
           dependencies[os.path.basename(base_kernel_path)] = f.read()
-          
+
       if optimized_kernel_path and os.path.exists(optimized_kernel_path):
         with open(optimized_kernel_path, "r") as f:
           dependencies[os.path.basename(optimized_kernel_path)] = f.read()
@@ -180,7 +178,6 @@ class TestRunner(BaseAgent):
           }
         ),
       )
-
 
 
 class SyntaxValidationAgent(BaseAgent):
@@ -583,24 +580,26 @@ class MockTestExecutionAgent(BaseAgent):
         return
 
       mock_content = test_content
-      
+
       # Programmatically comment out optimized_kernel import if uncommented
       mock_content = re.sub(
-          r"^([ \t]*from\s+optimized_kernel\s+import\s+.+)",
-          r"# \1",
-          mock_content,
-          flags=re.MULTILINE
+        r"^([ \t]*from\s+optimized_kernel\s+import\s+.+)",
+        r"# \1",
+        mock_content,
+        flags=re.MULTILINE,
       )
       mock_content = re.sub(
-          r"^([ \t]*import\s+optimized_kernel)",
-          r"# \1",
-          mock_content,
-          flags=re.MULTILINE
+        r"^([ \t]*import\s+optimized_kernel)",
+        r"# \1",
+        mock_content,
+        flags=re.MULTILINE,
       )
-      
+
       # Ensure optimized_kernel is aliased to base_kernel for the mock run
       if "optimized_kernel = base_kernel" not in mock_content:
-          mock_content = "import base_kernel\noptimized_kernel = base_kernel\n" + mock_content
+        mock_content = (
+          "import base_kernel\noptimized_kernel = base_kernel\n" + mock_content
+        )
 
       mock_prefix = """
 # Mock setup: Temporarily disable kernel imports to test with baseline
@@ -918,7 +917,6 @@ generate_test_file_agent = CustomLlmAgent(
     if vertex_ai_rag_tool
     else [search_api_tool, filesystem_tool_rw]
   ),
-  after_tool_callback=create_path_saver("test_file_path"),
 )
 
 # Validation agents
@@ -988,7 +986,6 @@ read_file_for_testing_agent = CustomLlmAgent(
   instruction=read_file_prompt.PROMPT,
   description="Reads the test file mentioned by the user.",
   tools=[filesystem_tool_rw],
-  after_tool_callback=create_path_saver("test_file_path"),
 )
 
 run_tests_agent = TestRunner(

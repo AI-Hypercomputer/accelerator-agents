@@ -8,7 +8,6 @@ from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 
 from auto_agent.callbacks import (
-  create_path_saver,
   load_profiling_script_to_state,
   load_single_kernel_to_state,
 )
@@ -34,7 +33,6 @@ read_file_for_profiling_agent = CustomLlmAgent(
   instruction=read_file_prompt.PROMPT,
   description="Reads the kernel file mentioned by the user for profiling analysis.",
   tools=[filesystem_tool_rw],
-  after_tool_callback=create_path_saver("optimized_kernel_path"),
 )
 
 # Profiling script generation agent - writes profiling script to file
@@ -47,7 +45,6 @@ generate_profiling_script_agent = CustomLlmAgent(
   description="Generates a profiling script to identify performance bottlenecks in the kernel code and writes it to a file.",
   tools=[filesystem_tool_rw],
   before_agent_callback=load_single_kernel_to_state,
-  after_tool_callback=create_path_saver("profiling_script_path"),
 )
 
 # Read profiling script agent - loads the generated profiling script file contents into state
@@ -92,7 +89,7 @@ class SummarizeProfileAgent(CustomLlmAgent):
       async for chunk in self.model.generate_content_async(decision_prompt):
         if hasattr(chunk, "text") and chunk.text:
           decision_text += chunk.text
-      
+
       decision_text = decision_text.strip().upper()
       needs_improvement = "TRUE" in decision_text
     except Exception as e:

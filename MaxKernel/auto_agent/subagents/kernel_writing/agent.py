@@ -11,7 +11,6 @@ from google.adk.events import Event, EventActions
 from auto_agent.callbacks import (
   add_pallas_docs,
   add_workdir_callback,
-  create_path_saver,
   extract_fix_summary,
   get_tpu_version_callback,
   load_kernel_and_plan_to_state,
@@ -290,7 +289,6 @@ read_file_for_validation_agent = CustomLlmAgent(
   instruction=read_file_prompt.PROMPT,
   description="Reads the kernel file mentioned by the user or from state for validation.",
   tools=[filesystem_tool_rw],
-  after_tool_callback=create_path_saver("optimized_kernel_path"),
 )
 
 fix_kernel_compilation_agent = CustomLlmAgent(

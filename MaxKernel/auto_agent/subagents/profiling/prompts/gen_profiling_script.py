@@ -123,11 +123,8 @@ Jax script:
 
 **Instructions:**
 1. Generate the profiling script based on the kernel code above
-2. **Write the profiling script to the same directory as the kernel file**
-   - Extract the directory path from the kernel file: {optimized_kernel_path?}
-   - Use a descriptive filename like `profile_<kernel_name>.py`
-   - Example: If kernel is at "foo/bar/baz/kernel.py", write to "foo/bar/baz/profile_kernel.py"
+2. **Write the profiling script to the exact path specified in session state: `{profiling_script_path?}`**
 3. After writing, confirm the file was saved successfully
 
-Use the `write_file` tool to save the profiling script in the same directory as the kernel file.
+Use the `write_file` tool to save the profiling script.
 """

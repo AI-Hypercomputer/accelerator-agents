@@ -14,8 +14,7 @@ from auto_agent.constants import (
 
 
 class KernelCompilationChecker(BaseAgent):
-  """Checks whether kernel compiles and escalates to stop the loop if grade is 'pass'.
-  """
+  """Checks whether kernel compiles and escalates to stop the loop if grade is 'pass'."""
 
   input_key: Optional[str] = None
   output_key: Optional[str] = None
@@ -45,7 +44,6 @@ class KernelCompilationChecker(BaseAgent):
       return
 
     try:
-
       # Call the TPU server to execute the code
       logging.info(f"[{self.name}] Running code")
       async with aiohttp.ClientSession(
@@ -118,4 +116,3 @@ class KernelCompilationChecker(BaseAgent):
         f"Exception during code execution: {str(e)}"
       )
       yield Event(author=self.name)
-

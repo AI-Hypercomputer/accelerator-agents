@@ -16,8 +16,6 @@ from auto_agent.callbacks import (
   get_tpu_version_callback,
   load_kernel_and_plan_to_state,
   load_single_kernel_to_state,
-  save_base_kernel_and_plan_paths,
-  save_optimized_kernel_and_plan_paths,
 )
 from auto_agent.config import model_config, thinking_planner
 from auto_agent.constants import MODEL_NAME
@@ -280,7 +278,6 @@ plan_kernel_agent = CustomLlmAgent(
     get_tpu_version_callback,
     add_workdir_callback,
   ],
-  after_tool_callback=save_base_kernel_and_plan_paths,
 )
 
 # Kernel compilation validation agents
@@ -385,7 +382,6 @@ implement_kernel_agent = CustomLlmAgent(
     if vertex_ai_rag_tool
     else [search_api_tool, filesystem_tool_rw]
   ),
-  after_tool_callback=save_optimized_kernel_and_plan_paths,
 )
 
 __all__ = [

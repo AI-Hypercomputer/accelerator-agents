@@ -8,6 +8,8 @@ from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 
+from auto_agent.config import WORKDIR
+
 
 class AutonomousPipelineAgent(BaseAgent):
   """Chains kernel generation sub-agents automatically with an improvement loop."""
@@ -47,9 +49,55 @@ class AutonomousPipelineAgent(BaseAgent):
   ) -> AsyncGenerator[Event, None]:
     iteration = 0
 
-    # Initialize history if not present (Option A: Cumulative)
+    # Initialize history if not present
     if "history" not in ctx.session.state:
       ctx.session.state["history"] = []
+
+    # Explicitly dictate standard paths in state to avoid relying on heuristic tool callbacks
+    session_dir = os.path.join(WORKDIR, ctx.session.id)
+    os.makedirs(session_dir, exist_ok=True)
+
+    if "workdir" not in ctx.session.state:
+      ctx.session.state["workdir"] = session_dir
+      logging.info(f"[{self.name}] Set workdir: {session_dir}")
+
+    if "base_kernel_path" not in ctx.session.state:
+      ctx.session.state["base_kernel_path"] = os.path.join(
+        session_dir, "base_kernel.py"
+      )
+      logging.info(
+        f"[{self.name}] Set base_kernel_path: {ctx.session.state['base_kernel_path']}"
+      )
+
+    if "optimized_kernel_path" not in ctx.session.state:
+      ctx.session.state["optimized_kernel_path"] = os.path.join(
+        session_dir, "optimized_kernel.py"
+      )
+      logging.info(
+        f"[{self.name}] Set optimized_kernel_path: {ctx.session.state['optimized_kernel_path']}"
+      )
+
+    if "kernel_plan_path" not in ctx.session.state:
+      ctx.session.state["kernel_plan_path"] = os.path.join(
+        session_dir, "base_kernel_plan.md"
+      )
+      logging.info(
+        f"[{self.name}] Set kernel_plan_path: {ctx.session.state['kernel_plan_path']}"
+      )
+
+    # Yield an event to publish the explicit path state updates to the framework
+    yield Event(
+      author=self.name,
+      actions=EventActions(
+        state_delta={
+          "workdir": ctx.session.state["workdir"],
+          "base_kernel_path": ctx.session.state["base_kernel_path"],
+          "optimized_kernel_path": ctx.session.state["optimized_kernel_path"],
+          "kernel_plan_path": ctx.session.state["kernel_plan_path"],
+        }
+      ),
+    )
+    logging.info(f"[{self.name}] Published explicit path state update Event.")
 
     while iteration < self.max_iterations:
       logging.info(
@@ -143,13 +191,13 @@ class AutonomousPipelineAgent(BaseAgent):
       }
       current_history = ctx.session.state.get("history", [])
       updated_history = current_history + [snapshot]
-      ctx.session.state["history"] = updated_history  # Ensure local consistency within the loop
-      
+      ctx.session.state["history"] = (
+        updated_history  # Ensure local consistency within the loop
+      )
+
       yield Event(
         author=self.name,
-        actions=EventActions(
-          state_delta={"history": updated_history}
-        ),
+        actions=EventActions(state_delta={"history": updated_history}),
       )
       logging.info(f"[{self.name}] Saved snapshot for iteration {iteration}")
 
@@ -300,6 +348,7 @@ class AutonomousPipelineAgent(BaseAgent):
             text += chunk.text
         text = text.strip()
         import re
+
         match = re.search(r"\d+", text)
         if match:
           iter_num = int(match.group())

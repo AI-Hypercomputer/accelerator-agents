@@ -285,10 +285,12 @@ class AutonomousPipelineAgent(BaseAgent):
         model = self.implement_agent.model
 
       if model:
-        response = await model.generate_content_async(prompt)
-        text = response.text.strip()
+        text = ""
+        async for chunk in model.generate_content_async(prompt):
+          if hasattr(chunk, "text") and chunk.text:
+            text += chunk.text
+        text = text.strip()
         import re
-
         match = re.search(r"\d+", text)
         if match:
           iter_num = int(match.group())

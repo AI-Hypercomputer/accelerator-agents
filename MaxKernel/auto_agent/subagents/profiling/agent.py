@@ -88,8 +88,12 @@ class SummarizeProfileAgent(CustomLlmAgent):
 
     # Call model directly
     try:
-      response = await self.model.generate_content_async(decision_prompt)
-      decision_text = response.text.strip().upper()
+      decision_text = ""
+      async for chunk in self.model.generate_content_async(decision_prompt):
+        if hasattr(chunk, "text") and chunk.text:
+          decision_text += chunk.text
+      
+      decision_text = decision_text.strip().upper()
       needs_improvement = "TRUE" in decision_text
     except Exception as e:
       logging.error(f"[{self.name}] Failed to make decision call: {e}")

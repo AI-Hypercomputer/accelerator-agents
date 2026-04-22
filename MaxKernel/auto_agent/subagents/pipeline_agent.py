@@ -7,6 +7,7 @@ from typing import AsyncGenerator
 from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
+from google.adk.models import LlmMessage, LlmRequest, Role
 
 from auto_agent.config import WORKDIR
 
@@ -281,22 +282,27 @@ class AutonomousPipelineAgent(BaseAgent):
     best_solution = None
     if valid_solutions:
       # Try to sort by latency (lower is better)
-      try:
-        solutions_with_latency = [
-          s for s in valid_solutions if s.get("latency") is not None
-        ]
-        if solutions_with_latency:
+      solutions_with_latency = [
+        s for s in valid_solutions if s.get("latency") is not None
+      ]
+      if solutions_with_latency:
+        try:
           best_solution = min(
             solutions_with_latency, key=lambda x: x["latency"]
           )
-        else:
-          logging.warning(
-            f"[{self.name}] No latency metrics found. Falling back to LLM selection."
+          if len(solutions_with_latency) < len(valid_solutions):
+            logging.warning(
+              f"[{self.name}] {len(valid_solutions) - len(solutions_with_latency)} "
+              f"valid solution(s) were missing latency metrics and ignored."
+            )
+        except Exception as e:
+          logging.error(
+            f"[{self.name}] Error selecting best solution by latency: {e}"
           )
           best_solution = await self._select_best_with_llm(valid_solutions)
-      except Exception as e:
-        logging.error(
-          f"[{self.name}] Error selecting best solution by latency: {e}"
+      else:
+        logging.warning(
+          f"[{self.name}] No latency metrics found. Falling back to LLM selection."
         )
         best_solution = await self._select_best_with_llm(valid_solutions)
 
@@ -352,6 +358,8 @@ class AutonomousPipelineAgent(BaseAgent):
     for s in valid_solutions:
       prompt += f"Iteration {s['iteration']}:\n{s['summary']}\n\n"
 
+    request = LlmRequest(messages=[LlmMessage(role=Role.USER, content=prompt)])
+
     try:
       model = None
       if hasattr(self.plan_agent, "model"):
@@ -361,7 +369,7 @@ class AutonomousPipelineAgent(BaseAgent):
 
       if model:
         text = ""
-        async for chunk in model.generate_content_async(prompt):
+        async for chunk in model.generate_content_async(request):
           if hasattr(chunk, "text") and chunk.text:
             text += chunk.text
         text = text.strip()

@@ -122,7 +122,6 @@ class KernelCompilationValidationLoop(BaseAgent):
         f"[{self.name}] Compilation validation attempt {retry_count + 1}/{self.max_retries}"
       )
 
-
       # Run compilation check
       async for event in self.compilation_checker.run_async(ctx):
         yield event
@@ -282,23 +281,6 @@ plan_kernel_agent = CustomLlmAgent(
     add_workdir_callback,
   ],
   after_tool_callback=save_base_kernel_and_plan_paths,
-)
-
-
-# Inner LLM agent that does the actual implementation work
-implement_kernel_llm_agent = CustomLlmAgent(
-  name="ImplementKernelLlmAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=thinking_planner,
-  instruction=kernel_implementation_prompt.PROMPT,
-  description="Implements the optimized Pallas kernel following the approved plan.",
-  tools=(
-    [search_api_tool, filesystem_tool_rw, vertex_ai_rag_tool]
-    if vertex_ai_rag_tool
-    else [search_api_tool, filesystem_tool_rw]
-  ),
-  after_tool_callback=save_kernel_and_plan_paths,
 )
 
 # Kernel compilation validation agents

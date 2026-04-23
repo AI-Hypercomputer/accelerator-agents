@@ -7,7 +7,8 @@ from typing import AsyncGenerator
 from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
-from google.adk.models import LlmMessage, LlmRequest, Role
+from google.adk.models import LlmRequest
+from google.genai import types
 
 from auto_agent.config import WORKDIR
 
@@ -358,7 +359,11 @@ class AutonomousPipelineAgent(BaseAgent):
     for s in valid_solutions:
       prompt += f"Iteration {s['iteration']}:\n{s['summary']}\n\n"
 
-    request = LlmRequest(messages=[LlmMessage(role=Role.USER, content=prompt)])
+    request = LlmRequest(
+      contents=[
+        types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
+      ]
+    )
 
     try:
       model = None
@@ -370,8 +375,10 @@ class AutonomousPipelineAgent(BaseAgent):
       if model:
         text = ""
         async for chunk in model.generate_content_async(request):
-          if hasattr(chunk, "text") and chunk.text:
-            text += chunk.text
+          if chunk.content and chunk.content.parts:
+            for part in chunk.content.parts:
+              if part.text:
+                text += part.text
         text = text.strip()
         import re
 

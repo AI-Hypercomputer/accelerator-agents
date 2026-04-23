@@ -38,6 +38,7 @@ Identify whether you are creating a **NEW plan** or performing a **REVISION**.
     *   Profiling Summary: `{profiling_summary?}`
 3.  **Follow Guidelines:**
     *   Preserve good ideas from the original plan that are not causing issues.
+    *   If the original plan is fundamentally flawed or lead to a kernel with a very bad performance, you may discard it and create a new plan, but you must still use the `write_file` tool to overwrite the existing plan file at `{kernel_plan_path?}` with your new version.
     *   Maintain clarity and detail.
     *   Update related sections if you change parameters.
 

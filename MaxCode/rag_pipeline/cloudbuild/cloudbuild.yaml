@@ -1,0 +1,56 @@
+# Multi-Repository Continuous Indexing Pipeline
+steps:
+  # Step 1: Clone the repository from GitHub
+  - name: 'gcr.io/cloud-builders/git'
+    args: ['clone', 'https://github.com/AI-Hypercomputer/maxtext.git', 'maxtext']
+ 
+  # Step 2: Stage raw code to GCS
+  - name: 'gcr.io/cloud-builders/gsutil'
+    args: ['-m', 'cp', '-r', 'maxtext/.', 'gs://${_INGESTION_BUCKET}/raw_code/${_REPO_NAME}/${_COMMIT_SHA}/']
+
+  # Step 3: Run Dataproc Spark Job (Parsing & Chunking)
+  # We assume code_chunker.py is uploaded to gs://${_INGESTION_BUCKET}/scripts/
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - >
+        gcloud dataproc jobs submit pyspark gs://${_INGESTION_BUCKET}/scripts/code_chunker.py
+        --cluster=${_DATAPROC_CLUSTER}
+        --region=${_REGION}
+        -- 
+        gs://${_INGESTION_BUCKET}/raw_code/${_REPO_NAME}/${_COMMIT_SHA}/
+        gs://${_INGESTION_BUCKET}/processed_chunks/${_REPO_NAME}/${_COMMIT_SHA}/
+        ${_REPO_NAME}
+        ${_COMMIT_SHA}
+        ${_BRANCH_NAME}
+
+  - name: 'python:3.10-slim'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - >
+        pip install pandas pyarrow psycopg2-binary google-cloud-storage &&
+        python3 -c "from google.cloud import storage; storage.Client().bucket('${_INGESTION_BUCKET}').blob('scripts/alloydb_loader.py').download_to_filename('alloydb_loader.py')" &&
+        python3 alloydb_loader.py
+        --input_path gs://${_INGESTION_BUCKET}/processed_chunks/${_REPO_NAME}/${_COMMIT_SHA}/
+        --db_host ${_ALLOYDB_HOST}
+        --db_name ${_DB_NAME}
+        --db_user ${_DB_USER}
+        --db_pass ${_DB_PASS}
+
+# Configuration for substitutions
+substitutions:
+  _INGESTION_BUCKET: 'your-ingestion-bucket'
+  _DATAPROC_CLUSTER: 'chunking-cluster'
+  _REGION: 'us-central1'
+  _ALLOYDB_HOST: 'alloydb-ip-address'
+  _DB_NAME: 'postgres'
+  _DB_USER: 'postgres'
+  _DB_PASS: 'password'
+  _REPO_NAME: 'MaxText'
+  _COMMIT_SHA: 'HEAD'
+  _BRANCH_NAME: 'main'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

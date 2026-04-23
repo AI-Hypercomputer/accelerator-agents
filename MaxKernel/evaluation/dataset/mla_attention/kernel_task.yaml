@@ -1,0 +1,41 @@
+task_id: mla_attention
+description: Kernel task for mla_attention
+input_gen_code: |-
+  def get_inputs():
+    import jax
+    import jax.numpy as jnp
+
+    CONFIG = {
+        'name': 'deepseek_v3_mla',
+        'model': 'DeepSeek-V3-671B',
+        'operator': 'mla_attention',
+        'batch': 1,
+        'seq_len': 2048,
+        'emb_dim': 7168,
+        'num_heads': 128,
+        'q_lora_rank': 1536,
+        'kv_lora_rank': 512,
+        'qk_nope_head_dim': 128,
+        'qk_rope_head_dim': 64,
+        'v_head_dim': 128,
+        'rope_theta': 10000,
+    }
+    dtype=jnp.bfloat16
+    key = jax.random.PRNGKey(42)
+    keys = jax.random.split(key, 8)
+    C = CONFIG
+    B, S, E = C['batch'], C['seq_len'], C['emb_dim']
+    H = C['num_heads']
+    ql, kvl = C['q_lora_rank'], C['kv_lora_rank']
+    nope, rope, vd = C['qk_nope_head_dim'], C['qk_rope_head_dim'], C['v_head_dim']
+    x = jax.random.normal(keys[0], (B, S, E), dtype=dtype)
+    q_down = jax.random.normal(keys[1], (E, ql), dtype=dtype) * 0.02
+    q_up_t = (jax.random.normal(keys[2],
+                                (H * (nope + rope), ql), dtype=dtype) * 0.02)
+    kv_down = jax.random.normal(keys[3], (E, kvl + rope), dtype=dtype) * 0.02
+    k_up_t = jax.random.normal(keys[4], (H * nope, kvl), dtype=dtype) * 0.02
+    v_up_t = jax.random.normal(keys[5], (H * vd, kvl), dtype=dtype) * 0.02
+    o_proj = jax.random.normal(keys[6], (H * vd, E), dtype=dtype) * 0.02
+    dynamic_args = (x, q_down, q_up_t, kv_down, k_up_t, v_up_t, o_proj)
+    static_args = []
+    return dynamic_args, static_args

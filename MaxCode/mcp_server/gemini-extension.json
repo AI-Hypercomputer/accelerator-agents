@@ -1,0 +1,14 @@
+{
+  "name": "maxcode-dev",
+  "version": "0.1.0",
+  "mcpServers": {
+    "dev-server": {
+      "command": "python3.11",
+      "args": ["-m", "mcp_server.primary_agent_server"],
+      "timeout": 1800000,
+      "env": {
+        "GOOGLE_API_KEY": "${env:GOOGLE_API_KEY}"
+      }
+    }
+  }
+}

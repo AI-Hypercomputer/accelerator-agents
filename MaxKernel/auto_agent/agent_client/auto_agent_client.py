@@ -4,7 +4,7 @@ import logging
 
 import requests
 
-REQUEST_TIMEOUT = 60 * 60 * 2
+REQUEST_TIMEOUT = 60 * 60 * 3
 
 
 # Configure logging

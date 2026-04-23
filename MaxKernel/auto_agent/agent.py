@@ -24,6 +24,7 @@ root_agent = AutonomousPipelineAgent(
   test_gen_agent=validated_test_generation_agent,
   test_run_agent=unified_test_agent,
   profile_agent=profile_agent,
+  max_iterations=5,
 )
 
 __all__ = ["root_agent"]

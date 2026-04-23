@@ -344,7 +344,7 @@ kernel_compilation_validation_loop = KernelCompilationValidationLoop(
   compilation_checker=kernel_compilation_checker_for_validation,
   fix_agent=fix_kernel_compilation_agent,
   debug_agent=add_debug_statements_agent,
-  max_retries=4,
+  max_retries=6,
 )
 
 kernel_compilation_summary_agent = CustomLlmAgent(

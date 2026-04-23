@@ -26,7 +26,7 @@ class CustomLlmAgent(LlmAgent):
         model=MODEL_NAME,
         retry_options=types.HttpRetryOptions(
           initial_delay=1,
-          attempts=5,
+          attempts=10,
         ),
       )
       kwargs["model"] = gemini_model

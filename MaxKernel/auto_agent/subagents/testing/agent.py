@@ -963,7 +963,7 @@ validation_loop_agent = TestValidationLoopAgent(
   structure_agent=structure_validation_agent,
   mock_execution_agent=mock_execution_validation_agent,
   fix_agent=fix_test_script_agent,
-  max_retries=3,
+  max_retries=6,
 )
 
 # Sequential agent that generates and validates test files

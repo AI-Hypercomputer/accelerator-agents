@@ -19,24 +19,11 @@ from auto_agent.subagents.profiling.kernel_profile import KernelProfiler
 from auto_agent.subagents.profiling.prompts import (
   analyze_profile_prompt,
   gen_profiling_script,
-  read_file_prompt,
   read_profiling_script_prompt,
 )
 from auto_agent.tools.tools import (
-  filesystem_tool_r,
   filesystem_tool_rw,
   vertex_ai_rag_tool,
-)
-
-# Read file agent for profiling
-read_file_for_profiling_agent = CustomLlmAgent(
-  name="ReadFileForProfilingAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=thinking_planner,
-  instruction=read_file_prompt.PROMPT,
-  description="Reads the kernel file mentioned by the user for profiling analysis.",
-  tools=[filesystem_tool_r],
 )
 
 # Profiling script generation agent - writes profiling script to file
@@ -143,7 +130,6 @@ summarize_profile_agent = SummarizeProfileAgent(
 profile_agent = SequentialAgent(
   name="ProfileAgentOrchestrator",
   sub_agents=[
-    read_file_for_profiling_agent,
     generate_profiling_script_agent,
     read_profiling_script_agent,
     eval_profile_agent,
@@ -154,7 +140,6 @@ profile_agent = SequentialAgent(
 
 __all__ = [
   "profile_agent",
-  "read_file_for_profiling_agent",
   "generate_profiling_script_agent",
   "read_profiling_script_agent",
   "eval_profile_agent",

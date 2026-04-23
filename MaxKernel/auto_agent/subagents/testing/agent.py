@@ -978,16 +978,6 @@ validated_test_generation_agent = SequentialAgent(
 )
 
 # Test execution agents
-read_file_for_testing_agent = CustomLlmAgent(
-  name="ReadFileForTestingAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=thinking_planner,
-  instruction=read_file_prompt.PROMPT,
-  description="Reads the test file mentioned by the user.",
-  tools=[filesystem_tool_rw],
-)
-
 run_tests_agent = TestRunner(
   name="RunTestsAgent",
   input_key="test_file_path",
@@ -1013,7 +1003,6 @@ summarize_test_results_agent = CustomLlmAgent(
 unified_test_agent = SequentialAgent(
   name="UnifiedTestAgent",
   sub_agents=[
-    read_file_for_testing_agent,
     run_tests_agent,
     summarize_test_results_agent,
   ],

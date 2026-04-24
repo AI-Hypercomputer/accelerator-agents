@@ -51,73 +51,7 @@ class AutonomousPipelineAgent(BaseAgent):
   ) -> AsyncGenerator[Event, None]:
     iteration = 0
 
-    # Initialize history if not present
-    if "history" not in ctx.session.state:
-      ctx.session.state["history"] = []
-
-    # Explicitly dictate standard paths in state to avoid relying on heuristic tool callbacks
-    session_dir = os.path.join(WORKDIR, ctx.session.id)
-    os.makedirs(session_dir, exist_ok=True)
-
-    if "workdir" not in ctx.session.state:
-      ctx.session.state["workdir"] = session_dir
-      logging.info(f"[{self.name}] Set workdir: {session_dir}")
-
-    if "base_kernel_path" not in ctx.session.state:
-      ctx.session.state["base_kernel_path"] = os.path.join(
-        session_dir, "base_kernel.py"
-      )
-      logging.info(
-        f"[{self.name}] Set base_kernel_path: {ctx.session.state['base_kernel_path']}"
-      )
-
-    if "optimized_kernel_path" not in ctx.session.state:
-      ctx.session.state["optimized_kernel_path"] = os.path.join(
-        session_dir, "optimized_kernel.py"
-      )
-      logging.info(
-        f"[{self.name}] Set optimized_kernel_path: {ctx.session.state['optimized_kernel_path']}"
-      )
-
-    if "kernel_plan_path" not in ctx.session.state:
-      ctx.session.state["kernel_plan_path"] = os.path.join(
-        session_dir, "base_kernel_plan.md"
-      )
-      logging.info(
-        f"[{self.name}] Set kernel_plan_path: {ctx.session.state['kernel_plan_path']}"
-      )
-
-    if "test_file_path" not in ctx.session.state:
-      ctx.session.state["test_file_path"] = os.path.join(
-        session_dir, "test_optimized_kernel.py"
-      )
-      logging.info(
-        f"[{self.name}] Set test_file_path: {ctx.session.state['test_file_path']}"
-      )
-
-    if "profiling_script_path" not in ctx.session.state:
-      ctx.session.state["profiling_script_path"] = os.path.join(
-        session_dir, "profile_optimized_kernel.py"
-      )
-      logging.info(
-        f"[{self.name}] Set profiling_script_path: {ctx.session.state['profiling_script_path']}"
-      )
-
-    # Yield an event to publish the explicit path state updates to the framework
-    yield Event(
-      author=self.name,
-      actions=EventActions(
-        state_delta={
-          "workdir": ctx.session.state["workdir"],
-          "base_kernel_path": ctx.session.state["base_kernel_path"],
-          "optimized_kernel_path": ctx.session.state["optimized_kernel_path"],
-          "kernel_plan_path": ctx.session.state["kernel_plan_path"],
-          "test_file_path": ctx.session.state["test_file_path"],
-          "profiling_script_path": ctx.session.state["profiling_script_path"],
-        }
-      ),
-    )
-    logging.info(f"[{self.name}] Published explicit path state update Event.")
+    yield self._initialize_state(ctx)
 
     while iteration < self.max_iterations:
       logging.info(
@@ -199,15 +133,13 @@ class AutonomousPipelineAgent(BaseAgent):
 
       snapshot = {
         "iteration": iteration,
-        "code": kernel_code,
-        "compiled": ctx.session.state.get("kernel_compilation_status", {}).get(
-          "success", False
+        "kernel_code": kernel_code,
+        "compilation_status": ctx.session.state.get(
+          "kernel_compilation_status", {}
         ),
-        "tests_passed": ctx.session.state.get("test_results", {}).get(
-          "success", False
-        ),
-        "latency": latency,
-        "summary": ctx.session.state.get("profiling_summary", ""),
+        "test_status": ctx.session.state.get("test_results", {}),
+        "latency_ms": latency,
+        "profiling_summary": ctx.session.state.get("profiling_summary", ""),
       }
       current_history = ctx.session.state.get("history", [])
       updated_history = current_history + [snapshot]
@@ -253,6 +185,75 @@ class AutonomousPipelineAgent(BaseAgent):
       ),
     )
 
+  def _initialize_state(self, ctx: InvocationContext) -> Event:
+    """Initializes session state with standard paths and returns the event."""
+    # Initialize history
+    if "history" not in ctx.session.state:
+      ctx.session.state["history"] = []
+
+    # Explicitly dictate standard paths in state
+    session_dir = os.path.join(WORKDIR, ctx.session.id)
+    os.makedirs(session_dir, exist_ok=True)
+
+    if "workdir" not in ctx.session.state:
+      ctx.session.state["workdir"] = session_dir
+      logging.info(f"[{self.name}] Set workdir: {session_dir}")
+
+    if "base_kernel_path" not in ctx.session.state:
+      ctx.session.state["base_kernel_path"] = os.path.join(
+        session_dir, "base_kernel.py"
+      )
+      logging.info(
+        f"[{self.name}] Set base_kernel_path: {ctx.session.state['base_kernel_path']}"
+      )
+
+    if "optimized_kernel_path" not in ctx.session.state:
+      ctx.session.state["optimized_kernel_path"] = os.path.join(
+        session_dir, "optimized_kernel.py"
+      )
+      logging.info(
+        f"[{self.name}] Set optimized_kernel_path: {ctx.session.state['optimized_kernel_path']}"
+      )
+
+    if "kernel_plan_path" not in ctx.session.state:
+      ctx.session.state["kernel_plan_path"] = os.path.join(
+        session_dir, "base_kernel_plan.md"
+      )
+      logging.info(
+        f"[{self.name}] Set kernel_plan_path: {ctx.session.state['kernel_plan_path']}"
+      )
+
+    if "test_file_path" not in ctx.session.state:
+      ctx.session.state["test_file_path"] = os.path.join(
+        session_dir, "test_optimized_kernel.py"
+      )
+      logging.info(
+        f"[{self.name}] Set test_file_path: {ctx.session.state['test_file_path']}"
+      )
+
+    if "profiling_script_path" not in ctx.session.state:
+      ctx.session.state["profiling_script_path"] = os.path.join(
+        session_dir, "profile_optimized_kernel.py"
+      )
+      logging.info(
+        f"[{self.name}] Set profiling_script_path: {ctx.session.state['profiling_script_path']}"
+      )
+
+    logging.info(f"[{self.name}] Published explicit path state update Event.")
+    return Event(
+      author=self.name,
+      actions=EventActions(
+        state_delta={
+          "workdir": ctx.session.state["workdir"],
+          "base_kernel_path": ctx.session.state["base_kernel_path"],
+          "optimized_kernel_path": ctx.session.state["optimized_kernel_path"],
+          "kernel_plan_path": ctx.session.state["kernel_plan_path"],
+          "test_file_path": ctx.session.state["test_file_path"],
+          "profiling_script_path": ctx.session.state["profiling_script_path"],
+        }
+      ),
+    )
+
   def _extract_latency(self, test_output: str):
     """Extracts execution time from test results output."""
     if not test_output:
@@ -277,19 +278,22 @@ class AutonomousPipelineAgent(BaseAgent):
     """Finds the best solution from history and rolls back the file if needed."""
     history = ctx.session.state.get("history", [])
     valid_solutions = [
-      s for s in history if s.get("compiled") and s.get("tests_passed")
+      s
+      for s in history
+      if s.get("compilation_status", {}).get("success")
+      and s.get("test_status", {}).get("success")
     ]
 
     best_solution = None
     if valid_solutions:
       # Try to sort by latency (lower is better)
       solutions_with_latency = [
-        s for s in valid_solutions if s.get("latency") is not None
+        s for s in valid_solutions if s.get("latency_ms") is not None
       ]
       if solutions_with_latency:
         try:
           best_solution = min(
-            solutions_with_latency, key=lambda x: x["latency"]
+            solutions_with_latency, key=lambda x: x["latency_ms"]
           )
           if len(solutions_with_latency) < len(valid_solutions):
             logging.warning(
@@ -324,14 +328,14 @@ class AutonomousPipelineAgent(BaseAgent):
             f"[{self.name}] Failed to read current kernel file: {e}"
           )
 
-      if best_solution["code"] != current_code:
+      if best_solution["kernel_code"] != current_code:
         logging.info(
           f"[{self.name}] Reverting kernel file to best solution from iteration {best_solution['iteration']}"
         )
         if kernel_path:
           try:
             with open(kernel_path, "w") as f:
-              f.write(best_solution["code"])
+              f.write(best_solution["kernel_code"])
           except Exception as e:
             logging.error(
               f"[{self.name}] Failed to write best solution to file: {e}"
@@ -357,7 +361,7 @@ class AutonomousPipelineAgent(BaseAgent):
     prompt = "You are an expert in performance optimization. Compare the following profiling summaries for different iterations of a kernel and decide which one is the best solution (maximizes performance/efficiency). Answer with ONLY the iteration number of the best solution.\n\n"
 
     for s in valid_solutions:
-      prompt += f"Iteration {s['iteration']}:\n{s['summary']}\n\n"
+      prompt += f"Iteration {s['iteration']}:\n{s['profiling_summary']}\n\n"
 
     request = LlmRequest(
       contents=[

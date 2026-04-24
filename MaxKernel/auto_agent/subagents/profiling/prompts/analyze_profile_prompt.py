@@ -23,7 +23,7 @@ Attributes of a good analysis:
 *   Use `get_overview_page_metrics` to retrieve high-level metrics (e.g., duty cycle, step time) for the summary.
 *   Use `create_chart_from_xplane` to visualize distributions.
 *   Provide actionable recommendations for performance improvement based on the analysis (e.g., specific HLO ops to optimize, memory bandwidth issues, or low duty cycle causes).
-*   Use `search_api_tool` (Vertex RAG Engine) to find relevant optimization guides or similar HLO patterns in the knowledge base.
+*   Use `vertex_ai_rag_tool` to find relevant optimization guides or similar HLO patterns in the knowledge base.
 
 If the profiling results contain a path to an `xplane.pb` file, prioritize using the tools to get more insights.
 

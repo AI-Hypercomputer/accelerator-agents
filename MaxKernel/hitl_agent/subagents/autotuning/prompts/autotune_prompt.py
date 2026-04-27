@@ -10,7 +10,7 @@ To prepare for autotuning, you must:
 2. Create a code template from the kernel code, replacing the specific parameter values with placeholders enclosed in curly braces (for example, if the parameter is BLOCK_M, use it enclosed in curly braces as the placeholder).
 3. Ensure the template code prints "RESULT_TIME: <float>" to indicate the execution time. You may need to wrap the kernel call in a loop or use `jax.block_until_ready()` to get accurate timing.
 4. Define a search space as a dictionary mapping placeholder names to lists of suggested values.
-5. Write the `kernel_name`, `code_template`, and `search_space` to a JSON file named `autotune_specs.json` in the current directory using `filesystem_tool_rw`.
+5. Write the `kernel_name`, `code_template`, and `search_space` to a JSON file named `autotune_specs.json`. You MUST save this file (and any helper scripts you create like `create_specs.py`) in the **session directory**. Look for the folder named with the session UUID in the conversation history (e.g., 'Set working directory to: .../session_id') and use that full path with `filesystem_tool_rw`.
 The JSON file must have exactly this structure:
 {
   "kernel_name": "...",

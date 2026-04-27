@@ -313,6 +313,7 @@ async def autotune(request: AutotuneRequest):
       best_time = float("inf")
       best_cfg = None
       best_output = ""
+      all_results = []
       
       for combo in combinations:
         cfg = dict(zip(keys, combo))
@@ -353,21 +354,26 @@ async def autotune(request: AutotuneRequest):
             match = re.search(r"RESULT_TIME:\s*([0-9.]+)", output)
             if match:
               time_taken = float(match.group(1))
+              all_results.append({"cfg": cfg, "time": time_taken, "status": "success"})
               if time_taken < best_time:
                 best_time = time_taken
                 best_cfg = cfg
                 best_output = output
             else:
               logging.warning(f"No RESULT_TIME found in output for config {cfg}")
+              all_results.append({"cfg": cfg, "status": "no_result_time", "output": output})
           else:
             logging.warning(f"Config {cfg} failed with exit code {exit_code}. Stderr: {error}")
+            all_results.append({"cfg": cfg, "status": "failed", "error": error, "exit_code": exit_code})
             
         except asyncio.TimeoutError:
           logging.warning(f"Config {cfg} timed out")
           process.kill()
           await process.wait()
+          all_results.append({"cfg": cfg, "status": "timeout"})
         except Exception as e:
           logging.error(f"Error running config {cfg}: {e}")
+          all_results.append({"cfg": cfg, "status": "exception", "error": str(e)})
         finally:
           try:
             os.unlink(temp_file_path)
@@ -376,7 +382,7 @@ async def autotune(request: AutotuneRequest):
             
       if best_cfg is None:
         return CodeResponse(
-          output="",
+          output=json.dumps({"all_results": all_results}),
           error="No successful configuration found during autotune.",
           exit_code=-1,
         )
@@ -385,6 +391,7 @@ async def autotune(request: AutotuneRequest):
         "best_cfg": best_cfg,
         "best_time": best_time,
         "best_output": best_output,
+        "all_results": all_results,
       }
       logging.info("Autotune finished")
       return CodeResponse(output=json.dumps(output_data), error=None, exit_code=0)

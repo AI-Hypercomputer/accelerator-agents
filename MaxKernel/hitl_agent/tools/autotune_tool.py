@@ -70,6 +70,7 @@ def autotune_kernel(
               "best_config": output_data["best_cfg"],
               "best_time_ms": output_data["best_time"],
               "best_output": output_data["best_output"],
+              "all_results": output_data.get("all_results", []),
           }
         except json.JSONDecodeError:
           logging.warning("Failed to decode JSON from server output.")
@@ -79,11 +80,19 @@ def autotune_kernel(
               "raw_output": result["output"],
           }
       else:
-        return {
-            "status": "failed",
-            "message": result["error"] or "Autotune failed on server",
-            "server_output": result["output"],
-        }
+        try:
+            output_data = json.loads(result["output"])
+            return {
+                "status": "failed",
+                "message": result["error"] or "Autotune failed on server",
+                "all_results": output_data.get("all_results", []),
+            }
+        except Exception:
+            return {
+                "status": "failed",
+                "message": result["error"] or "Autotune failed on server",
+                "server_output": result["output"],
+            }
     else:
       return {
           "status": "error",

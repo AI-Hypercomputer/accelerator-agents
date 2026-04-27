@@ -668,6 +668,7 @@ from unittest.mock import MagicMock
                   "output_summary": (
                     stdout[-500:] if len(stdout) > 500 else stdout
                   ),
+                  "details": ""
                 }
               }
             ),

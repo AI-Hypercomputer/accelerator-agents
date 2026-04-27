@@ -317,9 +317,11 @@ async def autotune(request: AutotuneRequest):
       for combo in combinations:
         cfg = dict(zip(keys, combo))
         try:
-          code_content = request.code_template.format(**cfg)
-        except KeyError as e:
-          logging.error(f"KeyError during template formatting: {e}. Config: {cfg}")
+          code_content = request.code_template
+          for k, v in cfg.items():
+              code_content = code_content.replace(f"{{{k}}}", str(v))
+        except Exception as e:
+          logging.error(f"Error during template formatting: {e}. Config: {cfg}")
           continue
           
         # Execute the code

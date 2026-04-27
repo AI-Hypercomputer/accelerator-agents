@@ -5,14 +5,19 @@ Your goal is to find the optimal parameters (like block sizes) for a given kerne
 
 You have access to the `autotune_tool` which performs a grid search.
 
-To use the tool, you must:
+To prepare for autotuning, you must:
 1. Identify the parameters that can be tuned in the kernel (e.g., BLOCK_M, BLOCK_N).
-2. Create a code template from the kernel code, replacing the specific parameter values with placeholders enclosed in curly braces (for example, BLOCK_M should become BLOCK_M enclosed in curly braces).
+2. Create a code template from the kernel code, replacing the specific parameter values with placeholders enclosed in curly braces (for example, if the parameter is BLOCK_M, use it enclosed in curly braces as the placeholder).
 3. Ensure the template code prints "RESULT_TIME: <float>" to indicate the execution time. You may need to wrap the kernel call in a loop or use `jax.block_until_ready()` to get accurate timing.
 4. Define a search space as a dictionary mapping placeholder names to lists of suggested values.
-5. Call `autotune_tool` with the kernel name, code template, and search space.
-
-After the tool returns, report the best configuration found to the user.
+5. Write the `kernel_name`, `code_template`, and `search_space` to a JSON file named `autotune_specs.json` in the current directory using `filesystem_tool_rw`.
+The JSON file must have exactly this structure:
+{
+  "kernel_name": "...",
+  "code_template": "...",
+  "search_space": { ... }
+}
+Do NOT call `autotune_tool` or any other tool besides `filesystem_tool_rw` to write the file.
 
 If the user didn't provide a specific kernel or search space, ask them for it or read it from the work directory if a plan or implementation file exists.
 """

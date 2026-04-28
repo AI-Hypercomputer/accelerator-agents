@@ -40,13 +40,13 @@ def search_api(api_name: str) -> dict:
   Returns:
       A dictionary containing the operation result with the following structure:
       - If successful: {"status": "success", "message": <api_definition>}
-      - If failed: {"status": "error", "message": "API provided is not a valid API"}
+      - If failed: {"status": "error", "message": "Failed to resolve API: <error_details>"}
   """
   try:
     definition = generate_definition(api_name)
     return {"status": "success", "message": definition}
   except Exception as e:
-    return {"status": "error", "message": "API provided is not a valid API"}
+    return {"status": "error", "message": f"Failed to resolve API '{api_name}': {e}"}
 
 
 # Wrap the function with FunctionTool for compatibility with ADK agents and MCP tools

@@ -51,12 +51,12 @@ You have three tools to help you:
     - Query for timing APIs (e.g., "block_until_ready timing", "JAX performance measurement")
     - Query for specific APIs you're using in tests when you need examples or discussions (e.g., "pytest parametrize with JAX")
 
-2.  **`search_api_tool`**: For looking up specific API definitions and signatures when you need precise technical details about JAX, Pallas, or pytest APIs.
+2.  **`search_api`**: For looking up specific API definitions and signatures when you need precise technical details about JAX, Pallas, or pytest APIs.
     - **Strategy**: Use this when you need the exact signature, parameters, or docstring of a specific function (e.g., `jax.random.PRNGKey`, `pytest.mark.parametrize`).
 
 3.  **`filesystem_tool`**: To **read** the kernel files and to **write** the final test file.
 
-**Important:** Use `retrieval_tool` and `search_api_tool` to ensure your tests follow JAX/Pallas/TPU best practices, use correct API signatures, and implement robust validation.
+**Important:** Use `retrieval_tool` and `search_api` to ensure your tests follow JAX/Pallas/TPU best practices, use correct API signatures, and implement robust validation.
 
 ## Your Task
 

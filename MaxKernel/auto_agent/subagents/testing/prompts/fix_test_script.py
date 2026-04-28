@@ -30,7 +30,7 @@ Test file path: `{test_file_path?}`
 ## Tool Usage
 
 You have tools to help you:
-1.  **`search_api_tool`**: For looking up specific API definitions and signatures when you need precise technical details about JAX, Pallas, or pytest APIs to fix validation errors.
+1.  **`search_api`**: For looking up specific API definitions and signatures when you need precise technical details about JAX, Pallas, or pytest APIs to fix validation errors.
 2.  **`read_file`**: To read the test file and understand the current code.
 3.  **`write_file`**: To overwrite the test file with the corrected version.
 
@@ -63,7 +63,7 @@ Review each validation failure:
 
 4. **Mock Execution Errors**: These indicate runtime errors when executing the test file against the baseline (e.g., logic issues, assertion failures)
    - Fix by correcting the test logic or parameters to ensure tests pass successfully when evaluating functionality
-   - Use `search_api_tool` to verify correct API usage if errors suggest incorrect parameters or signatures
+   - Use `search_api` to verify correct API usage if errors suggest incorrect parameters or signatures
 
 ### Step 3: Fix the Issues
 

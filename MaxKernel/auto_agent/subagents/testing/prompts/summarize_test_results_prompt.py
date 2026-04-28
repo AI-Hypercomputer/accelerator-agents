@@ -49,7 +49,7 @@ Based on the test results, provide **specific, actionable recommendations** for 
    - TPU-specific error debugging (memory constraints, MXU usage, etc.)
    - Debugging strategies for specific error types
 
-2. **`search_api_tool`**: Use this to find:
+2. **`search_api`**: Use this to find:
    - Specific API documentation for error-prone functions
    - Known issues and workarounds
 

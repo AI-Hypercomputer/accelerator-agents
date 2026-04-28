@@ -6,7 +6,6 @@ This module contains all agents related to generating, validating, and executing
 import ast
 import logging
 import os
-import re
 import subprocess
 import tempfile
 from typing import AsyncGenerator, Callable, Optional
@@ -580,35 +579,7 @@ class MockTestExecutionAgent(BaseAgent):
 
       mock_content = test_content
 
-      # Programmatically comment out optimized_kernel import if uncommented
-      mock_content = re.sub(
-        r"^([ \t]*from\s+optimized_kernel\s+import\s+.+)",
-        r"# \1",
-        mock_content,
-        flags=re.MULTILINE,
-      )
-      mock_content = re.sub(
-        r"^([ \t]*import\s+optimized_kernel)",
-        r"# \1",
-        mock_content,
-        flags=re.MULTILINE,
-      )
-
-      # Ensure optimized_kernel is aliased to base_kernel for the mock run
-      if "optimized_kernel = base_kernel" not in mock_content:
-        mock_content = (
-          "import base_kernel\noptimized_kernel = base_kernel\n" + mock_content
-        )
-
-      mock_prefix = """
-# Mock setup: Temporarily disable kernel imports to test with baseline
-import sys
-from unittest.mock import MagicMock
-
-# If kernel import fails, tests should fall back to baseline
-"""
-
-      mock_content = mock_prefix + mock_content
+      # Mock execution relies on the safe import fallback generated in the test file.
 
       with tempfile.NamedTemporaryFile(
         mode="w",
@@ -667,7 +638,7 @@ from unittest.mock import MagicMock
                   "output_summary": (
                     stdout[-500:] if len(stdout) > 500 else stdout
                   ),
-                  "details": ""
+                  "details": "",
                 }
               }
             ),
@@ -827,30 +798,6 @@ class TestValidationLoopAgent(BaseAgent):
         and mock_execution_valid
       ):
         logging.info(f"[{self.name}] ✓ All validations passed!")
-
-        if test_file_path and os.path.exists(test_file_path):
-          try:
-            with open(test_file_path, "r") as f:
-              content = f.read()
-
-            content = re.sub(
-              r"# (from .+ import .+ as optimized_kernel)", r"\1", content
-            )
-
-            content = re.sub(
-              r"\noptimized_kernel = base_kernel.*(?=\n)", "", content
-            )
-
-            with open(test_file_path, "w") as f:
-              f.write(content)
-
-            logging.info(
-              f"[{self.name}] Successfully uncommented optimized kernel import"
-            )
-          except Exception as e:
-            logging.warning(
-              f"[{self.name}] Failed to uncomment kernel import: {e}"
-            )
 
         yield Event(
           author=self.name,

@@ -137,6 +137,12 @@ When you have implemented the optimized kernel:
 ### TPU Hardware Context:
 {tpu_specs?}
 
+### TPU-Specific Constraints (Mosaic Backend)
+When targeting TPU (which is the default for these kernels), you must follow these Mosaic lowering constraints:
+- **Matmul Accumulator Type**: Any `tpu.matmul` operation (or `@` operator lowered to it) requires a **32-bit accumulator**. Ensure you use appropriate types (e.g., `acc_dtype=jnp.float32` or similar) or ensure inputs are cast correctly if needed, although accumulation is usually 32-bit.
+- **Block Spec Divisibility**: The Pallas TPU lowering requires that the last two dimensions of your block shape are divisible by **8 and 128** respectively, or that they match the array dimensions exactly.
+- **Rank Constraint**: The Pallas TPU lowering supports only blocks of rank **>= 1**. Do not generate zero-dimensional blocks.
+
 ### Important Notes
 - If you encounter any ambiguity in the plan, use your best judgment to resolve it rather than making assumptions or asking the user.
 - If the plan seems to have issues or contradictions, attempt to resolve them or proceed with the most logical approach. Do not stop to ask the user.

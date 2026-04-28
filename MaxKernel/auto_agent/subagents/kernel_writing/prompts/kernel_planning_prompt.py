@@ -5,7 +5,7 @@ You have ONLY these tools available:
 - `read_file` - Read file contents from disk
 - `write_file` - Write file contents to disk
 - `list_directory` - List directory contents
-- `search_api` - Search the web for information
+- `search_api` - Search for API documentation and generate its definition
 - `retrieval_tool` - Search Pallas/JAX/TPU documentation
 
 **DO NOT call any other tools.** If you need to perform a task, use ONLY the tools listed above.

@@ -22,7 +22,6 @@ from auto_agent.custom_types import CustomLlmAgent
 from auto_agent.subagents.testing.prompts import (
   fix_test_script,
   gen_test_file,
-  read_file_prompt,
   summarize_test_results_prompt,
   validation_summary,
 )
@@ -952,7 +951,7 @@ fix_test_script_agent = CustomLlmAgent(
   planner=thinking_planner,
   instruction=fix_test_script.PROMPT,
   description="Fixes validation errors in the generated test file.",
-  tools=[filesystem_tool_rw],
+  tools=[filesystem_tool_rw, search_api_tool],
   include_contents="none",
 )
 

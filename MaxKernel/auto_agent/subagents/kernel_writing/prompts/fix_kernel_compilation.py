@@ -38,25 +38,29 @@ Review the **current compilation error** and the **compilation history** to unde
 
 **Learn from previous fix attempts:** If previous attempts show a pattern (e.g., "Fix: Changed block size" but error persists), this suggests the approach isn't working and you need a different strategy.
 
-### Step 2.5: MANDATORY RAG Research (DO THIS BEFORE WRITING ANY CODE)
+### Step 2.5: MANDATORY Research (DO THIS BEFORE WRITING ANY CODE)
 
-**BEFORE making any changes, you MUST use `retrieval_tool` to research:**
+**BEFORE making any changes, you MUST use `retrieval_tool` and/or `search_api` to research:**
 
-1. **Query the specific error message:**
+1. **Query the specific error message (Use `retrieval_tool`):**
    - Extract the main error type (e.g., "TypeError", "ValueError", "Block shape error")
    - Search: `retrieval_tool` with the error message or key phrase
    - Example: "Block shape must have same number of dimensions"
 
-2. **Query each Pallas API involved:**
+2. **Query each Pallas API involved (Use `search_api` for definitions, `retrieval_tool` for docs):**
    - Identify Pallas functions in the error trace (pl.pallas_call, pl.BlockSpec, pltpu.emit_pipeline, etc.)
-   - Search: `retrieval_tool` for each one
-   - Example: "pl.pallas_call parameters", "BlockSpec index_map", "emit_pipeline usage"
+   - Use `search_api` with the exact API name to get its definition and parameters
+   - Use `retrieval_tool` to search for broader documentation or discussions about the API
+   - Example for search_api: `search_api(api_name="jax.experimental.pallas.pallas_call")`
+   - Example for retrieval_tool: "pl.pallas_call parameters"
 
-3. **Search for examples:**
-   - Query: `retrieval_tool` with "example" + the API or pattern you need
-   - Example: "pallas_call example", "BlockSpec multidimensional example"
+3. **Search for examples (Use `retrieval_tool` or `search_api`):**
+   - Query: Use `retrieval_tool` with "example" + the API or pattern you need
+   - Alternatively, use `search_api` with the API name, as the generated definition may include usage examples
+   - Example for retrieval_tool: "pallas_call example"
+   - Example for search_api: `search_api(api_name="jax.experimental.pallas.pallas_call")`
 
-**DO NOT skip this step.** Even if you think you know the answer, verify it with RAG first. API signatures and requirements change between versions.
+**DO NOT skip this step.** Even if you think you know the answer, verify it first. API signatures and requirements change between versions.
 
 ### Step 3: Fix the Compilation Errors
 
@@ -64,7 +68,7 @@ Review the **current compilation error** and the **compilation history** to unde
 Even if you're uncertain about the fix, you must attempt a correction and write the file.
 The validation loop will test your fix and give you another chance if it fails.
 
-**REMEMBER:** You have already completed Step 2.5 and gathered RAG information. Use those results to guide your fixes.
+**REMEMBER:** You have already completed Step 2.5 and gathered research information. Use those results to guide your fixes.
 
 **CRITICAL - Learn from History:**
 - If this is attempt 2 or 3, review what was tried before
@@ -84,7 +88,7 @@ The validation loop will test your fix and give you another chance if it fails.
 2. **Fix Only What's Broken:**
    - Correct Python syntax errors
    - Fix import statements and module paths
-   - Correct Pallas/JAX API usage (use `retrieval_tool` to verify correct APIs)
+   - Correct Pallas/JAX API usage (use `retrieval_tool` and/or `search_api` to verify correct APIs)
    - Fix variable references and scoping issues
    - Ensure the `main` function is present and correctly calls the kernel
    - **Consider the progression of errors** - if the same type of error persists, try a different approach
@@ -114,7 +118,7 @@ The validation loop will test your fix and give you another chance if it fails.
 Use the `write_file` tool to overwrite the kernel file at `{optimized_kernel_path?}` with your corrected version.
 
 If you are uncertain about the fix:
-- Make your best educated guess based on RAG research
+- Make your best educated guess based on research (RAG or search_api)
 - Try the simplest fix first
 - The validation loop will test it and give you another chance
 
@@ -177,7 +181,7 @@ FIX_SUMMARY:
 
 - If the optimization plan fundamentally conflicts with Pallas capabilities, inform the user
 - If you must change block sizes or grid config to fix compilation, explain why
-- Always verify API usage with `retrieval_tool` before making changes
+- Always verify API usage with `retrieval_tool` or `search_api` before making changes
 - The goal is a compiling kernel that still achieves the planned optimizations
 - Compilation errors are often simple syntax/API issues that don't require strategy changes
 """

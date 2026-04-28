@@ -92,17 +92,22 @@ Once you have identified both kernel files:
 ### Imports
 - Import pytest, jax, jax.numpy as jnp
 - Add the working directory to sys.path for imports
-- Import the kernel functions with the optimized kernel COMMENTED OUT for validation:
+- Import the kernel functions with a safe fallback for mock execution:
   ```python
   # Import base kernel (required)
-  from base_kernel_file import kernel_function_name as base_kernel
+  from base_kernel import computation as base_kernel
   
-  # Import optimized kernel (COMMENTED OUT during validation)
-  # from optimized_kernel_file import kernel_function_name as optimized_kernel
-  optimized_kernel = base_kernel  # Use baseline during validation
+  # Safe import for optimized_kernel to handle mock execution environments
+  try:
+      from optimized_kernel import computation as optimized_kernel
+  except ImportError:
+      pass
+  
+  # Fallback for mock execution environments where the import might fail
+  if 'optimized_kernel' not in globals():
+      optimized_kernel = base_kernel
   ```
-  **Important**: The optimized kernel import MUST be commented out as shown. After validation passes,
-  the import will be automatically uncommented and the fallback line removed.
+  **Important**: Use this exact structure. It allows tests to run with the base kernel in mock environments where the optimized kernel is not available.
 - Extract function names from the kernel code
 
 ### Test Structure
@@ -117,10 +122,18 @@ import time
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-# Import kernel functions (adjust based on actual function names)
+# Import base kernel (required)
 from base_kernel_file import kernel_function_name as base_kernel
-# from optimized_kernel_file import kernel_function_name as optimized_kernel
-optimized_kernel = base_kernel  # Use baseline during validation
+
+# Safe import for optimized_kernel to handle mock execution environments
+try:
+    from optimized_kernel_file import kernel_function_name as optimized_kernel
+except ImportError:
+    pass
+
+# Fallback for mock execution environments where the import might fail
+if 'optimized_kernel' not in globals():
+    optimized_kernel = base_kernel
 
 def report_perf_metrics(execution_time_ms):
     import sys

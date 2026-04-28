@@ -3,7 +3,6 @@
 import json
 import logging
 from typing import Any
-from google.adk import tools
 import requests
 
 from hitl_agent.constants import CPU_SERVER_PORT, TPU_SERVER_PORT
@@ -106,7 +105,3 @@ def autotune_kernel(
     }
   except Exception as e:
     return {"status": "error", "message": str(e)}
-
-
-# Wrap the function with FunctionTool for compatibility with ADK agents
-autotune_tool = tools.FunctionTool(autotune_kernel)

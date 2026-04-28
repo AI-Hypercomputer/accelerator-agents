@@ -11,7 +11,7 @@ from google.adk.tools.retrieval.vertex_ai_rag_retrieval import (
   VertexAiRagRetrieval,
 )
 from hitl_agent.config import RAG_CORPUS, WORKDIR
-from hitl_agent.tools.autotune_tool import autotune_tool
+
 from hitl_agent.tools.search_api_tool import search_api_tool
 from mcp import StdioServerParameters
 from vertexai.preview import rag
@@ -96,5 +96,4 @@ __all__ = [
     "filesystem_tool_rw",
     "vertex_ai_rag_tool",
     "CompatibleVertexAiRagRetrieval",
-    "autotune_tool",
 ]

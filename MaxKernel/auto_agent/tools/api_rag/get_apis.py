@@ -1,8 +1,9 @@
 # Imports
 import argparse
+import difflib
 import importlib
 import inspect
-import pkgutil  # <-- Switched to the more robust pkgutil for discovery
+import pkgutil
 import textwrap
 
 from docstring_parser import parse as parse_docstring
@@ -86,16 +87,40 @@ def discover_apis(api_prefix, recursive):
 
 
 def resolve_api(api_str):
-  """Dynamically resolve the JAX API object from its string name."""
+  """Dynamically resolve an API object from its string name."""
   parts = api_str.split(".")
-  module_path = ".".join(parts[:-1])
-  attr = parts[-1]
-  try:
-    module = importlib.import_module(module_path)
-    obj = getattr(module, attr)
-    return obj
-  except (ImportError, AttributeError) as e:
-    raise ImportError(f"Could not resolve {api_str}: {e}")
+
+  # Try to find the longest valid module path
+  module = None
+  remaining_parts = []
+  for i in range(len(parts), 0, -1):
+    module_path = ".".join(parts[:i])
+    try:
+      module = importlib.import_module(module_path)
+      remaining_parts = parts[i:]
+      break
+    except ImportError:
+      continue
+
+  if module is None:
+    raise ImportError(f"Could not resolve any part of {api_str} as a module.")
+
+  # Traverse the attributes
+  obj = module
+  for attr in remaining_parts:
+    try:
+      obj = getattr(obj, attr)
+    except AttributeError as e:
+      # Suggest close matches if attribute lookup failed
+      available_attrs = [a for a in dir(obj) if not a.startswith("_")]
+      matches = difflib.get_close_matches(attr, available_attrs)
+      if matches:
+        raise ImportError(
+          f"Could not resolve attribute '{attr}' in '{getattr(obj, '__name__', obj)}'. Did you mean one of these: {matches}? Original error: {e}"
+        )
+      raise ImportError(f"Could not resolve attribute '{attr}' in '{obj}': {e}")
+
+  return inspect.unwrap(obj)
 
 
 def get_signature(obj):
@@ -131,7 +156,7 @@ def format_docstring_sections(doc):
     return "", [], "", ""
 
   parsed = parse_docstring(doc)
-  description = doc or ""
+  description = parsed.description
   parameters = parsed.params
   returns = parsed.returns
   examples = parsed.examples
@@ -189,6 +214,22 @@ def generate_definition(api_str):
 
   if example_str:
     add_line(f"\n**Examples**:\n```python\n{example_str}\n```")
+
+  # Add source code extraction
+  try:
+    source_code = inspect.getsource(obj)
+    # Truncate if too long to avoid overwhelming context
+    if len(source_code) > 2000:
+      trunc_point = source_code.rfind("\n", 0, 2000)
+      if trunc_point == -1:
+        trunc_point = 2000
+      source_code = (
+        source_code[:trunc_point]
+        + "\n... [Source code truncated due to length] ..."
+      )
+    add_line(f"\n**Source Code**:\n```python\n{source_code}\n```")
+  except (TypeError, OSError) as e:
+    add_line(f"\n**Source Code**: Not available ({e})")
 
   add_line("-" * 80)
   return "\n".join(lines)

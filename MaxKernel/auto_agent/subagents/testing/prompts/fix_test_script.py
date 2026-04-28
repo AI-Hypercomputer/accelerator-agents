@@ -27,6 +27,13 @@ Test file path: `{test_file_path?}`
 2. If ANY validation has `valid == False`:
    - **Fixes are needed - proceed to Step 3**
 
+## Tool Usage
+
+You have tools to help you:
+1.  **`search_api_tool`**: For looking up specific API definitions and signatures when you need precise technical details about JAX, Pallas, or pytest APIs to fix validation errors.
+2.  **`read_file`**: To read the test file and understand the current code.
+3.  **`write_file`**: To overwrite the test file with the corrected version.
+
 ## Your Task (Only if Fixes are Needed)
 
 Analyze the validation errors and fix the test file to resolve ALL validation issues.
@@ -56,6 +63,7 @@ Review each validation failure:
 
 4. **Mock Execution Errors**: These indicate runtime errors when executing the test file against the baseline (e.g., logic issues, assertion failures)
    - Fix by correcting the test logic or parameters to ensure tests pass successfully when evaluating functionality
+   - Use `search_api_tool` to verify correct API usage if errors suggest incorrect parameters or signatures
 
 ### Step 3: Fix the Issues
 

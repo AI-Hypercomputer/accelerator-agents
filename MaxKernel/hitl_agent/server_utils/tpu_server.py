@@ -375,10 +375,11 @@ async def autotune(request: AutotuneRequest):
           logging.error(f"Error running config {cfg}: {e}")
           all_results.append({"cfg": cfg, "status": "exception", "error": str(e)})
         finally:
-          try:
-            os.unlink(temp_file_path)
-          except OSError:
-            pass
+          if "temp_file_path" in locals():
+            try:
+              os.unlink(temp_file_path)
+            except OSError:
+              pass
             
       if best_cfg is None:
         return CodeResponse(

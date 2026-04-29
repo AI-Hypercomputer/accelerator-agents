@@ -5,7 +5,7 @@ To generate the profiling script, you should follow these steps:
 2. Add import `from functools import partial` and add @partial(jax.jit, static_argnames=()) decorator to both computation functions to enable JIT compilation. If there are any constants in the function signatures, include them in the `static_argnames` list.
 3. Change the block size from the original JAX script to use the best block sizes from the performance study.
 4. Define profiling options using `jax.profiler.ProfileOptions()`. Set `python_tracer_level` to 0, `host_tracer_level` to 2, and `advanced_configuration` to `{"tpu_trace_mode": "TRACE_COMPUTE_AND_SYNC"}`.
-5. Start the profiler trace using `jax.profiler.start_trace('jax_trace_dir', profiler_options=options)`.
+5. Start the profiler trace using `jax.profiler.start_trace('jax_trace', profiler_options=options)`. Do not change this line.
 6. Execute the computation 3 times inside a loop, ensuring that the computation is JAX-blocked until ready each time.
 7. Stop the profiler trace using `jax.profiler.stop_trace()`.
 

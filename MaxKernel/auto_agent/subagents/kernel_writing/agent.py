@@ -110,9 +110,8 @@ class KernelCompilationValidationLoop(BaseAgent):
 
     retry_count = 0
 
-    # Initialize compilation history to track all attempts
-    if "compilation_history" not in ctx.session.state:
-      ctx.session.state["compilation_history"] = []
+    # Initialize compilation history to track all attempts for this invocation
+    ctx.session.state["compilation_history"] = []
 
     while retry_count < self.max_retries:
       logging.info(

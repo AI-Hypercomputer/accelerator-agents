@@ -116,11 +116,35 @@ class AutotuneRunner(ServerManagerMixin, BaseAgent):
 
       logging.info(f"[{self.name}] Running autotune for {kernel_name}")
       
+      # Check if TPU is available
+      backend = "tpu"
+      try:
+        process = await asyncio.create_subprocess_exec(
+          "/home/ninacai_google_com/miniconda3/bin/python3",
+          "-c",
+          "import jax; print(any(d.platform == 'tpu' for d in jax.devices()))",
+          stdout=asyncio.subprocess.PIPE,
+          stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
+        if process.returncode == 0:
+          tpu_available = stdout.decode().strip() == "True"
+          if not tpu_available:
+            logging.info(f"[{self.name}] No TPU detected, falling back to CPU")
+            backend = "cpu"
+        else:
+          logging.warning(f"[{self.name}] TPU check failed or returned error, falling back to CPU. Error: {stderr.decode().strip()}")
+          backend = "cpu"
+      except Exception as e:
+        logging.warning(f"[{self.name}] Exception checking TPU availability, falling back to CPU: {e}")
+        backend = "cpu"
+
       try:
         results = autotune_kernel(
             kernel_name=kernel_name,
             code_template=code_template,
             search_space=search_space,
+            backend=backend,
         )
         
         results_path = ""

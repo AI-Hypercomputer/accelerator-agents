@@ -16,6 +16,7 @@ from hitl_agent.config import (
 from hitl_agent.constants import MODEL_NAME
 from hitl_agent.custom_types import CustomLlmAgent
 from hitl_agent.prompts import interactive_prompt
+from hitl_agent.subagents.autotuning.agent import autotune_agent
 from hitl_agent.subagents.explanation import explanation_agent
 from hitl_agent.subagents.gpu_to_jax_agent.agent import (
   gpu_to_jax_agent,
@@ -25,7 +26,6 @@ from hitl_agent.subagents.kernel_writing import (
   plan_kernel_agent,
   validate_kernel_compilation_agent,
 )
-from hitl_agent.subagents.autotuning.agent import autotune_agent
 from hitl_agent.subagents.profiling import profile_agent
 from hitl_agent.subagents.testing import (
   unified_test_agent,

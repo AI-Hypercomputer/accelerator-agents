@@ -1,11 +1,11 @@
 import asyncio
+import itertools
 import json
 import logging
 import os
+import re
 import sys
 import tempfile
-import itertools
-import re
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
@@ -323,26 +323,28 @@ async def autotune(request: AutotuneRequest):
       keys = list(request.search_space.keys())
       values = list(request.search_space.values())
       combinations = list(itertools.product(*values))
-      
+
       best_time = float("inf")
       best_cfg = None
       best_output = ""
-      
+
       for combo in combinations:
         cfg = dict(zip(keys, combo))
         try:
           code_content = request.code_template.format(**cfg)
         except KeyError as e:
-          logging.error(f"KeyError during template formatting: {e}. Config: {cfg}")
+          logging.error(
+            f"KeyError during template formatting: {e}. Config: {cfg}"
+          )
           continue
-          
+
         # Execute the code
         with tempfile.NamedTemporaryFile(
           mode="w", suffix=".py", delete=False
         ) as temp_file:
           temp_file.write(code_content)
           temp_file_path = temp_file.name
-          
+
         try:
           process = await asyncio.create_subprocess_exec(
             sys.executable,
@@ -352,15 +354,15 @@ async def autotune(request: AutotuneRequest):
             cwd=tempfile.gettempdir(),
             env=get_cpu_env(),  # Force CPU backend
           )
-          
+
           stdout, stderr = await asyncio.wait_for(
             process.communicate(), timeout=request.timeout
           )
-          
+
           output = stdout.decode("utf-8") if stdout else ""
           error = stderr.decode("utf-8") if stderr else ""
           exit_code = process.returncode
-          
+
           if exit_code == 0:
             # Parse RESULT_TIME
             match = re.search(r"RESULT_TIME:\s*([0-9.]+)", output)
@@ -371,10 +373,14 @@ async def autotune(request: AutotuneRequest):
                 best_cfg = cfg
                 best_output = output
             else:
-              logging.warning(f"No RESULT_TIME found in output for config {cfg}")
+              logging.warning(
+                f"No RESULT_TIME found in output for config {cfg}"
+              )
           else:
-            logging.warning(f"Config {cfg} failed with exit code {exit_code}. Stderr: {error}")
-            
+            logging.warning(
+              f"Config {cfg} failed with exit code {exit_code}. Stderr: {error}"
+            )
+
         except asyncio.TimeoutError:
           logging.warning(f"Config {cfg} timed out")
           process.kill()
@@ -386,22 +392,24 @@ async def autotune(request: AutotuneRequest):
             os.unlink(temp_file_path)
           except OSError:
             pass
-            
+
       if best_cfg is None:
         return CodeResponse(
           output="",
           error="No successful configuration found during autotune.",
           exit_code=-1,
         )
-        
+
       output_data = {
         "best_cfg": best_cfg,
         "best_time": best_time,
         "best_output": best_output,
       }
       logging.info("Autotune finished on CPU backend")
-      return CodeResponse(output=json.dumps(output_data), error=None, exit_code=0)
-      
+      return CodeResponse(
+        output=json.dumps(output_data), error=None, exit_code=0
+      )
+
     except Exception as e:
       logging.error(f"Autotune failed with error: {str(e)}")
       raise HTTPException(status_code=500, detail=f"Autotune error: {str(e)}")

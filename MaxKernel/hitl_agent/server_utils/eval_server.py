@@ -74,11 +74,14 @@ class EvalTypes(Enum):
   COMPILATION_TEST = "compilation_test"
   PERFORMANCE_TEST = "performance_test"
   PROFILE = "profile"
+  AUTOTUNE = "autotune"
 
 
 class EvalRequest(BaseModel):
   eval_type: EvalTypes
-  code: str
+  code: Optional[str] = None
+  code_template: Optional[str] = None
+  search_space: Optional[dict] = None
   timeout: Optional[int] = 30
   backend_type: Optional[str] = None  # "tpu", "cpu", or None for any available
 
@@ -156,15 +159,22 @@ async def evaluate(request: EvalRequest):
       f"Starting evaluation on {backend_type} backend '{backend_name}' ({backend_ip}:{backend_port}) for {request.eval_type.value}{requested_type_msg}"
     )
 
+    # Construct payload based on eval type
+    payload = {
+      "eval_type": request.eval_type.value,
+      "timeout": request.timeout,
+    }
+    if request.eval_type == EvalTypes.AUTOTUNE:
+      payload["code_template"] = request.code_template
+      payload["search_space"] = request.search_space
+    else:
+      payload["code"] = request.code
+
     # Send request to backend server
     async with aiohttp.ClientSession() as session:
       async with session.post(
         f"http://{backend_ip}:{backend_port}/{request.eval_type.value}",
-        json={
-          "eval_type": request.eval_type.value,
-          "code": request.code,
-          "timeout": request.timeout,
-        },
+        json=payload,
       ) as response:
         result = await response.json()
         logging.info(

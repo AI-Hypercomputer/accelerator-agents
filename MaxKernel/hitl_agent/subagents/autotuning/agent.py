@@ -1,6 +1,5 @@
 """Autotuning agent following the split pattern (Planner + Runner)."""
 
-import asyncio
 import json
 import logging
 import os
@@ -15,32 +14,37 @@ from hitl_agent.config import model_config, thinking_planner
 from hitl_agent.constants import MODEL_NAME
 from hitl_agent.custom_types import CustomLlmAgent
 from hitl_agent.server_utils.server_manager_mixin import ServerManagerMixin
-from hitl_agent.subagents.autotuning.prompts import autotune_prompt, summary_prompt
-from .autotune_tool import autotune_kernel
+from hitl_agent.subagents.autotuning.prompts import (
+  autotune_prompt,
+  summary_prompt,
+)
 from hitl_agent.tools.tools import filesystem_tool_rw
+
+from .autotune_tool import autotune_kernel
 
 # 1. Planner Agent (LLM)
 # This agent identifies parameters, creates the template, and defines the search space.
 # It saves them to session state instead of calling the tool directly.
 autotune_planner_agent = CustomLlmAgent(
-    name="AutotunePlannerAgent",
-    model=MODEL_NAME,
-    generate_content_config=model_config,
-    planner=thinking_planner,
-    instruction=autotune_prompt.PROMPT,
-    description="Prepares code template and search space for auto-tuning Pallas kernels.",
-    tools=[filesystem_tool_rw],
-    after_tool_callback=create_path_saver("autotune_specs_path"),
+  name="AutotunePlannerAgent",
+  model=MODEL_NAME,
+  generate_content_config=model_config,
+  planner=thinking_planner,
+  instruction=autotune_prompt.PROMPT,
+  description="Prepares code template and search space for auto-tuning Pallas kernels.",
+  tools=[filesystem_tool_rw],
+  after_tool_callback=create_path_saver("autotune_specs_path"),
 )
+
 
 # 2. Runner Agent (Python)
 # This agent ensures the server is running locally and calls the autotune tool.
 class AutotuneRunner(ServerManagerMixin, BaseAgent):
   """Manages server lifecycle and executes autotuning via HTTP endpoint.
-  
+
   Uses ServerManagerMixin to manage servers.
   """
-  
+
   auto_manage_servers: bool = True
 
   def __init__(self, name: str):
@@ -53,14 +57,16 @@ class AutotuneRunner(ServerManagerMixin, BaseAgent):
     try:
       # Read inputs from file saved by Planner Agent
       autotune_specs_path = ctx.session.state.get("autotune_specs_path", "")
-      
+
       if not autotune_specs_path:
         error_msg = "Missing autotune_specs_path in session state."
         logging.error(error_msg)
         yield Event(
           author=self.name,
           actions=EventActions(
-            state_delta={"autotune_results": {"status": "error", "message": error_msg}}
+            state_delta={
+              "autotune_results": {"status": "error", "message": error_msg}
+            }
           ),
         )
         return
@@ -71,7 +77,9 @@ class AutotuneRunner(ServerManagerMixin, BaseAgent):
         yield Event(
           author=self.name,
           actions=EventActions(
-            state_delta={"autotune_results": {"status": "error", "message": error_msg}}
+            state_delta={
+              "autotune_results": {"status": "error", "message": error_msg}
+            }
           ),
         )
         return
@@ -88,7 +96,9 @@ class AutotuneRunner(ServerManagerMixin, BaseAgent):
         yield Event(
           author=self.name,
           actions=EventActions(
-            state_delta={"autotune_results": {"status": "error", "message": error_msg}}
+            state_delta={
+              "autotune_results": {"status": "error", "message": error_msg}
+            }
           ),
         )
         return
@@ -99,7 +109,9 @@ class AutotuneRunner(ServerManagerMixin, BaseAgent):
         yield Event(
           author=self.name,
           actions=EventActions(
-            state_delta={"autotune_results": {"status": "error", "message": error_msg}}
+            state_delta={
+              "autotune_results": {"status": "error", "message": error_msg}
+            }
           ),
         )
         return
@@ -109,95 +121,79 @@ class AutotuneRunner(ServerManagerMixin, BaseAgent):
         yield Event(
           author=self.name,
           actions=EventActions(
-            state_delta={"autotune_results": {"status": "error", "message": f"Server startup failed: {error_msg}"}}
+            state_delta={
+              "autotune_results": {
+                "status": "error",
+                "message": f"Server startup failed: {error_msg}",
+              }
+            }
           ),
         )
         return
 
       logging.info(f"[{self.name}] Running autotune for {kernel_name}")
-      
-      # Check if TPU is available
-      backend = "tpu"
-      try:
-        process = await asyncio.create_subprocess_exec(
-          "/home/ninacai_google_com/miniconda3/bin/python3",
-          "-c",
-          "import jax; print(any(d.platform == 'tpu' for d in jax.devices()))",
-          stdout=asyncio.subprocess.PIPE,
-          stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await process.communicate()
-        if process.returncode == 0:
-          tpu_available = stdout.decode().strip() == "True"
-          if not tpu_available:
-            logging.info(f"[{self.name}] No TPU detected, falling back to CPU")
-            backend = "cpu"
-        else:
-          logging.warning(f"[{self.name}] TPU check failed or returned error, falling back to CPU. Error: {stderr.decode().strip()}")
-          backend = "cpu"
-      except Exception as e:
-        logging.warning(f"[{self.name}] Exception checking TPU availability, falling back to CPU: {e}")
-        backend = "cpu"
 
       try:
         results = autotune_kernel(
-            kernel_name=kernel_name,
-            code_template=code_template,
-            search_space=search_space,
-            backend=backend,
+          kernel_name=kernel_name,
+          code_template=code_template,
+          search_space=search_space,
+          backend=None,
         )
-        
+
         results_path = ""
         try:
           results_dir = os.path.dirname(autotune_specs_path)
           results_path = os.path.join(results_dir, "autotune_results.json")
           with open(results_path, "w") as f:
-              json.dump(results, f)
+            json.dump(results, f)
           logging.info(f"[{self.name}] Saved results to {results_path}")
         except Exception as e:
           logging.error(f"[{self.name}] Failed to save results to file: {e}")
-          
+
         yield Event(
           author=self.name,
           actions=EventActions(
             state_delta={
               "autotune_results": results,
-              "autotune_results_path": results_path
+              "autotune_results_path": results_path,
             }
           ),
         )
-        
+
       except Exception as e:
         logging.error(f"Exception during autotuning: {e}")
         yield Event(
           author=self.name,
           actions=EventActions(
-            state_delta={"autotune_results": {"status": "error", "message": str(e)}}
+            state_delta={
+              "autotune_results": {"status": "error", "message": str(e)}
+            }
           ),
         )
     finally:
       await self._cleanup_servers()
+
 
 autotune_runner = AutotuneRunner(name="AutotuneRunner")
 
 # 3. Summarizer Agent (LLM)
 # This agent reads results from state and talks to the user.
 autotune_summary_agent = CustomLlmAgent(
-    name="AutotuneSummaryAgent",
-    model=MODEL_NAME,
-    generate_content_config=model_config,
-    planner=thinking_planner,
-    instruction=summary_prompt.PROMPT,
-    description="Summarizes autotuning results for the user.",
-    tools=[filesystem_tool_rw],
+  name="AutotuneSummaryAgent",
+  model=MODEL_NAME,
+  generate_content_config=model_config,
+  planner=thinking_planner,
+  instruction=summary_prompt.PROMPT,
+  description="Summarizes autotuning results for the user.",
+  tools=[filesystem_tool_rw],
 )
 
 # 4. Combined Sequential Agent
 # This maintains the original interface name.
 autotune_agent = SequentialAgent(
-    name="AutotuneAgent",
-    sub_agents=[autotune_planner_agent, autotune_runner, autotune_summary_agent],
+  name="AutotuneAgent",
+  sub_agents=[autotune_planner_agent, autotune_runner, autotune_summary_agent],
 )
 
 __all__ = ["autotune_agent"]
-

@@ -16,6 +16,7 @@ from hitl_agent.config import (
 from hitl_agent.constants import MODEL_NAME
 from hitl_agent.custom_types import CustomLlmAgent
 from hitl_agent.prompts import interactive_prompt
+from hitl_agent.subagents.autotuning.agent import autotune_agent
 from hitl_agent.subagents.explanation import explanation_agent
 from hitl_agent.subagents.gpu_to_jax_agent.agent import (
   gpu_to_jax_agent,
@@ -52,6 +53,7 @@ root_agent = CustomLlmAgent(
     unified_test_agent,  # Step 5: Run tests and provide summary
     profile_agent,  # Step 6: Profile for bottlenecks
     gpu_to_jax_agent,  # GPU-to-JAX conversion
+    autotune_agent,  # Step 7: Auto-tune kernel
   ],
   tools=[
     filesystem_tool_r

@@ -95,7 +95,7 @@ class PrimaryAgent(base.Agent):
       except subprocess.CalledProcessError as e:
         return False, e.stderr
 
-  def run(self, repo_path: str, context: str | None = None) -> dict[str, str]:
+  async def run(self, repo_path: str, context: str | None = None) -> dict[str, str]:
     """Orchestrates the migration of a repository from PyTorch to JAX.
 
     Args:
@@ -109,19 +109,27 @@ class PrimaryAgent(base.Agent):
       RuntimeError: If the code conversion and validation fails after
         `MAX_DEBUG_ITERATIONS` attempts.
     """
+    # Initialize the RAG pool if it hasn't been done yet
+    await self._rag_agent.init_pool()
+    
     if os.path.isfile(repo_path):
       with open(repo_path, "r", encoding="utf-8", errors="replace") as f:
         pytorch_code = f.read()
 
       if context is None:
-        rag_context_list = self._rag_agent.search_and_retrieve(
-            pytorch_code, top_k=7
+        logging.info("[RAG] Context is None. Triggering RAG retrieval...")
+        rag_context_list = await self._rag_agent.search_and_retrieve(
+            pytorch_code, top_k=10
         )
+        logging.info(f"[RAG] Retrieved {len(rag_context_list)} snippets from database.")
+        for idx, c in enumerate(rag_context_list):
+            logging.info(f"[RAG] Snippet {idx+1} from {c['file']}:\n{c['text'][:200]}...")
         rag_context = "\n\n".join([
             f"File: {c['file']}\n```python\n{c['text']}\n```"
             for c in rag_context_list
         ])
       else:
+        logging.info("[RAG] Using explicitly provided context. Skipping RAG retrieval.")
         rag_context = context
 
       jax_code = _strip_markdown_formatting(

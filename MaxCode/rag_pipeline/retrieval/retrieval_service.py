@@ -3,11 +3,13 @@
 import os
 import re
 import json
+import asyncio
+import asyncpg
 from typing import Any, Dict, List
 import numpy as np
-import psycopg2
 from agents import base
-from google import genai
+from google.cloud import aiplatform
+from vertexai.language_models import TextEmbeddingModel
 from rag_pipeline.retrieval import prompts as retrieval_prompts
 
 class RetrievalService(base.Agent):
@@ -21,19 +23,15 @@ class RetrievalService(base.Agent):
         api_key: str | None = None,
     ):
         super().__init__(model=model)
-        """Initializes the service.
-
-        Args:
-          model: The language model to use for generation (HyDE).
-          db_config: Optional dictionary containing host, database, user, password, port. If None, reads from environment.
-          embedding_model_name: Name of the embedding model to use.
-          api_key: The API key for Google AI services.
-        """
+        """Initializes the service."""
         self._model = model
         self._embedding_model_name = embedding_model_name
-        api_key = api_key or os.environ.get("GOOGLE_API_KEY")
-        self._genai_client = genai.Client(api_key=api_key)
+        self._pool = None  # Initialisation du pool à None
 
+        aiplatform.init(project=os.environ.get('GCP_PROJECT'), location=os.environ.get('GCP_LOCATION', 'us-west1'))
+        self._embedding_model = TextEmbeddingModel.from_pretrained(self._embedding_model_name)
+
+        # Configuration DB
         if db_config is None:
             self._db_config = {
                 'host': os.environ.get('ALLOYDB_HOST'),
@@ -42,10 +40,23 @@ class RetrievalService(base.Agent):
                 'password': os.environ.get('ALLOYDB_PASS'),
                 'port': int(os.environ.get('ALLOYDB_PORT', '5432'))
             }
-            if not self._db_config['host'] or not self._db_config['password']:
-                raise ValueError("Missing required AlloyDB environment variables (ALLOYDB_HOST, ALLOYDB_PASS).")
         else:
             self._db_config = db_config
+
+    async def init_pool(self):
+        """Crée le pool de connexions (à appeler une seule fois au démarrage)."""
+        if not self._pool:
+            self._pool = await asyncpg.create_pool(
+                host=self._db_config['host'],
+                database=self._db_config['database'],
+                user=self._db_config['user'],
+                password=self._db_config['password'],
+                port=self._db_config['port'],
+                ssl='require',
+                min_size=5,
+                max_size=10
+            )
+            print("[RAG] Connection Pool initialized.")
 
     def generate_draft_code(self, query: str) -> str:
         """Generates a hypothetical draft code snippet based on the query."""
@@ -60,50 +71,57 @@ class RetrievalService(base.Agent):
             print(f"HyDE generation failed: {e}. Falling back to raw query.")
             return query
 
-    def keyword_search(self, query: str, top_k: int = 4) -> List[Dict[str, Any]]:
+    async def keyword_search(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
         """Performs a simple keyword search in AlloyDB using ILIKE."""
+        search_query = """
+        SELECT file_path, code_chunk, metadata
+        FROM chunked_code_snippets
+        WHERE code_chunk ILIKE $1 AND repository = 'MaxText'
+        LIMIT $2;
+        """
         try:
-            conn = psycopg2.connect(
-                host=self._db_config['host'],
-                database=self._db_config['database'],
-                user=self._db_config['user'],
-                password=self._db_config['password'],
-                port=self._db_config['port'],
-                sslmode='require'
-            )
-            cur = conn.cursor()
-            
-            # Simple keyword search
-            search_query = """
-            SELECT file_path, code_chunk, metadata
-            FROM chunked_code_snippets
-            WHERE code_chunk ILIKE %s
-            LIMIT %s;
-            """
-            cur.execute(search_query, (f"%{query}%", top_k))
-            results = cur.fetchall()
-            
-            retrieved_context = []
-            for row in results:
-                file_path, code_chunk, metadata_json = row
-                metadata = json.loads(metadata_json) if isinstance(metadata_json, str) else metadata_json
-                retrieved_context.append(
+            async with self._pool.acquire() as conn:
+                results = await conn.fetch(search_query, f"%{query}%", top_k)
+                return [
                     {
-                        "name": os.path.basename(file_path),
-                        "text": code_chunk,
-                        "file": file_path,
-                        "metadata": metadata
-                    }
-                )
-            return retrieved_context
+                        "name": os.path.basename(row['file_path']),
+                        "text": row['code_chunk'],
+                        "file": row['file_path'],
+                        "metadata": json.loads(row['metadata']) if isinstance(row['metadata'], str) else row['metadata']
+                    } for row in results
+                ]
         except Exception as e:
-            print(f"AlloyDB keyword search failed: {e}")
+            print(f"Keyword search failed: {e}")
             return []
-        finally:
-            if 'cur' in locals():
-                cur.close()
-            if 'conn' in locals():
-                conn.close()
+
+    async def vector_search(self, embedding: List[float], top_k: int = 10) -> List[Dict[str, Any]]:
+        """Performs a dense vector search in AlloyDB."""
+        search_query = """
+        SELECT file_path, code_chunk, metadata, 
+               (embedding <=> $1::vector) as distance
+        FROM chunked_code_snippets
+        WHERE repository = 'MaxText'
+        ORDER BY distance ASC
+        LIMIT $2;
+        """
+        # Conversion de l'embedding en string format PostgreSQL vector
+        vector_str = f"[{','.join(map(str, embedding))}]"
+        
+        try:
+            async with self._pool.acquire() as conn:
+                results = await conn.fetch(search_query, vector_str, top_k)
+                return [
+                    {
+                        "name": os.path.basename(row['file_path']),
+                        "text": row['code_chunk'],
+                        "file": row['file_path'],
+                        "distance": float(row['distance']),
+                        "metadata": json.loads(row['metadata']) if isinstance(row['metadata'], str) else row['metadata']
+                    } for row in results
+                ]
+        except Exception as e:
+            print(f"Vector search failed: {e}")
+            return []
 
     def rrf(self, vector_results: List[Dict], keyword_results: List[Dict], k: int = 60) -> List[Dict]:
         """Combines results using Reciprocal Rank Fusion (RRF)."""
@@ -127,81 +145,35 @@ class RetrievalService(base.Agent):
         fused_results = sorted(scores.values(), key=lambda x: x["score"], reverse=True)
         return [x["doc"] for x in fused_results]
 
-    def search_and_retrieve(
-        self, query: str, top_k: int = 4
-    ) -> List[Dict[str, Any]]:
+    async def search_and_retrieve(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
         """Retrieves relevant context from AlloyDB using Hybrid Search and RRF."""
+        print(f"[RAG] search_and_retrieve called with query of length {len(query)}")
         
-        # 1. HyDE: Generate draft code snippet
+        # 1. HyDE (CPU bound/API call)
         draft_code = self.generate_draft_code(query)
-        print(f"Generated HyDE snippet:\n{draft_code[:100]}...")
+        print(f"[RAG] Generated HyDE snippet:\n{draft_code}")
+        
+        # Embedding (API call)
+        response = self._embedding_model.get_embeddings([draft_code])
+        snippet_embedding = response[0].values
 
-        # 2. Vector Search (Dense)
-        response = self._genai_client.models.embed_content(
-            model=self._embedding_model_name, contents=draft_code
-        )
-        snippet_embedding = response.embeddings[0].values
+        # 2. Exécution PARALLÈLE des deux recherches
+        print("[RAG] Launching parallel searches...")
+        vector_task = self.vector_search(snippet_embedding, top_k)
+        keyword_task = self.keyword_search(query, top_k)
+        
+        vector_results, keyword_results = await asyncio.gather(vector_task, keyword_task)
+        print(f"[RAG] Searches completed. Vector: {len(vector_results)}, Keyword: {len(keyword_results)}")
 
-        vector_results = []
-        try:
-            conn = psycopg2.connect(
-                host=self._db_config['host'],
-                database=self._db_config['database'],
-                user=self._db_config['user'],
-                password=self._db_config['password'],
-                port=self._db_config['port'],
-                sslmode='require'
-            )
-            cur = conn.cursor()
-            
-            query_vector = snippet_embedding
-            search_query = """
-            SELECT file_path, code_chunk, metadata, 
-                   (embedding <=> %s::vector) as distance
-            FROM chunked_code_snippets
-            ORDER BY distance ASC
-            LIMIT %s;
-            """
-            
-            vector_str = "[" + ",".join(map(str, query_vector)) + "]"
-            cur.execute(search_query, (vector_str, top_k))
-            results = cur.fetchall()
-            
-            for row in results:
-                file_path, code_chunk, metadata_json, distance = row
-                metadata = json.loads(metadata_json) if isinstance(metadata_json, str) else metadata_json
-                vector_results.append(
-                    {
-                        "name": os.path.basename(file_path),
-                        "text": code_chunk,
-                        "file": file_path,
-                        "distance": float(distance),
-                        "metadata": metadata
-                    }
-                )
-        except Exception as e:
-            print(f"AlloyDB vector search failed: {e}")
-        finally:
-            if 'cur' in locals():
-                cur.close()
-            if 'conn' in locals():
-                conn.close()
-
-        # 3. Keyword Search (Sparse)
-        keyword_results = self.keyword_search(query, top_k=top_k)
-
-        # 4. Result Fusion (RRF)
+        # 3. Fusion RRF
         fused_results = self.rrf(vector_results, keyword_results)
-
-        # 5. Re-ranking (Placeholder)
-        # TODO: Integrate a Cross-Encoder model for final reranking
-        print("Re-ranking requested but used as identity for now.")
+        print(f"[RAG] RRF fused into {len(fused_results)} unique results.")
         
         return fused_results[:top_k]
 
-    def run(self, query: str, top_k: int = 4) -> str:
+    async def run(self, query: str, top_k: int = 10) -> str:
         """Runs RAG to retrieve context, augment prompt, and generate final answer."""
-        context_list = self.search_and_retrieve(query, top_k=top_k)
+        context_list = await self.search_and_retrieve(query, top_k=top_k)
         context_text = "\n\n".join([c['text'] for c in context_list])
         augmented_prompt = f"Use the following context to answer the query:\nContext:\n{context_text}\n\nQuery: {query}"
         return self.generate(augmented_prompt)

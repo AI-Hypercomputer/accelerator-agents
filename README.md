@@ -17,8 +17,6 @@ hardware accelerators like TPUs becomes increasingly challenging. This project
 aims to provide a suite of "Agents"—specialized AI tools powered by Gemini—to
 automate and assist with these complex tasks.
 
-
-
 The project includes two primary agents:
 
 ### 1. MaxCode
@@ -57,23 +55,6 @@ language).
     suggestions to improve kernel performance (MFU).
 *   **Test Harness Generation:** Automatically generates boilerplate code for
     correctness testing and compilation checks.
-
-### 3. JAXBench (Temporary)
-**JAXBench** is a suite of 50 curated JAX/TPU kernel workloads with an evaluation
-harness for benchmarking AI-generated kernel optimizations. 
-
-> **Note:** This is a temporary addition to the repository and will be migrated to
-> a permanent standalone home in the future.
-
-**Features:**
-* **50 Workloads:** Includes 17 priority production operators and 33 KernelBench
-  fused ops with a consistent interface.
-* **Evaluation Harness:** Features a device-side profiling pipeline via
-  `jax.profiler.trace()`, correctness checking, and three-way comparison
-  (baseline XLA vs candidate vs Pallas reference).
-* **CLI Support:** Provides a simple CLI for evaluation and benchmarking:
-  `python -m JAXBench {evaluate,run,list}`.
-
 
 ## Getting Started
 

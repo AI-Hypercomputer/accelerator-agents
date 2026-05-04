@@ -6,7 +6,7 @@ from dataclasses import asdict
 from typing import List, Optional
 
 from evaluation.custom_types.evaluation_result import EvaluationResult
-from evaluation.evaluation_utils import summarize_results
+from evaluation.evaluation_utils import summarize_results, visualize_speed_up
 from evaluation.jax_kernel_evaluator import JAXKernelEvaluator
 
 logging.basicConfig(
@@ -165,6 +165,9 @@ def benchmark(
   # Calculate and print statistics
   if results:
     summarize_results(results, output_dir=dataset_dir)
+
+    # Generate visualization
+    visualize_speed_up(results, output_dir=dataset_dir)
 
   if skipped_problems:
     logger.info("\n" + "=" * 40)

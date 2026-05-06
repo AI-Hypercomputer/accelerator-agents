@@ -98,12 +98,17 @@ def print_eval_result(result: EvaluationResult):
   print("=" * 40 + "\n")
 
 
-def summarize_results(results: list, output_dir: Optional[str] = None) -> None:
+def summarize_results(
+  results: list,
+  speedup_threshold: float,
+  output_dir: Optional[str] = None,
+) -> None:
   """
   Calculates and prints summary statistics for a list of evaluation results.
 
   Args:
       results: A list of dictionaries, where each dictionary is an evaluation result.
+      speedup_threshold: The minimum speedup factor to consider an improvement.
       output_dir: Optional directory path to save the summary report and stats.
   """
   total_attempted = len(results)
@@ -122,7 +127,7 @@ def summarize_results(results: list, output_dir: Optional[str] = None) -> None:
     r["speedup"] for r in correct_tasks if r.get("speedup") is not None
   ]
 
-  improvements = [s for s in speedups if s > 1]
+  improvements = [s for s in speedups if s > speedup_threshold]
   num_improved = len(improvements)
 
   slowdowns = [s for s in speedups if s < 1]
@@ -136,15 +141,16 @@ def summarize_results(results: list, output_dir: Optional[str] = None) -> None:
 
   # --- Speedup Statistics ---
   speedups_cliped = [max(speed, 1) for speed in speedups]
+  max_speedup = max(speedups_cliped) if speedups_cliped else 1
+
   arithmetic_mean_speedup = (
-    sum(speedups_cliped) / len(speedups_cliped) if speedups_cliped else 0
+    sum(speedups_cliped) / len(speedups_cliped) if speedups_cliped else 1
   )
-  max_speedup = max(improvements) if improvements else 1
 
   # Geometric mean is more robust for averaging ratios like speedup.
   geo_mean_speedup = (
     math.exp(sum(math.log(s) for s in speedups_cliped) / len(speedups_cliped))
-    if num_improved > 0
+    if speedups_cliped
     else 1
   )
 

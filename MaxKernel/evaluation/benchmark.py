@@ -164,7 +164,7 @@ def benchmark(
 
   # Calculate and print statistics
   if results:
-    summarize_results(results, output_dir=dataset_dir)
+    summarize_results(results, speedup_threshold=1.05, output_dir=dataset_dir)
 
     # Generate visualization
     visualize_speed_up(results, output_dir=dataset_dir)

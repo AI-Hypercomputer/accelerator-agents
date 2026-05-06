@@ -4,7 +4,6 @@ Reference grouped matmul: for each expert group, slice the input tokens
 and multiply with that expert's weight matrix. Core primitive for MoE layers.
 From JAX experimental pallas ops (reference_gmm).
 
-Not jit-compatible: uses data-dependent slicing on group_sizes.
 """
 
 import jax
@@ -21,8 +20,6 @@ CONFIG = {
     'seq_len': 4096,
 }
 
-_skip_jit = True
-
 
 def create_inputs(dtype=jnp.bfloat16):
     key = jax.random.key(42)
@@ -38,28 +35,64 @@ def create_inputs(dtype=jnp.bfloat16):
     lhs = lhs.astype(jnp.bfloat16).astype(dtype)
     rhs = jax.random.uniform(k2, (G, K, N), dtype=dtype, minval=-limit, maxval=limit)
     rhs = rhs.astype(jnp.bfloat16).astype(dtype)
-    tokens_per_expert = M // G
-    group_sizes = jnp.full((G,), tokens_per_expert, dtype=jnp.int32)
-    return lhs, rhs, group_sizes
+    max_expert_size = M // G
+    group_sizes = jnp.full((G,), max_expert_size, dtype=jnp.int32)
+    return lhs, rhs, group_sizes, max_expert_size
 
 
-def workload(lhs, rhs, group_sizes):
-    """Reference grouped matmul from upstream JAX tests.
+def workload(lhs, rhs, group_sizes, max_expert_size):
+    """Jittable grouped matmul using static shapes and masking.
 
-    For each group i, slices lhs[start:start+size] and computes dot with rhs[i].
-    Uses data-dependent slicing so must be run eagerly (not under jax.jit).
+    Computes dot product for each group with static slice sizes to allow JIT.
     """
-    start = 0
-    out = []
-    for i, size in enumerate(group_sizes):
-        result = jax.lax.dot(
-            lhs[start:start + size, :],
-            rhs[i, :, :],
-            preferred_element_type=jnp.float32,
+    G = rhs.shape[0]
+    M, K = lhs.shape
+    N = rhs.shape[2]
+
+    # Compute expert offsets
+    group_ends = jnp.cumsum(group_sizes)
+    group_starts = jnp.concatenate(
+        [jnp.zeros(1, dtype=jnp.int32), group_ends[:-1]]
+    )
+
+    # Initialize flat result array with padding
+    res_flat = jnp.zeros((M + max_expert_size, N), dtype=lhs.dtype)
+
+    def body_fun(carry_res_flat, i):
+        start = group_starts[i]
+        count = group_sizes[i]
+
+        # Slice with a STATIC size
+        expert_lhs = jax.lax.dynamic_slice(
+            lhs, (start, 0), (max_expert_size, K)
         )
-        out.append(result)
-        start += group_sizes[i]
-    return jnp.concatenate(out, axis=0)
+        expert_rhs = rhs[i, :, :]
+
+        # Compute GEMM
+        res = jax.lax.dot(
+            expert_lhs, expert_rhs, preferred_element_type=jnp.float32
+        )
+
+        # Mask out invalid rows
+        mask = (
+            jax.lax.broadcasted_iota(jnp.int32, (max_expert_size, N), 0) < count
+        )
+        res_masked = jnp.where(mask, res, 0.0)
+
+        # Read-Modify-Write to accumulate results
+        current_slice = jax.lax.dynamic_slice(
+            carry_res_flat, (start, 0), (max_expert_size, N)
+        )
+        updated_slice = current_slice + res_masked.astype(carry_res_flat.dtype)
+        carry_res_flat = jax.lax.dynamic_update_slice(
+            carry_res_flat, updated_slice, (start, 0)
+        )
+
+        return carry_res_flat, None
+
+    res_flat, _ = jax.lax.scan(body_fun, res_flat, jnp.arange(G))
+
+    return res_flat[:M, :]
 
 
 def get_flops():
@@ -73,17 +106,20 @@ def get_flops():
 
 
 def benchmark(num_warmup=2, num_iters=10):
-    """Benchmark eagerly (no JIT — data-dependent control flow)."""
+    """Benchmark with JIT."""
     import time
     inputs = create_inputs()
+    
+    fn = jax.jit(workload, static_argnums=(3,))
+    
     # Warmup
     for _ in range(num_warmup):
-        out = workload(*inputs)
+        out = fn(*inputs)
         out.block_until_ready()
     times = []
     for _ in range(num_iters):
         t0 = time.perf_counter()
-        out = workload(*inputs)
+        out = fn(*inputs)
         out.block_until_ready()
         times.append(time.perf_counter() - t0)
     import numpy as np

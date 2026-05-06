@@ -56,9 +56,7 @@ def computation(A: jnp.ndarray, B: jnp.ndarray) -> jnp.ndarray:
     )(A, B)
 
 C = jax.block_until_ready(computation(A, B))
-
-Profile results:
-TODO
+```
 
 Jax Script with Profiling:
 ```python
@@ -123,8 +121,6 @@ Jax script:
 
 **Instructions:**
 1. Generate the profiling script based on the kernel code above
-2. **Write the profiling script to the exact path specified in session state: `{profiling_script_path?}`**
+2. Use the `restricted_write_file` tool to save the profiling script
 3. After writing, confirm the file was saved successfully
-
-Use the `write_file` tool to save the profiling script.
 """

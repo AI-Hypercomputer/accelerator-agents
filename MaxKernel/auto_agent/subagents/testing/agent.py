@@ -24,8 +24,9 @@ from auto_agent.subagents.testing.prompts import (
   summarize_test_results_prompt,
   validation_summary,
 )
+from auto_agent.tools.file_tools import filesystem_tool_r, write_test_file_tool
 from auto_agent.tools.search_api_tool import search_api_tool
-from auto_agent.tools.tools import filesystem_tool_rw, vertex_ai_rag_tool
+from auto_agent.tools.tools import vertex_ai_rag_tool
 
 # Timeout specifications (in seconds)
 COMPILE_VALIDATION_TIMEOUT = 60 * 1
@@ -105,10 +106,40 @@ class TestRunner(BaseAgent):
       if base_kernel_path and os.path.exists(base_kernel_path):
         with open(base_kernel_path, "r") as f:
           dependencies[os.path.basename(base_kernel_path)] = f.read()
+      else:
+        logging.error(f"[{self.name}] Base kernel path not found")
+        yield Event(
+          author=self.name,
+          actions=EventActions(
+            state_delta={
+              self.output_key: {
+                "exit_code": -1,
+                "output": "Base kernel path not found",
+                "success": False,
+              }
+            }
+          ),
+        )
+        return
 
       if optimized_kernel_path and os.path.exists(optimized_kernel_path):
         with open(optimized_kernel_path, "r") as f:
           dependencies[os.path.basename(optimized_kernel_path)] = f.read()
+      else:
+        logging.error(f"[{self.name}] Optimized kernel path not found")
+        yield Event(
+          author=self.name,
+          actions=EventActions(
+            state_delta={
+              self.output_key: {
+                "exit_code": -1,
+                "output": "Optimized kernel path not found",
+                "success": False,
+              }
+            }
+          ),
+        )
+        return
 
       payload = {
         "eval_type": "unified_test",
@@ -860,9 +891,14 @@ generate_test_file_agent = CustomLlmAgent(
   instruction=gen_test_file.PROMPT,
   description="Generates a comprehensive pytest test file.",
   tools=(
-    [search_api_tool, filesystem_tool_rw, vertex_ai_rag_tool]
+    [
+      search_api_tool,
+      filesystem_tool_r,
+      write_test_file_tool,
+      vertex_ai_rag_tool,
+    ]
     if vertex_ai_rag_tool
-    else [search_api_tool, filesystem_tool_rw]
+    else [search_api_tool, filesystem_tool_r, write_test_file_tool]
   ),
 )
 
@@ -898,7 +934,7 @@ fix_test_script_agent = CustomLlmAgent(
   planner=thinking_planner,
   instruction=fix_test_script.PROMPT,
   description="Fixes validation errors in the generated test file.",
-  tools=[filesystem_tool_rw, search_api_tool],
+  tools=[filesystem_tool_r, write_test_file_tool, search_api_tool],
   include_contents="none",
 )
 

@@ -190,8 +190,7 @@ if __name__ == "__main__":
 
 ## Output Format
 When you have generated the test file:
-1. **Write the complete test file to disk** using the write_file tool.
-2. The file MUST be written to the exact path specified in session state: `{test_file_path?}`
+1. **Write the complete test file to disk** using the restricted_write_file tool. The tool will automatically save it to the path specified in `{test_file_path?}`. You only need to provide the `content`.
 
 Generate a complete, runnable pytest test file now.
 """

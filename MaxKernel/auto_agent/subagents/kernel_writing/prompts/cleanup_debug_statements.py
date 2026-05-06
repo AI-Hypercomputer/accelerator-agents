@@ -7,11 +7,11 @@ You must use the tools following these exact parameters:
    - Required Argument: `path` (the full path to the file)
    - Example: `read_file(path="{optimized_kernel_path}")`
 
-2. **`write_file`** - Save the cleaned kernel
+2. **`restricted_write_file`** - Save the cleaned kernel
    - Required Argument: `path` (the full path to the file)
    - Required Argument: `content` (the complete file content as a string)
    - **MANDATORY**: You MUST provide the `path` argument. For this task, use: `{optimized_kernel_path}`
-   - Example: `write_file(path="{optimized_kernel_path}", content=...)`
+   - Example: `restricted_write_file(content=...)`
 
 **DO NOT call any other tools.** Use ONLY the tools listed above.
 
@@ -86,7 +86,7 @@ Remove all debugging statements that were added during the compilation validatio
 
 # Your Output
 
-Use the `write_file` tool to update the kernel file with debugging statements removed.
+Use the `restricted_write_file` tool to update the kernel file with debugging statements removed.
 
 **Important**:
 - Double-check that all functionality is preserved

@@ -31,8 +31,13 @@ from auto_agent.subagents.kernel_writing.prompts import (
   kernel_planning_prompt,
   read_file_prompt,
 )
+from auto_agent.tools.file_tools import (
+  filesystem_tool_r,
+  filesystem_tool_rw,
+  write_optimized_kernel_tool,
+)
 from auto_agent.tools.search_api_tool import search_api_tool
-from auto_agent.tools.tools import filesystem_tool_rw, vertex_ai_rag_tool
+from auto_agent.tools.tools import vertex_ai_rag_tool
 
 
 class KernelCompilationValidationLoop(BaseAgent):
@@ -287,7 +292,7 @@ read_file_for_validation_agent = CustomLlmAgent(
   planner=thinking_planner,
   instruction=read_file_prompt.PROMPT,
   description="Reads the kernel file mentioned by the user or from state for validation.",
-  tools=[filesystem_tool_rw],
+  tools=[filesystem_tool_r],
 )
 
 fix_kernel_compilation_agent = CustomLlmAgent(
@@ -298,9 +303,14 @@ fix_kernel_compilation_agent = CustomLlmAgent(
   instruction=fix_kernel_compilation.PROMPT,
   description="Fixes compilation errors in the generated kernel while preserving optimization strategy.",
   tools=(
-    [search_api_tool, filesystem_tool_rw, vertex_ai_rag_tool]
+    [
+      search_api_tool,
+      filesystem_tool_r,
+      write_optimized_kernel_tool,
+      vertex_ai_rag_tool,
+    ]
     if vertex_ai_rag_tool
-    else [search_api_tool, filesystem_tool_rw]
+    else [search_api_tool, filesystem_tool_r, write_optimized_kernel_tool]
   ),
   before_agent_callback=load_kernel_and_plan_to_state,
   after_model_callback=extract_fix_summary,
@@ -314,7 +324,7 @@ add_debug_statements_agent = CustomLlmAgent(
   planner=thinking_planner,
   instruction=add_debug_statements.PROMPT,
   description="Adds strategic debugging statements to diagnose persistent compilation issues.",
-  tools=[filesystem_tool_rw],
+  tools=[filesystem_tool_r, write_optimized_kernel_tool],
   before_agent_callback=load_kernel_and_plan_to_state,
   include_contents="none",
 )
@@ -326,7 +336,7 @@ cleanup_debug_statements_agent = CustomLlmAgent(
   planner=thinking_planner,
   instruction=cleanup_debug_statements.PROMPT,
   description="Removes debugging statements from successfully compiled kernel.",
-  tools=[filesystem_tool_rw],
+  tools=[filesystem_tool_r, write_optimized_kernel_tool],
   before_agent_callback=load_single_kernel_to_state,
   include_contents="none",
 )
@@ -375,9 +385,14 @@ implement_kernel_agent = CustomLlmAgent(
   instruction=kernel_implementation_prompt.PROMPT,
   description="Implements the optimized Pallas kernel following the plan.",
   tools=(
-    [search_api_tool, filesystem_tool_rw, vertex_ai_rag_tool]
+    [
+      search_api_tool,
+      filesystem_tool_r,
+      write_optimized_kernel_tool,
+      vertex_ai_rag_tool,
+    ]
     if vertex_ai_rag_tool
-    else [search_api_tool, filesystem_tool_rw]
+    else [search_api_tool, filesystem_tool_r, write_optimized_kernel_tool]
   ),
 )
 

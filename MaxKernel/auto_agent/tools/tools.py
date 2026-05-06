@@ -1,19 +1,15 @@
 """Tool setup for HITL kernel generation agents."""
 
 import logging
-import os
 
 from google.adk.models import LlmRequest
 from google.adk.tools import ToolContext
-from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams
-from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset
 from google.adk.tools.retrieval.vertex_ai_rag_retrieval import (
   VertexAiRagRetrieval,
 )
-from mcp import StdioServerParameters
 from vertexai.preview import rag
 
-from auto_agent.config import RAG_CORPUS, WORKDIR
+from auto_agent.config import RAG_CORPUS
 from auto_agent.tools.search_api_tool import search_api_tool
 
 
@@ -40,38 +36,6 @@ class CompatibleVertexAiRagRetrieval(VertexAiRagRetrieval):
     )
 
 
-# Read-only filesystem tool for orchestration agent (no write access)
-filesystem_tool_r = MCPToolset(
-  connection_params=StdioConnectionParams(
-    server_params=StdioServerParameters(
-      command="npx",
-      args=[
-        "-y",  # Argument for npx to auto-confirm install
-        "@modelcontextprotocol/server-filesystem@0.5.1",
-        os.path.abspath(WORKDIR),
-      ],
-    ),
-  ),
-  # Optional: Filter which tools from the MCP server are exposed
-  tool_filter=["list_directory", "read_file"],
-)
-
-# Read-write filesystem tool for sub-agents
-filesystem_tool_rw = MCPToolset(
-  connection_params=StdioConnectionParams(
-    server_params=StdioServerParameters(
-      command="npx",
-      args=[
-        "-y",  # Argument for npx to auto-confirm install
-        "@modelcontextprotocol/server-filesystem@0.5.1",
-        os.path.abspath(WORKDIR),
-      ],
-    ),
-  ),
-  # Optional: Filter which tools from the MCP server are exposed
-  tool_filter=["list_directory", "read_file", "write_file"],
-)
-
 # Vertex AI RAG Engine tool
 vertex_ai_rag_tool = None
 if RAG_CORPUS:
@@ -92,8 +56,6 @@ else:
 
 __all__ = [
   "search_api_tool",
-  "filesystem_tool_r",
-  "filesystem_tool_rw",
   "vertex_ai_rag_tool",
   "CompatibleVertexAiRagRetrieval",
 ]

@@ -127,9 +127,7 @@ You have three tools to help you:
 
 ### Output Requirement
 When you have implemented the optimized kernel:
-1.  You **must** use the `write_file` tool to write the *entire* optimized script to a file.
-    - **CRITICAL**: You must always write the output to exactly `{optimized_kernel_path}`.
-    - Example: `write_file(path="{optimized_kernel_path}", content=...)`
+1.  You **must** use the `restricted_write_file` tool to write the *entire* optimized script to a file. The tool will automatically save it to the path specified in `{optimized_kernel_path}`. You only need to provide the `content`.
 2.  Summarize changes made and key optimizations applied, including the path where the optimized kernel was written.
 
 **IMPORTANT:** Once you have written the optimized kernel file, your task is COMPLETE. Provide a summary of the implementation and simply end your response.
@@ -238,7 +236,7 @@ if __name__ == "__main__":
 5. Inform the user of success and the new filename
 
 ### Final Checklist Before Writing the File
-Before you call `write_file`, verify your implementation has:
+Before you call `restricted_write_file`, verify your implementation has:
 - ✅ **NO try-except blocks** - This is critical for validation
 - ✅ **NO error handling** - Let errors surface naturally
 - ✅ `kernel` function at module level

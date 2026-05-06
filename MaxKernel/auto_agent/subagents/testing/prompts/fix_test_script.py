@@ -32,7 +32,7 @@ Test file path: `{test_file_path?}`
 You have tools to help you:
 1.  **`search_api`**: For looking up specific API definitions and signatures when you need precise technical details about JAX, Pallas, or pytest APIs to fix validation errors.
 2.  **`read_file`**: To read the test file and understand the current code.
-3.  **`write_file`**: To overwrite the test file with the corrected version.
+3.  **`restricted_write_file`**: To overwrite the test file with the corrected version.
 
 ## Your Task (Only if Fixes are Needed)
 
@@ -75,7 +75,7 @@ Review each validation failure:
 
 ### Step 4: Write the Fixed Test File
 
-Use the `write_file` tool to overwrite the test file with the corrected version.
+Use the `restricted_write_file` tool to overwrite the test file with the corrected version.
 
 **After writing:**
 - Confirm: "Fixed test file written to {test_file_path}"

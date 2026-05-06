@@ -113,9 +113,9 @@ The validation loop will test your fix and give you another chance if it fails.
 
 ### Step 4: Write the Fixed Kernel (REQUIRED - NO EXCEPTIONS)
 
-**YOU MUST call `write_file` in this step. This is not optional.**
+**YOU MUST call `restricted_write_file` in this step. This is not optional.**
 
-Use the `write_file` tool to overwrite the kernel file at `{optimized_kernel_path?}` with your corrected version.
+Use the `restricted_write_file` tool to overwrite the kernel file. The tool will automatically save it to the path specified in `{optimized_kernel_path?}`. You only need to provide the `content`.
 
 If you are uncertain about the fix:
 - Make your best educated guess based on research (RAG or search_api)
@@ -169,11 +169,10 @@ FIX_SUMMARY:
 2. **`search_api`**: Search for API definitions and recent changes
 3. **`read_file`**: Read the kernel file and optimization plan
    - Required Argument: `path` 
-4. **`write_file`**: Write the corrected kernel file
-   - Required Argument: `path` (Use: `{optimized_kernel_path}`)
+4. **`restricted_write_file`**: Write the corrected kernel file
+   - The tool will automatically save it to the path specified in `{optimized_kernel_path}`.
    - Required Argument: `content` (The complete file content)
-   - **MANDATORY**: You MUST provide the `path` argument. 
-   - Example: `write_file(path="{optimized_kernel_path}", content=...)`
+   - Example: `restricted_write_file(content=...)`
 
 ---
 

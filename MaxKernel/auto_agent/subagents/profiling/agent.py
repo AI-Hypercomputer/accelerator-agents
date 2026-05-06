@@ -21,10 +21,11 @@ from auto_agent.subagents.profiling.prompts import (
   gen_profiling_script,
   read_profiling_script_prompt,
 )
-from auto_agent.tools.tools import (
-  filesystem_tool_rw,
-  vertex_ai_rag_tool,
+from auto_agent.tools.file_tools import (
+  filesystem_tool_r,
+  write_profiling_script_tool,
 )
+from auto_agent.tools.tools import vertex_ai_rag_tool
 
 # Profiling script generation agent - writes profiling script to file
 generate_profiling_script_agent = CustomLlmAgent(
@@ -34,7 +35,7 @@ generate_profiling_script_agent = CustomLlmAgent(
   planner=thinking_planner,
   instruction=gen_profiling_script.PROMPT,
   description="Generates a profiling script to identify performance bottlenecks in the kernel code and writes it to a file.",
-  tools=[filesystem_tool_rw],
+  tools=[filesystem_tool_r, write_profiling_script_tool],
   before_agent_callback=load_single_kernel_to_state,
 )
 

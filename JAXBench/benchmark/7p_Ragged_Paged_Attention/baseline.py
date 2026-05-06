@@ -4,7 +4,6 @@ Reference implementation with data-dependent slicing on per-sequence boundaries.
 Processes each sequence independently with variable-length queries and paged KV cache.
 From JAX experimental pallas ops (ref_ragged_paged_attention).
 
-Not jit-compatible: uses data-dependent slicing.
 """
 
 import math
@@ -26,8 +25,6 @@ CONFIG = {
     'page_size': 16,
     'pages_per_seq': 256,
 }
-
-_skip_jit = True
 
 
 def create_inputs(dtype=jnp.bfloat16):
@@ -58,10 +55,9 @@ def create_inputs(dtype=jnp.bfloat16):
 
 
 def workload(queries, kv_pages, kv_lens, page_indices, cu_q_lens, num_seqs):
-    """Reference ragged paged attention from upstream JAX.
+    """Ragged paged attention using static shapes and masking for JIT compatibility.
 
-    Processes each sequence independently with data-dependent slicing.
-    Must be run eagerly (not under jax.jit).
+    Processes each sequence independently, avoiding data-dependent slicing.
     """
     sm_scale = 1.0 / math.sqrt(CONFIG['head_dim'])
     mask_value = DEFAULT_MASK_VALUE
@@ -70,17 +66,21 @@ def workload(queries, kv_pages, kv_lens, page_indices, cu_q_lens, num_seqs):
     num_q_heads = queries.shape[1]
     num_query_per_kv = num_q_heads // num_kv_heads
 
+    max_seqs = CONFIG['max_num_seqs']
+    tokens_per_seq = CONFIG['max_num_batched_tokens'] // max_seqs
+
     outputs = []
-    for i in range(num_seqs[0]):
+    for i in range(max_seqs):
         q_start = cu_q_lens[i]
-        q_end = cu_q_lens[i + 1]
-        q_len = q_end - q_start
         kv_len = kv_lens[i]
         indices = page_indices[i]
 
-        q = queries[q_start:q_end]
-        k = kv_pages[indices, :, 0::2, :].reshape(-1, num_kv_heads, head_dim)[:kv_len]
-        v = kv_pages[indices, :, 1::2, :].reshape(-1, num_kv_heads, head_dim)[:kv_len]
+        q = jax.lax.dynamic_slice(
+            queries, (q_start, 0, 0), (tokens_per_seq, num_q_heads, head_dim)
+        )
+
+        k = kv_pages[indices, :, 0::2, :].reshape(-1, num_kv_heads, head_dim)
+        v = kv_pages[indices, :, 1::2, :].reshape(-1, num_kv_heads, head_dim)
 
         k = jnp.repeat(k, num_query_per_kv, axis=1)
         v = jnp.repeat(v, num_query_per_kv, axis=1)
@@ -90,15 +90,20 @@ def workload(queries, kv_pages, kv_lens, page_indices, cu_q_lens, num_seqs):
         )
         attn *= sm_scale
 
-        q_span = (kv_len - q_len) + jax.lax.broadcasted_iota(
+        q_span = (kv_len - tokens_per_seq) + jax.lax.broadcasted_iota(
             jnp.int32, attn.shape, 1
         )
         kv_span = jax.lax.broadcasted_iota(jnp.int32, attn.shape, 2)
-        mask = q_span < kv_span
-        attn += jnp.where(mask, mask_value, 0.0)
+
+        mask = (q_span < kv_span) | (kv_span >= kv_len)
+        attn = jnp.where(mask, mask_value, attn)
 
         attn = jax.nn.softmax(attn, axis=-1).astype(v.dtype)
         out = jnp.einsum("hqk,khd->qhd", attn, v).astype(queries.dtype)
+
+        is_valid = i < num_seqs[0]
+        out = jnp.where(is_valid, out, 0.0)
+
         outputs.append(out)
 
     return jnp.concatenate(outputs, axis=0)
@@ -115,17 +120,18 @@ def get_flops():
 
 
 def benchmark(num_warmup=2, num_iters=10):
-    """Benchmark eagerly (no JIT — data-dependent control flow)."""
+    """Benchmark with JIT."""
     import time
     inputs = create_inputs()
+    fn = jax.jit(workload)
     # Warmup
     for _ in range(num_warmup):
-        out = workload(*inputs)
+        out = fn(*inputs)
         out.block_until_ready()
     times = []
     for _ in range(num_iters):
         t0 = time.perf_counter()
-        out = workload(*inputs)
+        out = fn(*inputs)
         out.block_until_ready()
         times.append(time.perf_counter() - t0)
     import numpy as np

@@ -13,19 +13,31 @@ TPU_VERSION = os.environ.get("TPU_VERSION", "")
 RAG_CORPUS = os.environ.get("RAG_CORPUS", "")
 INCLUDE_THOUGHTS = os.environ.get("INCLUDE_THOUGHTS", "true").lower() == "true"
 
-# Model configuration
-model_config = types.GenerateContentConfig(
+# Model configurations
+gemini_config = types.GenerateContentConfig(
   temperature=0.5,
   top_p=TOP_P,
   top_k=TOP_K,
-  max_output_tokens = 21333,
 )
 
-# Planner configuration with thinking/reasoning traces
-thinking_planner = BuiltInPlanner(
+claude_config = types.GenerateContentConfig(
+  temperature=0.5,
+  top_p=TOP_P,
+  top_k=TOP_K,
+  max_output_tokens=21333,
+)
+
+# Planner configurations
+gemini_planner = BuiltInPlanner(
   thinking_config=types.ThinkingConfig(
     include_thoughts=INCLUDE_THOUGHTS,
-    # thinking_level="high",
+    thinking_level="high",
+  )
+)
+
+claude_planner = BuiltInPlanner(
+  thinking_config=types.ThinkingConfig(
+    include_thoughts=INCLUDE_THOUGHTS,
     thinking_budget=8192,
   )
 )

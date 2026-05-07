@@ -15,7 +15,6 @@ from google.adk.agents import BaseAgent, SequentialAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 
-from auto_agent.config import model_config, thinking_planner
 from auto_agent.constants import EVAL_SERVER_PORT, MODEL_NAME
 from auto_agent.custom_types import CustomLlmAgent
 from auto_agent.subagents.testing.prompts import (
@@ -876,8 +875,6 @@ class TestValidationLoopAgent(BaseAgent):
 validation_summary_agent = CustomLlmAgent(
   name="ValidationSummaryAgent",
   model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=thinking_planner,
   instruction=validation_summary.PROMPT,
   description="Summarizes validation results and provides next steps to the user.",
 )
@@ -886,8 +883,6 @@ validation_summary_agent = CustomLlmAgent(
 generate_test_file_agent = CustomLlmAgent(
   name="GenerateTestFileAgent",
   model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=thinking_planner,
   instruction=gen_test_file.PROMPT,
   description="Generates a comprehensive pytest test file.",
   tools=(
@@ -930,8 +925,6 @@ mock_execution_validation_agent = MockTestExecutionAgent(
 fix_test_script_agent = CustomLlmAgent(
   name="FixTestScriptAgent",
   model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=thinking_planner,
   instruction=fix_test_script.PROMPT,
   description="Fixes validation errors in the generated test file.",
   tools=[filesystem_tool_r, write_test_file_tool, search_api_tool],
@@ -970,8 +963,6 @@ run_tests_agent = TestRunner(
 summarize_test_results_agent = CustomLlmAgent(
   name="SummarizeTestResultsAgent",
   model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=thinking_planner,
   instruction=summarize_test_results_prompt.PROMPT,
   description="Analyzes pytest test results and provides recommendations.",
   tools=(

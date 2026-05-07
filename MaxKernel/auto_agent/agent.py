@@ -4,6 +4,9 @@ This module contains the root orchestrator that coordinates all subagents
 for the human-in-the-loop kernel generation process.
 """
 
+from google.adk.models.anthropic_llm import Claude
+from google.adk.models.registry import LLMRegistry
+
 from auto_agent.subagents.kernel_writing import (
   implement_kernel_agent,
   plan_kernel_agent,
@@ -15,6 +18,8 @@ from auto_agent.subagents.testing import (
   unified_test_agent,
   validated_test_generation_agent,
 )
+
+LLMRegistry.register(Claude)
 
 root_agent = AutonomousPipelineAgent(
   name="AutonomousPipelineAgent",

@@ -18,12 +18,14 @@ model_config = types.GenerateContentConfig(
   temperature=0.5,
   top_p=TOP_P,
   top_k=TOP_K,
+  max_output_tokens = 21333,
 )
 
 # Planner configuration with thinking/reasoning traces
 thinking_planner = BuiltInPlanner(
   thinking_config=types.ThinkingConfig(
     include_thoughts=INCLUDE_THOUGHTS,
-    thinking_level="high",
+    # thinking_level="high",
+    thinking_budget=8192,
   )
 )

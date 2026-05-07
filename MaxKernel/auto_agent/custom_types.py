@@ -7,10 +7,6 @@ from google.adk.events import Event, EventActions
 from google.adk.models.google_llm import Gemini
 from google.genai import types
 
-from auto_agent.constants import (
-  MODEL_NAME,
-)
-
 
 class CustomLlmAgent(LlmAgent):
   """Agent that allows early exit from the loop if a condition is met.
@@ -22,14 +18,16 @@ class CustomLlmAgent(LlmAgent):
     """Initialize CustomLlmAgent with automatic Gemini model (with retry) wrapping."""
     # If model is a string, use the pre-configured gemini_model with retry support
     if "model" in kwargs and isinstance(kwargs["model"], str):
-      gemini_model = Gemini(
-        model=MODEL_NAME,
-        retry_options=types.HttpRetryOptions(
-          initial_delay=1,
-          attempts=10,
-        ),
-      )
-      kwargs["model"] = gemini_model
+      model_str = kwargs["model"]
+      if not model_str.startswith("claude"):
+        gemini_model = Gemini(
+          model=model_str,
+          retry_options=types.HttpRetryOptions(
+            initial_delay=1,
+            attempts=5,
+          ),
+        )
+        kwargs["model"] = gemini_model
     super().__init__(*args, **kwargs)
 
   async def _run_async_impl(

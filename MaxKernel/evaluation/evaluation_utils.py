@@ -5,6 +5,7 @@ import os
 from dataclasses import asdict
 from typing import Optional
 
+import matplotlib.pyplot as plt
 import yaml
 
 from evaluation.custom_types.evaluation_result import EvaluationResult
@@ -97,12 +98,17 @@ def print_eval_result(result: EvaluationResult):
   print("=" * 40 + "\n")
 
 
-def summarize_results(results: list, output_dir: Optional[str] = None) -> None:
+def summarize_results(
+  results: list,
+  speedup_threshold: float,
+  output_dir: Optional[str] = None,
+) -> None:
   """
   Calculates and prints summary statistics for a list of evaluation results.
 
   Args:
       results: A list of dictionaries, where each dictionary is an evaluation result.
+      speedup_threshold: The minimum speedup factor to consider an improvement.
       output_dir: Optional directory path to save the summary report and stats.
   """
   total_attempted = len(results)
@@ -121,7 +127,7 @@ def summarize_results(results: list, output_dir: Optional[str] = None) -> None:
     r["speedup"] for r in correct_tasks if r.get("speedup") is not None
   ]
 
-  improvements = [s for s in speedups if s > 1]
+  improvements = [s for s in speedups if s > speedup_threshold]
   num_improved = len(improvements)
 
   slowdowns = [s for s in speedups if s < 1]
@@ -134,14 +140,18 @@ def summarize_results(results: list, output_dir: Optional[str] = None) -> None:
   slowdown_ratio = (num_slowdowns / total_attempted) * 100
 
   # --- Speedup Statistics ---
-  arithmetic_mean_speedup = sum(speedups) / len(speedups) if speedups else 0
-  max_speedup = max(improvements) if improvements else 0
+  speedups_cliped = [max(speed, 1) for speed in speedups]
+  max_speedup = max(speedups_cliped) if speedups_cliped else 1
+
+  arithmetic_mean_speedup = (
+    sum(speedups_cliped) / len(speedups_cliped) if speedups_cliped else 1
+  )
 
   # Geometric mean is more robust for averaging ratios like speedup.
   geo_mean_speedup = (
-    math.exp(sum(math.log(s) for s in speedups) / len(speedups))
-    if num_improved > 0
-    else 0
+    math.exp(sum(math.log(s) for s in speedups_cliped) / len(speedups_cliped))
+    if speedups_cliped
+    else 1
   )
 
   summary_lines = [
@@ -161,8 +171,8 @@ def summarize_results(results: list, output_dir: Optional[str] = None) -> None:
     f"  - Improved (Speedup > 1x): {num_improved} ({improvement_ratio:.2f}%)",
     f"  - Slower (Speedup < 1x):   {num_slowdowns} ({slowdown_ratio:.2f}%)",
     f"  - Max Speedup:             {max_speedup:.2f}x",
-    f"  - Average Speedup/Slowdown (Arithmetic): {arithmetic_mean_speedup:.2f}x",
-    f"  - Average Speedup/Slowdown (Geometric):  {geo_mean_speedup:.2f}x",
+    f"  - Average Speedup (Arithmetic): {arithmetic_mean_speedup:.2f}x",
+    f"  - Average Speedup (Geometric):  {geo_mean_speedup:.2f}x",
     "=" * 40,
     "",
   ]
@@ -199,3 +209,71 @@ def summarize_results(results: list, output_dir: Optional[str] = None) -> None:
       json.dump(stats, f, indent=4)
 
     logger.info(f"Saved evaluation summary and stats to {output_dir}")
+
+
+def visualize_speed_up(results: list, output_dir: str) -> None:
+  """
+  Visualizes the evaluation results.
+
+  Args:
+      results: A list of dictionaries, where each dictionary is an evaluation result.
+      output_dir: Directory path to save the output PNG files.
+                  Will generate speedup_distribution.png and
+                  speedup_barplot.png in this directory.
+  """
+  os.makedirs(output_dir, exist_ok=True)
+  plot_data = []
+  speedups = []
+  for r in results:
+    is_valid = r.get("compiled_successfully") and r.get("numerically_correct")
+    s = r.get("speedup") if is_valid else None
+    if s is not None:
+      plot_data.append((r["task_id"], s, False))
+      speedups.append(s)
+    else:
+      plot_data.append((r["task_id"], 0.0, True))
+
+  plot_data.sort(key=lambda x: x[1])
+  sorted_task_ids, sorted_speedups, sorted_is_invalid = zip(*plot_data)
+
+  # Derive paths for the two separate PNGs
+  dist_path = os.path.join(output_dir, "speedup_distribution.png")
+  bar_path = os.path.join(output_dir, "speedup_barplot.png")
+
+  # 1. Speedup distribution
+  fig1, ax1 = plt.subplots(1, 1, figsize=(10, 6))
+  if not speedups:
+    logger.warning("No valid speedup results found for distribution plot.")
+    ax1.text(0.5, 0.5, "No valid speedup data", ha="center", va="center")
+  else:
+    ax1.hist(speedups, bins=50, color="skyblue", edgecolor="black")
+    ax1.set_title("Speedup Distribution")
+    ax1.set_xlabel("Speedup")
+    ax1.set_ylabel("Frequency")
+    ax1.axvline(x=1.0, color="red", linestyle="--", label="Baseline (1.0x)")
+    ax1.legend()
+
+  plt.tight_layout()
+  fig1.savefig(dist_path)
+  plt.close(fig1)
+  logger.info(f"Saved distribution plot to {dist_path}")
+
+  # 2. Barplot for each problem
+  fig2, ax2 = plt.subplots(1, 1, figsize=(10, 12))
+  y_pos = range(len(sorted_task_ids))
+  bars = ax2.barh(y_pos, sorted_speedups, color="lightgreen")
+
+  for i, is_invalid in enumerate(sorted_is_invalid):
+    if is_invalid:
+      ax2.plot(0, i, marker="x", color="red", markersize=8)
+
+  ax2.set_yticks(y_pos)
+  ax2.set_yticklabels(sorted_task_ids, fontsize=8)
+  ax2.set_title("Speedup for Each Problem")
+  ax2.set_xlabel("Speedup")
+  ax2.axvline(x=1.0, color="red", linestyle="--")
+
+  plt.tight_layout()
+  fig2.savefig(bar_path)
+  plt.close(fig2)
+  logger.info(f"Saved barplot to {bar_path}")

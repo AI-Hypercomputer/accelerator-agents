@@ -144,12 +144,14 @@ def main():
     optimized_mod = load_module_from_path("optimized", "optimized.py")
 
     # 1. Correctness Check
-    out_base = jax.block_until_ready(base_mod.computation(*args))
+    jit_base = jax.jit(base_mod.computation, static_argnums=static_argnums)
+    out_base = jax.block_until_ready(jit_base(*args))
     out_base_cpu = jax.device_get(out_base)
     del out_base
 
     try:
-      out_optimized = jax.block_until_ready(optimized_mod.computation(*args))
+      jit_optimized = jax.jit(optimized_mod.computation, static_argnums=static_argnums)
+      out_optimized = jax.block_until_ready(jit_optimized(*args))
       out_optimized_cpu = jax.device_get(out_optimized)
       del out_optimized
     except Exception as e:

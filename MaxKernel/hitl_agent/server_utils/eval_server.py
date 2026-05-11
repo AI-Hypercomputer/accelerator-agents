@@ -171,7 +171,9 @@ async def evaluate(request: EvalRequest):
       payload["code"] = request.code
 
     # Send request to backend server
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(
+      timeout=aiohttp.ClientTimeout(total=3600)
+    ) as session:
       async with session.post(
         f"http://{backend_ip}:{backend_port}/{request.eval_type.value}",
         json=payload,

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from hitl_agent.constants import (
   EVAL_SERVER_PORT,
-  TPU_TIMEOUT,
+  AUTOTUNE_TIMEOUT,
 )
 from hitl_agent.server_utils.tpu_server import CodeResponse, get_tpu_version
 
@@ -172,7 +172,7 @@ async def evaluate(request: EvalRequest):
 
     # Send request to backend server
     async with aiohttp.ClientSession(
-      timeout=aiohttp.ClientTimeout(total=3600)
+      timeout=aiohttp.ClientTimeout(total=AUTOTUNE_TIMEOUT)
     ) as session:
       async with session.post(
         f"http://{backend_ip}:{backend_port}/{request.eval_type.value}",
@@ -187,7 +187,7 @@ async def evaluate(request: EvalRequest):
           if response.status == 408:
             raise HTTPException(
               status_code=408,
-              detail=f"Backend evaluation timed out. Timeout was set to {TPU_TIMEOUT} seconds.",
+              detail=f"Backend evaluation timed out. Timeout was set to {AUTOTUNE_TIMEOUT} seconds.",
             )
           raise HTTPException(
             status_code=response.status,

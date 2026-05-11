@@ -222,35 +222,44 @@ def visualize_speed_up(results: list, output_dir: str) -> None:
                   speedup_barplot.png in this directory.
   """
   os.makedirs(output_dir, exist_ok=True)
+
+  def set_log_ticks(ax, log_values):
+    min_log = min(math.floor(min(log_values)) if log_values else 0, 0)
+    max_log = max(math.ceil(max(log_values)) if log_values else 0, 0)
+    ticks = list(range(min_log, max_log + 1))
+    labels = [f"{int(2**t)}x" if 2**t >= 1 else f"{2**t:.2f}x" for t in ticks]
+    ax.set_xticks(ticks)
+    ax.set_xticklabels(labels)
+
+  # Prepare data
   plot_data = []
-  speedups = []
   for r in results:
     is_valid = r.get("compiled_successfully") and r.get("numerically_correct")
     s = r.get("speedup") if is_valid else None
-    if s is not None:
-      plot_data.append((r["task_id"], s, False))
-      speedups.append(s)
-    else:
-      plot_data.append((r["task_id"], 0.0, True))
+    log_s = math.log2(s) if s and s > 0 else -10.0
+    plot_data.append((r["task_id"], log_s, not is_valid))
 
   plot_data.sort(key=lambda x: x[1])
-  sorted_task_ids, sorted_speedups, sorted_is_invalid = zip(*plot_data)
+  sorted_task_ids, sorted_log_speedups, sorted_is_invalid = zip(*plot_data)
 
   # Derive paths for the two separate PNGs
   dist_path = os.path.join(output_dir, "speedup_distribution.png")
-  bar_path = os.path.join(output_dir, "speedup_barplot.png")
+  lollipop_path = os.path.join(output_dir, "speedup_lollipop.png")
 
   # 1. Speedup distribution
   fig1, ax1 = plt.subplots(1, 1, figsize=(10, 6))
-  if not speedups:
+  valid_logs = [s for s, invalid in zip(sorted_log_speedups, sorted_is_invalid) if not invalid]
+  
+  if not valid_logs:
     logger.warning("No valid speedup results found for distribution plot.")
     ax1.text(0.5, 0.5, "No valid speedup data", ha="center", va="center")
   else:
-    ax1.hist(speedups, bins=50, color="skyblue", edgecolor="black")
-    ax1.set_title("Speedup Distribution")
+    ax1.hist(valid_logs, bins=50, color="skyblue", edgecolor="black")
+    ax1.set_title("Speedup Distribution (Log Scale)")
+    set_log_ticks(ax1, valid_logs)
     ax1.set_xlabel("Speedup")
     ax1.set_ylabel("Frequency")
-    ax1.axvline(x=1.0, color="red", linestyle="--", label="Baseline (1.0x)")
+    ax1.axvline(x=0.0, color="red", linestyle="--", label="Baseline (1.0x)")
     ax1.legend()
 
   plt.tight_layout()
@@ -258,22 +267,35 @@ def visualize_speed_up(results: list, output_dir: str) -> None:
   plt.close(fig1)
   logger.info(f"Saved distribution plot to {dist_path}")
 
-  # 2. Barplot for each problem
+  # 2. Lollipop chart for each problem
   fig2, ax2 = plt.subplots(1, 1, figsize=(10, 12))
   y_pos = range(len(sorted_task_ids))
-  bars = ax2.barh(y_pos, sorted_speedups, color="lightgreen")
-
-  for i, is_invalid in enumerate(sorted_is_invalid):
-    if is_invalid:
-      ax2.plot(0, i, marker="x", color="red", markersize=8)
+  
+  # Separate valid and invalid data for vectorized plotting
+  valid_idx = [i for i, invalid in enumerate(sorted_is_invalid) if not invalid]
+  invalid_idx = [i for i, invalid in enumerate(sorted_is_invalid) if invalid]
+  
+  y_valid = [y_pos[i] for i in valid_idx]
+  x_valid = [sorted_log_speedups[i] for i in valid_idx]
+  y_invalid = [y_pos[i] for i in invalid_idx]
+  
+  # Plot lollipops for valid tasks
+  ax2.hlines(y=y_valid, xmin=0, xmax=x_valid, color="skyblue", linewidth=2)
+  ax2.plot(x_valid, y_valid, "o", color="blue", markersize=6)
+  
+  # Plot 'x' for invalid tasks at baseline
+  ax2.plot([0] * len(y_invalid), y_invalid, marker="x", color="red", linestyle="None", markersize=8)
 
   ax2.set_yticks(y_pos)
   ax2.set_yticklabels(sorted_task_ids, fontsize=8)
-  ax2.set_title("Speedup for Each Problem")
+  ax2.set_title("Log2 Speedup for Each Problem")
+      
+  set_log_ticks(ax2, x_valid)
+  
   ax2.set_xlabel("Speedup")
-  ax2.axvline(x=1.0, color="red", linestyle="--")
+  ax2.axvline(x=0.0, color="red", linestyle="--")
 
   plt.tight_layout()
-  fig2.savefig(bar_path)
+  fig2.savefig(lollipop_path)
   plt.close(fig2)
-  logger.info(f"Saved barplot to {bar_path}")
+  logger.info(f"Saved lollipop plot to {lollipop_path}")

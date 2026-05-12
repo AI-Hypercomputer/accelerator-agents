@@ -10,7 +10,6 @@ from pydantic import BaseModel
 
 from auto_agent.constants import (
   EVAL_SERVER_PORT,
-  TPU_TIMEOUT,
 )
 from auto_agent.server_utils.tpu_server import (
   CodeResponse,
@@ -38,22 +37,7 @@ class Backend:
 
     # Get version info for display purposes
     if backend_type == "tpu":
-      try:
-        # Try to get the running loop (if we're already in an async context)
-        loop = asyncio.get_running_loop()
-        # We're in an async context, but __init__ is sync, so this shouldn't happen
-        self.version = "TPU"
-      except RuntimeError:
-        # No running loop - we're in a sync context, which is expected
-        # Use asyncio.run() for Python 3.10+ compatibility
-        try:
-          self.version = asyncio.run(get_tpu_version())
-        except RuntimeError:
-          # asyncio.run() failed (maybe loop already exists), fall back to creating one
-          loop = asyncio.new_event_loop()
-          asyncio.set_event_loop(loop)
-          self.version = loop.run_until_complete(get_tpu_version())
-          loop.close()
+      self.version = get_tpu_version()
     else:
       self.version = "CPU"
 
@@ -157,11 +141,15 @@ async def evaluate(request: EvalRequest):
       f" (requested: {request.backend_type})" if request.backend_type else ""
     )
     logging.info(
-      f"Starting evaluation on {backend_type} backend '{backend_name}' ({backend_ip}:{backend_port}) for {request.eval_type.value}{requested_type_msg}"
+      f"Starting evaluation on {backend_type} backend '{backend_name}' "
+      f"({backend_ip}:{backend_port}) for {request.eval_type.value}"
+      f"{requested_type_msg}"
     )
 
     # Send request to backend server
-    async with aiohttp.ClientSession() as session:
+    backend_timeout = request.timeout if request.timeout is not None else 30
+    client_timeout = aiohttp.ClientTimeout(total=backend_timeout + 10)
+    async with aiohttp.ClientSession(timeout=client_timeout) as session:
       async with session.post(
         f"http://{backend_ip}:{backend_port}/{request.eval_type.value}",
         json={
@@ -180,7 +168,7 @@ async def evaluate(request: EvalRequest):
           if response.status == 408:
             raise HTTPException(
               status_code=408,
-              detail=f"Backend evaluation timed out. Timeout was set to {TPU_TIMEOUT} seconds.",
+              detail=f"Backend evaluation timed out. Timeout was set to {backend_timeout} seconds.",
             )
           raise HTTPException(
             status_code=response.status,
@@ -191,14 +179,16 @@ async def evaluate(request: EvalRequest):
     logging.info(
       f"Evaluation completed on {backend_name}, marking as available"
     )
-    backend.set_status("available")
-
     return result
 
+  except HTTPException as e:
+    logging.info(f"HTTPException occurred during evaluation: {e.detail}")
+    raise e
   except Exception as e:
     logging.error(f"Error occurred while evaluating on {backend_name}: {e}")
-    backend.set_status("available")
     raise HTTPException(status_code=500, detail="Backend evaluation failed")
+  finally:
+    backend.set_status("available")
 
 
 if __name__ == "__main__":

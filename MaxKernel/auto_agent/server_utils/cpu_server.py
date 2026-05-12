@@ -55,6 +55,26 @@ def get_cpu_env():
   return env
 
 
+def extract_code(code: str) -> str:
+  """Extracts code from markdown blocks if present."""
+  code_content = code.strip()
+  if code_content.startswith("```python") and code_content.endswith("```"):
+    lines = code_content.split("\n")
+    if lines[0].strip() == "```python":
+      lines = lines[1:]
+    if lines[-1].strip() == "```":
+      lines = lines[:-1]
+    return "\n".join(lines)
+  elif code_content.startswith("```") and code_content.endswith("```"):
+    lines = code_content.split("\n")
+    if lines[0].strip().startswith("```"):
+      lines = lines[1:]
+    if lines[-1].strip() == "```":
+      lines = lines[:-1]
+    return "\n".join(lines)
+  return code_content
+
+
 @app.get("/health")
 async def health_check():
   return {"status": "healthy", "backend": "cpu"}
@@ -68,26 +88,7 @@ async def compilation_test(request: CodeRequest):
   logging.info("Starting compilation test on CPU backend")
   async with compilation_semaphore:
     try:
-      # Extract code from markdown format if present
-      code_content = request.code.strip()
-      if code_content.startswith("```python") and code_content.endswith("```"):
-        # Remove the markdown code block markers
-        lines = code_content.split("\n")
-        if lines[0].strip() == "```python":
-          lines = lines[1:]
-        if lines[-1].strip() == "```":
-          lines = lines[:-1]
-        code_content = "\n".join(lines)
-      elif code_content.startswith("```") and code_content.endswith("```"):
-        # Handle generic code blocks
-        lines = code_content.split("\n")
-        if lines[0].strip().startswith("```"):
-          lines = lines[1:]
-        if lines[-1].strip() == "```":
-          lines = lines[:-1]
-        code_content = "\n".join(lines)
-
-      request.code = code_content
+      request.code = extract_code(request.code)
       # Create a temporary directory to store the code and dependencies
       temp_dir = tempfile.mkdtemp()
       temp_file_path = os.path.join(temp_dir, "run_code.py")
@@ -141,6 +142,13 @@ async def compilation_test(request: CodeRequest):
       raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
     finally:
+      if "process" in locals() and process.returncode is None:
+        logging.warning("Process still running in finally block, killing it.")
+        try:
+          process.kill()
+          await process.wait()
+        except Exception as e:
+          logging.error(f"Failed to kill process: {e}")
       # Clean up the temporary directory
       if "temp_dir" in locals():
         import shutil
@@ -160,26 +168,7 @@ async def correctness_test(request: CodeRequest):
   logging.info("Starting correctness test on CPU backend")
   async with correctness_semaphore:
     try:
-      # Extract code from markdown format if present
-      code_content = request.code.strip()
-      if code_content.startswith("```python") and code_content.endswith("```"):
-        # Remove the markdown code block markers
-        lines = code_content.split("\n")
-        if lines[0].strip() == "```python":
-          lines = lines[1:]
-        if lines[-1].strip() == "```":
-          lines = lines[:-1]
-        code_content = "\n".join(lines)
-      elif code_content.startswith("```") and code_content.endswith("```"):
-        # Handle generic code blocks
-        lines = code_content.split("\n")
-        if lines[0].strip().startswith("```"):
-          lines = lines[1:]
-        if lines[-1].strip() == "```":
-          lines = lines[:-1]
-        code_content = "\n".join(lines)
-
-      request.code = code_content
+      request.code = extract_code(request.code)
       # Create a temporary directory to store the code and dependencies
       temp_dir = tempfile.mkdtemp()
       temp_file_path = os.path.join(temp_dir, "run_code.py")
@@ -232,6 +221,13 @@ async def correctness_test(request: CodeRequest):
       raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
     finally:
+      if "process" in locals() and process.returncode is None:
+        logging.warning("Process still running in finally block, killing it.")
+        try:
+          process.kill()
+          await process.wait()
+        except Exception as e:
+          logging.error(f"Failed to kill process: {e}")
       # Clean up the temporary directory
       if "temp_dir" in locals():
         import shutil
@@ -251,26 +247,7 @@ async def performance_test(request: CodeRequest):
   logging.info("Starting performance test on CPU backend")
   async with performance_semaphore:
     try:
-      # Extract code from markdown format if present
-      code_content = request.code.strip()
-      if code_content.startswith("```python") and code_content.endswith("```"):
-        # Remove the markdown code block markers
-        lines = code_content.split("\n")
-        if lines[0].strip() == "```python":
-          lines = lines[1:]
-        if lines[-1].strip() == "```":
-          lines = lines[:-1]
-        code_content = "\n".join(lines)
-      elif code_content.startswith("```") and code_content.endswith("```"):
-        # Handle generic code blocks
-        lines = code_content.split("\n")
-        if lines[0].strip().startswith("```"):
-          lines = lines[1:]
-        if lines[-1].strip() == "```":
-          lines = lines[:-1]
-        code_content = "\n".join(lines)
-
-      request.code = code_content
+      request.code = extract_code(request.code)
       # Create a temporary directory to store the code and dependencies
       temp_dir = tempfile.mkdtemp()
       temp_file_path = os.path.join(temp_dir, "run_code.py")
@@ -323,6 +300,13 @@ async def performance_test(request: CodeRequest):
       raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
     finally:
+      if "process" in locals() and process.returncode is None:
+        logging.warning("Process still running in finally block, killing it.")
+        try:
+          process.kill()
+          await process.wait()
+        except Exception as e:
+          logging.error(f"Failed to kill process: {e}")
       # Clean up the temporary directory
       if "temp_dir" in locals():
         import shutil
@@ -342,24 +326,7 @@ async def unified_test(request: CodeRequest):
   logging.info("Starting unified test on CPU backend")
   async with performance_semaphore:
     try:
-      # Extract code from markdown format if present
-      code_content = request.code.strip()
-      if code_content.startswith("```python") and code_content.endswith("```"):
-        lines = code_content.split("\n")
-        if lines[0].strip() == "```python":
-          lines = lines[1:]
-        if lines[-1].strip() == "```":
-          lines = lines[:-1]
-        code_content = "\n".join(lines)
-      elif code_content.startswith("```") and code_content.endswith("```"):
-        lines = code_content.split("\n")
-        if lines[0].strip().startswith("```"):
-          lines = lines[1:]
-        if lines[-1].strip() == "```":
-          lines = lines[:-1]
-        code_content = "\n".join(lines)
-
-      request.code = code_content
+      request.code = extract_code(request.code)
       # Create a temporary directory to store the code and dependencies
       temp_dir = tempfile.mkdtemp()
       temp_file_path = os.path.join(temp_dir, "run_code.py")
@@ -411,6 +378,13 @@ async def unified_test(request: CodeRequest):
       raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
     finally:
+      if "process" in locals() and process.returncode is None:
+        logging.warning("Process still running in finally block, killing it.")
+        try:
+          process.kill()
+          await process.wait()
+        except Exception as e:
+          logging.error(f"Failed to kill process: {e}")
       # Clean up the temporary directory
       if "temp_dir" in locals():
         import shutil
@@ -427,26 +401,7 @@ async def profile(request: CodeRequest):
   logging.info("Starting profile on CPU backend")
   async with profile_semaphore:
     try:
-      # Extract code from markdown format if present
-      code_content = request.code.strip()
-      if code_content.startswith("```python") and code_content.endswith("```"):
-        # Remove the markdown code block markers
-        lines = code_content.split("\n")
-        if lines[0].strip() == "```python":
-          lines = lines[1:]
-        if lines[-1].strip() == "```":
-          lines = lines[:-1]
-        code_content = "\n".join(lines)
-      elif code_content.startswith("```") and code_content.endswith("```"):
-        # Handle generic code blocks
-        lines = code_content.split("\n")
-        if lines[0].strip().startswith("```"):
-          lines = lines[1:]
-        if lines[-1].strip() == "```":
-          lines = lines[:-1]
-        code_content = "\n".join(lines)
-
-      request.code = code_content
+      request.code = extract_code(request.code)
       # Create a temporary directory to store the code and any generated files
 
       temp_dir = tempfile.mkdtemp()
@@ -522,6 +477,13 @@ async def profile(request: CodeRequest):
       raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
     finally:
+      if "process" in locals() and process.returncode is None:
+        logging.warning("Process still running in finally block, killing it.")
+        try:
+          process.kill()
+          await process.wait()
+        except Exception as e:
+          logging.error(f"Failed to kill process: {e}")
       # Clean up the temporary directory
       # try:
       #     shutil.rmtree(temp_dir)

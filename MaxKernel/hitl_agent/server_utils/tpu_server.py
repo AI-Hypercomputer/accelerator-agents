@@ -44,7 +44,7 @@ class CodeResponse(BaseModel):
 class AutotuneRequest(BaseModel):
   code_template: str
   search_space: dict[str, list]
-  timeout: Optional[int] = 30
+  timeout: Optional[int] = 300
 
 
 class GetTpuVersionResponse(BaseModel):

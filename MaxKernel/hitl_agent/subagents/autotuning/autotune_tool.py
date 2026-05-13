@@ -107,10 +107,11 @@ def autotune_kernel(
     }
   except requests.exceptions.Timeout:
     logging.warning(
-      "Autotune timed out on client side. Cleaning up dangling subprocesses on TPU server..."
+      "Autotune timed out on client side. Cleaning up dangling subprocesses on server..."
     )
     try:
       subprocess.run(["pkill", "-9", "-f", "tpu_server.py"], check=False)
+      subprocess.run(["pkill", "-9", "-f", "cpu_server.py"], check=False)
       subprocess.run(["pkill", "-f", "/tmp/hitl_eval_.*\\.py"], check=False)
       logging.info("Killed dangling evaluations and tpu_server.py")
     except Exception as cleanup_error:

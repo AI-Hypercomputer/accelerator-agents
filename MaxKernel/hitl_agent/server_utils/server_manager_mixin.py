@@ -270,3 +270,10 @@ class ServerManagerMixin:
       process_name = f"{server_type}_server.py"
       self._stop_server_sync(process_name)
       await asyncio.sleep(0.5)  # Brief pause between stops
+
+    # Clean up dangling evaluation subprocesses
+    try:
+      logging.info("Cleaning up dangling evaluation subprocesses...")
+      subprocess.run(["pkill", "-f", "/tmp/hitl_eval_.*\.py"], check=False)
+    except Exception as e:
+      logging.warning(f"Failed to clean up subprocesses: {e}")

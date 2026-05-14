@@ -97,7 +97,7 @@ async def compilation_test(request: CodeRequest):
       request.code = code_content
       # Create a temporary file to store the code
       with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", delete=False
+        mode="w", suffix=".py", prefix="hitl_eval_", delete=False
       ) as temp_file:
         temp_file.write(request.code)
         temp_file_path = temp_file.name
@@ -180,7 +180,7 @@ async def correctness_test(request: CodeRequest):
       request.code = code_content
       # Create a temporary file to store the code
       with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", delete=False
+        mode="w", suffix=".py", prefix="hitl_eval_", delete=False
       ) as temp_file:
         temp_file.write(request.code)
         temp_file_path = temp_file.name
@@ -262,7 +262,7 @@ async def performance_test(request: CodeRequest):
       request.code = code_content
       # Create a temporary file to store the code
       with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", delete=False
+        mode="w", suffix=".py", prefix="hitl_eval_", delete=False
       ) as temp_file:
         temp_file.write(request.code)
         temp_file_path = temp_file.name
@@ -340,11 +340,12 @@ async def autotune(request: AutotuneRequest):
 
         # Execute the code
         with tempfile.NamedTemporaryFile(
-          mode="w", suffix=".py", delete=False
+          mode="w", suffix=".py", prefix="hitl_eval_", delete=False
         ) as temp_file:
           temp_file.write(code_content)
           temp_file_path = temp_file.name
 
+        process = None
         try:
           process = await asyncio.create_subprocess_exec(
             sys.executable,
@@ -383,8 +384,9 @@ async def autotune(request: AutotuneRequest):
 
         except asyncio.TimeoutError:
           logging.warning(f"Config {cfg} timed out")
-          process.kill()
-          await process.wait()
+          if process:
+            process.kill()
+            await process.wait()
         except Exception as e:
           logging.error(f"Error running config {cfg}: {e}")
         finally:
@@ -392,6 +394,7 @@ async def autotune(request: AutotuneRequest):
             os.unlink(temp_file_path)
           except OSError:
             pass
+          await asyncio.sleep(2)
 
       if best_cfg is None:
         return CodeResponse(
@@ -442,7 +445,7 @@ async def profile(request: CodeRequest):
       request.code = code_content
       # Create a temporary directory to store the code and any generated files
 
-      temp_dir = tempfile.mkdtemp()
+      temp_dir = tempfile.mkdtemp(prefix="hitl_eval_")
       logging.info("temp_dir: " + str(temp_dir))
 
       # Create a temporary file to store the code within temp_dir

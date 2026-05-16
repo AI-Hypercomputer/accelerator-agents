@@ -3,12 +3,14 @@ import itertools
 import json
 import logging
 import os
+import pathlib
 import re
 import subprocess
 import sys
 import tempfile
 from typing import Optional
 
+import jax
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -45,6 +47,8 @@ class AutotuneRequest(BaseModel):
   code_template: str
   search_space: dict[str, list]
   timeout: Optional[int] = 300
+  profile: bool = True
+  kernel_name_pattern: Optional[str] = None
 
 
 class GetTpuVersionResponse(BaseModel):
@@ -317,6 +321,7 @@ async def autotune(request: AutotuneRequest):
 
       for combo in combinations:
         cfg = dict(zip(keys, combo))
+        profile_dir = None
         try:
           code_content = request.code_template
           for k, v in cfg.items():
@@ -324,6 +329,21 @@ async def autotune(request: AutotuneRequest):
         except Exception as e:
           logging.error(f"Error during template formatting: {e}. Config: {cfg}")
           continue
+
+        if request.profile:
+          profile_dir = tempfile.mkdtemp(
+            prefix="hitl_eval_profile_", dir=tempfile.gettempdir()
+          )
+          indented_code = "\n".join(
+            ["    " + line for line in code_content.split("\n")]
+          )
+          code_content = f"""
+import jax.profiler
+import os
+
+with jax.profiler.trace("{profile_dir}"):
+{indented_code}
+"""
 
         # Execute the code
         with tempfile.NamedTemporaryFile(
@@ -351,24 +371,117 @@ async def autotune(request: AutotuneRequest):
           exit_code = process.returncode
 
           if exit_code == 0:
-            # Parse RESULT_TIME
-            match = re.search(r"RESULT_TIME:\s*([0-9.]+)", output)
-            if match:
-              time_taken = float(match.group(1))
-              all_results.append(
-                {"cfg": cfg, "time": time_taken, "status": "success"}
-              )
-              if time_taken < best_time:
-                best_time = time_taken
-                best_cfg = cfg
-                best_output = output
-            else:
-              logging.warning(
-                f"No RESULT_TIME found in output for config {cfg}"
-              )
-              all_results.append(
-                {"cfg": cfg, "status": "no_result_time", "output": output}
-              )
+            time_taken = None
+            xplane_path = None
+
+            if request.profile and profile_dir:
+              try:
+                profile_paths = list(
+                  pathlib.Path(profile_dir).glob("**/*.xplane.pb")
+                )
+                if profile_paths:
+                  xplane_path = str(profile_paths[0])
+                  logging.info("Found xplane.pb at %s", xplane_path)
+
+                  # Extract time from xplane
+                  profile_data_obj = (
+                    jax.profiler.ProfileData.from_serialized_xspace(
+                      profile_paths[0].read_bytes()
+                    )
+                  )
+
+                  from collections import defaultdict
+
+                  event_durations = defaultdict(int)
+                  for xplane in profile_data_obj.planes:
+                    if xplane.name.startswith("/device:"):
+                      for xline in xplane.lines:
+                        for e in xline.events:
+                          try:
+                            name = e.name
+                            duration = e.duration_ns
+                            event_durations[name] += duration
+                            logging.info("event name: ", name)
+                          except AttributeError:
+                            pass
+
+                  if request.kernel_name_pattern:
+                    # Use pattern override
+                    matched_events = []
+                    for name, duration in event_durations.items():
+                      if request.kernel_name_pattern in name:
+                        matched_events.append(duration)
+                    if matched_events:
+                      time_taken = sum(matched_events) / 1e6  # Convert ns to ms
+                      logging.info(
+                        "Found kernel matching %s with total time %s ms",
+                        request.kernel_name_pattern,
+                        time_taken,
+                      )
+                    else:
+                      logging.warning(
+                        "No kernel matching %s found in profile",
+                        request.kernel_name_pattern,
+                      )
+
+                  if time_taken is None:
+                    if event_durations:
+                      # First, try to find "jit_computation" or "jitted_computation"
+                      jitted_events = []
+                      for name, duration in event_durations.items():
+                        if (
+                          "jit_computation" in name
+                          or "jitted_computation" in name
+                        ):
+                          jitted_events.append(duration)
+
+                      if jitted_events:
+                        time_taken = sum(jitted_events) / 1e6
+                        logging.info(
+                          "Found default kernel 'jit_computation'/'jitted_computation' with total time %s ms",
+                          time_taken,
+                        )
+                      else:
+                        # Use heuristic: find event with largest total duration
+                        best_kernel_name = max(
+                          event_durations, key=event_durations.get
+                        )
+                        time_taken = (
+                          event_durations[best_kernel_name] / 1e6
+                        )  # Convert ns to ms
+                        logging.info(
+                          "Automatically identified kernel by duration: %s with total time %s ms",
+                          best_kernel_name,
+                          time_taken,
+                        )
+                    else:
+                      logging.warning("No events found in device planes")
+                else:
+                  logging.warning("No xplane.pb found in %s", profile_dir)
+              except Exception as e:
+                logging.error("Failed to extract time from profile: %s", e)
+
+            if time_taken is None:
+              # Fallback to wall time from output
+              match = re.search(r"RESULT_TIME:\s*([0-9.]+)", output)
+              if match:
+                time_taken = float(match.group(1))
+              else:
+                time_taken = float("inf")
+                logging.warning(
+                  "Failed to get time from profile and no RESULT_TIME found."
+                )
+
+            result_entry = {"cfg": cfg, "time": time_taken, "status": "success"}
+            if xplane_path:
+              result_entry["xplane_path"] = xplane_path
+
+            all_results.append(result_entry)
+
+            if time_taken < best_time:
+              best_time = time_taken
+              best_cfg = cfg
+              best_output = output
           else:
             logging.warning(
               f"Config {cfg} failed with exit code {exit_code}. Stderr: {error}"

@@ -26,7 +26,9 @@ elif [ "$1" = "--end" ]; then
     pkill -f "tpu_server.py"
     pkill -f "cpu_server.py"
     pkill -f "eval_server.py"
-
+    # Kill any dangling evaluation subprocesses
+    pkill -f "/tmp/hitl_eval_.*\.py"
+    
     echo "Server(s) stopped successfully"
 else
     echo "Usage: $0 --start-tpu|--start-cpu|--start-eval|--end"

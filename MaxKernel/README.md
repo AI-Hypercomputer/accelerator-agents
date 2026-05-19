@@ -45,6 +45,11 @@ The HITL Kernel Gen Agent provides a conversational interface for TPU kernel dev
    - Includes syntax validation and numerical correctness testing
    - See [GPU-to-JAX Agent README](gpu_to_jax_agent/README.md) for details
 
+6. **Automated Autotuning**
+   - Finds optimal parameters (like block sizes) via grid search
+   - Automatic server management (starts TPU server if needed)
+   - File-based specs and results passing between sub-agents
+
 ### 🛡️ Safety & Control
 
 - **Scoped Permissions**: Agent operates only within designated work directory
@@ -74,6 +79,10 @@ KernelGenerationOrchestrationAgent (root_agent)
 │   ├── GenerateProfilingScriptAgent - Creates profiling scripts
 │   ├── EvalProfileAgent - Executes profiling
 │   └── SummarizeProfileAgent - Analyzes bottlenecks
+├── AutotuneAgent - Automated parameter tuning
+│   ├── AutotunePlannerAgent - Prepares specs and search space
+│   ├── AutotuneRunner - Manages server and executes grid search
+│   └── AutotuneSummaryAgent - Reports results to user
 └── GpuToJaxAgent - GPU-to-JAX conversion pipeline
     └── (10-step conversion pipeline - see gpu_to_jax_agent/README.md)
 ```
@@ -128,6 +137,10 @@ hitl_agent/
 │   │   │   ├── agent.py
 │   │   │   ├── kernel_profile.py
 │   │   │   ├── offline_tools.py
+│   │   │   └── prompts
+│   │   ├── autotuning                 # Automated parameter tuning
+│   │   │   ├── agent.py
+│   │   │   ├── autotune_tool.py
 │   │   │   └── prompts
 │   │   └── testing                   # Test generation & execution
 │   │       ├── agent.py

@@ -6,3 +6,4 @@ cloudpickle
 xprof
 tpu-info
 pytest-asyncio
+requests

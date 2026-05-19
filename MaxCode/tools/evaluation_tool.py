@@ -219,7 +219,7 @@ def run_equivalence_tests(
             api_key,
             model_name=model_name,
         )
-        logging.info(test_gen_result)
+        logging.info("%s", test_gen_result)
 
         if not test_gen_result.startswith("Successfully generated"):
           test_run_results[test_file_name] = "ERROR (test generation failed)"
@@ -284,7 +284,7 @@ def run_equivalence_tests(
         )
 
   results_summary = "Equivalence test results:\n" + "\n".join(
-      [f"- {k}: {v}" for k, v in test_run_results.items()]
+      f"- {k}: {v}" for k, v in test_run_results.items()
   )
   return results_summary
 

@@ -5,6 +5,7 @@ import os
 from dataclasses import asdict
 from typing import Optional
 
+import matplotlib.pyplot as plt
 import yaml
 
 from evaluation.custom_types.evaluation_result import EvaluationResult
@@ -97,12 +98,17 @@ def print_eval_result(result: EvaluationResult):
   print("=" * 40 + "\n")
 
 
-def summarize_results(results: list, output_dir: Optional[str] = None) -> None:
+def summarize_results(
+  results: list,
+  speedup_threshold: float,
+  output_dir: Optional[str] = None,
+) -> None:
   """
   Calculates and prints summary statistics for a list of evaluation results.
 
   Args:
       results: A list of dictionaries, where each dictionary is an evaluation result.
+      speedup_threshold: The minimum speedup factor to consider an improvement.
       output_dir: Optional directory path to save the summary report and stats.
   """
   total_attempted = len(results)
@@ -121,7 +127,7 @@ def summarize_results(results: list, output_dir: Optional[str] = None) -> None:
     r["speedup"] for r in correct_tasks if r.get("speedup") is not None
   ]
 
-  improvements = [s for s in speedups if s > 1]
+  improvements = [s for s in speedups if s > speedup_threshold]
   num_improved = len(improvements)
 
   slowdowns = [s for s in speedups if s < 1]
@@ -134,14 +140,18 @@ def summarize_results(results: list, output_dir: Optional[str] = None) -> None:
   slowdown_ratio = (num_slowdowns / total_attempted) * 100
 
   # --- Speedup Statistics ---
-  arithmetic_mean_speedup = sum(speedups) / len(speedups) if speedups else 0
-  max_speedup = max(improvements) if improvements else 0
+  speedups_cliped = [max(speed, 1) for speed in speedups]
+  max_speedup = max(speedups_cliped) if speedups_cliped else 1
+
+  arithmetic_mean_speedup = (
+    sum(speedups_cliped) / len(speedups_cliped) if speedups_cliped else 1
+  )
 
   # Geometric mean is more robust for averaging ratios like speedup.
   geo_mean_speedup = (
-    math.exp(sum(math.log(s) for s in speedups) / len(speedups))
-    if num_improved > 0
-    else 0
+    math.exp(sum(math.log(s) for s in speedups_cliped) / len(speedups_cliped))
+    if speedups_cliped
+    else 1
   )
 
   summary_lines = [
@@ -161,8 +171,8 @@ def summarize_results(results: list, output_dir: Optional[str] = None) -> None:
     f"  - Improved (Speedup > 1x): {num_improved} ({improvement_ratio:.2f}%)",
     f"  - Slower (Speedup < 1x):   {num_slowdowns} ({slowdown_ratio:.2f}%)",
     f"  - Max Speedup:             {max_speedup:.2f}x",
-    f"  - Average Speedup/Slowdown (Arithmetic): {arithmetic_mean_speedup:.2f}x",
-    f"  - Average Speedup/Slowdown (Geometric):  {geo_mean_speedup:.2f}x",
+    f"  - Average Speedup (Arithmetic): {arithmetic_mean_speedup:.2f}x",
+    f"  - Average Speedup (Geometric):  {geo_mean_speedup:.2f}x",
     "=" * 40,
     "",
   ]
@@ -199,3 +209,93 @@ def summarize_results(results: list, output_dir: Optional[str] = None) -> None:
       json.dump(stats, f, indent=4)
 
     logger.info(f"Saved evaluation summary and stats to {output_dir}")
+
+
+def visualize_speed_up(results: list, output_dir: str) -> None:
+  """
+  Visualizes the evaluation results.
+
+  Args:
+      results: A list of dictionaries, where each dictionary is an evaluation result.
+      output_dir: Directory path to save the output PNG files.
+                  Will generate speedup_distribution.png and
+                  speedup_barplot.png in this directory.
+  """
+  os.makedirs(output_dir, exist_ok=True)
+
+  def set_log_ticks(ax, log_values):
+    min_log = min(math.floor(min(log_values)) if log_values else 0, 0)
+    max_log = max(math.ceil(max(log_values)) if log_values else 0, 0)
+    ticks = list(range(min_log, max_log + 1))
+    labels = [f"{int(2**t)}x" if 2**t >= 1 else f"{2**t:.2f}x" for t in ticks]
+    ax.set_xticks(ticks)
+    ax.set_xticklabels(labels)
+
+  # Prepare data
+  plot_data = []
+  for r in results:
+    is_valid = r.get("compiled_successfully") and r.get("numerically_correct")
+    s = r.get("speedup") if is_valid else None
+    log_s = math.log2(s) if s and s > 0 else -10.0
+    plot_data.append((r["task_id"], log_s, not is_valid))
+
+  plot_data.sort(key=lambda x: x[1])
+  sorted_task_ids, sorted_log_speedups, sorted_is_invalid = zip(*plot_data)
+
+  # Derive paths for the two separate PNGs
+  dist_path = os.path.join(output_dir, "speedup_distribution.png")
+  lollipop_path = os.path.join(output_dir, "speedup_lollipop.png")
+
+  # 1. Speedup distribution
+  fig1, ax1 = plt.subplots(1, 1, figsize=(10, 6))
+  valid_logs = [s for s, invalid in zip(sorted_log_speedups, sorted_is_invalid) if not invalid]
+  
+  if not valid_logs:
+    logger.warning("No valid speedup results found for distribution plot.")
+    ax1.text(0.5, 0.5, "No valid speedup data", ha="center", va="center")
+  else:
+    ax1.hist(valid_logs, bins=50, color="skyblue", edgecolor="black")
+    ax1.set_title("Speedup Distribution (Log Scale)")
+    set_log_ticks(ax1, valid_logs)
+    ax1.set_xlabel("Speedup")
+    ax1.set_ylabel("Frequency")
+    ax1.axvline(x=0.0, color="red", linestyle="--", label="Baseline (1.0x)")
+    ax1.legend()
+
+  plt.tight_layout()
+  fig1.savefig(dist_path)
+  plt.close(fig1)
+  logger.info(f"Saved distribution plot to {dist_path}")
+
+  # 2. Lollipop chart for each problem
+  fig2, ax2 = plt.subplots(1, 1, figsize=(10, 12))
+  y_pos = range(len(sorted_task_ids))
+  
+  # Separate valid and invalid data for vectorized plotting
+  valid_idx = [i for i, invalid in enumerate(sorted_is_invalid) if not invalid]
+  invalid_idx = [i for i, invalid in enumerate(sorted_is_invalid) if invalid]
+  
+  y_valid = [y_pos[i] for i in valid_idx]
+  x_valid = [sorted_log_speedups[i] for i in valid_idx]
+  y_invalid = [y_pos[i] for i in invalid_idx]
+  
+  # Plot lollipops for valid tasks
+  ax2.hlines(y=y_valid, xmin=0, xmax=x_valid, color="skyblue", linewidth=2)
+  ax2.plot(x_valid, y_valid, "o", color="blue", markersize=6)
+  
+  # Plot 'x' for invalid tasks at baseline
+  ax2.plot([0] * len(y_invalid), y_invalid, marker="x", color="red", linestyle="None", markersize=8)
+
+  ax2.set_yticks(y_pos)
+  ax2.set_yticklabels(sorted_task_ids, fontsize=8)
+  ax2.set_title("Log2 Speedup for Each Problem")
+      
+  set_log_ticks(ax2, x_valid)
+  
+  ax2.set_xlabel("Speedup")
+  ax2.axvline(x=0.0, color="red", linestyle="--")
+
+  plt.tight_layout()
+  fig2.savefig(lollipop_path)
+  plt.close(fig2)
+  logger.info(f"Saved lollipop plot to {lollipop_path}")

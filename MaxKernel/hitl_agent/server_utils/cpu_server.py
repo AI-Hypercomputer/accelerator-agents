@@ -1,7 +1,9 @@
 import asyncio
+import itertools
 import json
 import logging
 import os
+import re
 import sys
 import tempfile
 from typing import Optional
@@ -36,6 +38,12 @@ class CodeResponse(BaseModel):
   output: str
   error: Optional[str] = None
   exit_code: int
+
+
+class AutotuneRequest(BaseModel):
+  code_template: str
+  search_space: dict[str, list]
+  timeout: Optional[int] = 30
 
 
 class GetBackendVersionResponse(BaseModel):
@@ -89,7 +97,7 @@ async def compilation_test(request: CodeRequest):
       request.code = code_content
       # Create a temporary file to store the code
       with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", delete=False
+        mode="w", suffix=".py", prefix="hitl_eval_", delete=False
       ) as temp_file:
         temp_file.write(request.code)
         temp_file_path = temp_file.name
@@ -172,7 +180,7 @@ async def correctness_test(request: CodeRequest):
       request.code = code_content
       # Create a temporary file to store the code
       with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", delete=False
+        mode="w", suffix=".py", prefix="hitl_eval_", delete=False
       ) as temp_file:
         temp_file.write(request.code)
         temp_file_path = temp_file.name
@@ -254,7 +262,7 @@ async def performance_test(request: CodeRequest):
       request.code = code_content
       # Create a temporary file to store the code
       with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", delete=False
+        mode="w", suffix=".py", prefix="hitl_eval_", delete=False
       ) as temp_file:
         temp_file.write(request.code)
         temp_file_path = temp_file.name
@@ -306,6 +314,110 @@ async def performance_test(request: CodeRequest):
       logging.info("Performance test finished")
 
 
+@app.post("/autotune", response_model=CodeResponse)
+async def autotune(request: AutotuneRequest):
+  logging.info("Starting autotune on CPU backend")
+  async with performance_semaphore:
+    try:
+      # Generate all combinations
+      keys = list(request.search_space.keys())
+      values = list(request.search_space.values())
+      combinations = list(itertools.product(*values))
+
+      best_time = float("inf")
+      best_cfg = None
+      best_output = ""
+
+      for combo in combinations:
+        cfg = dict(zip(keys, combo))
+        try:
+          code_content = request.code_template.format(**cfg)
+        except KeyError as e:
+          logging.error(
+            f"KeyError during template formatting: {e}. Config: {cfg}"
+          )
+          continue
+
+        # Execute the code
+        with tempfile.NamedTemporaryFile(
+          mode="w", suffix=".py", prefix="hitl_eval_", delete=False
+        ) as temp_file:
+          temp_file.write(code_content)
+          temp_file_path = temp_file.name
+
+        process = None
+        try:
+          process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            temp_file_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=tempfile.gettempdir(),
+            env=get_cpu_env(),  # Force CPU backend
+          )
+
+          stdout, stderr = await asyncio.wait_for(
+            process.communicate(), timeout=request.timeout
+          )
+
+          output = stdout.decode("utf-8") if stdout else ""
+          error = stderr.decode("utf-8") if stderr else ""
+          exit_code = process.returncode
+
+          if exit_code == 0:
+            # Parse RESULT_TIME
+            match = re.search(r"RESULT_TIME:\s*([0-9.]+)", output)
+            if match:
+              time_taken = float(match.group(1))
+              if time_taken < best_time:
+                best_time = time_taken
+                best_cfg = cfg
+                best_output = output
+            else:
+              logging.warning(
+                f"No RESULT_TIME found in output for config {cfg}"
+              )
+          else:
+            logging.warning(
+              f"Config {cfg} failed with exit code {exit_code}. Stderr: {error}"
+            )
+
+        except asyncio.TimeoutError:
+          logging.warning(f"Config {cfg} timed out")
+          if process:
+            process.kill()
+            await process.wait()
+        except Exception as e:
+          logging.error(f"Error running config {cfg}: {e}")
+        finally:
+          try:
+            os.unlink(temp_file_path)
+          except OSError:
+            pass
+          await asyncio.sleep(2)
+
+      if best_cfg is None:
+        return CodeResponse(
+          output="",
+          error="No successful configuration found during autotune.",
+          exit_code=-1,
+        )
+
+      output_data = {
+        "best_cfg": best_cfg,
+        "best_time": best_time,
+        "best_output": best_output,
+      }
+      logging.info("Autotune finished on CPU backend")
+      return CodeResponse(
+        output=json.dumps(output_data), error=None, exit_code=0
+      )
+
+    except Exception as e:
+      logging.error(f"Autotune failed with error: {str(e)}")
+      raise HTTPException(status_code=500, detail=f"Autotune error: {str(e)}")
+
+
 @app.post("/profile", response_model=CodeResponse)
 async def profile(request: CodeRequest):
   logging.info("Starting profile on CPU backend")
@@ -333,7 +445,7 @@ async def profile(request: CodeRequest):
       request.code = code_content
       # Create a temporary directory to store the code and any generated files
 
-      temp_dir = tempfile.mkdtemp()
+      temp_dir = tempfile.mkdtemp(prefix="hitl_eval_")
       logging.info("temp_dir: " + str(temp_dir))
 
       # Create a temporary file to store the code within temp_dir

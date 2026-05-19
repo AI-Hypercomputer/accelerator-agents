@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from hitl_agent.constants import (
   EVAL_SERVER_PORT,
+  AUTOTUNE_TIMEOUT,
   TPU_TIMEOUT,
 )
 from hitl_agent.server_utils.tpu_server import CodeResponse, get_tpu_version
@@ -74,11 +75,14 @@ class EvalTypes(Enum):
   COMPILATION_TEST = "compilation_test"
   PERFORMANCE_TEST = "performance_test"
   PROFILE = "profile"
+  AUTOTUNE = "autotune"
 
 
 class EvalRequest(BaseModel):
   eval_type: EvalTypes
-  code: str
+  code: Optional[str] = None
+  code_template: Optional[str] = None
+  search_space: Optional[dict] = None
   timeout: Optional[int] = 30
   backend_type: Optional[str] = None  # "tpu", "cpu", or None for any available
 
@@ -156,15 +160,26 @@ async def evaluate(request: EvalRequest):
       f"Starting evaluation on {backend_type} backend '{backend_name}' ({backend_ip}:{backend_port}) for {request.eval_type.value}{requested_type_msg}"
     )
 
+    # Construct payload based on eval type
+    payload = {
+      "eval_type": request.eval_type.value,
+      "timeout": request.timeout,
+    }
+    if request.eval_type == EvalTypes.AUTOTUNE:
+      payload["code_template"] = request.code_template
+      payload["search_space"] = request.search_space
+      timeout = AUTOTUNE_TIMEOUT
+    else:
+      payload["code"] = request.code
+      timeout = TPU_TIMEOUT
+
     # Send request to backend server
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(
+      timeout=aiohttp.ClientTimeout(total=timeout)
+    ) as session:
       async with session.post(
         f"http://{backend_ip}:{backend_port}/{request.eval_type.value}",
-        json={
-          "eval_type": request.eval_type.value,
-          "code": request.code,
-          "timeout": request.timeout,
-        },
+        json=payload,
       ) as response:
         result = await response.json()
         logging.info(
@@ -175,7 +190,7 @@ async def evaluate(request: EvalRequest):
           if response.status == 408:
             raise HTTPException(
               status_code=408,
-              detail=f"Backend evaluation timed out. Timeout was set to {TPU_TIMEOUT} seconds.",
+              detail=f"Backend evaluation timed out. Timeout was set to {timeout} seconds.",
             )
           raise HTTPException(
             status_code=response.status,

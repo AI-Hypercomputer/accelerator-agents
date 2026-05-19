@@ -7,7 +7,9 @@ from typing import Any
 
 import requests
 
-from hitl_agent.constants import AUTOTUNE_TIMEOUT, EVAL_SERVER_PORT
+from auto_agent.constants import EVAL_SERVER_PORT
+
+AUTOTUNE_TIMEOUT = 5400
 
 
 def autotune_kernel(
@@ -46,10 +48,11 @@ def autotune_kernel(
         "eval_type": "autotune",
         "code_template": code_template,
         "search_space": search_space,
-        "timeout": 300,
+        "timeout": 300,  # timeout for each individual evaluation
         "backend_type": backend,
+        "total_timeout": AUTOTUNE_TIMEOUT,
       },
-      timeout=AUTOTUNE_TIMEOUT,  # timeout for the whole autotune request
+      timeout=AUTOTUNE_TIMEOUT + 10,
     )
 
     if response.status_code == 200:
@@ -110,16 +113,16 @@ def autotune_kernel(
       "Autotune timed out on client side. Cleaning up dangling subprocesses on server..."
     )
     try:
-      subprocess.run(["pkill", "-9", "-f", "tpu_server.py"], check=False)
-      subprocess.run(["pkill", "-9", "-f", "cpu_server.py"], check=False)
       subprocess.run(["pkill", "-f", "/tmp/hitl_eval_.*\\.py"], check=False)
-      logging.info("Killed dangling evaluations and tpu_server.py")
     except Exception as cleanup_error:
       logging.error(f"Failed to run cleanup commands: {cleanup_error}")
 
     return {
       "status": "error",
-      "message": f"Autotune request timed out after {AUTOTUNE_TIMEOUT} seconds. Dangling processes were killed.",
+      "message": (
+        f"Autotune request timed out after {AUTOTUNE_TIMEOUT} seconds. "
+        "Dangling processes were killed."
+      ),
     }
   except Exception as e:
     return {"status": "error", "message": str(e)}

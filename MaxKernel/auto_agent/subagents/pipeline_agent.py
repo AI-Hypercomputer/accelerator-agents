@@ -239,6 +239,22 @@ class AutonomousPipelineAgent(BaseAgent):
         f"[{self.name}] Set profiling_script_path: {ctx.session.state['profiling_script_path']}"
       )
 
+    if "autotune_specs_path" not in ctx.session.state:
+      ctx.session.state["autotune_specs_path"] = os.path.join(
+        session_dir, "autotune_specs.json"
+      )
+      logging.info(
+        f"[{self.name}] Set autotune_specs_path: {ctx.session.state['autotune_specs_path']}"
+      )
+
+    if "autotune_results_path" not in ctx.session.state:
+      ctx.session.state["autotune_results_path"] = os.path.join(
+        session_dir, "autotune_results.json"
+      )
+      logging.info(
+        f"[{self.name}] Set autotune_results_path: {ctx.session.state['autotune_results_path']}"
+      )
+
     logging.info(f"[{self.name}] Published explicit path state update Event.")
     return Event(
       author=self.name,

@@ -9,8 +9,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from hitl_agent.constants import (
-  EVAL_SERVER_PORT,
   AUTOTUNE_TIMEOUT,
+  EVAL_SERVER_PORT,
   TPU_TIMEOUT,
 )
 from hitl_agent.server_utils.tpu_server import CodeResponse, get_tpu_version

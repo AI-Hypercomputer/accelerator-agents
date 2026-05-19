@@ -62,12 +62,15 @@ class EvalTypes(Enum):
   PERFORMANCE_TEST = "performance_test"
   UNIFIED_TEST = "unified_test"
   PROFILE = "profile"
+  AUTOTUNE = "autotune"
 
 
 class EvalRequest(BaseModel):
   eval_type: EvalTypes
-  code: str
-  timeout: Optional[int] = 30
+  timeout: int
+  code: Optional[str] = None
+  code_template: Optional[str] = None  # For autotune
+  search_space: Optional[dict] = None  # For autotune
   backend_type: Optional[str] = None  # "tpu", "cpu", or None for any available
   dependencies: Optional[dict] = None
 
@@ -146,18 +149,28 @@ async def evaluate(request: EvalRequest):
       f"{requested_type_msg}"
     )
 
-    # Send request to backend server
-    backend_timeout = request.timeout if request.timeout is not None else 30
-    client_timeout = aiohttp.ClientTimeout(total=backend_timeout + 10)
+    # Construct payload based on eval type
+    payload = {
+      "eval_type": request.eval_type.value,
+      "timeout": request.timeout,
+    }
+    if request.eval_type == EvalTypes.AUTOTUNE:
+      payload["code_template"] = request.code_template
+      payload["search_space"] = request.search_space
+    else:
+      payload["code"] = request.code
+      payload["dependencies"] = request.dependencies
+
+    backend_timeout = (
+      request.total_timeout
+      if request.total_timeout is not None
+      else request.timeout
+    )
+    client_timeout = aiohttp.ClientTimeout(total=backend_timeout)
     async with aiohttp.ClientSession(timeout=client_timeout) as session:
       async with session.post(
         f"http://{backend_ip}:{backend_port}/{request.eval_type.value}",
-        json={
-          "eval_type": request.eval_type.value,
-          "code": request.code,
-          "timeout": request.timeout,
-          "dependencies": request.dependencies,
-        },
+        json=payload,
       ) as response:
         result = await response.json()
         logging.info(

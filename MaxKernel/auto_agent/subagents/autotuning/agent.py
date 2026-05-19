@@ -101,7 +101,7 @@ class AutotuneRunner(BaseAgent):
     logging.info(f"[{self.name}] Running autotune for {kernel_name}")
 
     try:
-      results = autotune_kernel(
+      results = await autotune_kernel(
         kernel_name=kernel_name,
         code_template=code_template,
         search_space=search_space,

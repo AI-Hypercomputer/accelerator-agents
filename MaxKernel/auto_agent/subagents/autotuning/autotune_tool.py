@@ -1,16 +1,16 @@
 """Standalone tool for auto-tuning Pallas kernels using grid search on remote servers."""
 
-import asyncio
 import json
 import logging
-import subprocess
 from typing import Any
 
 import aiohttp
 
-from auto_agent.constants import EVAL_SERVER_PORT
+from auto_agent.client_utils.eval_client import call_eval_server_async
+from auto_agent.constants import EVAL_SERVER_PORT, REQUEST_TIMEOUT
 
-AUTOTUNE_TIMEOUT = 5400
+AUTOTUNE_INDIVIDUAL_TIMEOUT = 300
+AUTOTUNE_TOTAL_TIMEOUT = 5400
 
 
 async def autotune_kernel(
@@ -43,64 +43,59 @@ async def autotune_kernel(
   url = f"{server_addr}:{EVAL_SERVER_PORT}/evaluate"
 
   try:
-    client_timeout = aiohttp.ClientTimeout(total=AUTOTUNE_TIMEOUT + 10)
+    client_timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT + 10)
     async with aiohttp.ClientSession(timeout=client_timeout) as session:
-      async with session.post(
-        url,
-        json={
-          "eval_type": "autotune",
-          "code_template": code_template,
-          "search_space": search_space,
-          "timeout": 300,  # timeout for each individual evaluation
-          "backend_type": backend,
-          "total_timeout": AUTOTUNE_TIMEOUT,
-        },
-      ) as response:
-        if response.status == 200:
-          result = await response.json()
-          if result["exit_code"] == 0:
-            try:
-              output_data = json.loads(result["output"])
-              logging.info(
-                f"Autotuning completed. Best config: {output_data['best_cfg']}"
-                f" with time {output_data['best_time']} ms"
-              )
-              return {
-                "status": "success",
-                "message": "Autotuning completed",
-                "best_config": output_data["best_cfg"],
-                "best_time_ms": output_data["best_time"],
-                "best_output": output_data["best_output"],
-                "all_results": output_data.get("all_results", []),
-              }
-            except json.JSONDecodeError:
-              logging.warning("Failed to decode JSON from server output.")
-              return {
-                "status": "success",
-                "message": "Autotuning completed (raw output)",
-                "raw_output": result["output"],
-              }
-          else:
-            try:
-              output_data = json.loads(result["output"])
-              return {
-                "status": "failed",
-                "message": result["error"] or "Autotune failed on server",
-                "all_results": output_data.get("all_results", []),
-              }
-            except Exception:
-              return {
-                "status": "failed",
-                "message": result["error"] or "Autotune failed on server",
-                "server_output": result["output"],
-              }
-        else:
-          response_text = await response.text()
+      payload = {
+        "eval_type": "autotune",
+        "code_template": code_template,
+        "search_space": search_space,
+        "timeout": AUTOTUNE_INDIVIDUAL_TIMEOUT,
+        "backend_type": backend,
+        "total_timeout": AUTOTUNE_TOTAL_TIMEOUT,
+      }
+      result = await call_eval_server_async(
+        session,
+        f"{server_addr}:{EVAL_SERVER_PORT}",
+        payload,
+        poll_interval=10,
+        client_wait_timeout=REQUEST_TIMEOUT,
+      )
+
+      if result["exit_code"] == 0:
+        try:
+          output_data = json.loads(result["output"])
+          logging.info(
+            f"Autotuning completed. Best config: {output_data['best_cfg']}"
+            f" with time {output_data['best_time']} ms"
+          )
           return {
-            "status": "error",
-            "message": (
-              f"Server returned status code {response.status}: {response_text}"
-            ),
+            "status": "success",
+            "message": "Autotuning completed",
+            "best_config": output_data["best_cfg"],
+            "best_time_ms": output_data["best_time"],
+            "best_output": output_data["best_output"],
+            "all_results": output_data.get("all_results", []),
+          }
+        except json.JSONDecodeError:
+          logging.warning("Failed to decode JSON from server output.")
+          return {
+            "status": "success",
+            "message": "Autotuning completed (raw output)",
+            "raw_output": result["output"],
+          }
+      else:
+        try:
+          output_data = json.loads(result["output"])
+          return {
+            "status": "failed",
+            "message": result["error"] or "Autotune failed on server",
+            "all_results": output_data.get("all_results", []),
+          }
+        except Exception:
+          return {
+            "status": "failed",
+            "message": result["error"] or "Autotune failed on server",
+            "server_output": result["output"],
           }
 
   except aiohttp.ClientConnectorError:
@@ -110,21 +105,6 @@ async def autotune_kernel(
         f"Could not connect to server at {url}. Make sure it is running."
       ),
     }
-  except asyncio.TimeoutError:
-    logging.warning(
-      "Autotune timed out on client side. Cleaning up dangling subprocesses on server..."
-    )
-    try:
-      subprocess.run(["pkill", "-f", "/tmp/hitl_eval_.*\\.py"], check=False)
-    except Exception as cleanup_error:
-      logging.error(f"Failed to run cleanup commands: {cleanup_error}")
 
-    return {
-      "status": "error",
-      "message": (
-        f"Autotune request timed out after {AUTOTUNE_TIMEOUT} seconds. "
-        "Dangling processes were killed."
-      ),
-    }
   except Exception as e:
     return {"status": "error", "message": str(e)}

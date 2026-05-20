@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
@@ -47,6 +48,7 @@ class AutotuneRequest(BaseModel):
   code_template: str
   search_space: dict[str, list]
   timeout: Optional[int] = 300
+  total_timeout: Optional[int] = None
 
 
 class GetTpuVersionResponse(BaseModel):
@@ -521,7 +523,16 @@ async def autotune(request: AutotuneRequest):
       best_output = ""
       all_results = []
 
+      start_time = time.time()
       for combo in combinations:
+        if (
+          request.total_timeout
+          and (time.time() - start_time) > request.total_timeout
+        ):
+          logging.warning(
+            f"Total timeout of {request.total_timeout}s reached in autotune"
+          )
+          break
         cfg = dict(zip(keys, combo))
         try:
           code_content = request.code_template

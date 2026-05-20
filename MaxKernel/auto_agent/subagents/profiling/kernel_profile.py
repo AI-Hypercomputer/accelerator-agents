@@ -6,8 +6,8 @@ from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 
+from auto_agent.client_utils.eval_client import call_eval_server_async
 from auto_agent.constants import EVAL_SERVER_PORT, REQUEST_TIMEOUT
-from auto_agent.tools.eval_client import call_eval_server_async
 
 PROFILE_TIMEOUT = 120
 

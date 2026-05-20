@@ -15,6 +15,7 @@ from google.adk.agents import BaseAgent, SequentialAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 
+from auto_agent.client_utils.eval_client import call_eval_server_async
 from auto_agent.config import model_config, thinking_planner
 from auto_agent.constants import EVAL_SERVER_PORT, MODEL_NAME, REQUEST_TIMEOUT
 from auto_agent.custom_types import CustomLlmAgent
@@ -24,7 +25,6 @@ from auto_agent.subagents.testing.prompts import (
   summarize_test_results_prompt,
   validation_summary,
 )
-from auto_agent.tools.eval_client import call_eval_server_async
 from auto_agent.tools.file_tools import filesystem_tool_r, write_test_file_tool
 from auto_agent.tools.search_api_tool import search_api_tool
 from auto_agent.tools.tools import vertex_ai_rag_tool

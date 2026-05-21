@@ -96,7 +96,7 @@ def process_problem(
       base_url=f"http://localhost:{port}",
     )
 
-    session_file = os.path.join(problem_dir, "session.json")
+    session_file = os.path.join(problem_dir, f"session_attempt_{attempt}.json")
     try:
       run_agent(client)
 

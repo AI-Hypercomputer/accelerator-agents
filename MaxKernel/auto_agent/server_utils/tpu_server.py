@@ -569,7 +569,7 @@ async def autotune(request: AutotuneRequest):
 
           if exit_code == 0:
             # Parse RESULT_TIME
-            match = re.search(r"RESULT_TIME:\s*([0-9.]+)", output)
+            match = re.search(r"RESULT_TIME:\s*([0-9.]+)\s*ms", output)
             if match:
               time_taken = float(match.group(1))
               all_results.append(

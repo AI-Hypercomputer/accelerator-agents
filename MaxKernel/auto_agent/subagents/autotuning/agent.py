@@ -3,7 +3,7 @@
 import json
 import logging
 import os
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
@@ -18,9 +18,12 @@ from auto_agent.subagents.autotuning.prompts import (
   autotune_prompt,
   summary_prompt,
 )
-from auto_agent.tools.file_tools import write_optimized_kernel_tool
+from auto_agent.tools.file_tools import (
+  filesystem_tool_r,
+  write_autotune_specs_tool,
+  write_optimized_kernel_tool,
+)
 from auto_agent.tools.search_api_tool import search_api_tool
-from auto_agent.tools.tools import filesystem_tool_r, write_autotune_specs_tool
 
 # 1. Planner Agent (LLM)
 # This agent identifies parameters, creates the template, and defines the search space.
@@ -39,6 +42,9 @@ autotune_planner_agent = CustomLlmAgent(
 # 2. Runner Agent
 class AutotuneRunner(BaseAgent):
   """Executes autotuning via HTTP endpoint."""
+
+  name: Optional[str] = None
+  output_key: Optional[str] = None
 
   def __init__(
     self,
@@ -185,7 +191,7 @@ class CombinedAutotuneAgent(BaseAgent):
     autotune_results = ctx.session.state.get("autotune_results", {})
     if (
       autotune_results.get("status") == "success"
-      and autotune_results.get("best_cfg") is not None
+      and autotune_results.get("best_config") is not None
     ):
       logging.info(f"[{self.name}] Running ApplyBestConfigAgent...")
       async for event in apply_best_config_agent.run_async(ctx):

@@ -248,8 +248,12 @@ def visualize_speed_up(results: list, output_dir: str) -> None:
 
   # 1. Speedup distribution
   fig1, ax1 = plt.subplots(1, 1, figsize=(10, 6))
-  valid_logs = [s for s, invalid in zip(sorted_log_speedups, sorted_is_invalid) if not invalid]
-  
+  valid_logs = [
+    s
+    for s, invalid in zip(sorted_log_speedups, sorted_is_invalid)
+    if not invalid
+  ]
+
   if not valid_logs:
     logger.warning("No valid speedup results found for distribution plot.")
     ax1.text(0.5, 0.5, "No valid speedup data", ha="center", va="center")
@@ -270,28 +274,35 @@ def visualize_speed_up(results: list, output_dir: str) -> None:
   # 2. Lollipop chart for each problem
   fig2, ax2 = plt.subplots(1, 1, figsize=(10, 12))
   y_pos = range(len(sorted_task_ids))
-  
+
   # Separate valid and invalid data for vectorized plotting
   valid_idx = [i for i, invalid in enumerate(sorted_is_invalid) if not invalid]
   invalid_idx = [i for i, invalid in enumerate(sorted_is_invalid) if invalid]
-  
+
   y_valid = [y_pos[i] for i in valid_idx]
   x_valid = [sorted_log_speedups[i] for i in valid_idx]
   y_invalid = [y_pos[i] for i in invalid_idx]
-  
+
   # Plot lollipops for valid tasks
   ax2.hlines(y=y_valid, xmin=0, xmax=x_valid, color="skyblue", linewidth=2)
   ax2.plot(x_valid, y_valid, "o", color="blue", markersize=6)
-  
+
   # Plot 'x' for invalid tasks at baseline
-  ax2.plot([0] * len(y_invalid), y_invalid, marker="x", color="red", linestyle="None", markersize=8)
+  ax2.plot(
+    [0] * len(y_invalid),
+    y_invalid,
+    marker="x",
+    color="red",
+    linestyle="None",
+    markersize=8,
+  )
 
   ax2.set_yticks(y_pos)
   ax2.set_yticklabels(sorted_task_ids, fontsize=8)
   ax2.set_title("Log2 Speedup for Each Problem")
-      
+
   set_log_ticks(ax2, x_valid)
-  
+
   ax2.set_xlabel("Speedup")
   ax2.axvline(x=0.0, color="red", linestyle="--")
 

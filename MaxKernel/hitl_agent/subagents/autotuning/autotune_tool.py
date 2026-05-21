@@ -7,7 +7,7 @@ from typing import Any
 
 import requests
 
-from hitl_agent.constants import EVAL_SERVER_PORT, AUTOTUNE_TIMEOUT
+from hitl_agent.constants import AUTOTUNE_TIMEOUT, EVAL_SERVER_PORT
 
 
 def autotune_kernel(

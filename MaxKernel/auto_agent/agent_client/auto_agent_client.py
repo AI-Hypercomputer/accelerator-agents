@@ -91,7 +91,7 @@ def run_agent(client: AutoAgentClient):
   # Send query
   query_response = client.send_query()
   if query_response.status_code != 200:
-    raise ValueError(f"Failed to send query: {query_response.text}")
+    raise ValueError(f"ADK server returned error: {query_response.text}")
 
 
 def read_query_from_file(file_path: str) -> str:

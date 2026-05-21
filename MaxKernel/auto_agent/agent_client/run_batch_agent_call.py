@@ -96,13 +96,14 @@ def process_problem(
       base_url=f"http://localhost:{port}",
     )
 
+    session_file = os.path.join(problem_dir, f"session_attempt_{attempt}.json")
     try:
       run_agent(client)
 
       # Save session file
-      session_file = os.path.join(problem_dir, "session.json")
       save_session_to_file(client, session_file)
 
+      # Save optimized code
       optimized_path = get_optimized_kernel_path(session_file)
       if not optimized_path:
         logger.error(
@@ -124,6 +125,13 @@ def process_problem(
 
     except Exception as e:
       logger.error(f"Error on attempt {attempt} for {problem_id}: {e}")
+      try:
+        save_session_to_file(client, session_file)
+        logger.info(
+          f"Saved session file for {problem_id} after attempt failure"
+        )
+      except Exception as se:
+        logger.error(f"Failed to save session file after attempt failure: {se}")
       if attempt == max_retries:
         return problem_id, f"Failed after {max_retries} attempts: {e}"
 

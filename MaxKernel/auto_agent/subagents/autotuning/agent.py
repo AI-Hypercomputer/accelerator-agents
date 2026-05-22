@@ -168,6 +168,7 @@ autotune_summary_agent = CustomLlmAgent(
   instruction=summary_prompt.PROMPT,
   description="Summarizes autotuning results for the user.",
   tools=[filesystem_tool_r],
+  output_key="autotuning_summary",
 )
 
 

@@ -6,12 +6,12 @@ from enum import Enum
 from typing import Optional
 
 import aiohttp
+import requests
 import yaml
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from pydantic import BaseModel
 
 from auto_agent.constants import EVAL_SERVER_PORT
-from auto_agent.server_utils.tpu_server import get_tpu_version
 
 logging.basicConfig(
   level=logging.INFO,
@@ -34,7 +34,20 @@ class Backend:
 
     # Get version info for display purposes
     if backend_type == "tpu":
-      self.version = get_tpu_version()
+      url = f"http://{self.ip}:{self.port}/get_tpu_version"
+      try:
+        resp = requests.post(url, timeout=10)
+        if resp.status_code == 200:
+          data = resp.json()
+          if isinstance(data, dict):
+            self.version = data.get("tpu_version", "TPU version not found")
+          else:
+            self.version = str(data)
+        else:
+          self.version = f"HTTP Error {resp.status_code}"
+      except Exception as e:
+        logging.warning(f"Failed to get TPU version from {url}: {e}")
+        self.version = "Unknown TPU"
     else:
       self.version = "CPU"
 

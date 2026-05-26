@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import itertools
 import json
 import logging
@@ -258,23 +259,32 @@ async def profile(request: CodeRequest):
     try:
       ratio = analyze_trace(xplane_pb_file)
       logging.info("Profile analysis completed successfully")
+
+      with open(xplane_pb_file, "rb") as f:
+        file_content = base64.b64encode(f.read()).decode("utf-8")
+
     except Exception as e:
-      error_msg = f"Failed to analyze trace: {str(e)}" + error_msg
+      error_msg = f"Failed to analyze trace or read file: {str(e)}"
       logging.error(error_msg)
       return CodeResponse(output=output_msg, error=error_msg, exit_code=-1)
 
     return CodeResponse(
-      output=json.dumps({"ratio": ratio, "xplane_path": xplane_pb_file}),
+      output=json.dumps(
+        {
+          "ratio": ratio,
+          "xplane_path": xplane_pb_file,
+          "xplane_content": file_content,
+        }
+      ),
       error=response.error,
       exit_code=response.exit_code,
     )
   finally:
-    pass
-  #   try:
-  #     shutil.rmtree(temp_dir)
-  #     logging.info(f"Cleaned up {temp_dir} after profiling analysis.")
-  #   except Exception as e:
-  #     logging.error(f"Failed to clean up {temp_dir}: {e}")
+    try:
+      shutil.rmtree(temp_dir)
+      logging.info(f"Cleaned up {temp_dir} after profiling analysis.")
+    except Exception as e:
+      logging.error(f"Failed to clean up {temp_dir}: {e}")
 
 
 @app.post("/autotune", response_model=CodeResponse)

@@ -1,3 +1,4 @@
+import base64
 import logging
 from typing import AsyncGenerator, Callable, Optional
 
@@ -95,16 +96,37 @@ class KernelProfiler(BaseAgent):
         else:
           # Successful profiling - parse the ratio and xplane path
           try:
+            xplane_content = ""
             try:
               import json
 
               res = json.loads(output.strip())
               ratio = float(res.get("ratio", 0))
               xplane_path = res.get("xplane_path", "")
+              xplane_content = res.get("xplane_content", "")
             except (ValueError, json.JSONDecodeError):
               # Fallback for old servers returning raw ratio
               ratio = float(output.strip())
               xplane_path = ""
+
+            if xplane_content:
+              xplane_pb_path = ctx.session.state.get("xplane_pb_path", "")
+              if xplane_pb_path:
+                try:
+                  with open(xplane_pb_path, "wb") as f:
+                    f.write(base64.b64decode(xplane_content))
+                  xplane_path = xplane_pb_path
+                  logging.info(
+                    f"[{self.name}] Saved remote profile to path: {xplane_path}"
+                  )
+                except Exception as e:
+                  logging.error(
+                    f"[{self.name}] Failed to save profile file to path: {e}"
+                  )
+              else:
+                logging.warning(
+                  f"[{self.name}] xplane_content received but xplane_pb_path not found in state. Skipping save."
+                )
 
             # Log warnings if present, but don't fail
             if error_msg:

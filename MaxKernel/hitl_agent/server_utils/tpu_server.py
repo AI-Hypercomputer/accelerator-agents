@@ -371,6 +371,11 @@ with jax.profiler.trace("{profile_dir}"):
           exit_code = process.returncode
 
           if exit_code == 0:
+            wall_time = None
+            match = re.search(r"RESULT_TIME:\s*([0-9.]+)", output)
+            if match:
+              wall_time = float(match.group(1))
+
             time_taken = None
             xplane_path = None
 
@@ -393,6 +398,7 @@ with jax.profiler.trace("{profile_dir}"):
                   from collections import defaultdict
 
                   event_durations = defaultdict(int)
+                  event_counts = defaultdict(int)
                   for xplane in profile_data_obj.planes:
                     if xplane.name.startswith("/device:"):
                       for xline in xplane.lines:
@@ -401,22 +407,29 @@ with jax.profiler.trace("{profile_dir}"):
                             name = e.name
                             duration = e.duration_ns
                             event_durations[name] += duration
-                            logging.info("event name: ", name)
+                            event_counts[name] += 1
                           except AttributeError:
                             pass
 
                   if request.kernel_name_pattern:
                     # Use pattern override
-                    matched_events = []
-                    for name, duration in event_durations.items():
+                    matched_durations = []
+                    matched_counts = []
+                    for name in event_durations.keys():
                       if request.kernel_name_pattern in name:
-                        matched_events.append(duration)
-                    if matched_events:
-                      time_taken = sum(matched_events) / 1e6  # Convert ns to ms
+                        matched_durations.append(event_durations[name])
+                        matched_counts.append(event_counts[name])
+                    if matched_durations:
+                      total_duration = sum(matched_durations) / 1e6  # ms
+                      total_count = sum(matched_counts)
+                      time_taken = (
+                        total_duration / total_count if total_count > 0 else 0.0
+                      )
                       logging.info(
-                        "Found kernel matching %s with total time %s ms",
+                        "Found kernel matching %s with average time %s ms (count: %d)",
                         request.kernel_name_pattern,
                         time_taken,
+                        total_count,
                       )
                     else:
                       logging.warning(
@@ -427,32 +440,49 @@ with jax.profiler.trace("{profile_dir}"):
                   if time_taken is None:
                     if event_durations:
                       # First, try to find "jit_computation" or "jitted_computation"
-                      jitted_events = []
-                      for name, duration in event_durations.items():
+                      jitted_durations = []
+                      jitted_counts = []
+                      for name in event_durations.keys():
                         if (
                           "jit_computation" in name
                           or "jitted_computation" in name
                         ):
-                          jitted_events.append(duration)
+                          jitted_durations.append(event_durations[name])
+                          jitted_counts.append(event_counts[name])
 
-                      if jitted_events:
-                        time_taken = sum(jitted_events) / 1e6
+                      if jitted_durations:
+                        total_duration = sum(jitted_durations) / 1e6
+                        total_count = sum(jitted_counts)
+                        time_taken = (
+                          total_duration / total_count
+                          if total_count > 0
+                          else 0.0
+                        )
                         logging.info(
-                          "Found default kernel 'jit_computation'/'jitted_computation' with total time %s ms",
+                          "Found default kernel"
+                          " 'jit_computation'/'jitted_computation' with average"
+                          " time %s ms (count: %d)",
                           time_taken,
+                          total_count,
                         )
                       else:
                         # Use heuristic: find event with largest total duration
                         best_kernel_name = max(
                           event_durations, key=event_durations.get
                         )
+                        total_duration = event_durations[best_kernel_name] / 1e6
+                        total_count = event_counts[best_kernel_name]
                         time_taken = (
-                          event_durations[best_kernel_name] / 1e6
-                        )  # Convert ns to ms
+                          total_duration / total_count
+                          if total_count > 0
+                          else 0.0
+                        )
                         logging.info(
-                          "Automatically identified kernel by duration: %s with total time %s ms",
+                          "Automatically identified kernel by duration: %s"
+                          " with average time %s ms (count: %d)",
                           best_kernel_name,
                           time_taken,
+                          total_count,
                         )
                     else:
                       logging.warning("No events found in device planes")
@@ -462,17 +492,18 @@ with jax.profiler.trace("{profile_dir}"):
                 logging.error("Failed to extract time from profile: %s", e)
 
             if time_taken is None:
-              # Fallback to wall time from output
-              match = re.search(r"RESULT_TIME:\s*([0-9.]+)", output)
-              if match:
-                time_taken = float(match.group(1))
-              else:
-                time_taken = float("inf")
+              time_taken = wall_time if wall_time is not None else float("inf")
+              if wall_time is None:
                 logging.warning(
                   "Failed to get time from profile and no RESULT_TIME found."
                 )
 
-            result_entry = {"cfg": cfg, "time": time_taken, "status": "success"}
+            result_entry = {
+              "cfg": cfg,
+              "time": time_taken,
+              "wall_time": wall_time,
+              "status": "success",
+            }
             if xplane_path:
               result_entry["xplane_path"] = xplane_path
 

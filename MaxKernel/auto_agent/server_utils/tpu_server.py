@@ -5,12 +5,15 @@ import logging
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
 import time
 from typing import Optional
 
+import uvicorn
+import yaml
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -482,7 +485,53 @@ def get_tpu_version() -> str:
   return "TPU version not found"
 
 
-if __name__ == "__main__":
-  import uvicorn
+def _get_local_ip():
+  try:
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("8.8.8.8", 80))
+    local_ip = s.getsockname()[0]
+    s.close()
+    return local_ip
+  except Exception:
+    return "127.0.0.1"
 
-  uvicorn.run(app, host="0.0.0.0", port=TPU_SERVER_PORT)
+
+def get_local_tpu_port(cfg_path: str = "eval_config.yaml") -> Optional[int]:
+  """Checks eval_config.yaml and returns the port if a local TPU server is needed."""
+  try:
+    with open(cfg_path, "r") as file:
+      config = yaml.safe_load(file)
+  except FileNotFoundError:
+    logging.error(f"Config file {cfg_path} not found.")
+    return None
+
+  backends = config.get("backends", [])
+  local_ip = _get_local_ip()
+
+  # Find all backends that are local TPUs
+  local_tpu_backends = [
+    b
+    for b in backends
+    if b.get("type") == "tpu"
+    and b.get("ip") in ["127.0.0.1", "localhost", local_ip]
+    and "tpu_vm" not in b
+  ]
+
+  if not local_tpu_backends:
+    return None
+
+  return local_tpu_backends[0].get("port", TPU_SERVER_PORT)
+
+
+if __name__ == "__main__":
+  tpu_port = get_local_tpu_port()
+
+  if tpu_port is None:
+    logging.info(
+      "No local TPU server needed according to eval_config.yaml. Skipping"
+      " startup."
+    )
+    sys.exit(0)
+
+  logging.info(f"Starting TPU server on port {tpu_port}")
+  uvicorn.run(app, host="0.0.0.0", port=tpu_port)

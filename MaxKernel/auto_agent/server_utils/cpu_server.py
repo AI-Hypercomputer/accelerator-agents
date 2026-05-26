@@ -2,10 +2,13 @@ import asyncio
 import json
 import logging
 import os
+import socket
 import sys
 import tempfile
 from typing import Optional
 
+import uvicorn
+import yaml
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -503,7 +506,52 @@ async def get_backend_version() -> str:
   return GetBackendVersionResponse(backend_version="CPU")
 
 
-if __name__ == "__main__":
-  import uvicorn
+def _get_local_ip():
+  try:
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("8.8.8.8", 80))
+    local_ip = s.getsockname()[0]
+    s.close()
+    return local_ip
+  except Exception:
+    return "127.0.0.1"
 
-  uvicorn.run(app, host="0.0.0.0", port=CPU_SERVER_PORT)
+
+def get_local_cpu_port(cfg_path: str = "eval_config.yaml") -> Optional[int]:
+  """Checks eval_config.yaml and returns the port if a local CPU server is needed."""
+  try:
+    with open(cfg_path, "r") as file:
+      config = yaml.safe_load(file)
+  except FileNotFoundError:
+    logging.error(f"Config file {cfg_path} not found.")
+    return None
+
+  backends = config.get("backends", [])
+  local_ip = _get_local_ip()
+
+  # Find all backends that are local CPUs
+  local_cpu_backends = [
+    b
+    for b in backends
+    if b.get("type") == "cpu"
+    and b.get("ip") in ["127.0.0.1", "localhost", local_ip]
+  ]
+
+  if not local_cpu_backends:
+    return None
+
+  return local_cpu_backends[0].get("port", CPU_SERVER_PORT)
+
+
+if __name__ == "__main__":
+  cpu_port = get_local_cpu_port()
+
+  if cpu_port is None:
+    logging.info(
+      "No local CPU server needed according to eval_config.yaml. Skipping"
+      " startup."
+    )
+    sys.exit(0)
+
+  logging.info(f"Starting CPU server on port {cpu_port}")
+  uvicorn.run(app, host="0.0.0.0", port=cpu_port)

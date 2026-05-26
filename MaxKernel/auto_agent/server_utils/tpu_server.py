@@ -197,9 +197,7 @@ async def performance_test(request: CodeRequest):
 @app.post("/unified_test", response_model=CodeResponse)
 async def unified_test(request: CodeRequest):
   """Test the correctness and performance of the kernel code."""
-  resp, _ = await _execute_code(
-    request, performance_semaphore, "Unified test"
-  )
+  resp, _ = await _execute_code(request, performance_semaphore, "Unified test")
   return resp
 
 

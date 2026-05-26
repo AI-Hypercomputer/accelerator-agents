@@ -1,5 +1,7 @@
 import asyncio
+import atexit
 import logging
+import subprocess
 import time
 import uuid
 from enum import Enum
@@ -113,9 +115,18 @@ class Evaluator:
 
     self.backends = []
 
+    self.tunnels = []
+    self._load_backends()
+
+    logging.info(f"Evaluator initialized with backends: {self.backends}")
+
+  def _load_backends(self):
     if "backends" in self.config and self.config["backends"]:
       logging.info("Using 'backends' configuration format")
       for backend_config in self.config["backends"]:
+        # Check if gcloud TPU VM tunnel is requested
+        self._create_tunnel(backend_config)
+
         backend_obj = Backend(
           name=backend_config["name"],
           ip=backend_config["ip"],
@@ -123,12 +134,66 @@ class Evaluator:
           backend_type=backend_config.get("type", "tpu"),
         )
         self.backends.append(backend_obj)
+
+      # Register cleanup
+      if self.tunnels:
+        atexit.register(self._cleanup_tunnels)
+
     else:
       raise ValueError(
         "No backends configured in eval_config.yaml. Please use the 'backends' format."
       )
 
-    logging.info(f"Evaluator initialized with backends: {self.backends}")
+  def _create_tunnel(self, backend_config):
+    if "tpu_vm" in backend_config:
+      local_port = backend_config["port"]
+      gt = backend_config["tpu_vm"]
+      tpu_name = gt["tpu_name"]
+      zone = gt["zone"]
+      project = gt["project"]
+      remote_port = gt["port"]
+
+      logging.info(f"Constructing gcloud SSH tunnel to {tpu_name}...")
+
+      cmd = [
+        "gcloud",
+        "compute",
+        "tpus",
+        "tpu-vm",
+        "ssh",
+        tpu_name,
+        f"--zone={zone}",
+        f"--project={project}",
+        "--",
+        "-N",
+        "-L",
+        f"{local_port}:localhost:{remote_port}",
+      ]
+
+      try:
+        process = subprocess.Popen(cmd)
+        self.tunnels.append(process)
+        logging.info(
+          f"Gcloud SSH tunnel started for {backend_config['name']} (PID: {process.pid})"
+        )
+        time.sleep(5)  # Blocking sleep as requested
+      except Exception as e:
+        logging.error(f"Failed to start gcloud SSH tunnel: {e}")
+
+  def _cleanup_tunnels(self):
+    if self.tunnels:
+      logging.info("Cleaning up SSH tunnels...")
+      for p in self.tunnels:
+        try:
+          p.terminate()
+          p.wait(timeout=5)
+          logging.info(f"Tunnel PID {p.pid} terminated.")
+        except Exception as e:
+          logging.error(f"Failed to terminate tunnel PID {p.pid}: {e}")
+          try:
+            p.kill()
+          except:
+            pass
 
   def get_available_backend(self, backend_type: Optional[str] = None):
     """

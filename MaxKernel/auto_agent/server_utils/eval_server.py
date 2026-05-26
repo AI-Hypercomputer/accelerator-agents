@@ -4,6 +4,7 @@ import logging
 import subprocess
 import time
 import uuid
+from contextlib import asynccontextmanager
 from enum import Enum
 from typing import Optional
 
@@ -21,7 +22,17 @@ logging.basicConfig(
   datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-app = FastAPI(title="Agent Evaluation Server", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+  yield
+  logging.info("Shutting down eval_server, cleaning up tunnels...")
+  evaluator._cleanup_tunnels()
+
+
+app = FastAPI(
+  title="Agent Evaluation Server", version="1.0.0", lifespan=lifespan
+)
 
 backend_semaphore = asyncio.Semaphore(1)
 
@@ -137,6 +148,7 @@ class Evaluator:
 
       # Register cleanup
       if self.tunnels:
+        logging.info(f"Registering cleanup for {len(self.tunnels)} tunnels.")
         atexit.register(self._cleanup_tunnels)
 
     else:
@@ -176,7 +188,7 @@ class Evaluator:
         logging.info(
           f"Gcloud SSH tunnel started for {backend_config['name']} (PID: {process.pid})"
         )
-        time.sleep(5)  # Blocking sleep as requested
+        time.sleep(10)  # Blocking sleep as requested
       except Exception as e:
         logging.error(f"Failed to start gcloud SSH tunnel: {e}")
 

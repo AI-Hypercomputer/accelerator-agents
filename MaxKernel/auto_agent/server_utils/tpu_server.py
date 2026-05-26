@@ -444,7 +444,7 @@ async def autotune(request: AutotuneRequest):
 
 
 @app.post("/get_tpu_version", response_model=GetTpuVersionResponse)
-def get_tpu_version() -> str:
+def get_tpu_version() -> dict:
   """Attempts to determine the TPU version by trying three methods.
 
   Prioritizes non-JAX methods to avoid TPU resource conflicts.
@@ -470,7 +470,7 @@ def get_tpu_version() -> str:
     match = re.search(r"(TPU v\d[\w-]*)", result.stdout)
     if match:
       # Return the first match, e.g., "TPU v4"
-      return match.group(1)
+      return {"tpu_version": match.group(1)}
 
   except (FileNotFoundError, subprocess.CalledProcessError):
     # FileNotFoundError: tpu-info not installed or not in PATH
@@ -482,7 +482,7 @@ def get_tpu_version() -> str:
     # Exception: Profiler connection failed
     pass
 
-  return "TPU version not found"
+  return {"tpu_version": "TPU version not found"}
 
 
 def _get_local_ip():

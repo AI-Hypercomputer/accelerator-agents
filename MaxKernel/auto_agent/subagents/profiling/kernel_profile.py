@@ -11,6 +11,7 @@ from auto_agent.client_utils.eval_client import call_eval_server_async
 from auto_agent.constants import EVAL_SERVER_PORT, REQUEST_TIMEOUT
 
 PROFILE_TIMEOUT = 120
+PROFILE_POLL_INTERVAL = 20
 
 
 class KernelProfiler(BaseAgent):

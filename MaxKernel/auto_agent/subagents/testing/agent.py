@@ -157,7 +157,7 @@ class TestRunner(BaseAgent):
           session,
           f"http://localhost:{EVAL_SERVER_PORT}",
           payload,
-          poll_interval=10,
+          poll_interval=TEST_EXECUTION_POLL_INTERVAL,
           client_wait_timeout=REQUEST_TIMEOUT,
         )
 

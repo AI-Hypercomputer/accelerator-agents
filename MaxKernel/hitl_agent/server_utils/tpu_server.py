@@ -47,8 +47,6 @@ class AutotuneRequest(BaseModel):
   code_template: str
   search_space: dict[str, list]
   timeout: Optional[int] = 300
-  profile: bool = True
-  kernel_name_pattern: Optional[str] = None
 
 
 class GetTpuVersionResponse(BaseModel):
@@ -321,7 +319,6 @@ async def autotune(request: AutotuneRequest):
 
       for combo in combinations:
         cfg = dict(zip(keys, combo))
-        profile_dir = None
         try:
           code_content = request.code_template
           for k, v in cfg.items():
@@ -330,14 +327,13 @@ async def autotune(request: AutotuneRequest):
           logging.error(f"Error during template formatting: {e}. Config: {cfg}")
           continue
 
-        if request.profile:
-          profile_dir = tempfile.mkdtemp(
-            prefix="hitl_eval_profile_", dir=tempfile.gettempdir()
-          )
-          indented_code = "\n".join(
-            ["    " + line for line in code_content.split("\n")]
-          )
-          code_content = f"""
+        profile_dir = tempfile.mkdtemp(
+          prefix="hitl_eval_profile_", dir=tempfile.gettempdir()
+        )
+        indented_code = "\n".join(
+          ["    " + line for line in code_content.split("\n")]
+        )
+        code_content = f"""
 import jax.profiler
 import os
 
@@ -379,7 +375,7 @@ with jax.profiler.trace("{profile_dir}"):
             time_taken = None
             xplane_path = None
 
-            if request.profile and profile_dir:
+            if profile_dir:
               try:
                 profile_paths = list(
                   pathlib.Path(profile_dir).glob("**/*.xplane.pb")
@@ -411,32 +407,6 @@ with jax.profiler.trace("{profile_dir}"):
                           except AttributeError:
                             pass
 
-                  if request.kernel_name_pattern:
-                    # Use pattern override
-                    matched_durations = []
-                    matched_counts = []
-                    for name in event_durations.keys():
-                      if request.kernel_name_pattern in name:
-                        matched_durations.append(event_durations[name])
-                        matched_counts.append(event_counts[name])
-                    if matched_durations:
-                      total_duration = sum(matched_durations) / 1e6  # ms
-                      total_count = sum(matched_counts)
-                      time_taken = (
-                        total_duration / total_count if total_count > 0 else 0.0
-                      )
-                      logging.info(
-                        "Found kernel matching %s with average time %s ms (count: %d)",
-                        request.kernel_name_pattern,
-                        time_taken,
-                        total_count,
-                      )
-                    else:
-                      logging.warning(
-                        "No kernel matching %s found in profile",
-                        request.kernel_name_pattern,
-                      )
-
                   if time_taken is None:
                     if event_durations:
                       # First, try to find "jit_computation" or "jitted_computation"
@@ -460,8 +430,8 @@ with jax.profiler.trace("{profile_dir}"):
                         )
                         logging.info(
                           "Found default kernel"
-                          " 'jit_computation'/'jitted_computation' with average"
-                          " time %s ms (count: %d)",
+                          " 'jit_computation'/'jitted_computation' with"
+                          " average time %s ms (count: %d)",
                           time_taken,
                           total_count,
                         )

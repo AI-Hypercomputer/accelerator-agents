@@ -1,11 +1,11 @@
 import asyncio
+import itertools
 import json
 import logging
 import os
+import re
 import sys
 import tempfile
-import itertools
-import re
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
@@ -44,8 +44,6 @@ class AutotuneRequest(BaseModel):
   code_template: str
   search_space: dict[str, list]
   timeout: Optional[int] = 300
-  profile: bool = True
-  kernel_name_pattern: Optional[str] = None
 
 
 class GetBackendVersionResponse(BaseModel):
@@ -333,7 +331,6 @@ async def autotune(request: AutotuneRequest):
 
       for combo in combinations:
         cfg = dict(zip(keys, combo))
-        profile_dir = None
         try:
           code_content = request.code_template.format(**cfg)
         except KeyError as e:
@@ -342,14 +339,13 @@ async def autotune(request: AutotuneRequest):
           )
           continue
 
-        if request.profile:
-          profile_dir = tempfile.mkdtemp(
-            prefix="hitl_eval_profile_", dir=tempfile.gettempdir()
-          )
-          indented_code = "\n".join(
-            ["    " + line for line in code_content.split("\n")]
-          )
-          code_content = f"""
+        profile_dir = tempfile.mkdtemp(
+          prefix="hitl_eval_profile_", dir=tempfile.gettempdir()
+        )
+        indented_code = "\n".join(
+          ["    " + line for line in code_content.split("\n")]
+        )
+        code_content = f"""
 import jax.profiler
 import os
 
@@ -387,10 +383,11 @@ with jax.profiler.trace("{profile_dir}"):
             time_taken = None
             xplane_path = None
 
-            if request.profile and profile_dir:
+            if profile_dir:
               import pathlib
-              import jax
               from collections import defaultdict
+
+              import jax
 
               try:
                 profile_paths = list(
@@ -419,25 +416,6 @@ with jax.profiler.trace("{profile_dir}"):
                         except AttributeError:
                           pass
 
-                  if request.kernel_name_pattern:
-                    # Use pattern override
-                    matched_events = []
-                    for name, duration in event_durations.items():
-                      if request.kernel_name_pattern in name:
-                        matched_events.append(duration)
-                    if matched_events:
-                      time_taken = sum(matched_events) / 1e6  # Convert ns to ms
-                      logging.info(
-                        "Found kernel matching %s with total time %s ms",
-                        request.kernel_name_pattern,
-                        time_taken,
-                      )
-                    else:
-                      logging.warning(
-                        "No kernel matching %s found in profile",
-                        request.kernel_name_pattern,
-                      )
-
                   if time_taken is None:
                     if event_durations:
                       # First, try to find "jit_computation" or "jitted_computation"
@@ -452,7 +430,9 @@ with jax.profiler.trace("{profile_dir}"):
                       if jitted_events:
                         time_taken = sum(jitted_events) / 1e6
                         logging.info(
-                          "Found default kernel 'jit_computation'/'jitted_computation' with total time %s ms",
+                          "Found default kernel"
+                          " 'jit_computation'/'jitted_computation' with total"
+                          " time %s ms",
                           time_taken,
                         )
                       else:
@@ -464,7 +444,8 @@ with jax.profiler.trace("{profile_dir}"):
                           event_durations[best_kernel_name] / 1e6
                         )  # Convert ns to ms
                         logging.info(
-                          "Automatically identified kernel by duration: %s with total time %s ms",
+                          "Automatically identified kernel by duration: %s"
+                          " with total time %s ms",
                           best_kernel_name,
                           time_taken,
                         )

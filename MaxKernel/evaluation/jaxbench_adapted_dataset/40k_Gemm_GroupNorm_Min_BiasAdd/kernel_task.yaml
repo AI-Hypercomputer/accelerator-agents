@@ -1,0 +1,18 @@
+task_id: 40k_Gemm_GroupNorm_Min_BiasAdd
+description: Kernel task for 40k_Gemm_GroupNorm_Min_BiasAdd
+input_gen_code: |-
+  def get_inputs(dtype=jnp.float32):
+      import jax
+      import jax.numpy as jnp
+
+      key = jax.random.key(0)
+      batch_size, in_features, out_features, num_groups = 4096, 8192, 8192, 512
+      x = jax.random.uniform(key, (batch_size, in_features), dtype=dtype)
+      weight = jnp.zeros((out_features, in_features), dtype=dtype)
+      linear_bias = jnp.zeros(out_features, dtype=dtype)
+      gn_weight = jnp.ones(out_features, dtype=dtype)
+      gn_bias = jnp.zeros(out_features, dtype=dtype)
+      bias = jnp.zeros((1, out_features, 1, 1), dtype=dtype)
+      dynamic_args = [x, weight, linear_bias, gn_weight, gn_bias, bias]
+      static_args = []
+      return dynamic_args, static_args

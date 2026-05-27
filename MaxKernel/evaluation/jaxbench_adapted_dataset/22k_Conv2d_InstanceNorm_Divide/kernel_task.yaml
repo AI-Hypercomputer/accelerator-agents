@@ -1,0 +1,25 @@
+task_id: 22k_Conv2d_InstanceNorm_Divide
+description: Kernel task for 22k_Conv2d_InstanceNorm_Divide
+input_gen_code: |-
+  def get_inputs():
+      import jax
+      import jax.numpy as jnp
+
+      batch_size = 128
+      in_channels = 64
+      out_channels = 128
+      kernel_size = 3
+      divide_by_value = 2.0
+
+      dtype = jnp.float32
+      key = jax.random.key(0)
+      height = width = 128
+      x = jax.random.uniform(key, (batch_size, in_channels, height, width), dtype=dtype)
+      weight = jnp.zeros((out_channels, in_channels, kernel_size, kernel_size), dtype=dtype)
+      conv_bias = jnp.zeros(out_channels, dtype=dtype)
+      in_weight = jnp.ones(out_channels, dtype=dtype)
+      in_bias = jnp.zeros(out_channels, dtype=dtype)
+
+      dynamic_args = [x, weight, conv_bias, in_weight, in_bias]
+      static_args = [divide_by_value]
+      return dynamic_args, static_args

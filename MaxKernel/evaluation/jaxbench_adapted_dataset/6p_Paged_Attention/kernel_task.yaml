@@ -1,0 +1,44 @@
+task_id: 6p_Paged_Attention
+description: Kernel task for 6p_Paged_Attention
+input_gen_code: |-
+  def get_inputs(dtype=jnp.bfloat16):
+      import jax
+      import jax.numpy as jnp
+
+      CONFIG = {
+          'name': 'llama3_70b_paged_attention',
+          'model': 'Llama-3.1-70B',
+          'operator': 'paged_attention',
+          'num_seqs': 64,
+          'max_seq_len': 4096,
+          'num_query_heads': 64,
+          'num_kv_heads': 8,
+          'head_dim': 128,
+          'page_size': 16,
+          'pages_per_seq': 256,
+      }
+
+      key = jax.random.key(42)
+      keys = jax.random.split(key, 5)
+      num_seqs = CONFIG['num_seqs']
+      num_q_heads = CONFIG['num_query_heads']
+      num_kv_heads = CONFIG['num_kv_heads']
+      head_dim = CONFIG['head_dim']
+      page_size = CONFIG['page_size']
+      pages_per_seq = CONFIG['pages_per_seq']
+      total_pages = num_seqs * pages_per_seq
+      max_seq_len_derived = pages_per_seq * page_size
+
+      max_num_tokens = num_seqs
+      queries = jax.random.normal(keys[0], (max_num_tokens, num_q_heads, head_dim), dtype=dtype)
+      k_pages = jax.random.normal(keys[1], (total_pages, page_size, num_kv_heads, head_dim), dtype=dtype) * 0.02
+      v_pages = jax.random.normal(keys[2], (total_pages, page_size, num_kv_heads, head_dim), dtype=dtype) * 0.02
+
+      kv_lens = jnp.full((num_seqs,), max_seq_len_derived, dtype=jnp.int32)
+      page_indices = jnp.arange(total_pages, dtype=jnp.int32).reshape(num_seqs, pages_per_seq)
+      cu_q_lens = jnp.arange(num_seqs + 1, dtype=jnp.int32)
+
+      dynamic_args = [queries, k_pages, v_pages, kv_lens, page_indices, cu_q_lens]
+      static_args = [num_seqs, num_q_heads, num_kv_heads, head_dim, max_seq_len_derived]
+
+      return dynamic_args, static_args

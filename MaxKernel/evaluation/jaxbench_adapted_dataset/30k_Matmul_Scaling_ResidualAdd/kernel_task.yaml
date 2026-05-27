@@ -1,0 +1,17 @@
+task_id: 30k_Matmul_Scaling_ResidualAdd
+description: Kernel task for 30k_Matmul_Scaling_ResidualAdd
+input_gen_code: |-
+  def get_inputs(dtype=jnp.float32):
+      import jax
+      import jax.numpy as jnp
+
+      batch_size = 16384
+      in_features = 4096
+      out_features = 4096
+      key = jax.random.key(0)
+      x = jax.random.uniform(key, (batch_size, in_features), dtype=dtype)
+      weight = jnp.zeros((in_features, out_features), dtype=dtype)
+      bias = jnp.zeros(out_features, dtype=dtype)
+      dynamic_args = [x, weight, bias]
+      static_args = []
+      return dynamic_args, static_args

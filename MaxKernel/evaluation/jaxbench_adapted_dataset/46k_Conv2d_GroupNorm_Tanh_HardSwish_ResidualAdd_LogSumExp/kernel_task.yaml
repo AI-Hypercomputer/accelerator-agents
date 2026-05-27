@@ -1,0 +1,23 @@
+task_id: 46k_Conv2d_GroupNorm_Tanh_HardSwish_ResidualAdd_LogSumExp
+description: Kernel task for 46k_Conv2d_GroupNorm_Tanh_HardSwish_ResidualAdd_LogSumExp
+input_gen_code: |-
+  def get_inputs(dtype=jnp.float32):
+      import jax
+      import jax.numpy as jnp
+      import jax.scipy.special
+
+      key = jax.random.key(0)
+      batch_size = 128
+      in_channels = 8
+      out_channels = 64
+      kernel_size = 3
+      height = 128
+      width = 128
+      x = jax.random.uniform(key, (batch_size, in_channels, height, width), dtype=dtype)
+      conv_weight = jnp.zeros((out_channels, in_channels, kernel_size, kernel_size), dtype=dtype)
+      conv_bias = jnp.zeros(out_channels, dtype=dtype)
+      gn_weight = jnp.ones(out_channels, dtype=dtype)
+      gn_bias = jnp.zeros(out_channels, dtype=dtype)
+      dynamic_args = [x, conv_weight, conv_bias, gn_weight, gn_bias]
+      static_args = []
+      return dynamic_args, static_args

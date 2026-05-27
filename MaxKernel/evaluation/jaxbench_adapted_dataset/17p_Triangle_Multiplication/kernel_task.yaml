@@ -1,0 +1,30 @@
+task_id: 17p_Triangle_Multiplication
+description: Kernel task for 17p_Triangle_Multiplication
+input_gen_code: |-
+  def get_inputs(dtype=jnp.bfloat16):
+      import jax
+      import jax.numpy as jnp
+
+      CONFIG = {
+          'name': 'alphafold_768_triangle_mult',
+          'model': 'AlphaFold2',
+          'operator': 'triangle_mult_outgoing',
+          'N': 1536,
+          'C': 128,
+          'direction': 'outgoing',
+      }
+      key = jax.random.key(42)
+      keys = jax.random.split(key, 9)
+      N, C = CONFIG['N'], CONFIG['C']
+      pair_act = jax.random.normal(keys[0], (N, N, C), dtype=dtype)
+      mask = jnp.ones((N, N, 1), dtype=dtype)
+      left_proj = jax.random.normal(keys[1], (C, C), dtype=dtype) * 0.02
+      right_proj = jax.random.normal(keys[2], (C, C), dtype=dtype) * 0.02
+      left_gate = jax.random.normal(keys[3], (C, C), dtype=dtype) * 0.02
+      right_gate = jax.random.normal(keys[4], (C, C), dtype=dtype) * 0.02
+      center_scale = jax.random.normal(keys[5], (C,), dtype=dtype) * 0.1 + 1.0
+      out_proj = jax.random.normal(keys[6], (C, C), dtype=dtype) * 0.02
+      out_gate = jax.random.normal(keys[7], (C, C), dtype=dtype) * 0.02
+      dynamic_args = [pair_act, mask, left_proj, right_proj, left_gate, right_gate, center_scale, out_proj, out_gate]
+      static_args = []
+      return dynamic_args, static_args

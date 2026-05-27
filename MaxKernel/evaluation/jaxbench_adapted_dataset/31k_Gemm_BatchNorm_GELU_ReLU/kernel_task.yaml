@@ -1,0 +1,20 @@
+task_id: 31k_Gemm_BatchNorm_GELU_ReLU
+description: Kernel task for 31k_Gemm_BatchNorm_GELU_ReLU
+input_gen_code: |-
+  def get_inputs(dtype=jnp.float32):
+      import jax
+      import jax.numpy as jnp
+
+      batch_size = 16384
+      in_features = 8192
+      out_features = 8192
+      key = jax.random.key(0)
+      k1, k2, k3 = jax.random.split(key, 3)
+      x = jax.random.uniform(k1, (batch_size, in_features), dtype=dtype)
+      gemm_weight = jax.random.normal(k2, (out_features, in_features), dtype=dtype)
+      gemm_bias = jax.random.normal(k3, (out_features,), dtype=dtype)
+      bn_weight = jnp.ones(out_features, dtype=dtype)
+      bn_bias = jnp.zeros(out_features, dtype=dtype)
+      dynamic_args = [x, gemm_weight, gemm_bias, bn_weight, bn_bias]
+      static_args = []
+      return dynamic_args, static_args

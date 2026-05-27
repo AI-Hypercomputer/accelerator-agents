@@ -1,0 +1,26 @@
+task_id: 34k_Conv2d_Activation_BatchNorm
+description: Kernel task for 34k_Conv2d_Activation_BatchNorm
+input_gen_code: |-
+  def get_inputs(dtype=jnp.float32):
+      import jax
+      import jax.numpy as jnp
+      import jax.lax as lax
+
+      batch_size = 64
+      in_channels = 64
+      out_channels = 128
+      kernel_size = 3
+      height = 128
+      width = 128
+
+      key = jax.random.key(0)
+      k1, k2, k3 = jax.random.split(key, 3)
+      x = jax.random.uniform(k1, (batch_size, in_channels, height, width), dtype=dtype)
+      conv_weight = jax.random.normal(k2, (out_channels, in_channels, kernel_size, kernel_size), dtype=dtype)
+      conv_bias = jax.random.normal(k3, (out_channels,), dtype=dtype)
+      bn_weight = jnp.ones(out_channels, dtype=dtype)
+      bn_bias = jnp.zeros(out_channels, dtype=dtype)
+
+      dynamic_args = [x, conv_weight, conv_bias, bn_weight, bn_bias]
+      static_args = []
+      return dynamic_args, static_args

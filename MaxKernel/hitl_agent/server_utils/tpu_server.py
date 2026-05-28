@@ -3,12 +3,14 @@ import itertools
 import json
 import logging
 import os
+import pathlib
 import re
 import subprocess
 import sys
 import tempfile
 from typing import Optional
 
+import jax
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -325,6 +327,20 @@ async def autotune(request: AutotuneRequest):
           logging.error(f"Error during template formatting: {e}. Config: {cfg}")
           continue
 
+        profile_dir = tempfile.mkdtemp(
+          prefix="hitl_eval_profile_", dir=tempfile.gettempdir()
+        )
+        indented_code = "\n".join(
+          ["    " + line for line in code_content.split("\n")]
+        )
+        code_content = f"""
+import jax.profiler
+import os
+
+with jax.profiler.trace("{profile_dir}"):
+{indented_code}
+"""
+
         # Execute the code
         with tempfile.NamedTemporaryFile(
           mode="w", suffix=".py", prefix="hitl_eval_", delete=False
@@ -351,24 +367,122 @@ async def autotune(request: AutotuneRequest):
           exit_code = process.returncode
 
           if exit_code == 0:
-            # Parse RESULT_TIME
+            wall_time = None
             match = re.search(r"RESULT_TIME:\s*([0-9.]+)", output)
             if match:
-              time_taken = float(match.group(1))
-              all_results.append(
-                {"cfg": cfg, "time": time_taken, "status": "success"}
-              )
-              if time_taken < best_time:
-                best_time = time_taken
-                best_cfg = cfg
-                best_output = output
-            else:
-              logging.warning(
-                f"No RESULT_TIME found in output for config {cfg}"
-              )
-              all_results.append(
-                {"cfg": cfg, "status": "no_result_time", "output": output}
-              )
+              wall_time = float(match.group(1))
+
+            time_taken = None
+            xplane_path = None
+
+            if profile_dir:
+              try:
+                profile_paths = list(
+                  pathlib.Path(profile_dir).glob("**/*.xplane.pb")
+                )
+                if profile_paths:
+                  xplane_path = str(profile_paths[0])
+                  logging.info("Found xplane.pb at %s", xplane_path)
+
+                  # Extract time from xplane
+                  profile_data_obj = (
+                    jax.profiler.ProfileData.from_serialized_xspace(
+                      profile_paths[0].read_bytes()
+                    )
+                  )
+
+                  from collections import defaultdict
+
+                  event_durations = defaultdict(int)
+                  event_counts = defaultdict(int)
+                  for xplane in profile_data_obj.planes:
+                    if xplane.name.startswith("/device:"):
+                      for xline in xplane.lines:
+                        for e in xline.events:
+                          try:
+                            name = e.name
+                            duration = e.duration_ns
+                            event_durations[name] += duration
+                            event_counts[name] += 1
+                          except AttributeError:
+                            pass
+
+                  if time_taken is None:
+                    if event_durations:
+                      # First, try to find "jit_computation" or "jitted_computation"
+                      jitted_durations = []
+                      jitted_counts = []
+                      for name in event_durations.keys():
+                        if (
+                          "jit_computation" in name
+                          or "jitted_computation" in name
+                        ):
+                          jitted_durations.append(event_durations[name])
+                          jitted_counts.append(event_counts[name])
+
+                      if jitted_durations:
+                        total_duration = sum(jitted_durations) / 1e6
+                        total_count = sum(jitted_counts)
+                        time_taken = (
+                          total_duration / total_count
+                          if total_count > 0
+                          else 0.0
+                        )
+                        logging.info(
+                          "Found default kernel"
+                          " 'jit_computation'/'jitted_computation' with"
+                          " average time %s ms (count: %d)",
+                          time_taken,
+                          total_count,
+                        )
+                      else:
+                        # Use heuristic: find event with largest total duration
+                        best_kernel_name = max(
+                          event_durations, key=event_durations.get
+                        )
+                        total_duration = event_durations[best_kernel_name] / 1e6
+                        total_count = event_counts[best_kernel_name]
+                        time_taken = (
+                          total_duration / total_count
+                          if total_count > 0
+                          else 0.0
+                        )
+                        logging.info(
+                          "Automatically identified kernel by duration: %s"
+                          " with average time %s ms (count: %d)",
+                          best_kernel_name,
+                          time_taken,
+                          total_count,
+                        )
+                    else:
+                      logging.warning("No events found in device planes")
+                else:
+                  logging.warning("No xplane.pb found in %s", profile_dir)
+              except Exception as e:
+                logging.error("Failed to extract time from profile: %s", e)
+
+            if time_taken is None:
+              time_taken = wall_time if wall_time is not None else float("inf")
+              if wall_time is None:
+                logging.warning(
+                  "Failed to get time from profile and no RESULT_TIME found."
+                )
+
+            result_entry = {
+              "cfg": cfg,
+              "time": time_taken,
+              "wall_time": wall_time,
+              "status": "success",
+            }
+            if xplane_path:
+              result_entry["xplane_path"] = xplane_path
+
+            all_results.append(result_entry)
+
+            if time_taken < best_time:
+              best_time = time_taken
+              best_cfg = cfg
+              best_output = output
           else:
             logging.warning(
               f"Config {cfg} failed with exit code {exit_code}. Stderr: {error}"

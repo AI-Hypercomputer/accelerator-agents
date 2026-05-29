@@ -1,0 +1,21 @@
+task_id: 19k_Matmul_Subtract_Multiply_ReLU
+description: Kernel task for 19k_Matmul_Subtract_Multiply_ReLU
+input_gen_code: |-
+  def get_inputs(dtype=jnp.float32):
+      import jax
+      import jax.numpy as jnp
+
+      batch_size = 4096
+      in_features = 8192
+      out_features = 8192
+      subtract_value = 2.0
+      multiply_value = 1.5
+
+      key = jax.random.key(0)
+      x = jax.random.uniform(key, (batch_size, in_features), dtype=dtype)
+      weight = jnp.zeros((in_features, out_features), dtype=dtype)
+      bias = jnp.zeros(out_features, dtype=dtype)
+
+      dynamic_args = [x, weight, bias]
+      static_args = [subtract_value, multiply_value]
+      return dynamic_args, static_args

@@ -1,0 +1,21 @@
+task_id: 44k_Matmul_Divide_GELU
+description: Kernel task for 44k_Matmul_Divide_GELU
+input_gen_code: |-
+  def get_inputs():
+      import jax
+      import jax.numpy as jnp
+
+      batch_size = 4096
+      input_size = 8192
+      output_size = 8192
+      divisor = 10.0
+      dtype = jnp.float32
+
+      key = jax.random.key(0)
+      x = jax.random.uniform(key, (batch_size, input_size), dtype=dtype)
+      weight = jnp.zeros((input_size, output_size), dtype=dtype)
+      bias = jnp.zeros(output_size, dtype=dtype)
+
+      dynamic_args = [x, weight, bias]
+      static_args = [divisor]
+      return dynamic_args, static_args

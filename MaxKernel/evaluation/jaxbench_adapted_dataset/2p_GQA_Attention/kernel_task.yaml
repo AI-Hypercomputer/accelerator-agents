@@ -1,0 +1,29 @@
+task_id: 2p_GQA_Attention
+description: Kernel task for 2p_GQA_Attention
+input_gen_code: |-
+  def get_inputs(dtype=jnp.bfloat16):
+      import jax
+      import jax.numpy as jnp
+      from functools import partial
+
+      CONFIG = {
+          'name': 'llama3_405b_gqa',
+          'model': 'Llama-3.1-405B',
+          'operator': 'gqa_attention',
+          'batch': 4,
+          'seq_len': 4096,
+          'num_query_heads': 128,
+          'num_kv_heads': 8,
+          'head_dim': 128,
+          'emb_dim': 16384,
+      }
+      key = jax.random.key(42)
+      k1, k2, k3 = jax.random.split(key, 3)
+      B, S = CONFIG['batch'], CONFIG['seq_len']
+      Hq, Hkv, D = CONFIG['num_query_heads'], CONFIG['num_kv_heads'], CONFIG['head_dim']
+      query = jax.random.normal(k1, (B, S, Hq, D), dtype=dtype)
+      key_t = jax.random.normal(k2, (B, S, Hkv, D), dtype=dtype)
+      value = jax.random.normal(k3, (B, S, Hkv, D), dtype=dtype)
+      dynamic_args = [query, key_t, value]
+      static_args = []
+      return dynamic_args, static_args

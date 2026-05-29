@@ -1,0 +1,29 @@
+task_id: 16p_Mamba2_SSD
+description: Kernel task for 16p_Mamba2_SSD
+input_gen_code: |-
+  def get_inputs(dtype=jnp.bfloat16):
+      import jax
+      import jax.numpy as jnp
+
+      CONFIG = {
+          'name': 'mamba2_2_7b_ssd',
+          'model': 'Mamba-2-2.7B',
+          'operator': 'state_space_duality',
+          'batch': 4,
+          'seq_len': 4096,
+          'num_heads': 64,
+          'head_dim': 64,
+          'd_state': 128,
+          'd_model': 2560,
+      }
+      rng = jax.random.key(42)
+      keys = jax.random.split(rng, 5)
+      B, S = CONFIG['batch'], CONFIG['seq_len']
+      H, D = CONFIG['num_heads'], CONFIG['head_dim']
+      query = jax.random.normal(keys[0], (B, H, S, D), dtype=dtype)
+      key = jax.random.normal(keys[1], (B, H, S, D), dtype=dtype)
+      value = jax.random.normal(keys[2], (B, H, S, D), dtype=dtype)
+      A_log = jax.random.normal(keys[3], (B, H, S), dtype=jnp.float32) * 0.5 - 4.0
+      dynamic_args = [query, key, value, A_log]
+      static_args = []
+      return dynamic_args, static_args

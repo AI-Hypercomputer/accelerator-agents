@@ -144,12 +144,12 @@ def summarize_results(
   max_speedup = max(speedups_cliped) if speedups_cliped else 1
 
   arithmetic_mean_speedup = (
-    sum(speedups_cliped) / len(speedups_cliped) if speedups_cliped else 1
+    sum(speedups_cliped) / total_attempted if speedups_cliped else 1
   )
 
   # Geometric mean is more robust for averaging ratios like speedup.
   geo_mean_speedup = (
-    math.exp(sum(math.log(s) for s in speedups_cliped) / len(speedups_cliped))
+    math.exp(sum(math.log(s) for s in speedups_cliped) / total_attempted)
     if speedups_cliped
     else 1
   )

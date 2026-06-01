@@ -2,6 +2,7 @@
 line-length = 80
 target-version = "py310"
 indent-width = 2
+extend-exclude = ["evaluation/jaxbench_adapted_dataset"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]

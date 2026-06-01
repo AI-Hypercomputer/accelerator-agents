@@ -1,4 +1,5 @@
 import asyncio
+import itertools
 import json
 import logging
 import os
@@ -6,6 +7,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
@@ -27,6 +29,7 @@ compilation_semaphore = asyncio.Semaphore(1)
 correctness_semaphore = asyncio.Semaphore(1)
 performance_semaphore = asyncio.Semaphore(1)
 profile_semaphore = asyncio.Semaphore(1)
+autotune_semaphore = asyncio.Semaphore(1)
 
 
 class CodeRequest(BaseModel):
@@ -39,6 +42,13 @@ class CodeResponse(BaseModel):
   output: str
   error: Optional[str] = None
   exit_code: int
+
+
+class AutotuneRequest(BaseModel):
+  code_template: str
+  search_space: dict[str, list]
+  timeout: Optional[int] = 300
+  total_timeout: Optional[int] = None
 
 
 class GetTpuVersionResponse(BaseModel):
@@ -496,6 +506,132 @@ async def profile(request: CodeRequest):
       # except Exception:
       #     pass
       logging.info("Profile analysis finished")
+
+
+@app.post("/autotune", response_model=CodeResponse)
+async def autotune(request: AutotuneRequest):
+  logging.info("Starting autotune")
+  async with performance_semaphore:
+    try:
+      # Generate all combinations
+      keys = list(request.search_space.keys())
+      values = list(request.search_space.values())
+      combinations = list(itertools.product(*values))
+
+      best_time = float("inf")
+      best_cfg = None
+      best_output = ""
+      all_results = []
+
+      start_time = time.time()
+      for combo in combinations:
+        if (
+          request.total_timeout
+          and (time.time() - start_time) > request.total_timeout
+        ):
+          logging.warning(
+            f"Total timeout of {request.total_timeout}s reached in autotune"
+          )
+          break
+        cfg = dict(zip(keys, combo))
+        try:
+          code_content = request.code_template
+          for k, v in cfg.items():
+            code_content = code_content.replace(f"{{{k}}}", str(v))
+        except Exception as e:
+          logging.error(f"Error during template formatting: {e}. Config: {cfg}")
+          continue
+
+        # Execute the code
+        with tempfile.NamedTemporaryFile(
+          mode="w", suffix=".py", prefix="hitl_eval_", delete=False
+        ) as temp_file:
+          temp_file.write(code_content)
+          temp_file_path = temp_file.name
+
+        process = None
+        try:
+          process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            temp_file_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=tempfile.gettempdir(),
+          )
+
+          stdout, stderr = await asyncio.wait_for(
+            process.communicate(), timeout=request.timeout
+          )
+
+          output = stdout.decode("utf-8") if stdout else ""
+          error = stderr.decode("utf-8") if stderr else ""
+          exit_code = process.returncode
+
+          if exit_code == 0:
+            # Parse RESULT_TIME
+            match = re.search(r"RESULT_TIME:\s*([0-9.]+)\s*ms", output)
+            if match:
+              time_taken = float(match.group(1))
+              all_results.append(
+                {"cfg": cfg, "time": time_taken, "status": "success"}
+              )
+              if time_taken < best_time:
+                best_time = time_taken
+                best_cfg = cfg
+                best_output = output
+            else:
+              logging.warning(
+                f"No RESULT_TIME found in output for config {cfg}"
+              )
+              all_results.append(
+                {"cfg": cfg, "status": "no_result_time", "output": output}
+              )
+          else:
+            logging.warning(
+              f"Config {cfg} failed with exit code {exit_code}. Stderr: {error}"
+            )
+            all_results.append(
+              {
+                "cfg": cfg,
+                "status": "failed",
+                "error": error,
+                "exit_code": exit_code,
+              }
+            )
+
+        except asyncio.TimeoutError:
+          logging.warning(f"Config {cfg} timed out")
+          if process:
+            process.kill()
+            await process.wait()
+          all_results.append({"cfg": cfg, "status": "timeout"})
+        except Exception as e:
+          logging.error(f"Error running config {cfg}: {e}")
+          all_results.append(
+            {"cfg": cfg, "status": "exception", "error": str(e)}
+          )
+        finally:
+          if "temp_file_path" in locals():
+            try:
+              os.unlink(temp_file_path)
+            except OSError:
+              pass
+
+      return CodeResponse(
+        output=json.dumps(
+          {
+            "best_cfg": best_cfg,
+            "best_time": best_time,
+            "best_output": best_output,
+            "all_results": all_results,
+          }
+        ),
+        exit_code=0 if best_cfg is not None else 1,
+      )
+
+    except Exception as e:
+      logging.error(f"Autotune failed with error: {str(e)}")
+      raise HTTPException(status_code=500, detail=f"Autotune error: {str(e)}")
 
 
 @app.post("/get_tpu_version", response_model=GetTpuVersionResponse)

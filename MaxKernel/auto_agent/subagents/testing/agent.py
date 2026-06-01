@@ -15,8 +15,9 @@ from google.adk.agents import BaseAgent, SequentialAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 
+from auto_agent.client_utils.eval_client import call_eval_server_async
 from auto_agent.config import model_config, thinking_planner
-from auto_agent.constants import EVAL_SERVER_PORT, MODEL_NAME
+from auto_agent.constants import EVAL_SERVER_PORT, MODEL_NAME, REQUEST_TIMEOUT
 from auto_agent.custom_types import CustomLlmAgent
 from auto_agent.subagents.testing.prompts import (
   fix_test_script,
@@ -149,17 +150,15 @@ class TestRunner(BaseAgent):
         "dependencies": dependencies,
       }
 
-      async with aiohttp.ClientSession() as session:
-        async with session.post(
-          f"http://localhost:{EVAL_SERVER_PORT}/evaluate",
-          json=payload,
-        ) as response:
-          if response.status != 200:
-            error_text = await response.text()
-            raise Exception(
-              f"Eval server returned status {response.status}: {error_text}"
-            )
-          result_json = await response.json()
+      client_timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT + 10)
+      async with aiohttp.ClientSession(timeout=client_timeout) as session:
+        result_json = await call_eval_server_async(
+          session,
+          f"http://localhost:{EVAL_SERVER_PORT}",
+          payload,
+          poll_interval=10,
+          client_wait_timeout=REQUEST_TIMEOUT,
+        )
 
       full_output = f"STDOUT:\n{result_json.get('output', '')}\n\nSTDERR:\n{result_json.get('error', '') or ''}"
 
@@ -177,21 +176,6 @@ class TestRunner(BaseAgent):
         actions=EventActions(state_delta={self.output_key: test_results}),
       )
 
-    except subprocess.TimeoutExpired:
-      error_msg = "Test execution timed out after 5 minutes"
-      logging.error(f"[{self.name}] {error_msg}")
-      yield Event(
-        author=self.name,
-        actions=EventActions(
-          state_delta={
-            self.output_key: {
-              "exit_code": -1,
-              "output": error_msg,
-              "success": False,
-            }
-          }
-        ),
-      )
     except Exception as e:
       error_msg = f"Exception during test execution: {str(e)}"
       logging.error(f"[{self.name}] {error_msg}")
@@ -639,17 +623,15 @@ class MockTestExecutionAgent(BaseAgent):
           "dependencies": dependencies,
         }
 
-        async with aiohttp.ClientSession() as session:
-          async with session.post(
-            f"http://localhost:{EVAL_SERVER_PORT}/evaluate",
-            json=payload,
-          ) as response:
-            if response.status != 200:
-              error_text = await response.text()
-              raise Exception(
-                f"Eval server returned status {response.status}: {error_text}"
-              )
-            result_json = await response.json()
+        client_timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT + 10)
+        async with aiohttp.ClientSession(timeout=client_timeout) as session:
+          result_json = await call_eval_server_async(
+            session,
+            f"http://localhost:{EVAL_SERVER_PORT}",
+            payload,
+            poll_interval=10,
+            client_wait_timeout=REQUEST_TIMEOUT,
+          )
 
         exit_code = result_json.get("exit_code", -1)
         stdout = result_json.get("output", "")

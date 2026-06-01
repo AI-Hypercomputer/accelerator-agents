@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 from typing import AsyncGenerator
 
 from google.adk.agents import BaseAgent
@@ -21,6 +22,7 @@ class AutonomousPipelineAgent(BaseAgent):
   validate_agent: BaseAgent
   test_gen_agent: BaseAgent
   test_run_agent: BaseAgent
+  autotune_agent: BaseAgent
   profile_agent: BaseAgent
   max_iterations: int = 2
 
@@ -32,6 +34,7 @@ class AutonomousPipelineAgent(BaseAgent):
     validate_agent: BaseAgent,
     test_gen_agent: BaseAgent,
     test_run_agent: BaseAgent,
+    autotune_agent: BaseAgent,
     profile_agent: BaseAgent,
     max_iterations: int = 2,
   ):
@@ -42,6 +45,7 @@ class AutonomousPipelineAgent(BaseAgent):
       validate_agent=validate_agent,
       test_gen_agent=test_gen_agent,
       test_run_agent=test_run_agent,
+      autotune_agent=autotune_agent,
       profile_agent=profile_agent,
       max_iterations=max_iterations,
     )
@@ -110,7 +114,12 @@ class AutonomousPipelineAgent(BaseAgent):
         iteration += 1
         continue
 
-      # Step 6: Profile
+      # Step 6: Autotune
+      logging.info(f"[{self.name}] Running AutotuneAgent...")
+      async for event in self.autotune_agent.run_async(ctx):
+        yield event
+
+      # Step 7: Profile
       logging.info(f"[{self.name}] Running ProfileAgentOrchestrator...")
       async for event in self.profile_agent.run_async(ctx):
         yield event
@@ -128,8 +137,7 @@ class AutonomousPipelineAgent(BaseAgent):
           )
 
       # Extract latency
-      test_output = ctx.session.state.get("test_results", {}).get("output", "")
-      latency = self._extract_latency(test_output)
+      latency = self._extract_latency(ctx)
 
       snapshot = {
         "iteration": iteration,
@@ -239,6 +247,22 @@ class AutonomousPipelineAgent(BaseAgent):
         f"[{self.name}] Set profiling_script_path: {ctx.session.state['profiling_script_path']}"
       )
 
+    if "autotune_specs_path" not in ctx.session.state:
+      ctx.session.state["autotune_specs_path"] = os.path.join(
+        session_dir, "autotune_specs.json"
+      )
+      logging.info(
+        f"[{self.name}] Set autotune_specs_path: {ctx.session.state['autotune_specs_path']}"
+      )
+
+    if "autotune_results_path" not in ctx.session.state:
+      ctx.session.state["autotune_results_path"] = os.path.join(
+        session_dir, "autotune_results.json"
+      )
+      logging.info(
+        f"[{self.name}] Set autotune_results_path: {ctx.session.state['autotune_results_path']}"
+      )
+
     logging.info(f"[{self.name}] Published explicit path state update Event.")
     return Event(
       author=self.name,
@@ -254,18 +278,26 @@ class AutonomousPipelineAgent(BaseAgent):
       ),
     )
 
-  def _extract_latency(self, test_output: str):
-    """Extracts execution time from test results output."""
+  def _extract_latency(self, ctx: InvocationContext):
+    """Extracts execution time from autotune results or test results output."""
+    autotune_results = ctx.session.state.get("autotune_results", {})
+    if autotune_results.get("status") == "success":
+      latency = autotune_results.get("best_time_ms")
+      if latency is not None:
+        logging.info(
+          f"[{self.name}] Extracted latency from autotune results: {latency} ms"
+        )
+        return latency
+
+    test_output = ctx.session.state.get("test_results", {}).get("output", "")
     if not test_output:
       return None
     try:
-      import re
-
       match = re.search(r"PERF_METRICS:\s*([\d.]+)", test_output)
       if match:
         latency = float(match.group(1))
         logging.info(
-          f"[{self.name}] Extracted execution time from test results: {latency} ms"
+          f"[{self.name}] Extracted execution time from test results: {latency} ms (fallback)"
         )
         return latency
     except Exception as e:

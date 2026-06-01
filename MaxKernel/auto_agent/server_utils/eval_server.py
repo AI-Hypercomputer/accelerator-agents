@@ -1,20 +1,17 @@
 import asyncio
 import logging
+import time
+import uuid
 from enum import Enum
 from typing import Optional
 
 import aiohttp
 import yaml
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from pydantic import BaseModel
 
-from auto_agent.constants import (
-  EVAL_SERVER_PORT,
-)
-from auto_agent.server_utils.tpu_server import (
-  CodeResponse,
-  get_tpu_version,
-)
+from auto_agent.constants import EVAL_SERVER_PORT
+from auto_agent.server_utils.tpu_server import get_tpu_version
 
 logging.basicConfig(
   level=logging.INFO,
@@ -62,14 +59,38 @@ class EvalTypes(Enum):
   PERFORMANCE_TEST = "performance_test"
   UNIFIED_TEST = "unified_test"
   PROFILE = "profile"
+  AUTOTUNE = "autotune"
 
 
 class EvalRequest(BaseModel):
   eval_type: EvalTypes
-  code: str
-  timeout: Optional[int] = 30
+  timeout: int
+  code: Optional[str] = None
+  code_template: Optional[str] = None  # For autotune
+  search_space: Optional[dict] = None  # For autotune
   backend_type: Optional[str] = None  # "tpu", "cpu", or None for any available
   dependencies: Optional[dict] = None
+  total_timeout: Optional[int] = None  # For autotune
+  client_wait_timeout: Optional[int] = None
+
+
+class TaskStatus(str, Enum):
+  QUEUED = "queued"
+  RUNNING = "running"
+  SUCCESS = "success"
+  FAILED = "failed"
+  TIMEOUT = "timeout"
+
+
+class TaskResponse(BaseModel):
+  task_id: str
+  status: TaskStatus
+  result: Optional[dict] = None
+  error: Optional[str] = None
+
+
+# For evaluation task tracking. task_id -> {status, request, result_or_error}
+_tasks = {}
 
 
 class Evaluator:
@@ -115,13 +136,64 @@ async def health_check():
   return {"status": "healthy"}
 
 
-@app.post("/evaluate", response_model=CodeResponse)
-async def evaluate(request: EvalRequest):
+# Asynchronous task polling architecture for evaluation.
+@app.post("/evaluate", status_code=202)
+async def evaluate(request: EvalRequest, background_tasks: BackgroundTasks):
+  task_id = str(uuid.uuid4())
+  _tasks[task_id] = {"status": TaskStatus.QUEUED, "request": request}
+  background_tasks.add_task(run_evaluation_task, task_id, request)
+  return {"task_id": task_id, "status": TaskStatus.QUEUED}
+
+
+@app.get("/status/{task_id}", response_model=TaskResponse)
+async def get_task_status(task_id: str):
+  if task_id not in _tasks:
+    raise HTTPException(status_code=404, detail="Task not found")
+  task_info = _tasks[task_id]
+  return {
+    "task_id": task_id,
+    "status": task_info["status"],
+    "result": task_info.get("result"),
+    "error": task_info.get("error"),
+  }
+
+
+async def run_evaluation_task(task_id: str, request: EvalRequest):
+  _tasks[task_id]["status"] = TaskStatus.RUNNING
+  try:
+    result = await _perform_evaluation(request)
+    _tasks[task_id]["status"] = TaskStatus.SUCCESS
+    _tasks[task_id]["result"] = result
+  except HTTPException as e:
+    if e.status_code == 408:
+      _tasks[task_id]["status"] = TaskStatus.TIMEOUT
+    else:
+      _tasks[task_id]["status"] = TaskStatus.FAILED
+    _tasks[task_id]["error"] = e.detail
+  except Exception as e:
+    _tasks[task_id]["status"] = TaskStatus.FAILED
+    _tasks[task_id]["error"] = str(e)
+
+
+async def _perform_evaluation(request: EvalRequest):
   if request.eval_type not in EvalTypes:
     raise HTTPException(status_code=400, detail="Invalid evaluation type")
 
   # Acquire backend, retry if busy
+  start_queue_time = time.time()
+  max_queue_time = (
+    request.client_wait_timeout
+    if request.client_wait_timeout is not None
+    else 3600 * 3
+  )
+
   while True:
+    if time.time() - start_queue_time > max_queue_time:
+      raise HTTPException(
+        status_code=408,
+        detail="Timed out waiting for an available backend in queue",
+      )
+
     async with backend_semaphore:
       backend = evaluator.get_available_backend(
         backend_type=request.backend_type
@@ -146,18 +218,26 @@ async def evaluate(request: EvalRequest):
       f"{requested_type_msg}"
     )
 
-    # Send request to backend server
-    backend_timeout = request.timeout if request.timeout is not None else 30
+    # Construct payload based on eval type
+    payload = {
+      "eval_type": request.eval_type.value,
+      "timeout": request.timeout,
+    }
+    if request.eval_type == EvalTypes.AUTOTUNE:
+      payload["code_template"] = request.code_template
+      payload["search_space"] = request.search_space
+      backend_timeout = request.total_timeout
+      payload["total_timeout"] = request.total_timeout
+    else:
+      payload["code"] = request.code
+      payload["dependencies"] = request.dependencies
+      backend_timeout = request.timeout
+
     client_timeout = aiohttp.ClientTimeout(total=backend_timeout + 10)
     async with aiohttp.ClientSession(timeout=client_timeout) as session:
       async with session.post(
         f"http://{backend_ip}:{backend_port}/{request.eval_type.value}",
-        json={
-          "eval_type": request.eval_type.value,
-          "code": request.code,
-          "timeout": request.timeout,
-          "dependencies": request.dependencies,
-        },
+        json=payload,
       ) as response:
         result = await response.json()
         logging.info(
@@ -186,7 +266,9 @@ async def evaluate(request: EvalRequest):
     raise e
   except Exception as e:
     logging.error(f"Error occurred while evaluating on {backend_name}: {e}")
-    raise HTTPException(status_code=500, detail="Backend evaluation failed")
+    raise HTTPException(
+      status_code=500, detail=f"Backend evaluation failed: {e}"
+    )
   finally:
     backend.set_status("available")
 

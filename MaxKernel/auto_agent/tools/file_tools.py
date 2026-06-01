@@ -86,6 +86,9 @@ write_optimization_plan_tool = restricted_write_file(
 write_profiling_script_tool = restricted_write_file(
   "profiling_script_path", "Writes the profiling script."
 )
+write_autotune_specs_tool = restricted_write_file(
+  "autotune_specs_path", "Writes the autotuning specifications."
+)
 
 __all__ = [
   "filesystem_tool_r",
@@ -94,4 +97,5 @@ __all__ = [
   "write_optimized_kernel_tool",
   "write_optimization_plan_tool",
   "write_profiling_script_tool",
+  "write_autotune_specs_tool",
 ]

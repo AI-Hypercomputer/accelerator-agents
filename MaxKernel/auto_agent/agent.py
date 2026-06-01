@@ -4,6 +4,7 @@ This module contains the root orchestrator that coordinates all subagents
 for the human-in-the-loop kernel generation process.
 """
 
+from auto_agent.subagents.autotuning.agent import autotune_agent
 from auto_agent.subagents.kernel_writing import (
   implement_kernel_agent,
   plan_kernel_agent,
@@ -23,6 +24,7 @@ root_agent = AutonomousPipelineAgent(
   validate_agent=validate_kernel_compilation_agent,
   test_gen_agent=validated_test_generation_agent,
   test_run_agent=unified_test_agent,
+  autotune_agent=autotune_agent,
   profile_agent=profile_agent,
   max_iterations=5,
 )

@@ -35,6 +35,7 @@ Identify whether you are creating a **NEW plan** or performing a **REVISION**.
 2.  **Review execution results:** Analyze the following to identify what needs improvement:
     *   Compilation Status: `{kernel_compilation_status?}`
     *   Test Results: `{test_results?}`
+    *.  Autotune Summary: `{autotuning_summary?}`
     *   Profiling Summary: `{profiling_summary?}`
 3.  **Follow Guidelines:**
     *   Preserve good ideas from the original plan that are not causing issues.

@@ -33,6 +33,7 @@ from auto_agent.tools.tools import vertex_ai_rag_tool
 COMPILE_VALIDATION_TIMEOUT = 60 * 1
 MOCK_EXECUTION_TIMEOUT = 60 * 3
 TEST_EXECUTION_TIMEOUT = 60 * 5
+TEST_EXECUTION_POLL_INTERVAL = 20
 
 
 class TestRunner(BaseAgent):

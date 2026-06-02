@@ -416,6 +416,8 @@ class AutonomousPipelineAgent(BaseAgent):
           "autotune_results_path": ctx.session.state["autotune_results_path"],
           "atol": ctx.session.state["atol"],
           "rtol": ctx.session.state["rtol"],
+          "autotune_specs_path": ctx.session.state["autotune_specs_path"],
+          "autotune_results_path": ctx.session.state["autotune_results_path"],
         }
       ),
     )

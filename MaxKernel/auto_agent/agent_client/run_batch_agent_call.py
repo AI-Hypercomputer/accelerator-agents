@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 import os
+import random
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -88,6 +89,11 @@ def process_problem(
     logger.info(f"Processing {problem_id} - Attempt {attempt}/{max_retries}")
     user_id = "user_0"
     session_id = f"session_{problem_id}_attempt_{attempt}_{int(time.time())}"
+
+    # Add random jitter to avoid SQLite database lock contention
+    jitter = random.uniform(0.1, 2.0)
+    logger.info(f"Sleeping for {jitter:.2f}s (jitter) to avoid DB lock.")
+    time.sleep(jitter)
 
     client = AutoAgentClient(
       user_id=user_id,

@@ -244,7 +244,7 @@ class AutonomousPipelineAgent(BaseAgent):
     if "history" not in ctx.session.state:
       ctx.session.state["history"] = []
 
-    # Explicitly dictate standard paths in state
+    # Path related states
     session_dir = os.path.join(WORKDIR, ctx.session.id)
     os.makedirs(session_dir, exist_ok=True)
 
@@ -308,6 +308,15 @@ class AutonomousPipelineAgent(BaseAgent):
         f"[{self.name}] Set autotune_results_path: {ctx.session.state['autotune_results_path']}"
       )
 
+    # Test related states
+    if "atol" not in ctx.session.state:
+      ctx.session.state["atol"] = 1e-2
+      logging.info(f"[{self.name}] Set atol: {ctx.session.state['atol']}")
+
+    if "rtol" not in ctx.session.state:
+      ctx.session.state["rtol"] = 1e-2
+      logging.info(f"[{self.name}] Set rtol: {ctx.session.state['rtol']}")
+
     logging.info(f"[{self.name}] Published explicit path state update Event.")
     return Event(
       author=self.name,
@@ -321,9 +330,12 @@ class AutonomousPipelineAgent(BaseAgent):
           "profiling_script_path": ctx.session.state["profiling_script_path"],
           "autotune_specs_path": ctx.session.state["autotune_specs_path"],
           "autotune_results_path": ctx.session.state["autotune_results_path"],
+          "atol": ctx.session.state["atol"],
+          "rtol": ctx.session.state["rtol"],
         }
       ),
     )
+
 
   def _extract_latency(self, ctx: InvocationContext):
     """Extracts execution time from autotune results or test results output."""

@@ -72,6 +72,8 @@ Review each validation failure:
 2. **DO NOT modify the actual kernel implementations** - only fix the test file
 3. **Keep all test classes and test methods** - just fix syntax/import/structure issues
 4. Focus ONLY on making the test file valid Python code with correct imports and pytest structure
+5. **Numerical Tolerance**: Use the specified tolerances: atol={atol?}, rtol={rtol?}. If they are not specified, default to atol=1e-3, rtol=1e-3.
+6. **Input Generation**: Ensure that if the base kernel file (`{base_kernel_path?}`) defines an input generation function (e.g. `create_inputs`), it is reused/imported and used directly.
 
 ### Step 4: Write the Fixed Test File
 

@@ -620,7 +620,7 @@ class MockTestExecutionAgent(BaseAgent):
           "eval_type": "unified_test",
           "code": mock_code_content,
           "timeout": MOCK_EXECUTION_TIMEOUT,
-          "backend_type": "cpu",
+          "backend_type": "tpu",
           "dependencies": dependencies,
         }
 

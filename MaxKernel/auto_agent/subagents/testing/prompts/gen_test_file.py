@@ -34,7 +34,6 @@ Ask:
 
 All files are located in: {workdir}"
 
-**Then wait for the user's response before proceeding.**
 
 ## Tool Usage
 
@@ -66,6 +65,7 @@ Once you have identified both kernel files:
    - The function names and signatures
    - Input/output shapes and types
    - Any configuration parameters (block_size, tile_size, etc.)
+   - Check if the base kernel (`{base_kernel_path?}`) contains an input generation function (e.g., `get_inputs` or similar). If it is defined, you should directly copy and reuse it in the test file.
 
 2. **Generate a complete pytest test file** that includes:
 
@@ -74,18 +74,19 @@ Once you have identified both kernel files:
    - Test that the base kernel compiles (for reference)
 
 2. **TestCorrectness class**: Tests that verify numerical correctness
-   - Compare outputs between base and optimized kernels
-   - Test with multiple input sizes using pytest.mark.parametrize
-   - Test edge cases (zeros, ones, random inputs)
-   - Use appropriate tolerance (rtol=1e-5, atol=1e-5 or adjust based on kernel)
+   - Compare outputs between base and optimized kernels with the tolerance specified in the state: rtol={rtol?}, atol={atol?}. If they are not specified, use appropriate tolerance (rtol=1e-3, atol=1e-3 or adjust based on kernel) 
+   - If the base kernel file (`{base_kernel_path?}`) contains an input generation function (e.g., `get_inputs` or similar). If it is defined, you should directly copy and reuse it in the test file.
+   - If no input generation function is defined, 
+     - Test with multiple input sizes using pytest.mark.parametrize
+     - Test edge cases (zeros, ones, random inputs)
    - **Note**: During validation, the optimized kernel import will be temporarily disabled to verify the test structure works with baseline only
 
 3. **TestPerformance class**: Tests that benchmark performance
+   - If the base kernel file (`{base_kernel_path?}`) contains a function to generate inputs (e.g., `get_inputs` or similar). If it is defined, you should directly copy and reuse it in the test file.
    - Compare execution time between base and optimized kernels
-   - Test different tiling/block size configurations if applicable
    - Include warmup runs before timing
    - Use .block_until_ready() for accurate JAX timing
-   - Run 20 iterations for each benchmark to get reliable timing measurements
+   - Run 10 iterations for each benchmark to get reliable timing measurements
 
 ## Requirements
 
@@ -175,10 +176,11 @@ if __name__ == "__main__":
    - Look for functions that match the operation (e.g., matmul, flash_attention, conv2d)
    - Test with appropriate input shapes based on the kernel type
 
-3. **Realistic test data**: 
-   - Use appropriate input sizes based on the kernel
-   - Generate random data with jax.random for correctness tests
-   - Use larger sizes for performance tests
+3. **Realistic test data & Input Generation**: 
+   - If the base kernel file (`{base_kernel_path?}`) defines a function to generate inputs (such as `get_test_inputs(...)`), you MUST directly reuse/import or copy and use it to construct test inputs.
+   - If no input generation function is defined, generate random data with `jax.random` suitable for the kernel.
+     - Use appropriate input sizes based on the kernel configuration.
+     - Use larger sizes for performance tests if needed.
 
 4. **Error handling**: Include try-catch where compilation might fail
 

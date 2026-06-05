@@ -17,7 +17,7 @@ You must:
 2. Apply `"best_cfg"` to the kernel code located at {optimized_kernel_path?} by: 
    a. Use the `read_file` tool to read the kernel code {optimized_kernel_path?}
    b. Replace their configured values with the values found in `best_config` (e.g., replace `BLOCK_M = 32` with `BLOCK_M = 128` if `best_config` contains `"BLOCK_M": 128`). Ensure the formatting of the script remains valid.
-   c. Write the updated code back using `restricted_write_file` tool.
+   c. Write the updated optimized kernel code back using `restricted_write_file` tool.
 3. Verify the best configuration is applied correctly by reading the updated file.
 4. Provide a clear summary in your response. Do NOT list all tested configurations from `all_results`.
 

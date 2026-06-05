@@ -336,7 +336,6 @@ class AutonomousPipelineAgent(BaseAgent):
       ),
     )
 
-
   def _extract_latency(self, ctx: InvocationContext):
     """Extracts execution time from autotune results or test results output."""
     autotune_results = ctx.session.state.get("autotune_results", {})

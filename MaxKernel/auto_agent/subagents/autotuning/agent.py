@@ -105,6 +105,17 @@ class AutotuneRunner(BaseAgent):
       )
       return
 
+    dependencies = {}
+    base_kernel_path = ctx.session.state.get("base_kernel_path", "")
+    if base_kernel_path and os.path.exists(base_kernel_path):
+      try:
+        with open(base_kernel_path, "r") as f:
+          dependencies[os.path.basename(base_kernel_path)] = f.read()
+      except Exception as e:
+        logging.warning(
+          f"[{self.name}] Failed to read base kernel file {base_kernel_path}: {e}"
+        )
+
     logging.info(f"[{self.name}] Running autotune for {kernel_name}")
 
     try:
@@ -113,6 +124,7 @@ class AutotuneRunner(BaseAgent):
         code_template=code_template,
         search_space=search_space,
         backend="tpu",
+        dependencies=dependencies,
       )
 
       try:

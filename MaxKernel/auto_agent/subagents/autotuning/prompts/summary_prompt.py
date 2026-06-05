@@ -35,5 +35,3 @@ Please use the following format for your summary:
 - **Latency**: `[Time]` ms
 - **Applied to File**: [Yes / No]
 """
-
-

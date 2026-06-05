@@ -1,3 +1,4 @@
+import os
 import urllib.request
 from html.parser import HTMLParser
 
@@ -115,7 +116,8 @@ def main():
     content = fetch_and_clean(url)
     combined_content += content + "\n\n"
 
-  target_file = "/usr/local/google/home/shangkunwang/kernel_agent/accelerator-agents/MaxKernel/auto_agent/knowledge_base/pallas_docs.py"
+  script_dir = os.path.dirname(os.path.abspath(__file__))
+  target_file = os.path.join(script_dir, "pallas_docs.py")
 
   print(f"Updating {target_file}...")
   try:

@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -49,6 +50,7 @@ class AutotuneRequest(BaseModel):
   search_space: dict[str, list]
   timeout: Optional[int] = 300
   total_timeout: Optional[int] = None
+  dependencies: Optional[dict] = None
 
 
 class GetTpuVersionResponse(BaseModel):
@@ -512,7 +514,17 @@ async def profile(request: CodeRequest):
 async def autotune(request: AutotuneRequest):
   logging.info("Starting autotune")
   async with performance_semaphore:
+    temp_dir = None
     try:
+      # Create unique temporary directory for this autotune request
+      temp_dir = tempfile.mkdtemp()
+      if request.dependencies:
+        for filename, content in request.dependencies.items():
+          file_path = os.path.join(temp_dir, filename)
+          os.makedirs(os.path.dirname(file_path), exist_ok=True)
+          with open(file_path, "w") as f:
+            f.write(content)
+
       # Generate all combinations
       keys = list(request.search_space.keys())
       values = list(request.search_space.values())
@@ -543,11 +555,9 @@ async def autotune(request: AutotuneRequest):
           continue
 
         # Execute the code
-        with tempfile.NamedTemporaryFile(
-          mode="w", suffix=".py", prefix="hitl_eval_", delete=False
-        ) as temp_file:
+        temp_file_path = os.path.join(temp_dir, "run_code.py")
+        with open(temp_file_path, "w") as temp_file:
           temp_file.write(code_content)
-          temp_file_path = temp_file.name
 
         process = None
         try:
@@ -556,7 +566,7 @@ async def autotune(request: AutotuneRequest):
             temp_file_path,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            cwd=tempfile.gettempdir(),
+            cwd=temp_dir,
           )
 
           stdout, stderr = await asyncio.wait_for(
@@ -568,10 +578,38 @@ async def autotune(request: AutotuneRequest):
           exit_code = process.returncode
 
           if exit_code == 0:
-            # Parse RESULT_TIME
-            match = re.search(r"RESULT_TIME:\s*([0-9.]+)\s*ms", output)
-            if match:
-              time_taken = float(match.group(1))
+            correctness_match = re.search(
+              r"CORRECTNESS:\s*(true|false)", output, re.IGNORECASE
+            )
+            time_match = re.search(
+              r"RESULT_TIME:\s*([0-9.]+)\s*ms", output, re.IGNORECASE
+            )
+
+            correctness_passed = False
+            if correctness_match:
+              correctness_passed = correctness_match.group(1).lower() == "true"
+
+            time_taken = float(time_match.group(1)) if time_match else None
+
+            if not correctness_passed:
+              logging.warning(
+                f"Correctness check failed or unknown for config {cfg}"
+              )
+              all_results.append(
+                {
+                  "cfg": cfg,
+                  "status": "correctness_failed_or_unknown",
+                  "output": output,
+                }
+              )
+            elif time_taken is None:
+              logging.warning(
+                f"No RESULT_TIME found in output for config {cfg}"
+              )
+              all_results.append(
+                {"cfg": cfg, "status": "no_result_time", "output": output}
+              )
+            else:
               all_results.append(
                 {"cfg": cfg, "time": time_taken, "status": "success"}
               )
@@ -579,13 +617,6 @@ async def autotune(request: AutotuneRequest):
                 best_time = time_taken
                 best_cfg = cfg
                 best_output = output
-            else:
-              logging.warning(
-                f"No RESULT_TIME found in output for config {cfg}"
-              )
-              all_results.append(
-                {"cfg": cfg, "status": "no_result_time", "output": output}
-              )
           else:
             logging.warning(
               f"Config {cfg} failed with exit code {exit_code}. Stderr: {error}"
@@ -602,8 +633,11 @@ async def autotune(request: AutotuneRequest):
         except asyncio.TimeoutError:
           logging.warning(f"Config {cfg} timed out")
           if process:
-            process.kill()
-            await process.wait()
+            try:
+              process.kill()
+              await process.wait()
+            except Exception as e:
+              logging.error(f"Failed to kill process: {e}")
           all_results.append({"cfg": cfg, "status": "timeout"})
         except Exception as e:
           logging.error(f"Error running config {cfg}: {e}")
@@ -611,7 +645,7 @@ async def autotune(request: AutotuneRequest):
             {"cfg": cfg, "status": "exception", "error": str(e)}
           )
         finally:
-          if "temp_file_path" in locals():
+          if "temp_file_path" in locals() and os.path.exists(temp_file_path):
             try:
               os.unlink(temp_file_path)
             except OSError:
@@ -632,6 +666,14 @@ async def autotune(request: AutotuneRequest):
     except Exception as e:
       logging.error(f"Autotune failed with error: {str(e)}")
       raise HTTPException(status_code=500, detail=f"Autotune error: {str(e)}")
+    finally:
+      if temp_dir and os.path.exists(temp_dir):
+        try:
+          shutil.rmtree(temp_dir)
+        except Exception as e:
+          logging.error(
+            f"Failed to clean up autotune temp directory {temp_dir}: {e}"
+          )
 
 
 @app.post("/get_tpu_version", response_model=GetTpuVersionResponse)

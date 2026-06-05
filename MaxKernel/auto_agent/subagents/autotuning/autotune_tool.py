@@ -19,6 +19,7 @@ async def autotune_kernel(
   search_space: dict[str, list[Any]],
   backend: str = None,
   server_addr: str = "http://localhost",
+  dependencies: dict[str, str] = None,
 ) -> dict:
   """Runs a grid search to auto-tune a Pallas kernel on a remote server.
 
@@ -31,6 +32,8 @@ async def autotune_kernel(
         values.
       backend: 'tpu' or 'cpu'.
       server_addr: Address of the server (default: http://localhost).
+      dependencies: A dictionary mapping dependency filenames to their contents.
+        Used to provide reference code for correctness check.
 
   Returns:
       A dictionary containing the status, optimal parameters, and a summary of
@@ -52,6 +55,7 @@ async def autotune_kernel(
         "timeout": AUTOTUNE_INDIVIDUAL_TIMEOUT,
         "backend_type": backend,
         "total_timeout": AUTOTUNE_TOTAL_TIMEOUT,
+        "dependencies": dependencies,
       }
       result = await call_eval_server_async(
         session,

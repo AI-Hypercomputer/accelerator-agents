@@ -228,6 +228,7 @@ async def _perform_evaluation(request: EvalRequest):
       payload["search_space"] = request.search_space
       backend_timeout = request.total_timeout
       payload["total_timeout"] = request.total_timeout
+      payload["dependencies"] = request.dependencies
     else:
       payload["code"] = request.code
       payload["dependencies"] = request.dependencies

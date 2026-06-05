@@ -1,7 +1,9 @@
 """File-related tools for subagents."""
 
+import json
 import os
 from pathlib import Path
+from typing import Any, Dict, List
 
 from google.adk.tools import FunctionTool, ToolContext
 from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams
@@ -74,6 +76,45 @@ def restricted_write_file(state_key: str, description: str) -> FunctionTool:
   return FunctionTool(_write_file)
 
 
+def write_autotune_specs_tool_fn(
+  kernel_name: str,
+  code_template: str,
+  search_space: Dict[str, List[Any]],
+  tool_context: ToolContext,
+) -> str:
+  """Writes the structured autotuning specifications to autotune_specs_path in session state.
+
+  Args:
+      kernel_name: The name of the Pallas kernel.
+      code_template: The kernel source code template with placeholders like {BLOCK_M}.
+      search_space: Dictionary mapping placeholder names to lists of suggested tuning values.
+  """
+  target_path = tool_context.state.get("autotune_specs_path")
+  if not target_path:
+    return (
+      "Error: Path variable 'autotune_specs_path' not found in session state."
+    )
+
+  base = Path(WORKDIR).resolve()
+  target = Path(target_path).resolve()
+
+  try:
+    if not target.is_relative_to(base):
+      return f"Error: Access denied. Path is outside {WORKDIR}"
+  except ValueError:
+    return "Error: Invalid path or access denied."
+
+  content_dict = {
+    "kernel_name": kernel_name,
+    "code_template": code_template,
+    "search_space": search_space,
+  }
+
+  target.parent.mkdir(parents=True, exist_ok=True)
+  target.write_text(json.dumps(content_dict, indent=2))
+  return f"Successfully wrote structured autotuning specs to {target}"
+
+
 write_test_file_tool = restricted_write_file(
   "test_file_path", "Writes the generated pytest file."
 )
@@ -86,9 +127,8 @@ write_optimization_plan_tool = restricted_write_file(
 write_profiling_script_tool = restricted_write_file(
   "profiling_script_path", "Writes the profiling script."
 )
-write_autotune_specs_tool = restricted_write_file(
-  "autotune_specs_path", "Writes the autotuning specifications."
-)
+write_autotune_specs_tool_fn.__name__ = "restricted_write_file"
+write_autotune_specs_tool = FunctionTool(write_autotune_specs_tool_fn)
 
 __all__ = [
   "filesystem_tool_r",

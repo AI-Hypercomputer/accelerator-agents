@@ -3,6 +3,7 @@
 import logging
 import os
 import re
+import shutil
 from typing import AsyncGenerator
 
 from google.adk.agents import BaseAgent
@@ -85,6 +86,9 @@ class AutonomousPipelineAgent(BaseAgent):
         logging.error(
           f"[{self.name}] Compilation failed. Looping back to planning."
         )
+        self._save_iteration_files(
+          ctx, iteration, keys_to_save=["optimized_kernel_path"]
+        )
         iteration += 1
         continue
 
@@ -99,6 +103,11 @@ class AutonomousPipelineAgent(BaseAgent):
         logging.error(
           f"[{self.name}] Test generation/validation failed. Looping back to planning."
         )
+        self._save_iteration_files(
+          ctx,
+          iteration,
+          keys_to_save=["optimized_kernel_path", "test_file_path"],
+        )
         iteration += 1
         continue
 
@@ -111,6 +120,11 @@ class AutonomousPipelineAgent(BaseAgent):
       test_results = ctx.session.state.get("test_results", {})
       if not test_results.get("success", False):
         logging.error(f"[{self.name}] Tests failed. Looping back to planning.")
+        self._save_iteration_files(
+          ctx,
+          iteration,
+          keys_to_save=["optimized_kernel_path", "test_file_path"],
+        )
         iteration += 1
         continue
 
@@ -161,9 +175,11 @@ class AutonomousPipelineAgent(BaseAgent):
       )
       logging.info(f"[{self.name}] Saved snapshot for iteration {iteration}")
 
-      # Step 7: Check if improvement is needed
-      needs_improvement = ctx.session.state.get("needs_improvement", False)
+      self._save_iteration_files(ctx, iteration)
 
+      # Step 7: Check if improvement is needed
+      # needs_improvement = ctx.session.state.get("needs_improvement", False)
+      needs_improvement = True
       if not needs_improvement:
         logging.info(
           f"[{self.name}] No further improvement needed or agent decided to stop. Stopping pipeline."
@@ -193,13 +209,42 @@ class AutonomousPipelineAgent(BaseAgent):
       ),
     )
 
+  def _save_iteration_files(
+    self,
+    ctx: InvocationContext,
+    iteration: int,
+    keys_to_save: list[str] | None = None,
+  ):
+    """Saves artifacts with an iteration suffix."""
+    if keys_to_save is None:
+      keys_to_save = [
+        "optimized_kernel_path",
+        "test_file_path",
+        "autotune_specs_path",
+        "autotune_results_path",
+      ]
+    for path_key in keys_to_save:
+      path = ctx.session.state.get(path_key)
+      if path and os.path.exists(path):
+        directory, filename = os.path.split(path)
+        name, ext = os.path.splitext(filename)
+        new_filename = f"{name}_{iteration}{ext}"
+        new_path = os.path.join(directory, new_filename)
+        try:
+          shutil.copy2(path, new_path)
+          logging.info(f"[{self.name}] Copied {path_key} to {new_path}")
+        except Exception as e:
+          logging.error(
+            f"[{self.name}] Failed to copy {path_key} to {new_path}: {e}"
+          )
+
   def _initialize_state(self, ctx: InvocationContext) -> Event:
     """Initializes session state with standard paths and returns the event."""
     # Initialize history
     if "history" not in ctx.session.state:
       ctx.session.state["history"] = []
 
-    # Explicitly dictate standard paths in state
+    # Path related states
     session_dir = os.path.join(WORKDIR, ctx.session.id)
     os.makedirs(session_dir, exist_ok=True)
 
@@ -263,6 +308,15 @@ class AutonomousPipelineAgent(BaseAgent):
         f"[{self.name}] Set autotune_results_path: {ctx.session.state['autotune_results_path']}"
       )
 
+    # Test related states
+    if "atol" not in ctx.session.state:
+      ctx.session.state["atol"] = 1e-2
+      logging.info(f"[{self.name}] Set atol: {ctx.session.state['atol']}")
+
+    if "rtol" not in ctx.session.state:
+      ctx.session.state["rtol"] = 1e-2
+      logging.info(f"[{self.name}] Set rtol: {ctx.session.state['rtol']}")
+
     logging.info(f"[{self.name}] Published explicit path state update Event.")
     return Event(
       author=self.name,
@@ -274,6 +328,10 @@ class AutonomousPipelineAgent(BaseAgent):
           "kernel_plan_path": ctx.session.state["kernel_plan_path"],
           "test_file_path": ctx.session.state["test_file_path"],
           "profiling_script_path": ctx.session.state["profiling_script_path"],
+          "autotune_specs_path": ctx.session.state["autotune_specs_path"],
+          "autotune_results_path": ctx.session.state["autotune_results_path"],
+          "atol": ctx.session.state["atol"],
+          "rtol": ctx.session.state["rtol"],
         }
       ),
     )

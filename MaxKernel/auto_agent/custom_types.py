@@ -1,15 +1,38 @@
 import logging
+from functools import cached_property
 from typing import AsyncGenerator
 
 from google.adk.agents import LlmAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 from google.adk.models.google_llm import Gemini
-from google.genai import types
+from google.genai import Client, types
 
 from auto_agent.constants import (
   MODEL_NAME,
 )
+
+
+class TimeoutGemini(Gemini):
+  @cached_property
+  def api_client(self) -> Client:
+    base_url, api_version = self._base_url_and_api_version
+    kwargs_for_http_options = {
+      "headers": self._tracking_headers(),
+      "retry_options": self.retry_options,
+      "base_url": base_url,
+      "timeout": 240000,  # 240 seconds in milliseconds
+    }
+    if api_version:
+      kwargs_for_http_options["api_version"] = api_version
+
+    kwargs = {
+      "http_options": types.HttpOptions(**kwargs_for_http_options),
+    }
+    if self.model.startswith("projects/"):
+      kwargs["vertexai"] = True
+
+    return Client(**kwargs)
 
 
 class CustomLlmAgent(LlmAgent):
@@ -22,7 +45,7 @@ class CustomLlmAgent(LlmAgent):
     """Initialize CustomLlmAgent with automatic Gemini model (with retry) wrapping."""
     # If model is a string, use the pre-configured gemini_model with retry support
     if "model" in kwargs and isinstance(kwargs["model"], str):
-      gemini_model = Gemini(
+      gemini_model = TimeoutGemini(
         model=MODEL_NAME,
         retry_options=types.HttpRetryOptions(
           initial_delay=1,

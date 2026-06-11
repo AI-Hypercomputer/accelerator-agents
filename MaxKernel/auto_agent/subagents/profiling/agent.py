@@ -37,6 +37,7 @@ generate_profiling_script_agent = CustomLlmAgent(
   description="Generates a profiling script to identify performance bottlenecks in the kernel code and writes it to a file.",
   tools=[filesystem_tool_r, write_profiling_script_tool],
   before_agent_callback=load_single_kernel_to_state,
+  include_contents="none",
 )
 
 # Read profiling script agent - loads the generated profiling script file contents into state

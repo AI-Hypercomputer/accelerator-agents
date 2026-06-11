@@ -281,6 +281,8 @@ plan_kernel_agent = CustomLlmAgent(
     get_tpu_version_callback,
     add_workdir_callback,
   ],
+  # ISOLATION: must not see conversation history from other hypothesis planning runs.
+  include_contents="none",
 )
 
 # Kernel compilation validation agents
@@ -394,6 +396,7 @@ implement_kernel_agent = CustomLlmAgent(
     if vertex_ai_rag_tool
     else [search_api_tool, filesystem_tool_r, write_optimized_kernel_tool]
   ),
+  include_contents="none",
 )
 
 __all__ = [

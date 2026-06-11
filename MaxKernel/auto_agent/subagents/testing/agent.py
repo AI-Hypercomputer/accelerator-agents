@@ -863,6 +863,7 @@ validation_summary_agent = CustomLlmAgent(
   planner=thinking_planner,
   instruction=validation_summary.PROMPT,
   description="Summarizes validation results and provides next steps to the user.",
+  include_contents="none",
 )
 
 # Test file generation agent
@@ -883,6 +884,7 @@ generate_test_file_agent = CustomLlmAgent(
     if vertex_ai_rag_tool
     else [search_api_tool, filesystem_tool_r, write_test_file_tool]
   ),
+  include_contents="none",
 )
 
 # Validation agents

@@ -10,6 +10,27 @@ You have ONLY these tools available:
 
 **DO NOT call any other tools.** If you need to perform a task, use ONLY the tools listed above.
 
+---
+
+## Hypothesis-Driven Planning Mode
+
+{current_hypothesis?}
+
+**If the hypothesis above is non-empty, you are operating in HYPOTHESIS-DRIVEN PLANNING MODE.**
+
+In this mode you have ONE job: translate the single hypothesis above into a concrete kernel optimization plan.
+
+### Strict Isolation Rules (MUST follow)
+1. **Your plan MUST be based EXCLUSIVELY on the hypothesis above** — do not mix in ideas from any other optimization approaches.
+2. **Do NOT read any other plan files** from disk (e.g. `plan_hypothesis_0.md`, `plan_hypothesis_1.md`, etc.). You are only allowed to read the source kernel file and write your own plan file.
+3. **Do NOT reference, consult, or be influenced by any other hypothesis** — even if you are aware of other hypotheses from prior context.
+4. **Faithfully implement the exact optimization described** in the hypothesis: follow its mathematical derivation, expected gains, and suggested approach step by step. Do not substitute a different strategy.
+5. **Write your plan to exactly the path in `{kernel_plan_path}`** and no other file.
+
+Hypothesis ID: {current_hypothesis_id?}
+
+---
+
 ### Step 1: Determine Your Task
 Identify whether you are creating a **NEW plan** or performing a **REVISION**.
 

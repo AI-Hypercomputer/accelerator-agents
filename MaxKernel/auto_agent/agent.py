@@ -4,6 +4,8 @@ This module contains the root orchestrator that coordinates all subagents
 for the human-in-the-loop kernel generation process.
 """
 
+import os
+
 from auto_agent.subagents.autotuning.agent import autotune_agent
 from auto_agent.subagents.kernel_writing import (
   implement_kernel_agent,
@@ -17,6 +19,9 @@ from auto_agent.subagents.testing import (
   validated_test_generation_agent,
 )
 
+# Path to the hypothesis idea store (one Hypothesis_*.md file per optimization direction).
+_IDEA_STORE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "idea_store")
+
 root_agent = AutonomousPipelineAgent(
   name="AutonomousPipelineAgent",
   plan_agent=plan_kernel_agent,
@@ -26,7 +31,11 @@ root_agent = AutonomousPipelineAgent(
   test_run_agent=unified_test_agent,
   autotune_agent=autotune_agent,
   profile_agent=profile_agent,
-  max_iterations=5,
+  max_iterations=1,
+  # num_impl_branches is the fallback when no hypothesis files are found.
+  # When hypothesis files exist, the pipeline spawns exactly one branch per hypothesis.
+  num_impl_branches=5,
+  idea_store_path=_IDEA_STORE_PATH,
 )
 
 __all__ = ["root_agent"]

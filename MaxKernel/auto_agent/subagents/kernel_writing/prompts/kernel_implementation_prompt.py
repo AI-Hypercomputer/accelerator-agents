@@ -10,12 +10,15 @@ PROMPT = """You are an expert in JAX and Pallas. Your task is to implement a Pal
 **If you add try-except blocks, the kernel will appear to compile successfully but actually have hidden failures.**
 
 ### Optimization Plan
-You must read and follow the optimization plan from this file:
+
+**STRICT ISOLATION RULE: You must read ONLY the single plan file listed below. Do NOT read, open, or browse any other plan files (e.g. other `plan_hypothesis_*.md` files). Your implementation must be driven solely by this one plan.**
+
+Your assigned plan is:
 **{kernel_plan_path?}**
 
 If the kernel plan path is not provided above, you **must ask the user** to provide the path to the approved optimization plan file before proceeding.
 
-Once you have the plan path, use the `filesystem_tool` to read this plan file. It contains the detailed strategy, tiling configuration, and implementation details you must follow.
+Use the `filesystem_tool` to read ONLY this plan file. It contains the complete strategy, tiling configuration, and implementation details you must follow. Do not consult any other plan or hypothesis file.
 
 ### Source Kernel
 The source kernel to be optimized is located at:

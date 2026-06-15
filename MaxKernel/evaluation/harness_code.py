@@ -10,6 +10,7 @@ import importlib.util
 import os
 import traceback
 import xprof_utils
+import sys
 
 
 def load_module_from_path(module_name, file_path):
@@ -141,6 +142,13 @@ def main():
 
     # Import the uploaded scripts as modules
     base_mod = load_module_from_path("reference", "reference.py")
+    # Some generated/test code imports the reference implementation as
+    # `from base_kernel import ...`. Ensure that import works by
+    # registering the loaded module under the legacy name.
+    try:
+      sys.modules.setdefault("base_kernel", base_mod)
+    except Exception:
+      pass
     optimized_mod = load_module_from_path("optimized", "optimized.py")
 
     # 1. Correctness Check

@@ -209,6 +209,17 @@ class AutonomousPipelineAgent(BaseAgent):
       ),
     )
 
+    session_dir = ctx.session.state.get("workdir")
+    if session_dir:
+      src = os.path.join(WORKDIR, "session_info", "output.txt")
+      dest = os.path.join(session_dir, "output.txt")
+      if os.path.exists(src):
+        try:
+          shutil.copy2(src, dest)
+          logging.info(f"[{self.name}] Saved session log to {dest}")
+        except Exception as e:
+          logging.error(f"[{self.name}] Failed to save session log: {e}")
+
   def _save_iteration_files(
     self,
     ctx: InvocationContext,

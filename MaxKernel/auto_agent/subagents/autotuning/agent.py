@@ -5,7 +5,7 @@ import logging
 import os
 from typing import AsyncGenerator, Optional
 
-from google.adk.agents import BaseAgent, SequentialAgent
+from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 
@@ -14,6 +14,7 @@ from auto_agent.constants import MODEL_NAME
 from auto_agent.custom_types import CustomLlmAgent
 from auto_agent.subagents.autotuning.autotune_tool import autotune_kernel
 from auto_agent.subagents.autotuning.prompts import (
+  apply_best_config_prompt,
   autotune_prompt,
   summary_prompt,
 )
@@ -159,7 +160,19 @@ autotune_runner = AutotuneRunner(
 )
 
 
-# 3. Summarizer Agent
+# 3. Apply Best Config Agent
+apply_best_config_agent = CustomLlmAgent(
+  name="ApplyBestConfigAgent",
+  model=MODEL_NAME,
+  generate_content_config=model_config,
+  planner=thinking_planner,
+  instruction=apply_best_config_prompt.PROMPT,
+  description="Applies autotuning results to the optimized kernel file.",
+  tools=[filesystem_tool_r, write_optimized_kernel_tool],
+)
+
+
+# 4. Summarizer Agent
 # This agent reads results from state and talks to the user.
 autotune_summary_agent = CustomLlmAgent(
   name="AutotuneSummaryAgent",
@@ -167,14 +180,49 @@ autotune_summary_agent = CustomLlmAgent(
   generate_content_config=model_config,
   planner=thinking_planner,
   instruction=summary_prompt.PROMPT,
-  description="Apply and Summarizes autotuning results.",
-  tools=[filesystem_tool_r, write_optimized_kernel_tool],
+  description="Summarizes autotuning results.",
+  tools=[filesystem_tool_r],
   output_key="autotuning_summary",
 )
 
-autotune_agent = SequentialAgent(
-  name="AutotuneAgent",
-  sub_agents=[autotune_planner_agent, autotune_runner, autotune_summary_agent],
-)
+
+class CombinedAutotuneAgent(BaseAgent):
+  """Chains autotuning steps and conditionally applies best config."""
+
+  def __init__(self, name: str):
+    super().__init__(name=name)
+
+  async def _run_async_impl(
+    self, ctx: InvocationContext
+  ) -> AsyncGenerator[Event, None]:
+    logging.info(f"[{self.name}] Running AutotunePlannerAgent...")
+    async for event in autotune_planner_agent.run_async(ctx):
+      yield event
+
+    logging.info(f"[{self.name}] Running AutotuneRunner...")
+    async for event in autotune_runner.run_async(ctx):
+      yield event
+
+    autotune_results = ctx.session.state.get("autotune_results", {})
+    if (
+      autotune_results.get("status") == "success"
+      and autotune_results.get("best_config") is not None
+      and autotune_results.get("best_time_ms") is not None
+    ):
+      logging.info(f"[{self.name}] Running ApplyBestConfigAgent...")
+      async for event in apply_best_config_agent.run_async(ctx):
+        yield event
+    else:
+      logging.warning(
+        f"[{self.name}] Autotune was not successful or no best configuration"
+        " found. Skipping ApplyBestConfigAgent."
+      )
+
+    logging.info(f"[{self.name}] Running AutotuneSummaryAgent...")
+    async for event in autotune_summary_agent.run_async(ctx):
+      yield event
+
+
+autotune_agent = CombinedAutotuneAgent(name="AutotuneAgent")
 
 __all__ = ["autotune_agent"]

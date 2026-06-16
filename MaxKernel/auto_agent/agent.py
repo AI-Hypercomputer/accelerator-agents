@@ -26,7 +26,8 @@ root_agent = AutonomousPipelineAgent(
   test_run_agent=unified_test_agent,
   autotune_agent=autotune_agent,
   profile_agent=profile_agent,
-  max_iterations=5,
+  max_iterations=1,
+  num_branches=3,
 )
 
 __all__ = ["root_agent"]

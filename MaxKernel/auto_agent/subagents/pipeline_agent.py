@@ -1,5 +1,7 @@
 """Autonomous pipeline agent for chaining kernel generation steps."""
 
+import asyncio
+import contextvars
 import logging
 import os
 import re
@@ -13,6 +15,113 @@ from google.adk.models import LlmRequest
 from google.genai import types
 
 from auto_agent.config import WORKDIR
+
+# ---------------------------------------------------------------------------
+# Per-branch state isolation for parallel execution
+# ---------------------------------------------------------------------------
+
+# Set inside each asyncio.create_task() to route ContextAwareStateDict ops to
+# a branch-local dict. asyncio.create_task() copies the current context, so
+# setting this variable in one task is invisible to the main coroutine and to
+# every other task.
+_branch_state_var: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+    "_branch_state_var", default=None
+)
+
+
+class ContextAwareStateDict(dict):
+    """dict subclass that routes all operations to a per-task dict when inside a branch task.
+
+    Installed as ctx.session.state before parallel branches are launched.
+    Because this IS a dict (not a proxy wrapper), Pydantic accepts the
+    assignment without validate_assignment issues.
+
+    How the ADK state_delta caveat is resolved
+    -------------------------------------------
+    ADK's InMemorySessionService.append_event() fetches the stored session by
+    session_id and calls storage_session.state.update(delta). In in-memory mode
+    (used by `adk run` / `adk web`), storage_session IS the same Python object
+    as ctx.session — so storage_session.state IS this ContextAwareStateDict.
+    Our overridden update() checks _branch_state_var and routes to the
+    per-branch dict when inside a branch task. Both write paths (direct key
+    assignment and EventActions state_delta) therefore go through the same
+    isolation logic.
+    """
+
+    def _b(self):
+        return _branch_state_var.get()
+
+    def __getitem__(self, key):
+        b = self._b()
+        return b[key] if b is not None else super().__getitem__(key)
+
+    def __setitem__(self, key, value):
+        b = self._b()
+        if b is not None:
+            b[key] = value
+        else:
+            super().__setitem__(key, value)
+
+    def __delitem__(self, key):
+        b = self._b()
+        if b is not None:
+            del b[key]
+        else:
+            super().__delitem__(key)
+
+    def __contains__(self, key):
+        b = self._b()
+        return key in b if b is not None else super().__contains__(key)
+
+    def __iter__(self):
+        b = self._b()
+        return iter(b) if b is not None else super().__iter__()
+
+    def __len__(self):
+        b = self._b()
+        return len(b) if b is not None else super().__len__()
+
+    def get(self, key, default=None):
+        b = self._b()
+        return b.get(key, default) if b is not None else super().get(key, default)
+
+    def update(self, other=(), **kwargs):
+        b = self._b()
+        if b is not None:
+            b.update(other, **kwargs)
+        else:
+            super().update(other, **kwargs)
+
+    def setdefault(self, key, default=None):
+        b = self._b()
+        return b.setdefault(key, default) if b is not None else super().setdefault(key, default)
+
+    def pop(self, key, *args):
+        b = self._b()
+        return b.pop(key, *args) if b is not None else super().pop(key, *args)
+
+    def keys(self):
+        b = self._b()
+        return b.keys() if b is not None else super().keys()
+
+    def values(self):
+        b = self._b()
+        return b.values() if b is not None else super().values()
+
+    def items(self):
+        b = self._b()
+        return b.items() if b is not None else super().items()
+
+
+# Branch-specific state keys that must not be inherited across branches.
+_BRANCH_RESET_KEYS: frozenset[str] = frozenset({
+    "optimized_kernel_path", "test_file_path", "profiling_script_path",
+    "autotune_specs_path", "autotune_results_path",
+    "kernel_compilation_status", "test_results", "validation_loop_status",
+    "autotune_results", "profiling_summary", "compilation_history",
+    "fix_summary", "compilation_results", "kernel_code",
+    "go_to_end", "needs_improvement", "branch_results",
+})
 
 
 class AutonomousPipelineAgent(BaseAgent):
@@ -67,6 +176,11 @@ class AutonomousPipelineAgent(BaseAgent):
   ) -> AsyncGenerator[Event, None]:
     iteration = 0
 
+    # Install ContextAwareStateDict so parallel branch tasks each see their own
+    # isolated state instead of the shared session dict.
+    if not isinstance(ctx.session.state, ContextAwareStateDict):
+      ctx.session.state = ContextAwareStateDict(ctx.session.state)
+
     yield self._initialize_state(ctx)
 
     while iteration < self.max_iterations:
@@ -82,8 +196,11 @@ class AutonomousPipelineAgent(BaseAgent):
       hypothesis_plans = ctx.session.state.get("hypothesis_plans", [])
       num_branches = len(hypothesis_plans) if hypothesis_plans else self.num_impl_branches
       logging.info(
-        f"[{self.name}] Planning complete. Running {num_branches} implementation branch(es)."
+        f"[{self.name}] Planning complete. Launching {num_branches} branch(es) in parallel."
       )
+
+      # Snapshot shared state after planning so each branch gets the same base.
+      initial_state = dict(ctx.session.state)
 
       # Initialize branch results for this iteration.
       ctx.session.state["branch_results"] = []
@@ -92,39 +209,47 @@ class AutonomousPipelineAgent(BaseAgent):
         actions=EventActions(state_delta={"branch_results": []}),
       )
 
-      # Steps 2–7: One implementation branch per hypothesis plan.
-      for branch_id in range(num_branches):
-        # Assign the branch its dedicated hypothesis plan (isolation: no shared plan).
-        if hypothesis_plans and branch_id < len(hypothesis_plans):
-          plan_info = hypothesis_plans[branch_id]
-          plan_path = plan_info["plan_path"]
-          ctx.session.state["kernel_plan_path"] = plan_path
-          # Clear hypothesis content so the impl agent only sees its plan file.
-          ctx.session.state["current_hypothesis"] = ""
-          ctx.session.state["current_hypothesis_id"] = ""
-          yield Event(
-            author=self.name,
-            actions=EventActions(
-              state_delta={
-                "kernel_plan_path": plan_path,
-                "current_hypothesis": "",
-                "current_hypothesis_id": "",
-              }
-            ),
-          )
-          logging.info(
-            f"[{self.name}] Branch {branch_id}: assigned plan for "
-            f"hypothesis '{plan_info['hypothesis_file']}' at {plan_path}"
-          )
-
-        logging.info(
-          f"[{self.name}] Starting implementation branch {branch_id + 1}/{num_branches}..."
+      # Steps 2–7: Run ALL implementation branches IN PARALLEL using asyncio tasks.
+      #
+      # Each task:
+      #   1. Calls _branch_state_var.set(branch_state) so ContextAwareStateDict
+      #      routes reads/writes to the branch-local dict — invisible to other tasks
+      #      because asyncio.create_task() copies the current context.
+      #   2. Uses a shallow-copied ctx with a unique .branch name so ADK's
+      #      LlmAgent._get_events(current_branch=True) only returns that branch's
+      #      conversation events (same mechanism as ADK's own ParallelAgent).
+      #   3. Puts events into a shared queue; the main generator yields them.
+      _sentinel = object()
+      _queue: asyncio.Queue = asyncio.Queue()
+      tasks = [
+        asyncio.create_task(
+          self._run_branch_parallel(branch_id, iteration, ctx, initial_state, _sentinel, _queue)
         )
-        async for event in self._run_impl_branch(ctx, branch_id, iteration):
-          yield event
+        for branch_id in range(num_branches)
+      ]
 
-      # Rank all branch results and select the best.
-      branch_results = ctx.session.state.get("branch_results", [])
+      try:
+        sentinel_count = 0
+        while sentinel_count < num_branches:
+          item = await _queue.get()
+          if item is _sentinel:
+            sentinel_count += 1
+          else:
+            yield item
+      finally:
+        for task in tasks:
+          if not task.done():
+            task.cancel()
+
+      # Collect per-branch state dicts; each has branch_results populated by
+      # _record_branch_result (called inside _run_impl_branch).
+      branch_states = await asyncio.gather(*tasks, return_exceptions=True)
+      branch_results = []
+      for bs in branch_states:
+        if isinstance(bs, Exception):
+          logging.error(f"[{self.name}] Branch task raised: {bs}")
+        elif isinstance(bs, dict):
+          branch_results.extend(bs.get("branch_results", []))
       best_branch = self._select_best_branch(branch_results)
 
       ranking_summary = self._build_ranking_summary(branch_results, hypothesis_plans)
@@ -387,6 +512,75 @@ class AutonomousPipelineAgent(BaseAgent):
       yield event
 
     self._record_branch_result(ctx, branch_id, success=True)
+
+  async def _run_branch_parallel(
+    self,
+    branch_id: int,
+    iteration: int,
+    ctx: InvocationContext,
+    initial_state: dict,
+    sentinel: object,
+    queue: asyncio.Queue,
+  ) -> dict:
+    """Runs one implementation branch as an isolated asyncio task.
+
+    State isolation
+    ---------------
+    _branch_state_var.set(branch_state) is called at the top of this coroutine.
+    asyncio.create_task() copies the current context per task, so this
+    assignment is invisible to the main coroutine and every other branch task.
+    All ContextAwareStateDict operations (reads, writes, update() calls from ADK
+    append_event) inside this task then go to branch_state, not the shared dict.
+
+    Conversation isolation
+    ----------------------
+    branch_ctx.branch = f"branch_{branch_id}" mirrors ADK's own ParallelAgent.
+    LlmAgent calls ctx._get_events(current_branch=True), filtering
+    session.events to events where event.branch == ctx.branch. Events emitted
+    through branch_ctx carry that branch tag automatically (BaseAgent sets
+    event.branch = ctx.branch when creating events). Most of our agents also
+    use include_contents="none", so this is an additional safety layer.
+    """
+    # Seed per-branch state from the post-planning shared snapshot.
+    branch_state = dict(initial_state)
+    for key in _BRANCH_RESET_KEYS:
+      branch_state.pop(key, None)
+    branch_state["branch_results"] = []
+
+    # Assign this branch's dedicated hypothesis plan.
+    hypothesis_plans = initial_state.get("hypothesis_plans", [])
+    if hypothesis_plans and branch_id < len(hypothesis_plans):
+      branch_state["kernel_plan_path"] = hypothesis_plans[branch_id]["plan_path"]
+      branch_state["current_hypothesis"] = ""
+      branch_state["current_hypothesis_id"] = ""
+      logging.info(
+        f"[{self.name}] Branch {branch_id}: using hypothesis plan "
+        f"'{hypothesis_plans[branch_id]['hypothesis_file']}'"
+      )
+
+    # All ContextAwareStateDict ops in THIS task now route to branch_state.
+    _branch_state_var.set(branch_state)
+
+    # Shallow-copy ctx; branch_ctx.session is still the shared session so the
+    # runner can append events, but branch_ctx.branch isolates conversation history.
+    branch_ctx = ctx.model_copy()
+    branch_ctx.branch = f"branch_{branch_id}"
+
+    try:
+      logging.info(f"[{self.name}] Branch {branch_id}: starting (parallel)...")
+      async for event in self._run_impl_branch(branch_ctx, branch_id, iteration):
+        await queue.put(event)
+      logging.info(f"[{self.name}] Branch {branch_id}: finished.")
+    except Exception as e:
+      logging.error(
+        f"[{self.name}] Branch {branch_id} raised exception: {e}", exc_info=True
+      )
+      if not branch_state.get("branch_results"):
+        self._record_branch_result(branch_ctx, branch_id, success=False)
+    finally:
+      await queue.put(sentinel)
+
+    return branch_state
 
   # ---------------------------------------------------------------------------
   # Branch result tracking

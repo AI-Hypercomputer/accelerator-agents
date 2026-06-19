@@ -1,25 +1,4 @@
-# Copyright 2024 The JAX Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-"""Pallas PagedAttention TPU kernel — Llama-3.1-70B decode dimensions.
-
-Upstream kernel from jax.experimental.pallas.ops.tpu.paged_attention, wrapped
-as a JAXBench workload with CONFIG / create_inputs / workload.
-
-quantization_utils imported from the installed JAX package (not optimizable).
-"""
-
+# Imports
 from collections.abc import Sequence
 import functools
 from typing import Literal
@@ -32,13 +11,68 @@ from jax.experimental.pallas.ops.tpu.paged_attention import quantization_utils
 import jax.numpy as jnp
 import numpy as np
 
+# Initialization
+def get_inputs(dtype=jnp.bfloat16):
+  CONFIG = {
+    "name": "llama3_70b_paged_attention",
+    "model": "Llama-3.1-70B",
+    "operator": "paged_attention",
+    "num_seqs": 64,
+    "max_seq_len": 4096,
+    "num_query_heads": 64,
+    "num_kv_heads": 8,
+    "head_dim": 128,
+    "page_size": 16,
+    "pages_per_seq": 256,
+  }
 
-DEFAULT_MASK_VALUE = -0.7 * float(np.finfo(np.dtype("float32")).max)
+  key = jax.random.key(42)
+  keys = jax.random.split(key, 5)
+  num_seqs = CONFIG["num_seqs"]
+  num_q_heads = CONFIG["num_query_heads"]
+  num_kv_heads = CONFIG["num_kv_heads"]
+  head_dim = CONFIG["head_dim"]
+  page_size = CONFIG["page_size"]
+  pages_per_seq = CONFIG["pages_per_seq"]
+  total_pages = num_seqs * pages_per_seq
+  max_seq_len_derived = pages_per_seq * page_size
 
+  max_num_tokens = num_seqs
+  queries = jax.random.normal(
+    keys[0], (max_num_tokens, num_q_heads, head_dim), dtype=dtype
+  )
+  k_pages = (
+    jax.random.normal(
+      keys[1], (total_pages, page_size, num_kv_heads, head_dim), dtype=dtype
+    )
+    * 0.02
+  )
+  v_pages = (
+    jax.random.normal(
+      keys[2], (total_pages, page_size, num_kv_heads, head_dim), dtype=dtype
+    )
+    * 0.02
+  )
 
+  kv_lens = jnp.full((num_seqs,), max_seq_len_derived, dtype=jnp.int32)
+  page_indices = jnp.arange(total_pages, dtype=jnp.int32).reshape(
+    num_seqs, pages_per_seq
+  )
+  cu_q_lens = jnp.arange(num_seqs + 1, dtype=jnp.int32)
+
+  dynamic_args = [queries, k_pages, v_pages, kv_lens, page_indices, cu_q_lens]
+  static_args = [
+    num_seqs,
+    num_q_heads,
+    num_kv_heads,
+    head_dim,
+    max_seq_len_derived,
+  ]
+
+  return dynamic_args, static_args
+
+# Computation
 class MultiPageAsyncCopyDescriptor:
-  """Descriptor for async copy of multiple K/V pages from HBM."""
-
   def __init__(
       self,
       pages_hbm_ref,
@@ -87,13 +121,12 @@ class MultiPageAsyncCopyDescriptor:
   def _make_scales_async_copy(self, i):
     page_index = self._page_indices[self._page_indices_start_offset + i]
     return pltpu.make_async_copy(
-        self._scales_pages_hbm_ref.at[page_index],  # pytype: disable=attribute-error
-        self._scales_vmem_buffer.at[i],  # pytype: disable=attribute-error
+        self._scales_pages_hbm_ref.at[page_index],
+        self._scales_vmem_buffer.at[i],
         self._sem,
     )
 
   def start(self):
-    """Starts the async copies."""
     for async_copy in self._async_copies:
       async_copy.start()
 
@@ -103,7 +136,6 @@ class MultiPageAsyncCopyDescriptor:
     return quantization_utils.from_int8(x, x_scale, dtype=dtype)
 
   def wait_and_get_loaded(self) -> jax.Array:
-    """Wait async copies and gets the loaded buffer as a jax.Array."""
     for async_copy in self._async_copies:
       async_copy.wait()
     head_dim = self._vmem_buffer.shape[-1]
@@ -144,7 +176,6 @@ def paged_flash_attention_kernel(
     megacore_mode: str | None,
     program_ids=(),
 ):
-  """Pallas kernel for paged attention."""
   if program_ids:
     core_index, b, h, i = program_ids
   else:
@@ -231,14 +262,14 @@ def paged_flash_attention_kernel(
     return async_copy_k, async_copy_v
 
   @pl.when(i * bk < length)
-  def flash_attention():  # pylint: disable=unused-variable
+  def flash_attention():
     init_flag = init_flag_ref[0]
     init_flag_ref[0] = 0
     buffer_index = buffer_index_ref[0]
     next_b, next_h, next_i = compute_block_indices(b, h, i + 1)
 
     @pl.when(init_flag)
-    def prefetch_first_block():  # pylint: disable=unused-variable
+    def prefetch_first_block():
       async_copy_k, async_copy_v = create_kv_async_copy_descriptors(
           b, h, i, buffer_index
       )
@@ -246,13 +277,13 @@ def paged_flash_attention_kernel(
       async_copy_v.start()
 
     @pl.when(i == 0)
-    def init():  # pylint: disable=unused-variable
+    def init():
       m_ref[...] = jnp.full_like(m_ref, -jnp.inf)
       l_ref[...] = jnp.zeros_like(l_ref)
       o_ref[...] = jnp.zeros_like(o_ref)
 
     @pl.when(next_b < batch_size)
-    def prefetch_next_block():  # pylint: disable=unused-variable
+    def prefetch_next_block():
       next_buffer_index = jnp.where(buffer_index == 0, 1, 0)
       async_copy_next_k, async_copy_next_v = create_kv_async_copy_descriptors(
           next_b, next_h, next_i, next_buffer_index
@@ -322,8 +353,6 @@ def paged_flash_attention_kernel_inline_seq_dim(
 ):
   core_index, b, h = pl.program_id(0), pl.program_id(1), pl.program_id(2)
 
-  # Initialize the output HBM buffers to avoid accessing garbage memory inside
-  # the kernel body below.
   m_ref[...] = jnp.full_like(m_ref, -jnp.inf)
   l_ref[...] = jnp.zeros_like(l_ref)
   o_ref[...] = jnp.zeros_like(o_ref)
@@ -386,45 +415,15 @@ def paged_attention(
     lengths: jax.Array,
     page_indices: jax.Array,
     *,
-    mask_value: float = DEFAULT_MASK_VALUE,
+    mask_value: float,
     attn_logits_soft_cap: float | None = None,
     pages_per_compute_block: int,
     megacore_mode: str | None = None,
     inline_seq_dim: bool = True,
 ) -> jax.Array:
-  """Paged grouped query attention.
-
-  Args:
-    q: A [batch_size, num_q_heads, head_dim] jax.Array.
-    k_pages: A [num_kv_heads, total_num_pages, page_size, head_dim] jax.Array.
-    v_pages: A [num_kv_heads, total_num_pages, page_size, head_dim] jax.Array.
-    lengths: A i32[batch_size] jax.Array the length of each example.
-    page_indices: A i32[batch_size, pages_per_sequence] jax.Array. Each entry
-      should be in the range of [0, total_num_pages), indicating where to locate
-      the page in `k_pages` or `v_pages`.
-    mask_value: The value used for padding in attention. By default it is a very
-      negative floating point number.
-    attn_logits_soft_cap: The value used for soft capping the attention logits.
-    pages_per_compute_block: how many pages to be processed in one flash
-      attention block in the pallas kernel.
-    megacore_mode: if set, enable megacore to parallelize the computation. Must
-      be one of ['kv_head', 'batch', None]. Caveat: set this only if megacore is
-      enabled, otherwise the kernel may hang. If you are not sure, leave it to
-      None.
-      * None: disable megacore parallelism.
-      * kv_head: megacore parallelism on KV heads; requires number of KV heads
-        divisible by 2.
-      * batch: megacore parallelism on batch dimension; requires batch divisible
-        by 2.
-    inline_seq_dim: whether to fuse kernel instances along the sequence dim into
-      one kernel.
-
-  Returns:
-    The output of attention([batch_size, num_q_heads, head_dim]).
-  """
   if isinstance(k_pages, quantization_utils.QuantizedTensor):
     k_pages, k_scales_pages = k_pages.weight, k_pages.scales
-    assert isinstance(k_scales_pages, jax.Array)  # For typing.
+    assert isinstance(k_scales_pages, jax.Array)
     k_scales_pages = jnp.broadcast_to(
         k_scales_pages, (*k_scales_pages.shape[:-1], k_pages.shape[-1])
     )
@@ -432,7 +431,7 @@ def paged_attention(
     k_scales_pages = None
   if isinstance(v_pages, quantization_utils.QuantizedTensor):
     v_pages, v_scales_pages = v_pages.weight, v_pages.scales
-    assert isinstance(v_scales_pages, jax.Array)  # For typing.
+    assert isinstance(v_scales_pages, jax.Array)
     v_scales_pages = jnp.broadcast_to(
         v_scales_pages, (*v_scales_pages.shape[:-1], v_pages.shape[-1])
     )
@@ -446,7 +445,7 @@ def paged_attention(
   if k_pages.shape != v_pages.shape:
     raise ValueError(
         f"k_pages and v_pages must have the same shape. Got {k_pages.shape} and"
-        f" {v_pages.shape}"  # pytype: disable=attribute-error
+        f" {v_pages.shape}"
     )
   if num_q_heads % num_kv_heads != 0:
     raise ValueError(
@@ -472,7 +471,6 @@ def paged_attention(
         f"The dtype of `lengths` must be int32. Got {lengths.dtype}"
     )
 
-  # TODO(dinghua): get the actual cores per chip once there's an official API.
   if megacore_mode == "kv_head":
     if num_kv_heads % 2 != 0:
       raise ValueError(
@@ -490,8 +488,6 @@ def paged_attention(
 
   num_groups = num_q_heads // num_kv_heads
   if (num_groups) % 8 != 0:
-    # Reshape q to hint XLA to pick a <1x128> layout otherwise it will pick a
-    # <8x128> layout for a <1x128> memref inside the kernel and error out.
     q = q.reshape(batch_size, num_q_heads, 1, head_dim)
     if megacore_mode == "kv_head":
       q_block_spec = pl.BlockSpec(
@@ -547,7 +543,7 @@ def paged_attention(
         if megacore_mode == "kv_head"
         else num_kv_heads,
         pages_per_sequence // pages_per_compute_block,
-    )  # type: ignore
+    )
     dimension_semantics = ("parallel", "arbitrary", "arbitrary", "arbitrary")
 
   if k_scales_pages is not None and v_scales_pages is not None:
@@ -561,40 +557,40 @@ def paged_attention(
     scratch_shapes = (
         pltpu.VMEM(
             (
-                2,  # For double buffering during DMA copies.
+                2,
                 pages_per_compute_block,
                 page_size,
                 head_dim,
             ),
             k_pages.dtype,
-        ),  # k_pages buffer
+        ),
         pltpu.VMEM(
             (
-                2,  # For double buffering during DMA copies.
+                2,
                 pages_per_compute_block,
                 page_size,
                 head_dim,
             ),
-            k_scales_pages.dtype,  # pytype: disable=attribute-error
-        ),  # k_scales_pages buffer
+            k_scales_pages.dtype,
+        ),
         pltpu.VMEM(
             (
-                2,  # For double buffering during DMA copies.
+                2,
                 pages_per_compute_block,
                 page_size,
                 head_dim,
             ),
             v_pages.dtype,
-        ),  # v_pages buffer
+        ),
         pltpu.VMEM(
             (
-                2,  # For double buffering during DMA copies.
+                2,
                 pages_per_compute_block,
                 page_size,
                 head_dim,
             ),
-            v_scales_pages.dtype,  # pytype: disable=attribute-error
-        ),  # v_scales_pages buffer
+            v_scales_pages.dtype,
+        ),
         pltpu.SemaphoreType.DMA((2,)),
         pltpu.SemaphoreType.DMA((2,)),
     )
@@ -602,30 +598,30 @@ def paged_attention(
     in_specs = [
         q_block_spec,
         pl.BlockSpec(memory_space=pl.ANY),
-        None,  # type: ignore[list-item]
+        None,
         pl.BlockSpec(memory_space=pl.ANY),
-        None,  # type: ignore[list-item]
+        None,
     ]
     scratch_shapes = (
         pltpu.VMEM(
             (
-                2,  # For double buffering during DMA copies.
+                2,
                 pages_per_compute_block,
                 page_size,
                 head_dim,
             ),
             k_pages.dtype,
-        ),  # k_pages buffer
+        ),
         None,
         pltpu.VMEM(
             (
-                2,  # For double buffering during DMA copies.
+                2,
                 pages_per_compute_block,
                 page_size,
                 head_dim,
             ),
             v_pages.dtype,
-        ),  # v_pages buffer
+        ),
         None,
         pltpu.SemaphoreType.DMA((2,)),
         pltpu.SemaphoreType.DMA((2,)),
@@ -642,8 +638,6 @@ def paged_attention(
           megacore_mode=megacore_mode,
       ),
       grid_spec=pltpu.PrefetchScalarGridSpec(
-          # There are 4 scalars prefetched per kernel call: `lengths_ref`,
-          # `page_indices_ref`, `buffer_index_ref`, `init_flag_ref`
           num_scalar_prefetch=4,
           in_specs=in_specs,
           out_specs=[
@@ -665,8 +659,8 @@ def paged_attention(
   )(
       lengths,
       page_indices.reshape(-1),
-      jnp.zeros((1,), jnp.int32),  # buffer index
-      jnp.ones((1,), jnp.int32),  # init flag
+      jnp.zeros((1,), jnp.int32),
+      jnp.ones((1,), jnp.int32),
       q.astype(q_dtype_for_kernel_launch),
       k_pages,
       k_scales_pages,
@@ -676,92 +670,25 @@ def paged_attention(
   return out.reshape(batch_size, num_q_heads, head_dim).astype(q.dtype)
 
 
-CONFIG = {
-    'name': 'pallas_paged_attention_llama70b',
-    'model': 'Llama-3.1-70B',
-    'operator': 'pallas_paged_attention',
-    'batch': 64,
-    'num_q_heads': 64,
-    'num_kv_heads': 8,
-    'head_dim': 128,
-    'page_size': 16,
-    'pages_per_seq': 256,
-    'atol': 1e-2,
-    'rtol': 2e-2,
-}
-
-# Tuned by autotune_block_sizes.py. Re-run to update.
-TUNED_PARAMS = {'pages_per_compute_block': 128}
-
-
-def get_flops():
-    B = CONFIG['batch']
-    H_q = CONFIG['num_q_heads']
-    D = CONFIG['head_dim']
-    seq_len = CONFIG['pages_per_seq'] * CONFIG['page_size']
-    return B * H_q * (4 * seq_len * D)
-
-
-def create_inputs(dtype=jnp.bfloat16):
-    key = jax.random.key(42)
-    keys = jax.random.split(key, 5)
-    B = CONFIG['batch']
-    H_q = CONFIG['num_q_heads']
-    H_kv = CONFIG['num_kv_heads']
-    D = CONFIG['head_dim']
-    page_size = CONFIG['page_size']
-    pages_per_seq = CONFIG['pages_per_seq']
-    total_num_pages = B * pages_per_seq
-    
-    q = jax.random.normal(keys[0], (B, H_q, D), dtype=dtype)
-    k_pages = jax.random.normal(keys[1], (total_num_pages, page_size, H_kv, D), dtype=dtype) * 0.02
-    v_pages = jax.random.normal(keys[2], (total_num_pages, page_size, H_kv, D), dtype=dtype) * 0.02
-    
+def computation(
+    queries,
+    k_pages,
+    v_pages,
+    kv_lens,
+    page_indices,
+    cu_q_lens,
+    num_seqs,
+    num_q_heads,
+    num_kv_heads,
+    head_dim,
+    max_seq_len,
+):
+    DEFAULT_MASK_VALUE = -0.7 * float(np.finfo(np.dtype("float32")).max)
+    pages_per_compute_block = 128
     k_pages = k_pages.transpose(2, 0, 1, 3)
     v_pages = v_pages.transpose(2, 0, 1, 3)
-    
-    seq_len = pages_per_seq * page_size
-    lengths = jnp.full((B,), seq_len, dtype=jnp.int32)
-    page_indices = jnp.arange(total_num_pages, dtype=jnp.int32).reshape(B, pages_per_seq)
-    return q, k_pages, v_pages, lengths, page_indices
-
-
-def workload(q, k_pages, v_pages, lengths, page_indices):
     return paged_attention(
-        q, k_pages, v_pages, lengths, page_indices,
-        pages_per_compute_block=TUNED_PARAMS['pages_per_compute_block'],
+        queries, k_pages, v_pages, kv_lens, page_indices,
+        mask_value=DEFAULT_MASK_VALUE,
+        pages_per_compute_block=pages_per_compute_block,
     )
-
-
-def benchmark(num_warmup=5, num_iters=100):
-    """Benchmark and return results dict."""
-    import time
-    inputs = create_inputs()
-    fn = jax.jit(workload)
-    for _ in range(num_warmup):
-        out = fn(*inputs)
-        out.block_until_ready()
-    times = []
-    for _ in range(num_iters):
-        t0 = time.perf_counter()
-        out = fn(*inputs)
-        out.block_until_ready()
-        times.append(time.perf_counter() - t0)
-    import numpy as np
-    times = np.array(times) * 1000
-    avg = float(np.mean(times))
-    return {
-        'name': CONFIG['name'],
-        'model': CONFIG['model'],
-        'operator': CONFIG['operator'],
-        'config': {k: v for k, v in CONFIG.items() if k not in ('name', 'model', 'operator', 'atol', 'rtol')},
-        'time_ms': round(avg, 4),
-        'std_ms': round(float(np.std(times)), 4),
-        'output_shape': list(out.shape) if hasattr(out, 'shape') else [],
-        'status': 'success',
-    }
-
-
-if __name__ == '__main__':
-    import json
-    print(json.dumps(benchmark()))

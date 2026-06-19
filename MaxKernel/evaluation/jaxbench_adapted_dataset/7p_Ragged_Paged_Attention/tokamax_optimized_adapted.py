@@ -1,25 +1,4 @@
-# Copyright 2025 The JAX Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-"""TPU-Friendly Ragged Paged Attention kernel.
-
-This kernel offers a highly optimized implementation of ragged paged attention,
-specifically designed for TPU and compatible with a wide range of model
-specifications. It supports mixed prefill and decoding, enhancing throughput
-during inference.
-"""
-
+# Imports
 import functools
 import jax
 from jax import lax
@@ -28,27 +7,62 @@ from jax.experimental import pallas as pl
 from jax.experimental.pallas import tpu as pltpu
 from jax.experimental.pallas.ops.tpu.ragged_paged_attention.tuned_block_sizes import get_tuned_block_sizes
 import jax.numpy as jnp
+import math
 
+# Initialization
+def get_inputs(dtype=jnp.bfloat16):
+    CONFIG = {
+        'name': 'mixtral_8x22b_ragged_paged_attention',
+        'model': 'Mixtral-8x22B',
+        'operator': 'ragged_paged_attention',
+        'max_num_seqs': 64,
+        'max_num_batched_tokens': 4096,
+        'num_query_heads': 64,
+        'head_dim': 128,
+    }
+    key = jax.random.key(42)
+    keys = jax.random.split(key, 4)
+    max_num_seqs = CONFIG['max_num_seqs']
+    max_num_batched_tokens = CONFIG['max_num_batched_tokens']
+    num_q_heads = CONFIG['num_query_heads']
+    head_dim = CONFIG['head_dim']
 
-DEFAULT_MASK_VALUE = -0.7 * float(jnp.finfo(jnp.dtype("float32")).max)
+    num_kv_heads = 8
+    page_size = 16
+    pages_per_seq = 256
+    num_combined_kv_heads = 2 * num_kv_heads
+    total_pages = max_num_seqs * pages_per_seq
 
+    q = jax.random.normal(keys[0], (max_num_batched_tokens, num_q_heads, head_dim), dtype=dtype)
+    kv_pages = jax.random.normal(
+        keys[1], (total_pages, page_size, num_combined_kv_heads, head_dim), dtype=dtype
+    )
 
+    tokens_per_seq = max_num_batched_tokens // max_num_seqs
+    kv_lens = jnp.full((max_num_seqs,), pages_per_seq * page_size, dtype=jnp.int32)
+    page_indices = jnp.arange(total_pages, dtype=jnp.int32).reshape(
+        max_num_seqs, pages_per_seq
+    )
+    cu_q_lens = jnp.arange(max_num_seqs + 1, dtype=jnp.int32) * tokens_per_seq
+    num_seqs = max_num_seqs
+
+    dynamic_args = [q, kv_pages, kv_lens, page_indices, cu_q_lens]
+    static_args = [num_seqs, head_dim, max_num_seqs, max_num_batched_tokens]
+    return dynamic_args, static_args
+
+# Computation
 class MultiPageAsyncCopyDescriptor:
-  """Descriptor for async copy of multiple K/V pages from HBM."""
-
   def __init__(
       self,
-      pages_hbm_ref,  # [total_num_pages, page_size, num_combined_kv_heads_per_blk, head_dim]
-      vmem_buf,  # [num_kv_pages_per_blk, page_size, num_combined_kv_heads_per_blk, head_dim]
+      pages_hbm_ref,
+      vmem_buf,
       sem,
-      page_indices_ref,  # i32[max_num_seqs, pages_per_seq]
-      metadata,  # [seq_idx, start_page_idx, end_page_idx]
+      page_indices_ref,
+      metadata,
   ):
     self._vmem_buf = vmem_buf
     seq_id, start_page_idx, end_page_idx = metadata
     self._async_copies = []
-    # TODO(jevinjiang): Only fetch dynamic shape in need! This will insert
-    # a bunch of if-ops. Check the performance when we have benchmarking setup.
     for i in range(vmem_buf.shape[0]):
       page_idx = start_page_idx + i
       page_idx = jax.lax.select(page_idx < end_page_idx, page_idx, 0)
@@ -61,7 +75,6 @@ class MultiPageAsyncCopyDescriptor:
       )
 
   def start(self):
-    """Starts the async copies."""
     for async_copy in self._async_copies:
       async_copy.start()
 
@@ -70,22 +83,23 @@ class MultiPageAsyncCopyDescriptor:
       async_copy.wait()
     return self._vmem_buf
 
-
 def ref_ragged_paged_attention(
-    queries: jax.Array,  # [max_num_batched_tokens, num_q_heads, head_dim]
-    kv_pages: jax.Array,  # [total_num_pages, page_size, num_combined_kv_heads, head_dim]
-    kv_lens: jax.Array,  # i32[max_num_seqs]
-    page_indices: jax.Array,  # i32[max_num_seqs, pages_per_seq]
-    cu_q_lens: jax.Array,  # i32[max_num_seqs + 1]
-    num_seqs: jax.Array,  # i32[1],
+    queries: jax.Array,
+    kv_pages: jax.Array,
+    kv_lens: jax.Array,
+    page_indices: jax.Array,
+    cu_q_lens: jax.Array,
+    num_seqs: jax.Array,
     *,
     sm_scale: float = 1.0,
     sliding_window: int | None = None,
     soft_cap: float | None = None,
-    mask_value: float | None = DEFAULT_MASK_VALUE,
+    mask_value: float | None = None,
     k_scale: float | None = None,
     v_scale: float | None = None,
 ):
+  if mask_value is None:
+    mask_value = -0.7 * float(jnp.finfo(jnp.dtype("float32")).max)
   static_validate_inputs(
       queries,
       kv_pages,
@@ -100,8 +114,6 @@ def ref_ragged_paged_attention(
       soft_cap=soft_cap,
       mask_value=mask_value,
   )
-  if mask_value is None:
-    mask_value = DEFAULT_MASK_VALUE
   _, _, num_combined_kv_heads, head_dim = kv_pages.shape
   assert num_combined_kv_heads % 2 == 0
   num_kv_heads = num_combined_kv_heads // 2
@@ -145,27 +157,22 @@ def ref_ragged_paged_attention(
     attn = jax.nn.softmax(attn, axis=-1).astype(v.dtype)
     out = jnp.einsum("hqk,khd->qhd", attn, v).astype(queries.dtype)
     outputs.append(out)
-
   return jnp.concatenate(outputs, axis=0)
 
-
-# Expect to run these checks during runtime.
 def dynamic_validate_inputs(
-    q: jax.Array,  # [max_num_batched_tokens, num_q_heads, head_dim]
-    kv_pages: jax.Array,  # [total_num_pages, page_size, num_combined_kv_heads, head_dim]
-    kv_lens: jax.Array,  # i32[max_num_seqs]
-    page_indices: jax.Array,  # i32[max_num_seqs, pages_per_seq]
-    cu_q_lens: jax.Array,  # i32[max_num_seqs + 1]
-    num_seqs: jax.Array,  # i32[1]
+    q: jax.Array,
+    kv_pages: jax.Array,
+    kv_lens: jax.Array,
+    page_indices: jax.Array,
+    cu_q_lens: jax.Array,
+    num_seqs: jax.Array,
     *,
-    # These inputs are optional. If not specified, we will not validate them.
     sm_scale: float | None = None,
     sliding_window: int | None = None,
     soft_cap: float | None = None,
     mask_value: float | None = None,
     k_scale: float | None = None,
     v_scale: float | None = None,
-    # Kernel tuning params.
     num_kv_pages_per_block: int | None = None,
     num_queries_per_block: int | None = None,
     vmem_limit_bytes: int | None = None,
@@ -212,24 +219,20 @@ def dynamic_validate_inputs(
           f"{q_len=} must be less or equal to {kv_len=} at sequence {i}."
       )
 
-
-# Expect to run these checks during compile time.
 def static_validate_inputs(
-    q: jax.Array,  # [max_num_batched_tokens, num_q_heads, head_dim]
-    kv_pages: jax.Array,  # [total_num_pages, page_size, num_combined_kv_heads, head_dim]
-    kv_lens: jax.Array,  # i32[max_num_seqs]
-    page_indices: jax.Array,  # i32[max_num_seqs, pages_per_seq]
-    cu_q_lens: jax.Array,  # i32[max_num_seqs + 1]
-    num_seqs: jax.Array,  # i32[1]
+    q: jax.Array,
+    kv_pages: jax.Array,
+    kv_lens: jax.Array,
+    page_indices: jax.Array,
+    cu_q_lens: jax.Array,
+    num_seqs: jax.Array,
     *,
-    # These inputs are optional. If not specified, we will not validate them.
     sm_scale: float | None = None,
     sliding_window: int | None = None,
     soft_cap: float | None = None,
     mask_value: float | None = None,
     k_scale: float | None = None,
     v_scale: float | None = None,
-    # Kernel tuning params.
     num_kv_pages_per_block: int | None = None,
     num_queries_per_block: int | None = None,
     vmem_limit_bytes: int | None = None,
@@ -284,39 +287,33 @@ def static_validate_inputs(
     raise ValueError(f"{num_queries_per_block=} must be positive.")
   if vmem_limit_bytes is not None and vmem_limit_bytes <= 0:
     raise ValueError(f"{vmem_limit_bytes=} must be positive.")
-  del sm_scale  # No constraints on sm_scale.
-  del mask_value  # No consstraints on mask_value.
-
+  del sm_scale
+  del mask_value
 
 def ragged_paged_attention_kernel(
-    # Prefetch
-    kv_lens_ref,  # [max_num_seqs]
-    page_indices_ref,  # [max_num_seqs, pages_per_seq]
-    cu_q_lens_ref,  # [max_num_seqs + 1]
+    kv_lens_ref,
+    page_indices_ref,
+    cu_q_lens_ref,
     seq_buf_idx_ref,
-    # TODO(jevinjiang): if OOM in SMEM, consider pack to other scalar refs.
     num_seqs_ref,
-    # Input
-    q_ref,  # [num_q_per_blk, num_q_heads_per_blk, head_dim]
-    kv_pages_hbm_ref,  # [total_num_pages, page_size, num_combined_kv_heads, head_dim]
-    # Output
-    o_ref,  # [num_q_per_blk, num_q_heads_per_blk, head_dim]
-    # Scratch
-    kv_bufs,  # [2, num_kv_pages_per_blk, page_size, num_combined_kv_heads_per_blk, head_dim]
-    sems,  # [2, 2]
-    l_ref,  # [num_kv_heads_per_blk, num_q_per_blk * num_q_heads_per_kv_head, 128]
-    m_ref,  # [num_kv_heads_per_blk, num_q_per_blk * num_q_heads_per_kv_head, 128]
-    acc_ref,  # [num_q_per_blk, num_q_heads_per_blk, head_dim]
+    q_ref,
+    kv_pages_hbm_ref,
+    o_ref,
+    kv_bufs,
+    sems,
+    l_ref,
+    m_ref,
+    acc_ref,
     *,
     sm_scale: float,
     sliding_window: int | None = None,
     soft_cap: float | None = None,
-    mask_value: float | None = DEFAULT_MASK_VALUE,
+    mask_value: float | None = None,
     k_scale: float | None = None,
     v_scale: float | None = None,
 ):
   if mask_value is None:
-    mask_value = DEFAULT_MASK_VALUE
+    mask_value = -0.7 * float(jnp.finfo(jnp.dtype("float32")).max)
   num_q_per_blk, num_q_heads_per_blk, head_dim = q_ref.shape
   pages_per_seq = page_indices_ref.shape[-1]
   num_seqs = num_seqs_ref[0]
@@ -356,9 +353,6 @@ def ragged_paged_attention_kernel(
     )
     return async_copy_kv
 
-  # TODO(jevinjiang): Add these to Mosaic:
-  # 1. Support arbitrary strided load/store for int4 and int8 dtype.
-  # 2. Support arbitrary strided load/store for any last dimension.
   def strided_load_kv(ref, start, step):
     packing = get_dtype_packing(ref.dtype)
     if packing == 1:
@@ -371,8 +365,6 @@ def ragged_paged_attention_kernel(
     b_ref = ref.bitcast(jnp.uint32)
     b = b_ref[b_start::b_step, :]
 
-    # TODO(chengjiyao): use the general strided loading logic for bf16 after
-    # fixing the issue in mosaic's infer vector layout pass
     if ref.dtype == jnp.bfloat16:
       bk = b << 16
       bv = b & jnp.uint32(0xFFFF0000)
@@ -453,12 +445,12 @@ def ragged_paged_attention_kernel(
       return next_heads_blk_idx, next_seq_idx, next_kv_blk_idx, next_buf_idx
 
     def flash_attention(
-        q,  # [num_q_per_blk * num_q_heads_per_kv_head, head_dim]
-        k,  # [num_kv_per_blk, head_dim]
-        v,  # [num_kv_per_blk, head_dim]
-        head_l_ref,  # [num_q_per_blk * num_q_heads_per_kv_head, 128]
-        head_m_ref,  # [num_q_per_blk * num_q_heads_per_kv_head, 128]
-        head_acc_ref,  # [num_q_per_blk, num_q_heads_per_kv_head, head_dim]
+        q,
+        k,
+        v,
+        head_l_ref,
+        head_m_ref,
+        head_acc_ref,
         *,
         kv_blk_idx,
     ):
@@ -499,7 +491,6 @@ def ragged_paged_attention_kernel(
             kv_blk_idx == 0, jnp.full_like(ref, init_val), ref[...]
         )
 
-      # kv lens will be contracting dim, we should mask out the NaNs.
       kv_mask = (
           lax.broadcasted_iota(jnp.int32, k.shape, 0) < kv_len - kv_len_start
       )
@@ -569,7 +560,6 @@ def ragged_paged_attention_kernel(
         assert len(arr.shape) == len(shape)
         assert arr.shape[0] == shape[0]
         assert shape[1] % arr.shape[1] == 0
-        # no-op concatenation.
         return jnp.concatenate(
             [arr for _ in range(shape[1] // arr.shape[1])], axis=1
         )
@@ -603,9 +593,6 @@ def ragged_paged_attention_kernel(
 
       @pl.when(next_heads_blk_idx < num_heads_blks)
       def prefetch_next_kv_blk():
-        # TODO(jevinjiang): reuse the same buffer if it is already prefetched!
-        # TODO(jevinjiang): only fetch effective dynamic size to hold kv_len and
-        # DMA to fixed size buffer!
         next_async_copy_kv = create_kv_async_copy_descriptors(
             next_heads_blk_idx, next_seq_idx, next_kv_blk_idx, next_buf_idx
         )
@@ -619,7 +606,6 @@ def ragged_paged_attention_kernel(
           head_dim,
       )
       kv_packing = get_dtype_packing(kv_ref.dtype)
-      # NOTE: kv_packing is divided by 2 because k and v are packed together.
       kv_load_step = max(1, kv_packing // 2)
       for kv_head_chunk_idx in range(0, num_kv_heads_per_blk, kv_load_step):
         k_list, v_list = strided_load_kv(
@@ -629,8 +615,6 @@ def ragged_paged_attention_kernel(
           k = k_list[step_idx]
           v = v_list[step_idx]
           if k_scale is not None:
-            # NOTE: Conversion between arbitrary data types is not supported.
-            # That's why it is converted to float32 first.
             k = k.astype(jnp.float32) * k_scale
             k = k.astype(q_ref.dtype)
           if v_scale is not None:
@@ -638,8 +622,6 @@ def ragged_paged_attention_kernel(
             v = v.astype(q_ref.dtype)
           kv_head_idx = kv_head_chunk_idx + step_idx
           q_head_idx = kv_head_idx * num_q_heads_per_kv_head
-          # TODO(jevinjiang): extra handling for packed type that can start at
-          # unaligned position!
           q = fold_on_2nd_minor(
               q_ref[:, q_head_idx : q_head_idx + num_q_heads_per_kv_head, :]
           )
@@ -659,7 +641,7 @@ def ragged_paged_attention_kernel(
     _, next_buf_idx = lax.while_loop(
         is_valid_kv_blk_in_cur_seq,
         compute_with_kv_blk_in_cur_seq,
-        (0, cur_buf_idx),  # (kv_blk_idx, buf_idx)
+        (0, cur_buf_idx),
     )
     next_seq_idx = lax.select(q_end <= q_len_end, cur_seq_idx + 1, cur_seq_idx)
     done = lax.select(q_end < q_len_end, done, 1)
@@ -668,19 +650,15 @@ def ragged_paged_attention_kernel(
   _, seq_idx, buf_idx = lax.while_loop(
       is_cur_q_blk_needed,
       compute_with_cur_q_blk,
-      (0, init_seq_idx, init_buf_idx),  # (done, seq_idx, buf_idx)
+      (0, init_seq_idx, init_buf_idx),
   )
-  # Reset seq_idx for next kv_heads_blk if run out of seqs!
   seq_buf_idx_ref[0] = lax.select(seq_idx < num_seqs, seq_idx, 0)
   seq_buf_idx_ref[1] = buf_idx
   o_ref[...] = acc_ref[...].astype(q_ref.dtype)
 
-
-
 def get_dtype_packing(dtype):
   bits = dtypes.itemsize_bits(dtype)
   return 32 // bits
-
 
 def get_min_heads_per_blk(
     num_q_heads, num_combined_kv_heads, q_dtype, kv_dtype
@@ -694,7 +672,6 @@ def get_min_heads_per_blk(
     x //= packing
     return x in (1, 2, 4, 8) or x % 8 == 0
 
-  # TODO(jevinjiang): support unaligned number of heads!
   if not can_be_xla_fully_tiled(num_combined_kv_heads, kv_packing):
     raise ValueError(
         f"Not implemented: {num_combined_kv_heads=} can not be XLA fully tiled."
@@ -703,8 +680,6 @@ def get_min_heads_per_blk(
   num_kv_heads = num_combined_kv_heads // 2
   assert num_q_heads % num_kv_heads == 0
   ratio = num_q_heads // num_kv_heads
-  # TODO(jevinjiang): we can choose smaller tiling for packed type if large
-  # second minor tiling is not on.
   max_combined_kv_tiling = 8 * kv_packing
   min_combined_kv_heads = (
       max_combined_kv_tiling
@@ -715,7 +690,6 @@ def get_min_heads_per_blk(
   if can_be_xla_fully_tiled(min_q_heads, q_packing):
     return min_q_heads, min_combined_kv_heads
   return num_q_heads, num_combined_kv_heads
-
 
 @functools.partial(
     jax.jit,
@@ -732,50 +706,25 @@ def get_min_heads_per_blk(
     ],
 )
 def ragged_paged_attention(
-    q: jax.Array,  # [max_num_batched_tokens, num_q_heads, head_dim]
-    # TODO(jevinjiang): create a write_to_kv_cache kernel!
-    kv_pages: jax.Array,  # [total_num_pages, page_size, num_combined_kv_heads, head_dim]
-    kv_lens: jax.Array,  # i32[max_num_seqs]
-    page_indices: jax.Array,  # i32[max_num_seqs, pages_per_seq]
-    cu_q_lens: jax.Array,  # i32[max_num_seqs + 1]
-    num_seqs: jax.Array,  # i32[1]
+    q: jax.Array,
+    kv_pages: jax.Array,
+    kv_lens: jax.Array,
+    page_indices: jax.Array,
+    cu_q_lens: jax.Array,
+    num_seqs: jax.Array,
     *,
     sm_scale: float = 1.0,
     sliding_window: int | None = None,
     soft_cap: float | None = None,
-    mask_value: float | None = DEFAULT_MASK_VALUE,
+    mask_value: float | None = None,
     k_scale: float | None = None,
     v_scale: float | None = None,
     num_kv_pages_per_block: int | None = None,
     num_queries_per_block: int | None = None,
     vmem_limit_bytes: int | None = None,
 ):
-  """Ragged paged attention that supports mixed prefill and decode.
-
-  Args:
-    q: concatenated all sequences' queries.
-    kv_pages: paged KV cache. Normally in HBM.
-    kv_lens: padded kv lengths. Only the first num_seqs values are valid.
-    page_indices: the first index indicates which page to use in the kv cache
-      for each sequence. Only the first num_seqs values are valid.
-    cu_q_lens: the cumulative sum of the effective query lengths. Similar to
-      kv_lens, only the first num_seqs+1 values are valid.
-    num_seqs: the dynamic number of sequences.
-    sm_scale: the softmax scale which will be applied to the Q@K^T.
-    sliding_window: the sliding window size for the attention.
-    soft_cap: the logit soft cap for the attention.
-    mask_value: mask value for causal mask.
-    k_scale: the scale for the key cache.
-    v_scale: the scale for the value cache.
-    num_kv_pages_per_block: number of kv pages to be processed in one flash
-      attention block in the pallas kernel.
-    num_queries_per_block: number of kv pages to be processed in one flash
-      attention block in the pallas kernel.
-    vmem_limit_bytes: the vmem limit for the pallas kernel.
-
-  Returns:
-    The output of the attention.
-  """
+  if mask_value is None:
+    mask_value = -0.7 * float(jnp.finfo(jnp.dtype("float32")).max)
   static_validate_inputs(
       q,
       kv_pages,
@@ -793,8 +742,6 @@ def ragged_paged_attention(
       num_queries_per_block=num_queries_per_block,
       vmem_limit_bytes=vmem_limit_bytes,
   )
-  if mask_value is None:
-    mask_value = DEFAULT_MASK_VALUE
   num_q_tokens, num_q_heads, head_dim = q.shape
   _, page_size, num_combined_kv_heads, _ = kv_pages.shape
   assert num_combined_kv_heads % 2 == 0
@@ -837,8 +784,6 @@ def ragged_paged_attention(
   ]
   out_specs = q_block_spec
   lm_scratch = pltpu.VMEM(
-      # TODO(jevinjiang): use 128 instead of 1 is due to Mosaic does not support
-      # unaligned slicing!
       (num_kv_heads_per_blk, num_q_per_blk * num_q_heads_per_kv_head, 128),
       jnp.float32,
   )
@@ -848,7 +793,7 @@ def ragged_paged_attention(
   )
   double_buf_scratch = pltpu.VMEM(
       (
-          2,  # For double buffering during DMA copies.
+          2,
           num_kv_pages_per_blk,
           page_size,
           num_combined_kv_heads_per_blk,
@@ -857,17 +802,17 @@ def ragged_paged_attention(
       kv_pages.dtype,
   )
   scratch_shapes = [
-      double_buf_scratch,  # kv_bufs
-      pltpu.SemaphoreType.DMA((2,)),  # Semaphores for double buffers.
-      lm_scratch,  # l_ref
-      lm_scratch,  # m_ref
+      double_buf_scratch,
+      pltpu.SemaphoreType.DMA((2,)),
+      lm_scratch,
+      lm_scratch,
       acc_scratch,
   ]
   scalar_prefetches = (
       kv_lens,
       page_indices,
       cu_q_lens,
-      jnp.array((0, 0), jnp.int32),  # seq_idx, buf_idx
+      jnp.array((0, 0), jnp.int32),
       num_seqs,
   )
   kernel = pl.pallas_call(
@@ -900,108 +845,19 @@ def ragged_paged_attention(
 
   return kernel(*scalar_prefetches, q, kv_pages)
 
+def computation(q, kv_pages, kv_lens, page_indices, cu_q_lens,
+                num_seqs, head_dim, max_num_seqs, max_num_batched_tokens):
+    sm_scale = 1.0 / math.sqrt(head_dim)
+    num_kv_pages_per_block = 64
+    num_queries_per_block = 64
+    vmem_limit_bytes = 33554432
 
-import math
+    num_seqs = jnp.atleast_1d(jnp.array(num_seqs, dtype=jnp.int32))
 
-CONFIG = {
-    'name': 'pallas_ragged_paged_attention_llama70b',
-    'model': 'Llama-3.1-70B',
-    'operator': 'pallas_ragged_paged_attention',
-    'max_num_batched_tokens': 4096,
-    'max_num_seqs': 64,
-    'num_q_heads': 64,
-    'num_kv_heads': 8,
-    'head_dim': 128,
-    'page_size': 16,
-    'pages_per_seq': 256,
-    'atol': 0.2,
-    'rtol': 0.2,
-}
-
-# Tuned by autotune_block_sizes.py. Re-run to update.
-TUNED_PARAMS = {
-    'num_kv_pages_per_block': 64,  # autotuned (was 32)
-    'num_queries_per_block': 64,  # autotuned
-    'vmem_limit_bytes': 33554432,  # not autotuned (hardware constraint)
-}
-
-
-def get_flops():
-    max_seqs = CONFIG['max_num_seqs']
-    H_q = CONFIG['num_q_heads']
-    D = CONFIG['head_dim']
-    tokens_per_seq = CONFIG['max_num_batched_tokens'] // max_seqs
-    kv_len = CONFIG['pages_per_seq'] * CONFIG['page_size']
-    return max_seqs * H_q * (4 * tokens_per_seq * kv_len * D)
-
-
-def create_inputs(dtype=jnp.bfloat16):
-    key = jax.random.key(42)
-    k1, k2 = jax.random.split(key, 2)
-    max_tokens = CONFIG['max_num_batched_tokens']
-    max_seqs = CONFIG['max_num_seqs']
-    H_q = CONFIG['num_q_heads']
-    H_kv = CONFIG['num_kv_heads']
-    D = CONFIG['head_dim']
-    page_size = CONFIG['page_size']
-    pages_per_seq = CONFIG['pages_per_seq']
-    num_combined_kv_heads = 2 * H_kv
-    total_num_pages = max_seqs * pages_per_seq
-    q = jax.random.normal(k1, (max_tokens, H_q, D), dtype=dtype)
-    kv_pages = jax.random.normal(
-        k2, (total_num_pages, page_size, num_combined_kv_heads, D), dtype=dtype
-    )
-    tokens_per_seq = max_tokens // max_seqs
-    kv_len_per_seq = pages_per_seq * page_size
-    kv_lens = jnp.full((max_seqs,), kv_len_per_seq, dtype=jnp.int32)
-    page_indices = jnp.arange(total_num_pages, dtype=jnp.int32).reshape(
-        max_seqs, pages_per_seq
-    )
-    cu_q_lens = jnp.arange(max_seqs + 1, dtype=jnp.int32) * tokens_per_seq
-    num_seqs = jnp.array([max_seqs], dtype=jnp.int32)
-    return q, kv_pages, kv_lens, page_indices, cu_q_lens, num_seqs
-
-
-def workload(q, kv_pages, kv_lens, page_indices, cu_q_lens, num_seqs):
-    sm_scale = 1.0 / math.sqrt(CONFIG['head_dim'])
     return ragged_paged_attention(
         q, kv_pages, kv_lens, page_indices, cu_q_lens, num_seqs,
         sm_scale=sm_scale,
-        num_kv_pages_per_block=TUNED_PARAMS['num_kv_pages_per_block'],
-        num_queries_per_block=TUNED_PARAMS['num_queries_per_block'],
-        vmem_limit_bytes=TUNED_PARAMS['vmem_limit_bytes'],
+        num_kv_pages_per_block=num_kv_pages_per_block,
+        num_queries_per_block=num_queries_per_block,
+        vmem_limit_bytes=vmem_limit_bytes,
     )
-
-
-def benchmark(num_warmup=5, num_iters=100):
-    """Benchmark and return results dict."""
-    import time
-    inputs = create_inputs()
-    fn = jax.jit(workload)
-    for _ in range(num_warmup):
-        out = fn(*inputs)
-        out.block_until_ready()
-    times = []
-    for _ in range(num_iters):
-        t0 = time.perf_counter()
-        out = fn(*inputs)
-        out.block_until_ready()
-        times.append(time.perf_counter() - t0)
-    import numpy as np
-    times = np.array(times) * 1000
-    avg = float(np.mean(times))
-    return {
-        'name': CONFIG['name'],
-        'model': CONFIG['model'],
-        'operator': CONFIG['operator'],
-        'config': {k: v for k, v in CONFIG.items() if k not in ('name', 'model', 'operator', 'atol', 'rtol')},
-        'time_ms': round(avg, 4),
-        'std_ms': round(float(np.std(times)), 4),
-        'output_shape': list(out.shape) if hasattr(out, 'shape') else [],
-        'status': 'success',
-    }
-
-
-if __name__ == '__main__':
-    import json
-    print(json.dumps(benchmark()))

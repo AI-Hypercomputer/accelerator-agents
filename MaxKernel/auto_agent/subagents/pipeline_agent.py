@@ -569,6 +569,12 @@ class AutonomousPipelineAgent(BaseAgent):
     try:
       logging.info(f"[{self.name}] Branch {branch_id}: starting (parallel)...")
       async for event in self._run_impl_branch(branch_ctx, branch_id, iteration):
+        # Events with state_delta will be applied to the SHARED dict by the ADK
+        # runner (which runs in the main coroutine where _branch_state_var is None).
+        # We must also apply the delta to branch_state so that subsequent agents
+        # in THIS task can read the values (e.g. compilation_results).
+        if event.actions and event.actions.state_delta:
+          branch_state.update(event.actions.state_delta)
         await queue.put(event)
       logging.info(f"[{self.name}] Branch {branch_id}: finished.")
     except Exception as e:

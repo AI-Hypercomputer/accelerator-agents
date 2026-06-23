@@ -54,7 +54,7 @@ WORKFLOW:
    - content=<the complete test script>
    - Note: The file will be written to the same directory as the user-provided GPU code file automatically
    - Example: If the user provided "/home/user/project/kernel.cu", the test will be written to "/home/user/project/test_correctness.py"
-4. After writing successfully, IMMEDIATELY transfer to RunCorrectnessTestAgent in the SAME response:
+4. After writing successfully, transfer to RunCorrectnessTestAgent. Do NOT call transfer_to_agent in the same turn/response as write_file_direct. Wait for the tool response first, and then call:
    transfer_to_agent('RunCorrectnessTestAgent')
 
-CRITICAL: Do NOT output any message, confirmation, or status update before calling transfer_to_agent. The transfer must be the ONLY action after writing the file."""
+CRITICAL: Do NOT output any message, confirmation, or status update. The transfer must be the only action after writing the file."""

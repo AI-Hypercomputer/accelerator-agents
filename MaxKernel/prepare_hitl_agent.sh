@@ -255,10 +255,10 @@ prompt_env_vars() {
     
     # WORKDIR
     if [ -z "$WORKDIR" ]; then
-        echo -n "Enter your WORKDIR (default: $(pwd)): "
+        echo -n "Enter your WORKDIR (default: $(pwd)/artifacts): "
         read -r WORKDIR_INPUT
         if [ -z "$WORKDIR_INPUT" ]; then
-            WORKDIR="$(pwd)"
+            WORKDIR="$(pwd)/artifacts"
         else
             # Strip quotes and whitespace
             WORKDIR=$(echo "$WORKDIR_INPUT" | sed -e "s/^['\"]*//" -e "s/['\"]*$//" -e 's/^[[:space:]]*//g' -e 's/[[:space:]]*$//g')

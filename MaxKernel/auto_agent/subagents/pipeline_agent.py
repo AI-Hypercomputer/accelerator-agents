@@ -1,5 +1,7 @@
 """Autonomous pipeline agent for chaining kernel generation steps."""
 
+import asyncio
+import contextvars
 import logging
 import os
 import re
@@ -13,6 +15,92 @@ from google.adk.models import LlmRequest
 from google.genai import types
 
 from auto_agent.config import WORKDIR
+
+# ---------------------------------------------------------------------------
+# Per-branch state isolation for parallel execution
+# ---------------------------------------------------------------------------
+
+_branch_state_var: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+    "_branch_state_var", default=None
+)
+
+
+class ContextAwareStateDict(dict):
+    """dict subclass that routes operations to a per-task dict inside branch tasks.
+
+    Installed as ctx.session.state before parallel branches launch.
+    Because it IS a dict subclass, Pydantic accepts the assignment.
+
+    ADK state_delta caveat resolution: In InMemorySessionService,
+    storage_session IS ctx.session (same object), so storage_session.state
+    IS this ContextAwareStateDict. Our overridden update() checks
+    _branch_state_var and routes accordingly.
+    """
+
+    def _b(self):
+        return _branch_state_var.get()
+
+    def __getitem__(self, key):
+        b = self._b()
+        return b[key] if b is not None else super().__getitem__(key)
+
+    def __setitem__(self, key, value):
+        b = self._b()
+        if b is not None:
+            b[key] = value
+        else:
+            super().__setitem__(key, value)
+
+    def __delitem__(self, key):
+        b = self._b()
+        if b is not None:
+            del b[key]
+        else:
+            super().__delitem__(key)
+
+    def __contains__(self, key):
+        b = self._b()
+        return key in b if b is not None else super().__contains__(key)
+
+    def __iter__(self):
+        b = self._b()
+        return iter(b) if b is not None else super().__iter__()
+
+    def __len__(self):
+        b = self._b()
+        return len(b) if b is not None else super().__len__()
+
+    def get(self, key, default=None):
+        b = self._b()
+        return b.get(key, default) if b is not None else super().get(key, default)
+
+    def update(self, other=(), **kwargs):
+        b = self._b()
+        if b is not None:
+            b.update(other, **kwargs)
+        else:
+            super().update(other, **kwargs)
+
+    def setdefault(self, key, default=None):
+        b = self._b()
+        return b.setdefault(key, default) if b is not None else super().setdefault(key, default)
+
+    def pop(self, key, *args):
+        b = self._b()
+        return b.pop(key, *args) if b is not None else super().pop(key, *args)
+
+    def keys(self):
+        b = self._b()
+        return b.keys() if b is not None else super().keys()
+
+    def values(self):
+        b = self._b()
+        return b.values() if b is not None else super().values()
+
+    def items(self):
+        b = self._b()
+        return b.items() if b is not None else super().items()
+
 
 # State keys preserved across branches (shared inputs)
 _INITIAL_STATE_KEYS = frozenset({"workdir", "base_kernel_path", "atol", "rtol"})
@@ -107,53 +195,58 @@ class AutonomousPipelineAgent(BaseAgent):
       )
       return
 
-    # --- Multi-branch mode: N isolated branches → ranking ---
+    # --- Multi-branch mode: N branches in PARALLEL → ranking ---
+    if not isinstance(ctx.session.state, ContextAwareStateDict):
+      ctx.session.state = ContextAwareStateDict(ctx.session.state)
+
     yield self._initialize_base_state(ctx)
     session_dir = ctx.session.state["workdir"]
 
-    # Snapshot the shared initial state and conversation history for restoration
     initial_state = {
       k: v for k, v in ctx.session.state.items() if k in _INITIAL_STATE_KEYS
     }
-    events_snapshot = self._snapshot_events(ctx)
+
+    logging.info(
+      f"[{self.name}] Launching {self.num_branches} branch(es) in parallel."
+    )
+
+    _sentinel = object()
+    _queue: asyncio.Queue = asyncio.Queue()
+    tasks = [
+      asyncio.create_task(
+        self._run_branch_parallel(branch_idx, ctx, initial_state, session_dir, _sentinel, _queue)
+      )
+      for branch_idx in range(self.num_branches)
+    ]
+
+    try:
+      sentinel_count = 0
+      while sentinel_count < self.num_branches:
+        item = await _queue.get()
+        if item is _sentinel:
+          sentinel_count += 1
+        else:
+          yield item
+    finally:
+      for task in tasks:
+        if not task.done():
+          task.cancel()
+
+    branch_states = await asyncio.gather(*tasks, return_exceptions=True)
     branches_results = []
-
-    for branch_idx in range(self.num_branches):
-      logging.info(
-        f"[{self.name}] ===== Starting Branch {branch_idx + 1}/{self.num_branches} ====="
-      )
-
-      # Restore conversation to the pre-branch snapshot so this branch
-      # has no memory of what previous branches wrote or did.
-      self._restore_events(ctx, events_snapshot)
-
-      branch_dir = os.path.join(session_dir, f"branch_{branch_idx}")
-      os.makedirs(branch_dir, exist_ok=True)
-      yield self._setup_branch_state(ctx, initial_state, branch_dir)
-
-      async for event in self._run_pipeline_branch(ctx):
-        yield event
-
-      branch_best = await self._apply_best_solution(ctx)
-      branches_results.append({
-        "branch_idx": branch_idx,
-        "branch_dir": branch_dir,
-        "best_solution": branch_best,
-        "history": list(ctx.session.state.get("history", [])),
-      })
-      logging.info(
-        f"[{self.name}] ===== Branch {branch_idx + 1} Complete ====="
-      )
-
-    # Restore conversation after all branches before ranking
-    self._restore_events(ctx, events_snapshot)
+    for bs in branch_states:
+      if isinstance(bs, Exception):
+        logging.error(f"[{self.name}] Branch task raised: {bs}")
+      elif isinstance(bs, dict):
+        result = bs.get("_branch_result")
+        if result:
+          branches_results.append(result)
 
     best_branch = await self._rank_branches(ctx, branches_results)
     logging.info(
       f"[{self.name}] Best branch: {best_branch['branch_idx'] if best_branch else 'none'}"
     )
 
-    # Copy the best branch's solution to the canonical session-level output path
     final_kernel_path = os.path.join(session_dir, "optimized_kernel.py")
     if best_branch and best_branch.get("best_solution"):
       kernel_code = best_branch["best_solution"].get("kernel_code", "")
@@ -179,6 +272,62 @@ class AutonomousPipelineAgent(BaseAgent):
         }
       ),
     )
+
+  async def _run_branch_parallel(
+    self,
+    branch_idx: int,
+    ctx: InvocationContext,
+    initial_state: dict,
+    session_dir: str,
+    sentinel: object,
+    queue: asyncio.Queue,
+  ) -> dict:
+    """Runs one full branch (plan→profile) as an isolated asyncio task."""
+    branch_dir = os.path.join(session_dir, f"branch_{branch_idx}")
+    os.makedirs(branch_dir, exist_ok=True)
+
+    # Seed per-branch state from shared initial state + branch-specific paths
+    branch_state = dict(initial_state)
+    for key in _PIPELINE_RESET_KEYS:
+      branch_state.pop(key, None)
+    branch_state.update({
+      "optimized_kernel_path": os.path.join(branch_dir, "optimized_kernel.py"),
+      "kernel_plan_path": os.path.join(branch_dir, "base_kernel_plan.md"),
+      "test_file_path": os.path.join(branch_dir, "test_optimized_kernel.py"),
+      "profiling_script_path": os.path.join(branch_dir, "profile_optimized_kernel.py"),
+      "autotune_specs_path": os.path.join(branch_dir, "autotune_specs.json"),
+      "autotune_results_path": os.path.join(branch_dir, "autotune_results.json"),
+      "history": [],
+    })
+
+    _branch_state_var.set(branch_state)
+
+    branch_ctx = ctx.model_copy()
+    branch_ctx.branch = f"branch_{branch_idx}"
+
+    try:
+      logging.info(f"[{self.name}] Branch {branch_idx}: starting (parallel)...")
+      async for event in self._run_pipeline_branch(branch_ctx):
+        if event.actions and event.actions.state_delta:
+          branch_state.update(event.actions.state_delta)
+        await queue.put(event)
+      logging.info(f"[{self.name}] Branch {branch_idx}: finished.")
+    except Exception as e:
+      logging.error(
+        f"[{self.name}] Branch {branch_idx} raised exception: {e}", exc_info=True
+      )
+    finally:
+      await queue.put(sentinel)
+
+    # Collect result from per-branch state for ranking
+    best_solution = await self._apply_best_solution_from_state(branch_state)
+    branch_state["_branch_result"] = {
+      "branch_idx": branch_idx,
+      "branch_dir": branch_dir,
+      "best_solution": best_solution,
+      "history": list(branch_state.get("history", [])),
+    }
+    return branch_state
 
   async def _run_pipeline_branch(
     self, ctx: InvocationContext
@@ -769,6 +918,35 @@ class AutonomousPipelineAgent(BaseAgent):
         )
 
     return best_solution
+
+  async def _apply_best_solution_from_state(self, state: dict):
+    """Like _apply_best_solution but reads from a plain dict (for branch tasks)."""
+    history = state.get("history", [])
+    valid_solutions = [
+      s for s in history
+      if s.get("compilation_status", {}).get("success")
+      and s.get("test_status", {}).get("success")
+    ]
+    if not valid_solutions:
+      return None
+
+    solutions_with_latency = [
+      s for s in valid_solutions if s.get("latency_ms") is not None
+    ]
+    if solutions_with_latency:
+      best = min(solutions_with_latency, key=lambda x: x["latency_ms"])
+    else:
+      best = valid_solutions[-1]
+
+    kernel_path = state.get("optimized_kernel_path")
+    if best and kernel_path and best.get("kernel_code"):
+      try:
+        with open(kernel_path, "w") as f:
+          f.write(best["kernel_code"])
+      except Exception as e:
+        logging.error(f"[{self.name}] Failed to write best solution: {e}")
+
+    return best
 
   async def _select_best_with_llm(self, valid_solutions):
     """Fallback method to let LLM select the best solution based on summaries."""

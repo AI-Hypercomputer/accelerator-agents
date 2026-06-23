@@ -411,6 +411,27 @@ prompt_env_vars() {
     else
         print_info "Using existing RAG_CORPUS: $RAG_CORPUS"
     fi
+
+    # EXTRA_TPU_IPS (optional - for parallel multi-branch execution on multiple TPU VMs)
+    if [ -z "$EXTRA_TPU_IPS" ]; then
+        echo ""
+        print_info "Multi-TPU setup for parallel branches"
+        echo "  To run N branches in parallel on N different TPU VMs, enter the"
+        echo "  internal IPs of the extra VMs (the local TPU is always included)."
+        echo "  Each VM must have the repo cloned and tpu_server.py will be started via SSH."
+        echo ""
+        echo -n "Enter extra TPU VM IPs (comma-separated, e.g. 10.1.2.3,10.1.2.4), or press Enter to skip: "
+        read -r EXTRA_TPU_IPS_INPUT
+        EXTRA_TPU_IPS=$(echo "$EXTRA_TPU_IPS_INPUT" | sed 's/[[:space:]]//g')
+        if [ -n "$EXTRA_TPU_IPS" ]; then
+            IFS=',' read -ra _IPS <<< "$EXTRA_TPU_IPS"
+            print_info "Extra TPU VMs: ${#_IPS[@]} — ${_IPS[*]}"
+        else
+            print_info "No extra TPU VMs configured. All branches will share the local TPU."
+        fi
+    else
+        print_info "Using existing EXTRA_TPU_IPS: $EXTRA_TPU_IPS"
+    fi
 }
 
 # Function to save configuration
@@ -432,6 +453,7 @@ GOOGLE_CLOUD_PROJECT="$GOOGLE_CLOUD_PROJECT"
 GOOGLE_CLOUD_LOCATION="$GOOGLE_CLOUD_LOCATION"
 RAG_CORPUS="$RAG_CORPUS"
 INCLUDE_THOUGHTS="$INCLUDE_THOUGHTS"
+EXTRA_TPU_IPS="$EXTRA_TPU_IPS"
 EOF
     
     print_success "Configuration saved to $CONFIG_FILE"
@@ -464,7 +486,24 @@ backends:
     type: cpu
 EOF
 
-    print_success "Created eval_config.yaml with backends (TPU and CPU) at IP: $HOSTNAME_IP"
+    # Append extra TPU backends (one per remote VM)
+    if [ -n "$EXTRA_TPU_IPS" ]; then
+        IFS=',' read -ra IPS <<< "$EXTRA_TPU_IPS"
+        TPU_IDX=1
+        for ip in "${IPS[@]}"; do
+            ip=$(echo "$ip" | tr -d '[:space:]')
+            cat >> "$REPO_ROOT/auto_agent/server_utils/eval_config.yaml" << EOF
+  - name: tpu-${TPU_IDX}
+    ip: ${ip}
+    port: 5463
+    type: tpu
+EOF
+            ((TPU_IDX++))
+        done
+        print_success "Created eval_config.yaml with local TPU + ${#IPS[@]} remote TPU backend(s)"
+    else
+        print_success "Created eval_config.yaml with local TPU + CPU at IP: $HOSTNAME_IP"
+    fi
 }
 
 # Function to check server status

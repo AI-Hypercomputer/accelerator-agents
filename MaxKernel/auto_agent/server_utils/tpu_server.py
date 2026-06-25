@@ -12,10 +12,17 @@ import time
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
 
 from auto_agent.constants import TPU_SERVER_PORT
 from auto_agent.tools.analyze_profile import analyze_trace
+from auto_agent.server_utils.common_models import (
+    CodeRequest,
+    CodeResponse,
+    AutotuneRequest,
+    GetTpuVersionResponse,
+    extract_code,
+)
+
 
 logging.basicConfig(
   level=logging.INFO,
@@ -33,53 +40,9 @@ profile_semaphore = asyncio.Semaphore(1)
 autotune_semaphore = asyncio.Semaphore(1)
 
 
-class CodeRequest(BaseModel):
-  code: str
-  timeout: Optional[int] = 30
-  dependencies: Optional[dict] = None
-
-
-class CodeResponse(BaseModel):
-  output: str
-  error: Optional[str] = None
-  exit_code: int
-
-
-class AutotuneRequest(BaseModel):
-  code_template: str
-  search_space: dict[str, list]
-  timeout: Optional[int] = 300
-  total_timeout: Optional[int] = None
-  dependencies: Optional[dict] = None
-
-
-class GetTpuVersionResponse(BaseModel):
-  tpu_version: str
-
-
-def extract_code(code: str) -> str:
-  """Extracts code from markdown blocks if present."""
-  code_content = code.strip()
-  if code_content.startswith("```python") and code_content.endswith("```"):
-    lines = code_content.split("\n")
-    if lines[0].strip() == "```python":
-      lines = lines[1:]
-    if lines[-1].strip() == "```":
-      lines = lines[:-1]
-    return "\n".join(lines)
-  elif code_content.startswith("```") and code_content.endswith("```"):
-    lines = code_content.split("\n")
-    if lines[0].strip().startswith("```"):
-      lines = lines[1:]
-    if lines[-1].strip() == "```":
-      lines = lines[:-1]
-    return "\n".join(lines)
-  return code_content
-
-
 @app.get("/health")
 async def health_check():
-  return {"status": "healthy"}
+  return {"status": "healthy", "mode": "production"}
 
 
 @app.post("/compilation_test", response_model=CodeResponse)
@@ -102,16 +65,38 @@ async def compilation_test(request: CodeRequest):
           with open(file_path, "w") as f:
             f.write(content)
 
+      # Write sitecustomize.py to force Pallas interpret mode on CPU fallback
+      sitecustomize_path = os.path.join(temp_dir, "sitecustomize.py")
+      with open(sitecustomize_path, "w") as f:
+        f.write("""
+import sys
+try:
+  import jax.experimental.pallas as pl
+  original_pallas_call = pl.pallas_call
+  def mocked_pallas_call(*args, **kwargs):
+    kwargs['interpret'] = True
+    return original_pallas_call(*args, **kwargs)
+  pl.pallas_call = mocked_pallas_call
+except Exception:
+  pass
+""")
+
       with open(temp_file_path, "w") as f:
         f.write(request.code)
 
-      # Execute the code in a subprocess
+
+      # Execute the code in a subprocess with sitecustomize active via PYTHONPATH
+      env = os.environ.copy()
+      current_pythonpath = env.get("PYTHONPATH", "")
+      env["PYTHONPATH"] = f"{temp_dir}:{current_pythonpath}" if current_pythonpath else temp_dir
+
       process = await asyncio.create_subprocess_exec(
         sys.executable,
         temp_file_path,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=temp_dir,
+        env=env,
       )
 
       try:
@@ -340,7 +325,6 @@ async def unified_test(request: CodeRequest):
       with open(temp_file_path, "w") as f:
         f.write(request.code)
 
-      # Execute the code in a subprocess
       process = await asyncio.create_subprocess_exec(
         sys.executable,
         temp_file_path,
@@ -417,7 +401,6 @@ async def profile(request: CodeRequest):
       with open(temp_file_path, "w") as temp_file:
         temp_file.write(request.code)
 
-      # Execute the code in a subprocess
       process = await asyncio.create_subprocess_exec(
         sys.executable,
         temp_file_path,
@@ -502,11 +485,6 @@ async def profile(request: CodeRequest):
           await process.wait()
         except Exception as e:
           logging.error(f"Failed to kill process: {e}")
-      # Clean up the temporary directory
-      # try:
-      #     shutil.rmtree(temp_dir)
-      # except Exception:
-      #     pass
       logging.info("Profile analysis finished")
 
 
@@ -680,8 +658,6 @@ async def autotune(request: AutotuneRequest):
 def get_tpu_version() -> str:
   """Attempts to determine the TPU version by trying three methods.
 
-  Prioritizes non-JAX methods to avoid TPU resource conflicts.
-
   1.  **`tpu-info` Tool**: Runs the `tpu-info` command-line tool and parses its
   output.
   2.  **TF Profiler**: (Colab only) Uses the TF profiler client.
@@ -690,29 +666,17 @@ def get_tpu_version() -> str:
   Returns:
       A string like "TPU v4", "TPU v3", etc., or "TPU version not found".
   """
-
-  # --- Method 1: Try running the `tpu-info` command-line tool (No resource conflicts) ---
   try:
     # Run the tpu-info command
     result = subprocess.run(
       ["tpu-info"], capture_output=True, text=True, check=True
     )
-
-    # Regex to find a pattern like "TPU v4", "TPU v5e", "TPU v3 chip", etc.
-    # We search the entire output
     match = re.search(r"(TPU v\d[\w-]*)", result.stdout)
     if match:
-      # Return the first match, e.g., "TPU v4"
       return match.group(1)
-
   except (FileNotFoundError, subprocess.CalledProcessError):
-    # FileNotFoundError: tpu-info not installed or not in PATH
-    # CalledProcessError: tpu-info command failed
     pass
-  except (ImportError, KeyError, Exception):
-    # ImportError: TensorFlow not installed
-    # KeyError: COLAB_TPU_ADDR not set
-    # Exception: Profiler connection failed
+  except Exception:
     pass
 
   return "TPU version not found"

@@ -7,10 +7,15 @@ import tempfile
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
 
 from auto_agent.constants import CPU_SERVER_PORT
 from auto_agent.tools.analyze_profile import analyze_trace
+from auto_agent.server_utils.common_models import (
+    CodeRequest,
+    CodeResponse,
+    GetBackendVersionResponse,
+    extract_code,
+)
 
 logging.basicConfig(
   level=logging.INFO,
@@ -27,22 +32,6 @@ performance_semaphore = asyncio.Semaphore(1)
 profile_semaphore = asyncio.Semaphore(1)
 
 
-class CodeRequest(BaseModel):
-  code: str
-  timeout: Optional[int] = 30
-  dependencies: Optional[dict] = None
-
-
-class CodeResponse(BaseModel):
-  output: str
-  error: Optional[str] = None
-  exit_code: int
-
-
-class GetBackendVersionResponse(BaseModel):
-  backend_version: str
-
-
 def get_cpu_env():
   """
   Returns environment variables that force JAX to use CPU backend.
@@ -53,26 +42,6 @@ def get_cpu_env():
   # Disable GPU visibility to ensure CPU-only execution
   env["CUDA_VISIBLE_DEVICES"] = ""
   return env
-
-
-def extract_code(code: str) -> str:
-  """Extracts code from markdown blocks if present."""
-  code_content = code.strip()
-  if code_content.startswith("```python") and code_content.endswith("```"):
-    lines = code_content.split("\n")
-    if lines[0].strip() == "```python":
-      lines = lines[1:]
-    if lines[-1].strip() == "```":
-      lines = lines[:-1]
-    return "\n".join(lines)
-  elif code_content.startswith("```") and code_content.endswith("```"):
-    lines = code_content.split("\n")
-    if lines[0].strip().startswith("```"):
-      lines = lines[1:]
-    if lines[-1].strip() == "```":
-      lines = lines[:-1]
-    return "\n".join(lines)
-  return code_content
 
 
 @app.get("/health")
@@ -100,17 +69,38 @@ async def compilation_test(request: CodeRequest):
           with open(file_path, "w") as f:
             f.write(content)
 
+      # Write sitecustomize.py to force Pallas interpret mode on CPU fallback
+      sitecustomize_path = os.path.join(temp_dir, "sitecustomize.py")
+      with open(sitecustomize_path, "w") as f:
+        f.write("""
+import sys
+try:
+  import jax.experimental.pallas as pl
+  original_pallas_call = pl.pallas_call
+  def mocked_pallas_call(*args, **kwargs):
+    kwargs['interpret'] = True
+    return original_pallas_call(*args, **kwargs)
+  pl.pallas_call = mocked_pallas_call
+except Exception:
+  pass
+""")
+
       with open(temp_file_path, "w") as f:
         f.write(request.code)
 
-      # Execute the code in a subprocess with CPU-only environment
+
+      # Execute the code in a subprocess with CPU-only environment and sitecustomize active
+      env = get_cpu_env()
+      current_pythonpath = env.get("PYTHONPATH", "")
+      env["PYTHONPATH"] = f"{temp_dir}:{current_pythonpath}" if current_pythonpath else temp_dir
+
       process = await asyncio.create_subprocess_exec(
         sys.executable,
         temp_file_path,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=temp_dir,
-        env=get_cpu_env(),  # Force CPU backend
+        env=env,
       )
 
       try:
@@ -484,11 +474,6 @@ async def profile(request: CodeRequest):
           await process.wait()
         except Exception as e:
           logging.error(f"Failed to kill process: {e}")
-      # Clean up the temporary directory
-      # try:
-      #     shutil.rmtree(temp_dir)
-      # except Exception:
-      #     pass
       logging.info("Profile analysis finished")
 
 

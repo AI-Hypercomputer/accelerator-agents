@@ -37,16 +37,14 @@ def apply_patch():
     return True
 
   # Patch 1: Modify run_interactively to return runner instead of closing it
-  old_code_1 = """  await runner.close()
+  old_code_1 = """      resume_invocation_id = invocation_id
 
+  await runner.close()"""
 
-async def run_cli("""
+  new_code_1 = """      resume_invocation_id = invocation_id
 
-  new_code_1 = """  # PATCHED: MCP cleanup fix - return runner instead of closing
-  return runner
-
-
-async def run_cli("""
+  # PATCHED: MCP cleanup fix - return runner instead of closing
+  return runner"""
 
   if old_code_1 not in content:
     print("Error: Could not find code to patch (section 1)")
@@ -55,26 +53,8 @@ async def run_cli("""
   content = content.replace(old_code_1, new_code_1)
 
   # Patch 2: Update run_cli to close runner after session saving
-  old_code_2 = """    await run_interactively(
-        agent_or_app,
-        artifact_service,
-        session,
-        session_service,
-        credential_service,
-    )
-
-  if save_session:"""
-
-  new_code_2 = """    # PATCHED: MCP cleanup fix - get runner to close it later
-    runner = await run_interactively(
-        agent_or_app,
-        artifact_service,
-        session,
-        session_service,
-        credential_service,
-    )
-
-  if save_session:"""
+  old_code_2 = "    await run_interactively("
+  new_code_2 = "    runner = await run_interactively("
 
   if old_code_2 not in content:
     print("Error: Could not find code to patch (section 2)")

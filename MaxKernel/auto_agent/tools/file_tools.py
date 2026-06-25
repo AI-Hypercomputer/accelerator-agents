@@ -1,6 +1,7 @@
 """File-related tools for subagents."""
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, List
@@ -55,21 +56,35 @@ def restricted_write_file(state_key: str, description: str) -> FunctionTool:
 
   def _write_file(content: str, tool_context: ToolContext) -> str:
     target_path = tool_context.state.get(state_key)
+    logging.info(f"[restricted_write_file] Called for {state_key}. Target path from state: {target_path}")
     if not target_path:
-      return f"Error: Path variable '{state_key}' not found in session state."
+      err = f"Error: Path variable '{state_key}' not found in session state."
+      logging.error(f"[restricted_write_file] {err}")
+      return err
 
     base = Path(WORKDIR).resolve()
     target = Path(target_path).resolve()
 
     try:
       if not target.is_relative_to(base):
-        return f"Error: Access denied. Path is outside {WORKDIR}"
-    except ValueError:
-      return "Error: Invalid path or access denied."
+        err = f"Error: Access denied. Path {target} is outside base {base}"
+        logging.error(f"[restricted_write_file] {err}")
+        return err
+    except ValueError as e:
+      err = f"Error: Invalid path or access denied: {e}"
+      logging.error(f"[restricted_write_file] {err}")
+      return err
 
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(content)
-    return f"Successfully wrote to {target}"
+    try:
+      target.parent.mkdir(parents=True, exist_ok=True)
+      target.write_text(content)
+      res = f"Successfully wrote to {target}"
+      logging.info(f"[restricted_write_file] {res}")
+      return res
+    except Exception as e:
+      err = f"Error writing file {target}: {e}"
+      logging.error(f"[restricted_write_file] {err}")
+      return err
 
   _write_file.__name__ = "restricted_write_file"
   _write_file.__doc__ = description

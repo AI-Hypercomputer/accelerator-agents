@@ -15,7 +15,7 @@ from auto_agent.callbacks import (
   load_kernel_and_plan_to_state,
   load_single_kernel_to_state,
 )
-from auto_agent.config import model_config, thinking_planner
+from auto_agent.config import get_thinking_planner, model_config
 from auto_agent.constants import MODEL_NAME
 from auto_agent.custom_types import CustomLlmAgent
 from auto_agent.subagents.kernel_writing.kernel_compilation import (
@@ -267,7 +267,7 @@ plan_kernel_agent = CustomLlmAgent(
   name="PlanKernelAgent",
   model=MODEL_NAME,
   generate_content_config=model_config,
-  planner=thinking_planner,
+  planner=get_thinking_planner("high"),
   instruction=kernel_planning_prompt.PROMPT,
   description="Creates or revises a detailed optimization plan for a Pallas kernel.",
   tools=(
@@ -287,7 +287,6 @@ read_file_for_validation_agent = CustomLlmAgent(
   name="ReadFileForValidationAgent",
   model=MODEL_NAME,
   generate_content_config=model_config,
-  planner=thinking_planner,
   instruction=read_file_prompt.PROMPT,
   description="Reads the kernel file mentioned by the user or from state for validation.",
   tools=[filesystem_tool_r],
@@ -297,7 +296,7 @@ fix_kernel_compilation_agent = CustomLlmAgent(
   name="FixKernelCompilationAgent",
   model=MODEL_NAME,
   generate_content_config=model_config,
-  planner=thinking_planner,
+  planner=get_thinking_planner("high"),
   instruction=fix_kernel_compilation.PROMPT,
   description="Fixes compilation errors in the generated kernel while preserving optimization strategy.",
   tools=(
@@ -319,7 +318,7 @@ add_debug_statements_agent = CustomLlmAgent(
   name="AddDebugStatementsAgent",
   model=MODEL_NAME,
   generate_content_config=model_config,
-  planner=thinking_planner,
+  planner=get_thinking_planner("medium"),
   instruction=add_debug_statements.PROMPT,
   description="Adds strategic debugging statements to diagnose persistent compilation issues.",
   tools=[filesystem_tool_r, write_optimized_kernel_tool],
@@ -331,7 +330,7 @@ cleanup_debug_statements_agent = CustomLlmAgent(
   name="CleanupDebugStatementsAgent",
   model=MODEL_NAME,
   generate_content_config=model_config,
-  planner=thinking_planner,
+  planner=get_thinking_planner("low"),
   instruction=cleanup_debug_statements.PROMPT,
   description="Removes debugging statements from successfully compiled kernel.",
   tools=[filesystem_tool_r, write_optimized_kernel_tool],
@@ -358,7 +357,6 @@ kernel_compilation_summary_agent = CustomLlmAgent(
   name="KernelCompilationSummaryAgent",
   model=MODEL_NAME,
   generate_content_config=model_config,
-  planner=thinking_planner,
   instruction=kernel_compilation_summary.PROMPT,
   description="Summarizes kernel compilation validation results with full trace on failure.",
   include_contents="none",
@@ -379,7 +377,7 @@ implement_kernel_agent = CustomLlmAgent(
   name="ImplementKernelAgent",
   model=MODEL_NAME,
   generate_content_config=model_config,
-  planner=thinking_planner,
+  planner=get_thinking_planner("high"),
   instruction=kernel_implementation_prompt.PROMPT,
   description="Implements the optimized Pallas kernel following the plan.",
   tools=(

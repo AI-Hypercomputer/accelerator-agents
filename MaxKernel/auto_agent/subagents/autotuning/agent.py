@@ -9,7 +9,7 @@ from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 
-from auto_agent.config import model_config, thinking_planner
+from auto_agent.config import get_thinking_planner, model_config
 from auto_agent.constants import MODEL_NAME
 from auto_agent.custom_types import CustomLlmAgent
 from auto_agent.subagents.autotuning.autotune_tool import autotune_kernel
@@ -32,7 +32,7 @@ autotune_planner_agent = CustomLlmAgent(
   name="AutotunePlannerAgent",
   model=MODEL_NAME,
   generate_content_config=model_config,
-  planner=thinking_planner,
+  planner=get_thinking_planner("high"),
   instruction=autotune_prompt.PROMPT,
   description="Prepares code template and search space for auto-tuning Pallas kernels.",
   tools=[filesystem_tool_r, write_autotune_specs_tool, search_api_tool],
@@ -165,7 +165,7 @@ apply_best_config_agent = CustomLlmAgent(
   name="ApplyBestConfigAgent",
   model=MODEL_NAME,
   generate_content_config=model_config,
-  planner=thinking_planner,
+  planner=get_thinking_planner("high"),
   instruction=apply_best_config_prompt.PROMPT,
   description="Applies autotuning results to the optimized kernel file.",
   tools=[filesystem_tool_r, write_optimized_kernel_tool],
@@ -178,7 +178,6 @@ autotune_summary_agent = CustomLlmAgent(
   name="AutotuneSummaryAgent",
   model=MODEL_NAME,
   generate_content_config=model_config,
-  planner=thinking_planner,
   instruction=summary_prompt.PROMPT,
   description="Summarizes autotuning results.",
   tools=[filesystem_tool_r],

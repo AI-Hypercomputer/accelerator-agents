@@ -16,7 +16,7 @@ from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 
 from auto_agent.client_utils.eval_client import call_eval_server_async
-from auto_agent.config import model_config, thinking_planner
+from auto_agent.config import get_thinking_planner, model_config
 from auto_agent.constants import EVAL_SERVER_PORT, MODEL_NAME, REQUEST_TIMEOUT
 from auto_agent.custom_types import CustomLlmAgent
 from auto_agent.subagents.testing.prompts import (
@@ -860,7 +860,6 @@ validation_summary_agent = CustomLlmAgent(
   name="ValidationSummaryAgent",
   model=MODEL_NAME,
   generate_content_config=model_config,
-  planner=thinking_planner,
   instruction=validation_summary.PROMPT,
   description="Summarizes validation results and provides next steps to the user.",
 )
@@ -870,7 +869,7 @@ generate_test_file_agent = CustomLlmAgent(
   name="GenerateTestFileAgent",
   model=MODEL_NAME,
   generate_content_config=model_config,
-  planner=thinking_planner,
+  planner=get_thinking_planner("high"),
   instruction=gen_test_file.PROMPT,
   description="Generates a comprehensive pytest test file.",
   tools=(
@@ -914,7 +913,7 @@ fix_test_script_agent = CustomLlmAgent(
   name="FixTestScriptAgent",
   model=MODEL_NAME,
   generate_content_config=model_config,
-  planner=thinking_planner,
+  planner=get_thinking_planner("high"),
   instruction=fix_test_script.PROMPT,
   description="Fixes validation errors in the generated test file.",
   tools=[filesystem_tool_r, write_test_file_tool, search_api_tool],
@@ -954,7 +953,7 @@ summarize_test_results_agent = CustomLlmAgent(
   name="SummarizeTestResultsAgent",
   model=MODEL_NAME,
   generate_content_config=model_config,
-  planner=thinking_planner,
+  planner=get_thinking_planner("medium"),
   instruction=summarize_test_results_prompt.PROMPT,
   description="Analyzes pytest test results and provides recommendations.",
   tools=(

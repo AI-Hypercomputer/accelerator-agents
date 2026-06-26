@@ -23,10 +23,10 @@ WORKFLOW:
    
    Where <FRAMEWORK_NAME> is the exact framework you detected (e.g., "CUDA", "Triton", "PyTorch CUDA")
 
-4. After successfully saving the framework, IMMEDIATELY transfer to the next agent:
+4. After successfully saving the framework, transfer to the next agent. Do NOT call transfer_to_agent in the same turn/response as save_framework_detection. Wait for the tool response first, and then call:
    transfer_to_agent('AnalyzePlanAndWriteAgent')
-   
-   Do this in the SAME response - do not wait for user input.
+
+   Do not wait for user input.
 
 IMPORTANT:
 - ALWAYS call save_framework_detection before transferring to ensure state is populated

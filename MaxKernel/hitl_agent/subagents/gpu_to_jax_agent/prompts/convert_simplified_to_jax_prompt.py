@@ -39,8 +39,8 @@ If write_file_direct fails or returns an error:
 4. Do NOT proceed to transfer_to_agent if the file write failed
 
 After SUCCESSFULLY writing the file (check the tool response for success):
-1. IMMEDIATELY call transfer_to_agent('ValidateSyntaxAgent') in the SAME response
-2. Do NOT output any message, confirmation, or status update before calling transfer_to_agent
-3. The transfer must be the ONLY action after successful file write
+1. Transfer to ValidateSyntaxAgent. Do NOT call transfer_to_agent in the same turn/response as write_file_direct. Wait for the tool response first, and then call:
+   transfer_to_agent('ValidateSyntaxAgent')
+2. Do NOT output any message, confirmation, or status update. The transfer must be the only action after successful file write.
 
 If you cannot write the file after multiple attempts, inform the user about the tool failure and ask them to manually create the file before proceeding."""

@@ -130,6 +130,10 @@ class AgenticSearchOrchestrator:
     with open(self.baseline_code_path, "r") as f:
       self.baseline_code = f.read()
 
+  # BE AWARE: the current implementation is broken. It simply concatenates all candidate codes into one python file, thus the
+  # output python contains repeated main functions and won't execute all candidates.
+  #
+  # TODO(ligh-svg): Fix the grouped kernel harness to allow executing all candidates. 
   def _prepare_grouped_harness(self, candidate_paths: List[str]) -> str:
     """Inlines all candidate implementations into a single file."""
     inlined_solutions = []

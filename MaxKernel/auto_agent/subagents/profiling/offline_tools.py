@@ -2,12 +2,29 @@
 
 import gzip
 import json
+import os
 import sqlite3
 from typing import Optional
 
 import matplotlib.pyplot as plt
 import pandas as pd
 from tensorflow.tsl.profiler.protobuf import xplane_pb2
+
+
+def is_mock_path(path: str) -> bool:
+  return "mock_profile" in path or os.environ.get("MOCK_COMPILER", "false").lower() == "true"
+
+
+def to_markdown_simple(df: pd.DataFrame) -> str:
+  cols = list(df.columns)
+  headers = "| " + " | ".join(str(c) for c in cols) + " |"
+  separator = "| " + " | ".join("---" for _ in cols) + " |"
+  lines = [headers, separator]
+  for _, row in df.iterrows():
+    lines.append("| " + " | ".join(str(row[c]) for c in cols) + " |")
+  return "\n".join(lines)
+
+
 
 
 def _get_xplane_path(profiling_results: str) -> str:
@@ -31,6 +48,16 @@ def load_xplane_and_query(xplane_path: str, sql_query: str) -> str:
   Returns:
       A markdown-formatted table of the query results.
   """
+  if is_mock_path(xplane_path):
+    data = {
+        "plane_name": ["Device 0", "Device 0"],
+        "line_name": ["Compute", "Memory"],
+        "event_name": ["MatMul", "HBM_to_VMEM"],
+        "duration_us": [1500.0, 420.0],
+    }
+    df = pd.DataFrame(data)
+    return to_markdown_simple(df)
+
   try:
     # Open file (handle gz if needed)
     open_func = gzip.open if xplane_path.endswith(".gz") else open
@@ -89,7 +116,7 @@ def load_xplane_and_query(xplane_path: str, sql_query: str) -> str:
     df = pd.read_sql_query(sql_query, conn)
     conn.close()
 
-    return df.to_markdown(index=False)
+    return to_markdown_simple(df)
 
   except Exception as e:
     return f"Error executing query: {e}"
@@ -152,6 +179,12 @@ def create_chart_from_xplane(
       y_col: Column for Y axis (bar) or values (pie).
       title: Chart title.
   """
+  if is_mock_path(xplane_path):
+    output_filename = f"{xplane_path}.png"
+    with open(output_filename, "wb") as f:
+      f.write(b"MOCK_PNG_DATA")
+    return f"Chart saved to {output_filename}"
+
   try:
     # Re-use loading logic (inefficient but stateless)
     # TODO: we might want to cache the DB connection or pass it around.
@@ -240,6 +273,19 @@ def get_overview_page_metrics(xplane_path: str) -> str:
   Returns:
       A JSON string containing metrics and metadata.
   """
+  if is_mock_path(xplane_path):
+    metrics = {
+        "device_count": 1,
+        "host_count": 1,
+        "total_duration_ms": 1.92,
+        "device_duty_cycle_percent": 78.0,
+        "average_step_time_ms": 1.92,
+        "step_count": 1,
+        "build_target": "N/A (Offline Mock)",
+        "xid": "N/A (Offline Mock)",
+    }
+    return json.dumps(metrics, indent=2)
+
   try:
     open_func = gzip.open if xplane_path.endswith(".gz") else open
     with open_func(xplane_path, "rb") as f:

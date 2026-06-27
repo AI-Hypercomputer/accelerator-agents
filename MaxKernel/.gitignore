@@ -5,3 +5,7 @@ session_info/
 *.txt
 .adk
 eval_config.yaml
+
+# Local execution environments and outputs
+.venv/
+beam_search/output/

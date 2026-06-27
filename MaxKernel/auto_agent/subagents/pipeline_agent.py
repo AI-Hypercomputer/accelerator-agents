@@ -23,9 +23,10 @@ class AutonomousPipelineAgent(BaseAgent):
   validate_agent: BaseAgent
   test_gen_agent: BaseAgent
   test_run_agent: BaseAgent
-  autotune_agent: BaseAgent
-  profile_agent: BaseAgent
+  autotune_agent: BaseAgent | None = None
+  profile_agent: BaseAgent | None = None
   max_iterations: int = 2
+  stop_on_first_valid: bool = False
 
   def __init__(
     self,
@@ -35,9 +36,10 @@ class AutonomousPipelineAgent(BaseAgent):
     validate_agent: BaseAgent,
     test_gen_agent: BaseAgent,
     test_run_agent: BaseAgent,
-    autotune_agent: BaseAgent,
-    profile_agent: BaseAgent,
+    autotune_agent: BaseAgent | None = None,
+    profile_agent: BaseAgent | None = None,
     max_iterations: int = 2,
+    stop_on_first_valid: bool = False,
   ):
     super().__init__(
       name=name,
@@ -49,6 +51,7 @@ class AutonomousPipelineAgent(BaseAgent):
       autotune_agent=autotune_agent,
       profile_agent=profile_agent,
       max_iterations=max_iterations,
+      stop_on_first_valid=stop_on_first_valid,
     )
 
   async def _run_async_impl(
@@ -129,14 +132,16 @@ class AutonomousPipelineAgent(BaseAgent):
         continue
 
       # Step 6: Autotune
-      logging.info(f"[{self.name}] Running AutotuneAgent...")
-      async for event in self.autotune_agent.run_async(ctx):
-        yield event
+      if self.autotune_agent:
+        logging.info(f"[{self.name}] Running AutotuneAgent...")
+        async for event in self.autotune_agent.run_async(ctx):
+          yield event
 
       # Step 7: Profile
-      logging.info(f"[{self.name}] Running ProfileAgentOrchestrator...")
-      async for event in self.profile_agent.run_async(ctx):
-        yield event
+      if self.profile_agent:
+        logging.info(f"[{self.name}] Running ProfileAgentOrchestrator...")
+        async for event in self.profile_agent.run_async(ctx):
+          yield event
 
       # Snapshot intermediate result
       kernel_path = ctx.session.state.get("optimized_kernel_path")
@@ -176,6 +181,19 @@ class AutonomousPipelineAgent(BaseAgent):
       logging.info(f"[{self.name}] Saved snapshot for iteration {iteration}")
 
       self._save_iteration_files(ctx, iteration)
+
+      # Check if we should stop on first successful validation
+      if self.stop_on_first_valid:
+        has_valid_candidate = any(
+            s.get("compilation_status", {}).get("success")
+            and s.get("test_status", {}).get("success")
+            for s in ctx.session.state.get("history", [])
+        )
+        if has_valid_candidate:
+          logging.info(
+              f"[{self.name}] stop_on_first_valid is True and a valid, profiled candidate was generated. Stopping pipeline."
+          )
+          break
 
       # Step 7: Check if improvement is needed
       # needs_improvement = ctx.session.state.get("needs_improvement", False)

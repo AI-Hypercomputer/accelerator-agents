@@ -119,11 +119,15 @@ summarize_profile_agent = SummarizeProfileAgent(
   output_key="profiling_summary",
   include_contents="none",
   tools=[
-    offline_tools.load_xplane_and_query,
-    offline_tools.get_hlo_dump,
-    offline_tools.create_chart_from_xplane,
-    offline_tools.get_overview_page_metrics,
-    vertex_ai_rag_tool,
+      t
+      for t in [
+          offline_tools.load_xplane_and_query,
+          offline_tools.get_hlo_dump,
+          offline_tools.create_chart_from_xplane,
+          offline_tools.get_overview_page_metrics,
+          vertex_ai_rag_tool,
+      ]
+      if t is not None
   ],
 )
 

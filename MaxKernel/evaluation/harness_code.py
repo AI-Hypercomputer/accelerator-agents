@@ -164,12 +164,17 @@ def main():
         json.dump(result, f)
       return
 
-    is_correct = jnp.allclose(out_base_cpu,
-                              out_optimized_cpu,
-                              atol={atol},
-                              rtol={rtol})
-    max_abs_diff = float(jnp.max(jnp.abs(out_base_cpu - out_optimized_cpu)))
-    max_rel_diff = float(jnp.max(jnp.abs((out_base_cpu - out_optimized_cpu) / out_base_cpu)))
+    out_base_flat = jax.tree_util.tree_leaves(out_base_cpu)
+    out_optimized_flat = jax.tree_util.tree_leaves(out_optimized_cpu)
+
+    is_correct = True
+    max_abs_diff = 0.0
+    max_rel_diff = 0.0
+
+    for b, o in zip(out_base_flat, out_optimized_flat):
+      is_correct = is_correct and bool(jnp.allclose(b, o, atol={atol}, rtol={rtol}))
+      max_abs_diff = max(max_abs_diff, float(jnp.max(jnp.abs(b - o))))
+      max_rel_diff = max(max_rel_diff, float(jnp.max(jnp.abs((b - o) / b))))
 
     if not is_correct:
       result = {

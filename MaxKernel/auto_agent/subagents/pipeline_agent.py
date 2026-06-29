@@ -420,8 +420,6 @@ class AutonomousPipelineAgent(BaseAgent):
           "kernel_plan_path": ctx.session.state["kernel_plan_path"],
           "test_file_path": ctx.session.state["test_file_path"],
           "profiling_script_path": ctx.session.state["profiling_script_path"],
-          "autotune_specs_path": ctx.session.state["autotune_specs_path"],
-          "autotune_results_path": ctx.session.state["autotune_results_path"],
           "atol": ctx.session.state["atol"],
           "rtol": ctx.session.state["rtol"],
           "autotune_specs_path": ctx.session.state["autotune_specs_path"],

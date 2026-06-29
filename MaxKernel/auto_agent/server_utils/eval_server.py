@@ -25,9 +25,44 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+  # Start background task to clean up old completed tasks (TTL: 30 mins / 1800 seconds)
+  cleanup_task = asyncio.create_task(
+    clean_old_tasks_periodically(ttl_seconds=1800, check_interval_seconds=60)
+  )
   yield
+  # Clean up background task on shutdown
+  cleanup_task.cancel()
+  try:
+    await cleanup_task
+  except asyncio.CancelledError:
+    pass
   logging.info("Shutting down eval_server, cleaning up tunnels...")
   evaluator._cleanup_tunnels()
+
+
+async def clean_old_tasks_periodically(
+  ttl_seconds: int = 1800, check_interval_seconds: int = 60
+):
+  """Periodically removes completed tasks older than ttl_seconds."""
+  while True:
+    try:
+      await asyncio.sleep(check_interval_seconds)
+      now = time.time()
+      to_remove = []
+      for task_id, task_info in list(_tasks.items()):
+        # Only clean up tasks that have finished (are not queued or running)
+        if task_info["status"] not in [TaskStatus.QUEUED, TaskStatus.RUNNING]:
+          completed_at = task_info.get("completed_at")
+          if completed_at and (now - completed_at) > ttl_seconds:
+            to_remove.append(task_id)
+
+      for task_id in to_remove:
+        _tasks.pop(task_id, None)
+        logging.info(f"Cleaned up expired task {task_id} from memory.")
+    except asyncio.CancelledError:
+      break
+    except Exception as e:
+      logging.error(f"Error in task cleanup loop: {e}")
 
 
 app = FastAPI(
@@ -263,6 +298,8 @@ async def run_evaluation_task(task_id: str, request: EvalRequest):
   except Exception as e:
     _tasks[task_id]["status"] = TaskStatus.FAILED
     _tasks[task_id]["error"] = str(e)
+  finally:
+    _tasks[task_id]["completed_at"] = time.time()
 
 
 async def _perform_evaluation(request: EvalRequest):

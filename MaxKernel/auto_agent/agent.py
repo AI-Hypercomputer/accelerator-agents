@@ -35,9 +35,12 @@ if EVENTS_COMPACTION:
   compaction_config = EventsCompactionConfig(
     token_threshold=200000,
     event_retention_size=100,
+    compaction_interval=1,
+    overlap_size=0,
   )
 else:
   compaction_config = None
+
 
 app = App(
   name="auto_agent",

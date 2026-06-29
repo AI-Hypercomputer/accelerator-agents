@@ -5,6 +5,7 @@ for the human-in-the-loop kernel generation process.
 """
 
 from google.adk.apps.app import App, EventsCompactionConfig
+
 from auto_agent.subagents.autotuning.agent import autotune_agent
 from auto_agent.subagents.kernel_writing import (
   implement_kernel_agent,
@@ -30,10 +31,13 @@ root_agent = AutonomousPipelineAgent(
   max_iterations=5,
 )
 
-compaction_config = EventsCompactionConfig(
-  token_threshold=200000,
-  event_retention_size=100,
-)
+if EVENTS_COMPACTION:
+  compaction_config = EventsCompactionConfig(
+    token_threshold=200000,
+    event_retention_size=100,
+  )
+else:
+  compaction_config = None
 
 app = App(
   name="auto_agent",
@@ -42,4 +46,3 @@ app = App(
 )
 
 __all__ = ["root_agent", "app"]
-

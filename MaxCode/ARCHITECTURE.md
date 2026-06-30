@@ -33,29 +33,50 @@ execute the `migration_agent` and `evaluation_agent`, respectively.
 
 ### 4. ADK Tools
 
-`tools/migration_tool.py` and `tools/evaluation_tool.py` define ADK
-`FunctionTool`s that wrap specific Python functions for code conversion,
-config generation, data generation, and testing.
+`tools/migration_tool.py`, `tools/evaluation_tool.py`, and
+`tools/verification_tool.py` define ADK `FunctionTool`s that wrap specific
+Python functions for code conversion, quality verification, config generation,
+data generation, and testing.
 
-### 5. Migration and Validation Logic
+### 5. Migration Pipeline
+
+For **directory inputs**, `PrimaryAgent` uses `MergeAgent`
+(`agents/migration/merge_agent.py`) to preprocess the repository before
+conversion. The merge step:
+- Discovers all nn.Module files and builds an import dependency graph
+- Filters infrastructure files (fused kernels, CUDA wrappers, etc.)
+- Merges model files into a single file in topological order
+- Discovers and merges utility files separately
+- Filters infrastructure classes from merged output
+
+For **single-file inputs**, the existing direct conversion path is used.
+
+After conversion, `migration_tool.convert_code` automatically runs
+`VerificationAgent` (`agents/migration/verification_agent.py`) to produce
+a completeness scorecard (AST-based, no LLM). The verification tool is
+also available standalone via `tools/verification_tool.py`.
+
+### 6. ADK Agent Orchestration
 
 The `migration_agent` orchestrates the end-to-end migration and validation
 workflow by calling tools in sequence:
-1.  **`migration_tool.convert_code`**: Converts PyTorch code to JAX using
-    `agents.migration.primary_agent.PrimaryAgent`, copies the original source
-    code, and saves the results to a timestamped output directory. Returns
-    paths to the migrated code, original code, and mapping file.
-2.  **`evaluation_tool.generate_model_configs`**: Generates configuration
+1.  **`migration_tool.convert_code`**: Merges, converts, and verifies
+    PyTorch code to JAX using `PrimaryAgent` (which delegates to
+    `MergeAgent` for directories). Copies the original source code and
+    saves results to a timestamped output directory.
+2.  **`verification_tool.verify_conversion`** (optional): Standalone
+    quality verification with completeness and correctness scores.
+3.  **`evaluation_tool.generate_model_configs`**: Generates configuration
     files from the original PyTorch code.
-3.  **`evaluation_tool.generate_oracle_data`**: Generates oracle data
+4.  **`evaluation_tool.generate_oracle_data`**: Generates oracle data
     (.pkl files) from the PyTorch code using the generated configurations.
-4.  **`evaluation_tool.run_equivalence_tests`**: Generates test scripts
+5.  **`evaluation_tool.run_equivalence_tests`**: Generates test scripts
     that compare JAX outputs against PyTorch oracle data, and then runs these
     tests using `subprocess`.
 
 The result is a destination directory containing the migrated JAX code, a
-`mapping.json` file, and an `evaluation` subdirectory with configurations,
-oracle data, and test scripts.
+`mapping.json` file, a `verification_scorecard.json`, and an `evaluation`
+subdirectory with configurations, oracle data, and test scripts.
 
 ## Summary
 
@@ -63,10 +84,22 @@ The overall flow for migration is:
 
 ```
 Gemini CLI -> mcp_server:primary_agent_server -> adk_agents:migration_agent ->
-  1. tools:migration_tool:convert_code (Migration)
-  2. tools:evaluation_tool:generate_model_configs (Config Gen)
-  3. tools:evaluation_tool:generate_oracle_data (Data Gen)
-  4. tools:evaluation_tool:run_equivalence_tests (Test Gen & Run)
+  1. tools:migration_tool:convert_code
+     (Merge -> Convert -> Validate/Repair -> Verify)
+  2. tools:verification_tool:verify_conversion (optional, standalone)
+  3. tools:evaluation_tool:generate_model_configs (Config Gen)
+  4. tools:evaluation_tool:generate_oracle_data (Data Gen)
+  5. tools:evaluation_tool:run_equivalence_tests (Test Gen & Run)
+```
+
+The internal flow within `convert_code` for directory inputs:
+
+```
+MergeAgent.run(repo_dir)          # Preprocessing: discover, filter, merge
+  -> PrimaryAgent._convert_file() # LLM conversion (model + utils)
+  -> PrimaryAgent._fill_missing() # Gap-filling pass
+  -> PrimaryAgent._validate()     # Validation + repair loop
+  -> VerificationAgent.verify()   # Quality scorecard
 ```
 
 ## Agent Structure and Extension
@@ -74,8 +107,8 @@ Gemini CLI -> mcp_server:primary_agent_server -> adk_agents:migration_agent ->
 The project separates agent implementation logic from ADK agent/tool
 definitions:
 
-*   **`agents/<domain>/`**: Contains agent classes with core implementation logic (e.g., `agents/migration/primary_agent.py`).
-*   **`tools/`**: Contains ADK `FunctionTool` wrappers that call agent logic or other Python functions (e.g., `tools/migration_tool.py`).
+*   **`agents/<domain>/`**: Contains agent classes with core implementation logic (e.g., `agents/migration/primary_agent.py`, `agents/migration/merge_agent.py`, `agents/migration/verification_agent.py`).
+*   **`tools/`**: Contains ADK `FunctionTool` wrappers that call agent logic or other Python functions (e.g., `tools/migration_tool.py`, `tools/verification_tool.py`).
 *   **`mcp_server/adk_agents.py`**: Defines the ADK agent hierarchy, instructions, and tool mappings.
 
 ### How to Add a New Capability

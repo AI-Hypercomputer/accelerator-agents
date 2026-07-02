@@ -4,7 +4,7 @@ import logging
 import os
 import re
 import shutil
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
@@ -26,6 +26,8 @@ class AutonomousPipelineAgent(BaseAgent):
   autotune_agent: BaseAgent
   profile_agent: BaseAgent
   max_iterations: int = 2
+  session_dir: Optional[str] = None
+  end_agent: Optional[str] = None
 
   def __init__(
     self,
@@ -38,6 +40,8 @@ class AutonomousPipelineAgent(BaseAgent):
     autotune_agent: BaseAgent,
     profile_agent: BaseAgent,
     max_iterations: int = 2,
+    session_dir: Optional[str] = None,
+    end_agent: Optional[str] = None,
   ):
     super().__init__(
       name=name,
@@ -49,6 +53,8 @@ class AutonomousPipelineAgent(BaseAgent):
       autotune_agent=autotune_agent,
       profile_agent=profile_agent,
       max_iterations=max_iterations,
+      session_dir=session_dir,
+      end_agent=end_agent,
     )
 
   async def _run_async_impl(
@@ -67,11 +73,17 @@ class AutonomousPipelineAgent(BaseAgent):
       logging.info(f"[{self.name}] Running PlanKernelAgent...")
       async for event in self.plan_agent.run_async(ctx):
         yield event
+      if self._should_end_at_step(ctx, iteration, "plan"):
+        iteration += 1
+        continue
 
       # Step 2: Implement
       logging.info(f"[{self.name}] Running ImplementKernelAgent...")
       async for event in self.implement_agent.run_async(ctx):
         yield event
+      if self._should_end_at_step(ctx, iteration, "implement"):
+        iteration += 1
+        continue
 
       # Step 3: Validate
       logging.info(f"[{self.name}] Running ValidateKernelCompilationAgent...")
@@ -86,9 +98,11 @@ class AutonomousPipelineAgent(BaseAgent):
         logging.error(
           f"[{self.name}] Compilation failed. Looping back to planning."
         )
-        self._save_iteration_files(
-          ctx, iteration, keys_to_save=["optimized_kernel_path"]
-        )
+        self._save_iteration_files(ctx, iteration, step_name="validate")
+        iteration += 1
+        continue
+
+      if self._should_end_at_step(ctx, iteration, "validate"):
         iteration += 1
         continue
 
@@ -103,11 +117,11 @@ class AutonomousPipelineAgent(BaseAgent):
         logging.error(
           f"[{self.name}] Test generation/validation failed. Looping back to planning."
         )
-        self._save_iteration_files(
-          ctx,
-          iteration,
-          keys_to_save=["optimized_kernel_path", "test_file_path"],
-        )
+        self._save_iteration_files(ctx, iteration, step_name="test_gen")
+        iteration += 1
+        continue
+
+      if self._should_end_at_step(ctx, iteration, "test_gen"):
         iteration += 1
         continue
 
@@ -120,11 +134,11 @@ class AutonomousPipelineAgent(BaseAgent):
       test_results = ctx.session.state.get("test_results", {})
       if not test_results.get("success", False):
         logging.error(f"[{self.name}] Tests failed. Looping back to planning.")
-        self._save_iteration_files(
-          ctx,
-          iteration,
-          keys_to_save=["optimized_kernel_path", "test_file_path"],
-        )
+        self._save_iteration_files(ctx, iteration, step_name="test_run")
+        iteration += 1
+        continue
+
+      if self._should_end_at_step(ctx, iteration, "test_run"):
         iteration += 1
         continue
 
@@ -132,11 +146,17 @@ class AutonomousPipelineAgent(BaseAgent):
       logging.info(f"[{self.name}] Running AutotuneAgent...")
       async for event in self.autotune_agent.run_async(ctx):
         yield event
+      if self._should_end_at_step(ctx, iteration, "autotune"):
+        iteration += 1
+        continue
 
       # Step 7: Profile
       logging.info(f"[{self.name}] Running ProfileAgentOrchestrator...")
       async for event in self.profile_agent.run_async(ctx):
         yield event
+      if self._should_end_at_step(ctx, iteration, "profile"):
+        iteration += 1
+        continue
 
       # Snapshot intermediate result
       kernel_path = ctx.session.state.get("optimized_kernel_path")
@@ -209,20 +229,47 @@ class AutonomousPipelineAgent(BaseAgent):
       ),
     )
 
+  def _should_end_at_step(
+    self, ctx: InvocationContext, iteration: int, step_name: str
+  ) -> bool:
+    """Checks if the pipeline should terminate at the current step."""
+    if self.end_agent == step_name:
+      logging.info(
+        f"[{self.name}] Ending iteration {iteration} early at step '{step_name}'."
+      )
+      self._save_iteration_files(ctx, iteration, step_name=step_name)
+      return True
+    return False
+
   def _save_iteration_files(
     self,
     ctx: InvocationContext,
     iteration: int,
-    keys_to_save: list[str] | None = None,
+    step_name: Optional[str] = None,
   ):
     """Saves artifacts with an iteration suffix."""
-    if keys_to_save is None:
-      keys_to_save = [
-        "optimized_kernel_path",
-        "test_file_path",
-        "autotune_specs_path",
-        "autotune_results_path",
-      ]
+    all_keys = [
+      "kernel_plan_path",
+      "optimized_kernel_path",
+      "test_file_path",
+      "autotune_specs_path",
+      "autotune_results_path",
+    ]
+    if step_name is not None:
+      step_to_last_key = {
+        "plan": "kernel_plan_path",
+        "implement": "optimized_kernel_path",
+        "validate": "optimized_kernel_path",
+        "test_gen": "test_file_path",
+        "test_run": "test_file_path",
+        "autotune": "autotune_results_path",
+        "profile": "autotune_results_path",
+      }
+      last_key = step_to_last_key.get(step_name, "autotune_results_path")
+      keys_to_save = all_keys[: all_keys.index(last_key) + 1]
+    else:
+      keys_to_save = all_keys
+
     for path_key in keys_to_save:
       path = ctx.session.state.get(path_key)
       if path and os.path.exists(path):
@@ -245,7 +292,16 @@ class AutonomousPipelineAgent(BaseAgent):
       ctx.session.state["history"] = []
 
     # Path related states
-    session_dir = os.path.join(WORKDIR, ctx.session.id)
+    session_dir = self.session_dir or os.path.join(WORKDIR, ctx.session.id)
+
+    # Ensure session_dir is under WORKDIR
+    abs_session_dir = os.path.abspath(session_dir)
+    abs_workdir = os.path.abspath(WORKDIR)
+    if os.path.commonpath([abs_workdir, abs_session_dir]) != abs_workdir:
+      raise ValueError(
+        f"session_dir ({session_dir}) must be a subdirectory of WORKDIR ({WORKDIR})"
+      )
+
     os.makedirs(session_dir, exist_ok=True)
 
     if "workdir" not in ctx.session.state:

@@ -73,6 +73,9 @@ class AutonomousPipelineAgent(BaseAgent):
       logging.info(f"[{self.name}] Running PlanKernelAgent...")
       async for event in self.plan_agent.run_async(ctx):
         yield event
+
+      self._clear_iteration_metrics(ctx)
+
       if self._should_end_at_step(ctx, iteration, "plan"):
         iteration += 1
         continue
@@ -98,7 +101,9 @@ class AutonomousPipelineAgent(BaseAgent):
         logging.error(
           f"[{self.name}] Compilation failed. Looping back to planning."
         )
-        self._save_iteration_files(ctx, iteration, step_name="validate")
+        self._save_iteration_files_and_snapshot(
+          ctx, iteration, step_name="validate"
+        )
         iteration += 1
         continue
 
@@ -117,7 +122,9 @@ class AutonomousPipelineAgent(BaseAgent):
         logging.error(
           f"[{self.name}] Test generation/validation failed. Looping back to planning."
         )
-        self._save_iteration_files(ctx, iteration, step_name="test_gen")
+        self._save_iteration_files_and_snapshot(
+          ctx, iteration, step_name="test_gen"
+        )
         iteration += 1
         continue
 
@@ -134,7 +141,9 @@ class AutonomousPipelineAgent(BaseAgent):
       test_results = ctx.session.state.get("test_results", {})
       if not test_results.get("success", False):
         logging.error(f"[{self.name}] Tests failed. Looping back to planning.")
-        self._save_iteration_files(ctx, iteration, step_name="test_run")
+        self._save_iteration_files_and_snapshot(
+          ctx, iteration, step_name="test_run"
+        )
         iteration += 1
         continue
 
@@ -158,44 +167,14 @@ class AutonomousPipelineAgent(BaseAgent):
         iteration += 1
         continue
 
-      # Snapshot intermediate result
-      kernel_path = ctx.session.state.get("optimized_kernel_path")
-      kernel_code = ""
-      if kernel_path and os.path.exists(kernel_path):
-        try:
-          with open(kernel_path, "r") as f:
-            kernel_code = f.read()
-        except Exception as e:
-          logging.error(
-            f"[{self.name}] Failed to read kernel file for snapshot: {e}"
-          )
-
-      # Extract latency
-      latency = self._extract_latency(ctx)
-
-      snapshot = {
-        "iteration": iteration,
-        "kernel_code": kernel_code,
-        "compilation_status": ctx.session.state.get(
-          "kernel_compilation_status", {}
-        ),
-        "test_status": ctx.session.state.get("test_results", {}),
-        "latency_ms": latency,
-        "profiling_summary": ctx.session.state.get("profiling_summary", ""),
-      }
-      current_history = ctx.session.state.get("history", [])
-      updated_history = current_history + [snapshot]
-      ctx.session.state["history"] = (
-        updated_history  # Ensure local consistency within the loop
-      )
+      self._save_iteration_files_and_snapshot(ctx, iteration)
 
       yield Event(
         author=self.name,
-        actions=EventActions(state_delta={"history": updated_history}),
+        actions=EventActions(
+          state_delta={"history": ctx.session.state.get("history", [])}
+        ),
       )
-      logging.info(f"[{self.name}] Saved snapshot for iteration {iteration}")
-
-      self._save_iteration_files(ctx, iteration)
 
       # Step 7: Check if improvement is needed
       # needs_improvement = ctx.session.state.get("needs_improvement", False)
@@ -237,11 +216,47 @@ class AutonomousPipelineAgent(BaseAgent):
       logging.info(
         f"[{self.name}] Ending iteration {iteration} early at step '{step_name}'."
       )
-      self._save_iteration_files(ctx, iteration, step_name=step_name)
+      self._save_iteration_files_and_snapshot(
+        ctx, iteration, step_name=step_name
+      )
       return True
     return False
 
-  def _save_iteration_files(
+  def _record_history_snapshot(self, ctx: InvocationContext, iteration: int):
+    """Records the iteration snapshot into the session history."""
+    current_history = ctx.session.state.get("history", [])
+    if any(s.get("iteration") == iteration for s in current_history):
+      return
+
+    kernel_path = ctx.session.state.get("optimized_kernel_path")
+    kernel_code = ""
+    if kernel_path and os.path.exists(kernel_path):
+      try:
+        with open(kernel_path, "r") as f:
+          kernel_code = f.read()
+      except Exception as e:
+        logging.error(
+          f"[{self.name}] Failed to read kernel file for snapshot: {e}"
+        )
+
+    latency = self._extract_latency(ctx)
+
+    snapshot = {
+      "iteration": iteration,
+      "kernel_code": kernel_code,
+      "compilation_status": ctx.session.state.get(
+        "kernel_compilation_status", {}
+      ),
+      "test_status": ctx.session.state.get("test_results", {}),
+      "latency_ms": latency,
+      "profiling_summary": ctx.session.state.get("profiling_summary", ""),
+    }
+
+    updated_history = current_history + [snapshot]
+    ctx.session.state["history"] = updated_history
+    logging.info(f"[{self.name}] Saved snapshot for iteration {iteration}")
+
+  def _save_iteration_files_and_snapshot(
     self,
     ctx: InvocationContext,
     iteration: int,
@@ -284,6 +299,19 @@ class AutonomousPipelineAgent(BaseAgent):
           logging.error(
             f"[{self.name}] Failed to copy {path_key} to {new_path}: {e}"
           )
+
+    self._record_history_snapshot(ctx, iteration)
+
+  def _clear_iteration_metrics(self, ctx: InvocationContext):
+    """Clears iteration-specific metrics to avoid carrying over stale data."""
+    for key in [
+      "kernel_compilation_status",
+      "validation_loop_status",
+      "test_results",
+      "autotune_results",
+      "profiling_summary",
+    ]:
+      ctx.session.state.pop(key, None)
 
   def _initialize_state(self, ctx: InvocationContext) -> Event:
     """Initializes session state with standard paths and returns the event."""
@@ -462,34 +490,32 @@ class AutonomousPipelineAgent(BaseAgent):
         f"[{self.name}] Best solution found from iteration {best_solution['iteration']}"
       )
 
-      # Rollback if needed
-      current_code = ""
-      kernel_path = ctx.session.state.get("optimized_kernel_path")
-      if kernel_path and os.path.exists(kernel_path):
-        try:
-          with open(kernel_path, "r") as f:
-            current_code = f.read()
-        except Exception as e:
-          logging.error(
-            f"[{self.name}] Failed to read current kernel file: {e}"
-          )
+      # Rollback all relevant files to the best iteration's state
+      best_iter = best_solution["iteration"]
+      keys_to_rollback = [
+        "optimized_kernel_path",
+        "kernel_plan_path",
+        "test_file_path",
+        "autotune_specs_path",
+        "autotune_results_path",
+      ]
 
-      if best_solution["kernel_code"] != current_code:
-        logging.info(
-          f"[{self.name}] Reverting kernel file to best solution from iteration {best_solution['iteration']}"
-        )
-        if kernel_path:
-          try:
-            with open(kernel_path, "w") as f:
-              f.write(best_solution["kernel_code"])
-          except Exception as e:
-            logging.error(
-              f"[{self.name}] Failed to write best solution to file: {e}"
-            )
-      else:
-        logging.info(
-          f"[{self.name}] Current file is already the best solution."
-        )
+      logging.info(
+        f"[{self.name}] Restoring files to match best solution from iteration {best_iter}"
+      )
+
+      for path_key in keys_to_rollback:
+        base_path = ctx.session.state.get(path_key)
+        if base_path:
+          directory, filename = os.path.split(base_path)
+          name, ext = os.path.splitext(filename)
+          suffixed_path = os.path.join(directory, f"{name}_{best_iter}{ext}")
+
+          if os.path.exists(suffixed_path):
+            try:
+              shutil.copy2(suffixed_path, base_path)
+            except Exception as e:
+              logging.error(f"[{self.name}] Failed to rollback {path_key}: {e}")
 
     return best_solution
 

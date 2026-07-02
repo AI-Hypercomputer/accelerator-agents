@@ -1,16 +1,25 @@
 import argparse
+import asyncio
 import json
 import logging
+from typing import Any, Optional
 
-import requests
+# Load environment variables from .env file if available
+try:
+  from dotenv import load_dotenv
 
-REQUEST_TIMEOUT = 60 * 60 * 5
+  load_dotenv()
+except ImportError:
+  logging.warning(
+    "dotenv not installed, skipping loading environment variables"
+  )
 
+from google.adk.runners import Runner
+from google.adk.sessions.in_memory_session_service import InMemorySessionService
+from google.genai.types import Content, Part
 
-# Configure logging
-logging.basicConfig(
-  level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+from auto_agent.agent import root_agent
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,7 +27,6 @@ class AutoAgentClient:
   user_id: str
   session_id: str
   query: str
-  base_url: str
   app_name: str = "auto_agent"
 
   def __init__(
@@ -26,54 +34,35 @@ class AutoAgentClient:
     user_id: str,
     session_id: str,
     query: str,
-    base_url: str = "http://localhost:8000",
+    agent: Optional[Any] = None,
   ):
     self.user_id = user_id
     self.session_id = session_id
     self.query = query
-    self.base_url = base_url
+    self.agent = agent or root_agent
+    self.session_service = InMemorySessionService()
+    self.session = None
 
-  def create_session(self):
-    session_url = f"{self.base_url}/apps/{self.app_name}/users/{self.user_id}/sessions/{self.session_id}"
-    response = requests.post(
-      session_url, headers={"Content-Type": "application/json"}
+  async def create_session(self) -> None:
+    self.session = await self.session_service.create_session(
+      app_name=self.app_name,
+      user_id=self.user_id,
+      session_id=self.session_id,
     )
-    return response
-
-  def send_query(self):
-    run_url = f"{self.base_url}/run"
-    payload = {
-      "appName": self.app_name,
-      "userId": self.user_id,
-      "sessionId": self.session_id,
-      "newMessage": {"role": "user", "parts": [{"text": self.query}]},
-    }
-    response = requests.post(
-      run_url,
-      headers={"Content-Type": "application/json"},
-      data=json.dumps(payload),
-      timeout=REQUEST_TIMEOUT,
-    )
-    return response
 
   def _get_session_data(self) -> dict:
-    session_url = f"{self.base_url}/apps/{self.app_name}/users/{self.user_id}/sessions/{self.session_id}"
-    response = requests.get(
-      session_url, headers={"Content-Type": "application/json"}
+    if not self.session:
+      raise ValueError("Session has not been created yet.")
+
+    return json.loads(
+      self.session.model_dump_json(by_alias=True, exclude_none=True)
     )
-    if response.status_code != 200:
-      raise ValueError(f"Failed to get state: {response.status_code}")
-    try:
-      return response.json()
-    except json.JSONDecodeError:
-      raise ValueError("Failed to decode JSON response from server")
 
-  def get_state(self, key: str = None):
-    state_data = self._get_session_data()
-    state = state_data.get("state")
-    if not state:
-      raise ValueError("State not found in response")
+  def get_state(self, key: Optional[str] = None) -> Any:
+    if not self.session:
+      raise ValueError("Session has not been created yet.")
 
+    state = self.session.state
     if key is None:
       return state
 
@@ -81,17 +70,36 @@ class AutoAgentClient:
       raise ValueError(f"Key '{key}' not found in state")
     return state.get(key)
 
+  async def run_async(self) -> None:
+    if not self.session:
+      await self.create_session()
 
-def run_agent(client: AutoAgentClient):
-  # Create session
-  session_response = client.create_session()
-  if session_response.status_code != 200:
-    raise ValueError(f"Failed to create session: {session_response.text}")
+    runner = Runner(
+      app_name=self.app_name,
+      agent=self.agent,
+      session_service=self.session_service,
+    )
 
-  # Send query
-  query_response = client.send_query()
-  if query_response.status_code != 200:
-    raise ValueError(f"ADK server returned error: {query_response.text}")
+    new_message = Content(parts=[Part(text=self.query)])
+
+    logger.info(f"Starting in-process agent run for session {self.session_id}")
+    try:
+      async for event in runner.run_async(
+        user_id=self.user_id,
+        session_id=self.session_id,
+        new_message=new_message,
+      ):
+        pass
+      logger.info(
+        f"Finished in-process agent run for session {self.session_id}"
+      )
+    finally:
+      # Retrieve the updated session from the session service, even if the run crashed
+      self.session = await self.session_service.get_session(
+        app_name=self.app_name,
+        user_id=self.user_id,
+        session_id=self.session_id,
+      )
 
 
 def read_query_from_file(file_path: str) -> str:
@@ -113,11 +121,6 @@ def main():
     default="client_query.txt",
     help="File containing the query to send",
   )
-  parser.add_argument(
-    "--already-generated",
-    action="store_true",
-    help="Whether to use an already generated script",
-  )
   args = parser.parse_args()
 
   user_id = args.user_id
@@ -128,16 +131,10 @@ def main():
   # Create client instance
   client = AutoAgentClient(user_id, session_id, query)
 
-  if not args.already_generated:
-    # Generate and return script
-    logger.info(
-      f"Generating script for user {user_id} in session {session_id} with query: {query}"
-    )
-    run_agent(client)
-  else:
-    logger.info(
-      f"Using already generated script for user {user_id} in session {session_id}"
-    )
+  logger.info(
+    f"Generating script for user {user_id} in session {session_id} with query: {query}"
+  )
+  asyncio.run(client.run_async())
 
 
 if __name__ == "__main__":

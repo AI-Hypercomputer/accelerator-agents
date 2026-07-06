@@ -31,7 +31,7 @@ from hitl_agent.subagents.testing import (
   unified_test_agent,
   validated_test_generation_agent,
 )
-from hitl_agent.tools.tools import filesystem_tool_r
+from hitl_agent.tools.tools import filesystem_tool_r, set_working_directory
 
 # Root orchestration agent
 root_agent = CustomLlmAgent(
@@ -56,7 +56,8 @@ root_agent = CustomLlmAgent(
     autotune_agent,  # Step 7: Auto-tune kernel
   ],
   tools=[
-    filesystem_tool_r
+    filesystem_tool_r,
+    set_working_directory,
   ],  # Read-only access - orchestrator delegates writes to sub-agents
   instruction=interactive_prompt.PROMPT,
   description="Orchestrates the human-in-the-loop kernel generation process with GPU to JAX conversion capability.",

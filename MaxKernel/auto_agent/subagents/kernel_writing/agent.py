@@ -10,7 +10,6 @@ from google.adk.events import Event, EventActions
 
 from auto_agent.callbacks import (
   add_pallas_docs,
-  add_workdir_callback,
   extract_fix_summary,
   get_tpu_version_callback,
   load_kernel_and_plan_to_state,
@@ -279,7 +278,6 @@ plan_kernel_agent = CustomLlmAgent(
   before_agent_callback=[
     add_pallas_docs,
     get_tpu_version_callback,
-    add_workdir_callback,
   ],
 )
 

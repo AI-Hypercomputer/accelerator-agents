@@ -20,3 +20,9 @@ class EvaluationResult:
     if self.optimized_time_ms == 0 or self.reference_time_ms == 0:
       return None
     return self.reference_time_ms / self.optimized_time_ms
+
+  @property
+  def speed_up_xprof(self) -> Optional[float]:
+    if self.xprof_optimized_time_ms == 0 or self.xprof_reference_time_ms == 0:
+      return None
+    return self.xprof_reference_time_ms / self.xprof_optimized_time_ms

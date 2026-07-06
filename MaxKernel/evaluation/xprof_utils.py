@@ -4,7 +4,7 @@ import os
 
 
 def extract_xprof_time(
-  trace_dir: str, event_name: str, num_runs: int = 20
+  trace_dir: str, event_name: str, num_runs: int = 20, line_name: str = None
 ) -> float:
   """Extracts execution time for a named event from xprof trace.
 
@@ -80,12 +80,19 @@ def extract_xprof_time(
     except Exception as e:
       logging.warning(f"Failed to parse {file_path}: {e}")
 
-  if xla_op_events:
-    logging.info("Found kernel events starting with %. Using them.")
-    target_events = xla_op_events
+  if line_name == "XLA Ops":
+    if xla_op_events:
+      logging.info(f"Using XLA Ops events. Found {len(xla_op_events)} events.")
+      target_events = xla_op_events
+    else:
+      logging.info(
+        "XLA Ops events requested but not found. Falling back to XLA Modules events."
+      )
+      target_events = xla_module_events
   else:
+    # Default behavior or explicit "XLA Modules"
     logging.info(
-      "No xla_op_events events found. Falling back to xla_module_events matched events."
+      f"Using XLA Modules events. Found {len(xla_module_events)} events."
     )
     target_events = xla_module_events
 

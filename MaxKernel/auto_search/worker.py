@@ -17,14 +17,15 @@ class ADKSessionWorker:
     node_id: str,
     parent_node: Node,
     session_dir: str,
+    reference_code: str,
     strategy: Optional[str] = None,
     agent_config: Optional[Dict[str, Any]] = None,
   ) -> Node:
     """Expand an ADK session to get a new optimized kernel."""
     os.makedirs(session_dir, exist_ok=True)
 
-    # Prepare inputs files for the agent based on parent_node
-    self._prepare_inputs(session_dir, parent_node)
+    # Prepare inputs files for the agent based on reference_code and parent_node
+    self._prepare_inputs(session_dir, parent_node, reference_code)
 
     # Run the agent and process results
     try:
@@ -56,15 +57,18 @@ class ADKSessionWorker:
         evaluation=EvaluationResult(correct=False),
       )
 
-  def _prepare_inputs(self, session_dir: str, parent_node: Node) -> None:
-    """Writes the parent node code and plan to the session directory."""
+  def _prepare_inputs(
+    self, session_dir: str, parent_node: Node, reference_code: str
+  ) -> None:
+    """Writes the reference code and parent's optimized code (if any) to session directory."""
     base_kernel_path = os.path.join(session_dir, "base_kernel.py")
     with open(base_kernel_path, "w") as f:
-      f.write(parent_node.code)
+      f.write(reference_code)
 
-    optimized_kernel_path = os.path.join(session_dir, "optimized_kernel.py")
-    with open(optimized_kernel_path, "w") as f:
-      f.write(parent_node.code)
+    if parent_node.depth > 0 and parent_node.code:
+      optimized_kernel_path = os.path.join(session_dir, "optimized_kernel.py")
+      with open(optimized_kernel_path, "w") as f:
+        f.write(parent_node.code)
 
     kernel_plan_path = None
     if parent_node.plan:

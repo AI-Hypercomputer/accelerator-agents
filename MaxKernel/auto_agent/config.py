@@ -12,6 +12,7 @@ WORKDIR = os.environ.get("WORKDIR", os.path.dirname(os.path.abspath(__file__)))
 TPU_VERSION = os.environ.get("TPU_VERSION", "")
 RAG_CORPUS = os.environ.get("RAG_CORPUS", "")
 INCLUDE_THOUGHTS = os.environ.get("INCLUDE_THOUGHTS", "true").lower() == "true"
+MAX_COMPILATION_RETRIES = int(os.environ.get("MAX_COMPILATION_RETRIES", "6"))
 
 # Model configuration
 model_config = types.GenerateContentConfig(

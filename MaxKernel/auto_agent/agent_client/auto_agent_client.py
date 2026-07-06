@@ -50,7 +50,7 @@ class AutoAgentClient:
       session_id=self.session_id,
     )
 
-  def _get_session_data(self) -> dict:
+  def get_session_data(self) -> dict:
     if not self.session:
       raise ValueError("Session has not been created yet.")
 

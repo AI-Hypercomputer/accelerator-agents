@@ -50,7 +50,7 @@ def get_optimized_kernel_path(session_file_path: str):
 
 def save_session_to_file(client: Any, file_path: str):
   """Fetches full session data and saves it to a local JSON file."""
-  session_data = client._get_session_data()
+  session_data = client.get_session_data()
   with open(file_path, "w") as f:
     json.dump(session_data, f, indent=2)
   logger.info(f"Saved session data to {file_path}")

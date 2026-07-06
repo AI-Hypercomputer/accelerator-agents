@@ -149,6 +149,23 @@ def main():
     out_base_cpu = jax.device_get(out_base)
     del out_base
 
+    # Dirty all HBM memory leaves with NaN / Sentinel values to prevent cache reuse
+    try:
+      for leaf in jax.tree_util.tree_leaves(out_base_cpu):
+        if hasattr(leaf, "shape") and hasattr(leaf, "dtype"):
+          if jnp.issubdtype(leaf.dtype, jnp.floating) or jnp.issubdtype(leaf.dtype, jnp.complexfloating):
+            val = jnp.nan
+          elif jnp.issubdtype(leaf.dtype, jnp.bool_):
+            val = True
+          else:
+            val = 123  # Fits within int8/uint8 and all larger integer dtypes
+
+          dummy = jax.device_put(jnp.full(leaf.shape, val, dtype=leaf.dtype))
+          dummy.block_until_ready()
+          del dummy
+    except Exception:
+      pass
+
     try:
       jit_optimized = jax.jit(optimized_mod.computation, static_argnums=static_argnums)
       out_optimized = jax.block_until_ready(jit_optimized(*args))

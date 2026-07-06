@@ -20,7 +20,7 @@ class EvaluationResult(BaseModel):
 class Node(BaseModel):
   node_id: str
   parent_id: Optional[str]
-  session_id: str
+  session_dir: Optional[str] = None
   code: str
   plan: str
   depth: int

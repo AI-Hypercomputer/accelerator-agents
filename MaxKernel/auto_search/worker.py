@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from typing import Any, Dict, Optional
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 class ADKSessionWorker:
   async def expand_node(
     self,
-    session_id: str,
+    node_id: str,
     parent_node: Node,
     session_dir: str,
     strategy: Optional[str] = None,
@@ -28,23 +29,24 @@ class ADKSessionWorker:
     # Run the agent and process results
     try:
       state = await self._run_agent(
-        session_id=session_id,
+        node_id=node_id,
         session_dir=session_dir,
         strategy=strategy,
         agent_config=agent_config,
       )
       return self._process_results(
-        session_id=session_id,
+        node_id=node_id,
         parent_node=parent_node,
         strategy=strategy,
         state=state,
+        session_dir=session_dir,
       )
     except Exception as e:
-      logger.exception(f"Session {session_id} failed: {e}")
+      logger.exception(f"Node {node_id} expansion failed: {e}")
       return Node(
-        node_id=session_id,
+        node_id=node_id,
         parent_id=parent_node.node_id,
-        session_id=session_id,
+        session_dir=session_dir,
         code="",
         plan="",
         depth=parent_node.depth + 1,
@@ -72,7 +74,7 @@ class ADKSessionWorker:
 
   async def _run_agent(
     self,
-    session_id: str,
+    node_id: str,
     session_dir: str,
     strategy: Optional[str],
     agent_config: Optional[Dict[str, Any]] = None,
@@ -101,20 +103,28 @@ class ADKSessionWorker:
     )
     client = AutoAgentClient(
       user_id="orchestrator",
-      session_id=session_id,
+      session_id=node_id,
       query=query,
       agent=custom_agent,
     )
     await client.create_session()
     await client.run_async()
+    try:
+      session_json_path = os.path.join(session_dir, "session.json")
+      with open(session_json_path, "w") as f:
+        json.dump(client.get_session_data(), f, indent=2)
+      logger.info(f"Saved session data to {session_json_path}")
+    except Exception as se:
+      logger.warning(f"Failed to save session data for {node_id}: {se}")
     return client.get_state()
 
   def _process_results(
     self,
-    session_id: str,
+    node_id: str,
     parent_node: Node,
     strategy: Optional[str],
     state: Dict[str, Any],
+    session_dir: str,
   ) -> Node:
     """Reads optimized code/plan and extracts metrics to construct a new Node."""
     history = state.get("history", [])
@@ -154,9 +164,9 @@ class ADKSessionWorker:
         optimized_plan = f.read()
 
     return Node(
-      node_id=session_id,
+      node_id=node_id,
       parent_id=parent_node.node_id,
-      session_id=session_id,
+      session_dir=session_dir,
       code=optimized_code,
       plan=optimized_plan,
       depth=parent_node.depth + 1,

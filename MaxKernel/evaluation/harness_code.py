@@ -149,6 +149,8 @@ def main():
     out_base_cpu = jax.device_get(out_base)
     del out_base
 
+    harness_logs = []
+
     # Dirty all HBM memory leaves with NaN / Sentinel values to prevent cache reuse
     try:
       for leaf in jax.tree_util.tree_leaves(out_base_cpu):
@@ -160,11 +162,11 @@ def main():
           else:
             val = 123  # Fits within int8/uint8 and all larger integer dtypes
 
-          dummy = jax.device_put(jnp.full(leaf.shape, val, dtype=leaf.dtype))
+          dummy = jnp.full(leaf.shape, val, dtype=leaf.dtype)
           dummy.block_until_ready()
           del dummy
-    except Exception:
-      pass
+    except Exception as e:
+      harness_logs.append(f"Failed to dirty HBM memory: {e}")
 
     try:
       jit_optimized = jax.jit(optimized_mod.computation, static_argnums=static_argnums)
@@ -177,6 +179,8 @@ def main():
           "error": str(e),
           "traceback": traceback.format_exc()
       }
+      if harness_logs:
+        result["logs"] = harness_logs
       with open("result.json", "w", encoding="utf-8") as f:
         json.dump(result, f)
       return
@@ -200,6 +204,8 @@ def main():
           "max_abs_diff": max_abs_diff,
           "max_rel_diff": max_rel_diff,
       }
+      if harness_logs:
+        result["logs"] = harness_logs
       with open("result.json", "w", encoding="utf-8") as f:
         json.dump(result, f)
       return
@@ -217,6 +223,8 @@ def main():
         "xprof_reference_time_ms": xprof_time_base,
         "xprof_optimized_time_ms": xprof_time_optimized,
     }
+    if harness_logs:
+      result["logs"] = harness_logs
     with open("result.json", "w", encoding="utf-8") as f:
       json.dump(result, f)
   except Exception as e:

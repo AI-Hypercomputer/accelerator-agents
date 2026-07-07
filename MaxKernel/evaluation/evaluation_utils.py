@@ -101,6 +101,11 @@ def print_eval_result(result: EvaluationResult):
       print(f"XProf speedup:      {xprof_speedup:.2f}x")
     else:
       print("XProf speedup:      N/A")
+
+    if result.logs:
+      print("Harness Logs:")
+      for log_msg in result.logs:
+        print(f"  - {log_msg}")
   print("=" * 40 + "\n")
 
 

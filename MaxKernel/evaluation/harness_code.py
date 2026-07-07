@@ -149,6 +149,25 @@ def main():
     out_base_cpu = jax.device_get(out_base)
     del out_base
 
+    harness_logs = []
+
+    # Dirty all HBM memory leaves with NaN / Sentinel values to prevent cache reuse
+    try:
+      for leaf in jax.tree_util.tree_leaves(out_base_cpu):
+        if hasattr(leaf, "shape") and hasattr(leaf, "dtype"):
+          if jnp.issubdtype(leaf.dtype, jnp.floating) or jnp.issubdtype(leaf.dtype, jnp.complexfloating):
+            val = jnp.nan
+          elif jnp.issubdtype(leaf.dtype, jnp.bool_):
+            val = True
+          else:
+            val = 123  # Fits within int8/uint8 and all larger integer dtypes
+
+          dummy = jnp.full(leaf.shape, val, dtype=leaf.dtype)
+          dummy.block_until_ready()
+          del dummy
+    except Exception as e:
+      harness_logs.append(f"Failed to dirty HBM memory: {e}")
+
     try:
       jit_optimized = jax.jit(optimized_mod.computation, static_argnums=static_argnums)
       out_optimized = jax.block_until_ready(jit_optimized(*args))
@@ -160,16 +179,23 @@ def main():
           "error": str(e),
           "traceback": traceback.format_exc()
       }
+      if harness_logs:
+        result["logs"] = harness_logs
       with open("result.json", "w", encoding="utf-8") as f:
         json.dump(result, f)
       return
 
-    is_correct = jnp.allclose(out_base_cpu,
-                              out_optimized_cpu,
-                              atol={atol},
-                              rtol={rtol})
-    max_abs_diff = float(jnp.max(jnp.abs(out_base_cpu - out_optimized_cpu)))
-    max_rel_diff = float(jnp.max(jnp.abs((out_base_cpu - out_optimized_cpu) / out_base_cpu)))
+    out_base_flat = jax.tree_util.tree_leaves(out_base_cpu)
+    out_optimized_flat = jax.tree_util.tree_leaves(out_optimized_cpu)
+
+    is_correct = True
+    max_abs_diff = 0.0
+    max_rel_diff = 0.0
+
+    for b, o in zip(out_base_flat, out_optimized_flat):
+      is_correct = is_correct and bool(jnp.allclose(b, o, atol={atol}, rtol={rtol}))
+      max_abs_diff = max(max_abs_diff, float(jnp.max(jnp.abs(b - o))))
+      max_rel_diff = max(max_rel_diff, float(jnp.max(jnp.abs((b - o) / b))))
 
     if not is_correct:
       result = {
@@ -178,6 +204,8 @@ def main():
           "max_abs_diff": max_abs_diff,
           "max_rel_diff": max_rel_diff,
       }
+      if harness_logs:
+        result["logs"] = harness_logs
       with open("result.json", "w", encoding="utf-8") as f:
         json.dump(result, f)
       return
@@ -195,6 +223,8 @@ def main():
         "xprof_reference_time_ms": xprof_time_base,
         "xprof_optimized_time_ms": xprof_time_optimized,
     }
+    if harness_logs:
+      result["logs"] = harness_logs
     with open("result.json", "w", encoding="utf-8") as f:
       json.dump(result, f)
   except Exception as e:

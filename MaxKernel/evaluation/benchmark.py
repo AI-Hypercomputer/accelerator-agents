@@ -153,6 +153,9 @@ def benchmark(
     # Convert the new result to a dictionary
     res_dict = asdict(result)
     res_dict["speedup"] = result.speedup if result.speedup is not None else None
+    res_dict["speed_up_xprof"] = (
+      result.speed_up_xprof if result.speed_up_xprof is not None else None
+    )
 
     # Append to the main list and save immediately
     results.append(res_dict)

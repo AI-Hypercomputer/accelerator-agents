@@ -21,9 +21,7 @@ async def set_max_compilation_retries_fn(retries: int, tool_context: ToolContext
 
   # Update in-memory config variables
   import hitl_agent.config as hitl_cfg
-  import auto_agent.config as auto_cfg
   hitl_cfg.MAX_COMPILATION_RETRIES = retries
-  auto_cfg.MAX_COMPILATION_RETRIES = retries
   os.environ["MAX_COMPILATION_RETRIES"] = str(retries)
 
   # Update .env file
@@ -51,12 +49,6 @@ async def set_max_compilation_retries_fn(retries: int, tool_context: ToolContext
     hitl_loop.max_retries = retries
   except Exception as e:
     logging.warning(f"Could not update hitl_loop max_retries: {e}")
-
-  try:
-    from auto_agent.subagents.kernel_writing.agent import kernel_compilation_validation_loop as auto_loop
-    auto_loop.max_retries = retries
-  except Exception as e:
-    logging.warning(f"Could not update auto_loop max_retries: {e}")
 
   return f"Successfully updated maximum compilation retries to: {retries}"
 

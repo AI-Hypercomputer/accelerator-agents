@@ -9,9 +9,7 @@ from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 
 from auto_agent.callbacks import (
-  add_pallas_docs,
   extract_fix_summary,
-  get_tpu_version_callback,
   load_kernel_and_plan_to_state,
   load_single_kernel_to_state,
 )
@@ -275,10 +273,6 @@ plan_kernel_agent = CustomLlmAgent(
     if vertex_ai_rag_tool
     else [search_api_tool, filesystem_tool_rw]
   ),
-  before_agent_callback=[
-    add_pallas_docs,
-    get_tpu_version_callback,
-  ],
 )
 
 # Kernel compilation validation agents

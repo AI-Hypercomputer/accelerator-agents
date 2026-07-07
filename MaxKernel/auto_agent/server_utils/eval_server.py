@@ -314,27 +314,29 @@ async def _perform_evaluation(request: EvalRequest):
     else 3600 * 3
   )
 
-  while True:
-    if time.time() - start_queue_time > max_queue_time:
-      raise HTTPException(
-        status_code=408,
-        detail="Timed out waiting for an available backend in queue",
-      )
-
-    async with backend_semaphore:
-      backend = evaluator.get_available_backend(
-        backend_type=request.backend_type
-      )
-      if backend:
-        backend.set_status("busy")
-        backend_ip = backend.ip
-        backend_port = backend.port
-        backend_name = backend.name
-        backend_type = backend.backend_type
-        break
-    await asyncio.sleep(0.1)
-
+  backend = None
   try:
+    while True:
+      if time.time() - start_queue_time > max_queue_time:
+        raise HTTPException(
+          status_code=408,
+          detail="Timed out waiting for an available backend in queue",
+        )
+
+      async with backend_semaphore:
+        backend_candidate = evaluator.get_available_backend(
+          backend_type=request.backend_type
+        )
+        if backend_candidate:
+          backend = backend_candidate
+          backend.set_status("busy")
+          backend_ip = backend.ip
+          backend_port = backend.port
+          backend_name = backend.name
+          backend_type = backend.backend_type
+          break
+      await asyncio.sleep(0.1)
+
     # Start evaluation process
     requested_type_msg = (
       f" (requested: {request.backend_type})" if request.backend_type else ""
@@ -393,12 +395,14 @@ async def _perform_evaluation(request: EvalRequest):
     logging.info(f"HTTPException occurred during evaluation: {e.detail}")
     raise e
   except Exception as e:
-    logging.error(f"Error occurred while evaluating on {backend_name}: {e}")
+    backend_name_str = backend.name if backend else "unknown"
+    logging.error(f"Error occurred while evaluating on {backend_name_str}: {e}")
     raise HTTPException(
       status_code=500, detail=f"Backend evaluation failed: {e}"
     )
   finally:
-    backend.set_status("available")
+    if backend:
+      backend.set_status("available")
 
 
 if __name__ == "__main__":

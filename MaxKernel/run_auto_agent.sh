@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Script to start the kernel agent with UI or CLI options
-# Usage: ./run_auto_agent.sh [--ui] [--reset] [--session <session_id>]
+# Script to start and manage the kernel agent with UI or CLI options
+# Usage: ./run_auto_agent.sh [command] [options]
 #
 # Note: CLI and UI modes use different session storage:
 #   - CLI mode: JSON files (*.session.json) 
@@ -10,47 +10,64 @@
 
 set -e
 
+# Default values
+COMMAND="start"
+BACKEND="local"
 UI_MODE=false
-RESET_MODE=false
-STOP_MODE=false
+SESSION_ID=""
 OUTPUT_FILE="output.txt"
 UI_PORT=1430
-SESSION_ID=""
 SESSION_DIR="${PWD}/session_info"
 
-# Parse command line arguments
+# Function to show help usage
+show_help() {
+    echo "Usage: $0 [command] [options]"
+    echo ""
+    echo "Commands:"
+    echo "  start                   Start the agent and background servers (default action)"
+    echo "  stop                    Stop all running agent sessions, servers, and tunnels"
+    echo ""
+    echo "Options:"
+    echo "  -b, --backend <type>    Execution backend: 'local', 'gce', or 'gke' (default: 'local')"
+    echo "  --ui                    Start with the web UI on port $UI_PORT (default: CLI mode)"
+    echo "  -s, --session <id>      Specify session ID to resume or start (CLI mode only)"
+    echo "  -h, --help              Show this help message"
+    echo ""
+    echo "Note: CLI and UI modes use different session storage mechanisms:"
+    echo "  - CLI mode: JSON files (*.session.json) in current directory"
+    echo "  - UI mode: SQLite database (sessions.db) - manage via web interface"
+    echo "  Sessions cannot be shared between CLI and UI modes."
+}
+
+# Check if the first argument is a command
+if [[ $1 =~ ^(start|stop)$ ]]; then
+    COMMAND="$1"
+    shift
+fi
+
+# Parse remaining options
 while [[ $# -gt 0 ]]; do
     case $1 in
+        -b|--backend)
+            if [[ "$2" =~ ^(local|gce|gke)$ ]]; then
+                BACKEND="$2"
+                shift 2
+            else
+                echo "Error: Invalid backend '$2'. Must be 'local', 'gce', or 'gke'."
+                echo "Use --help for usage information"
+                exit 1
+            fi
+            ;;
         --ui)
             UI_MODE=true
             shift
             ;;
-        --reset)
-            RESET_MODE=true
-            shift
-            ;;
-        --stop)
-            STOP_MODE=true
-            shift
-            ;;
-        --session)
+        -s|--session)
             SESSION_ID="$2"
             shift 2
             ;;
         -h|--help)
-            echo "Usage: $0 [--ui] [--reset] [--stop] [--session <session_id>]"
-            echo ""
-            echo "Options:"
-            echo "  --ui              Start with web UI on port $UI_PORT"
-            echo "  --reset           Kill existing instances and restart"
-            echo "  --stop            Kill existing instances and exit"
-            echo "  --session <id>    Specify session ID to resume (CLI mode only)"
-            echo "  --help            Show this help message"
-            echo ""
-            echo "Note: CLI and UI modes use different session storage mechanisms:"
-            echo "  - CLI mode: JSON files (*.session.json) in current directory"
-            echo "  - UI mode: SQLite database (sessions.db) - manage via web interface"
-            echo "  Sessions cannot be shared between CLI and UI modes."
+            show_help
             exit 0
             ;;
         *)
@@ -61,7 +78,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Function to kill existing adk processes
+# Function to kill existing adk processes and servers
 kill_existing_processes() {
     echo "Checking for existing adk processes..."
     
@@ -84,13 +101,20 @@ kill_existing_processes() {
 }
 
 start_background_servers() {
-    echo "Starting background servers (CPU, TPU, Eval)..."
-    
-    # Run the setup script to start all servers
-    bash auto_agent/server_utils/setup.sh --start-all
-    
-    echo "Waiting for servers to initialize..."
-    sleep 5 # Give them a few seconds to bind to ports
+    if [ "$BACKEND" = "gke" ]; then
+        echo "Using GKE execution backend. Delegating startup to setup.sh --start-gke..."
+        bash auto_agent/server_utils/setup.sh --start-gke
+    elif [ "$BACKEND" = "gce" ]; then
+        echo "Using GCE execution backend. Delegating startup to setup.sh --start-gce..."
+        bash auto_agent/server_utils/setup.sh --start-gce
+        echo "Waiting for servers to initialize..."
+        sleep 5
+    else
+        echo "Using local execution backend. Delegating startup to setup.sh --start-local..."
+        bash auto_agent/server_utils/setup.sh --start-local
+        echo "Waiting for servers to initialize..."
+        sleep 5
+    fi
 }
 
 # Function to select or manage session
@@ -190,7 +214,6 @@ start_ui_mode() {
     nohup adk web --port $UI_PORT --session_service_uri "sqlite:///$session_db" > "$SESSION_DIR/$OUTPUT_FILE" 2>&1 &
     ADK_PID=$!
 
-
     # Get the PID
     echo "Started with PID: $ADK_PID"
     
@@ -230,23 +253,17 @@ start_cli_mode() {
 }
 
 # Main execution
-echo "=== Kernel Agent Startup Script ==="
-echo "Mode: $([ "$UI_MODE" = true ] && echo "UI" || echo "CLI")"
-echo "Reset: $([ "$RESET_MODE" = true ] && echo "Yes" || echo "No")"
+echo "=== Kernel Agent Orchestrator ==="
+echo "Action: $COMMAND"
+echo "Backend: $BACKEND"
+echo "Interface: $([ "$UI_MODE" = true ] && echo "UI" || echo "CLI")"
 echo ""
 
 # Stop all processes if requested
-if [ "$STOP_MODE" = true ]; then
+if [ "$COMMAND" = "stop" ]; then
     kill_existing_processes
     echo "All processes stopped."
     exit 0
-fi
-
-# Kill existing processes if reset is requested
-if [ "$RESET_MODE" = true ]; then
-    kill_existing_processes
-    kill_existing_processes
-    echo ""
 fi
 
 # Start the background servers

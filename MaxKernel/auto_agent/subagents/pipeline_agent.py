@@ -376,6 +376,14 @@ class AutonomousPipelineAgent(BaseAgent):
         f"[{self.name}] Set profiling_script_path: {ctx.session.state['profiling_script_path']}"
       )
 
+    if "xplane_pb_path" not in ctx.session.state:
+      ctx.session.state["xplane_pb_path"] = os.path.join(
+        session_dir, "profile.xplane.pb"
+      )
+      logging.info(
+        f"[{self.name}] Set xplane_pb_path: {ctx.session.state['xplane_pb_path']}"
+      )
+
     if "autotune_specs_path" not in ctx.session.state:
       ctx.session.state["autotune_specs_path"] = os.path.join(
         session_dir, "autotune_specs.json"
@@ -412,10 +420,11 @@ class AutonomousPipelineAgent(BaseAgent):
           "kernel_plan_path": ctx.session.state["kernel_plan_path"],
           "test_file_path": ctx.session.state["test_file_path"],
           "profiling_script_path": ctx.session.state["profiling_script_path"],
-          "autotune_specs_path": ctx.session.state["autotune_specs_path"],
-          "autotune_results_path": ctx.session.state["autotune_results_path"],
           "atol": ctx.session.state["atol"],
           "rtol": ctx.session.state["rtol"],
+          "autotune_specs_path": ctx.session.state["autotune_specs_path"],
+          "autotune_results_path": ctx.session.state["autotune_results_path"],
+          "xplane_pb_path": ctx.session.state["xplane_pb_path"],
         }
       ),
     )

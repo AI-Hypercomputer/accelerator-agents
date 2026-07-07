@@ -11,6 +11,7 @@ from auto_agent.constants import EVAL_SERVER_PORT, REQUEST_TIMEOUT
 
 AUTOTUNE_INDIVIDUAL_TIMEOUT = 300
 AUTOTUNE_TOTAL_TIMEOUT = 5400
+AUTOTUNE_POLL_INTERVAL = 30
 
 
 async def autotune_kernel(
@@ -61,7 +62,7 @@ async def autotune_kernel(
         session,
         f"{server_addr}:{EVAL_SERVER_PORT}",
         payload,
-        poll_interval=10,
+        poll_interval=AUTOTUNE_POLL_INTERVAL,
         client_wait_timeout=REQUEST_TIMEOUT,
       )
 

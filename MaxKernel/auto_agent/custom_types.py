@@ -21,7 +21,7 @@ class TimeoutGemini(Gemini):
       "headers": self._tracking_headers(),
       "retry_options": self.retry_options,
       "base_url": base_url,
-      "timeout": 240000,  # 240 seconds in milliseconds
+      "timeout": 600000,  # 600 seconds in milliseconds
     }
     if api_version:
       kwargs_for_http_options["api_version"] = api_version

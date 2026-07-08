@@ -107,10 +107,10 @@ def test_jax_independent():
   out = model.apply(variables, x, src_mask=None, deterministic=True)
 
   expected_shape = (CONFIG["batch_size"], CONFIG["seq_len"], CONFIG["ntoken"])
-  assert out.shape == expected_shape, (
+  assert out.shape == expected_shape, (  # pyrefly: ignore[missing-attribute]
       f"JAX Shape Mismatch: Expected {expected_shape}, got {out.shape}"
   )
-  assert not jnp.isnan(out).any(), "JAX Output contains NaNs"
+  assert not jnp.isnan(out).any(), "JAX Output contains NaNs"  # pyrefly: ignore[bad-argument-type]
 
 
 def transfer_and_align_weights(pt_model, jax_variables):

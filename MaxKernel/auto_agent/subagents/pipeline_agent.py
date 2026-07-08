@@ -1,5 +1,6 @@
 """Autonomous pipeline agent for chaining kernel generation steps."""
 
+import json
 import logging
 import os
 import re
@@ -12,7 +13,8 @@ from google.adk.events import Event, EventActions
 from google.adk.models import LlmRequest
 from google.genai import types
 
-from auto_agent.config import WORKDIR
+from auto_agent.config import TPU_VERSION, WORKDIR
+from auto_agent.knowledge_base import pallas_docs, pallas_profiling_docs
 
 
 class AutonomousPipelineAgent(BaseAgent):
@@ -319,6 +321,29 @@ class AutonomousPipelineAgent(BaseAgent):
     if "history" not in ctx.session.state:
       ctx.session.state["history"] = []
 
+    # Initialize TPU version and Pallas docs in state
+    tpu_version = TPU_VERSION
+    ctx.session.state["tpu_version"] = tpu_version
+    logging.info(f"[{self.name}] Detected TPU version: {tpu_version}")
+
+    try:
+      with open("auto_agent/tpu_specs.json", "r") as f:
+        tpu_specs = json.load(f)
+
+      if tpu_version in tpu_specs:
+        ctx.session.state["tpu_specs"] = tpu_specs[tpu_version]
+      else:
+        ctx.session.state["tpu_specs"] = (
+          "TPU specs not found for detected version."
+        )
+      logging.info(f"[{self.name}] Loaded TPU specs for {tpu_version}")
+    except Exception as e:
+      logging.error(f"[{self.name}] Failed to load TPU specs: {e}")
+      ctx.session.state["tpu_specs"] = None
+
+    ctx.session.state["pallas_docs"] = pallas_docs.PROMPT
+    ctx.session.state["pallas_profiling_docs"] = pallas_profiling_docs.PROMPT
+
     # Path related states
     session_dir = self.session_dir or os.path.join(WORKDIR, ctx.session.id)
 
@@ -425,6 +450,12 @@ class AutonomousPipelineAgent(BaseAgent):
           "autotune_specs_path": ctx.session.state["autotune_specs_path"],
           "autotune_results_path": ctx.session.state["autotune_results_path"],
           "xplane_pb_path": ctx.session.state["xplane_pb_path"],
+          "tpu_version": ctx.session.state.get("tpu_version"),
+          "tpu_specs": ctx.session.state.get("tpu_specs"),
+          "pallas_docs": ctx.session.state.get("pallas_docs"),
+          "pallas_profiling_docs": ctx.session.state.get(
+            "pallas_profiling_docs"
+          ),
         }
       ),
     )

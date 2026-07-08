@@ -9,7 +9,9 @@ import hitl_agent.config as config
 from hitl_agent.tools.filesystem_tools import filesystem_tool_r, filesystem_tool_rw
 
 
-async def set_working_directory_fn(path: str, tool_context: ToolContext) -> str:
+async def set_working_directory_fn(
+    path: str, tool_context: ToolContext, persist: bool = False
+) -> str:
   """Set the active workspace/working directory path for the session.
 
   All filesystem tools (list_directory, read_file, write_file) will use
@@ -17,10 +19,11 @@ async def set_working_directory_fn(path: str, tool_context: ToolContext) -> str:
 
   Args:
       path: The absolute path of the directory.
+      persist: Whether to permanently save this change to the configuration file (default is False).
 
   Returns:
       A string containing the operation result description:
-      - If successful: "Successfully switched working directory to: <abs_path>"
+      - If successful: "Successfully switched working directory to: <abs_path> (persisted: <persist>)"
       - If failed: "Error: Path '<path>' does not exist." or "Error: Path '<path>' is not a directory."
   """
   if not os.path.exists(path):
@@ -34,24 +37,25 @@ async def set_working_directory_fn(path: str, tool_context: ToolContext) -> str:
   config.WORKDIR = abs_path
   os.environ["WORKDIR"] = abs_path
 
-  # Update .env file
-  try:
-    env_path = ".env"
-    if os.path.exists(env_path):
-      with open(env_path, "r") as f:
-        lines = f.readlines()
-      with open(env_path, "w") as f:
-        updated = False
-        for line in lines:
-          if line.strip().startswith("WORKDIR="):
+  # Update .env file if persist is requested
+  if persist:
+    try:
+      env_path = ".env"
+      if os.path.exists(env_path):
+        with open(env_path, "r") as f:
+          lines = f.readlines()
+        with open(env_path, "w") as f:
+          updated = False
+          for line in lines:
+            if line.strip().startswith("WORKDIR="):
+              f.write(f'WORKDIR="{abs_path}"\n')
+              updated = True
+            else:
+              f.write(line)
+          if not updated:
             f.write(f'WORKDIR="{abs_path}"\n')
-            updated = True
-          else:
-            f.write(line)
-        if not updated:
-          f.write(f'WORKDIR="{abs_path}"\n')
-  except Exception as e:
-    logging.error(f"Failed to update .env: {e}")
+    except Exception as e:
+      logging.error(f"Failed to update .env: {e}")
 
   # Update active filesystem tools
   # Update read-only filesystem tool
@@ -80,7 +84,7 @@ async def set_working_directory_fn(path: str, tool_context: ToolContext) -> str:
         sampling_capabilities=filesystem_tool_rw._sampling_capabilities,
     )
 
-  return f"Successfully switched working directory to: {abs_path}"
+  return f"Successfully switched working directory to: {abs_path} (persisted: {persist})"
 
 
 set_working_directory = FunctionTool(set_working_directory_fn)

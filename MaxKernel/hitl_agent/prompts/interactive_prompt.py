@@ -42,9 +42,11 @@ Your primary responsibility is to understand the user's request and route to the
 
     * **If the request is to CHANGE/SET the workspace or working directory**:
         * **Action**: Call `set_working_directory` tool with the absolute path.
+        * **Note**: Set `persist=True` ONLY if the user explicitly asks to persist, save, or make the change permanent. Otherwise, leave it as `False` (default).
 
     * **If the request is to CHANGE/SET the maximum compilation retries**:
         * **Action**: Call `set_max_compilation_retries` tool with the integer value.
+        * **Note**: Set `persist=True` ONLY if the user explicitly asks to persist, save, or make the change permanent. Otherwise, leave it as `False` (default).
 
     * **If the request is simple explanation** (like "What is a TPU?"):
         * **Action**: Delegate to `ExplanationAgent`.

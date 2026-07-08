@@ -15,7 +15,7 @@ from auto_agent.callbacks import (
   load_kernel_and_plan_to_state,
   load_single_kernel_to_state,
 )
-from auto_agent.config import model_config, thinking_planner
+from auto_agent.config import model_config, thinking_planner, MAX_COMPILATION_RETRIES
 from auto_agent.constants import MODEL_NAME
 from auto_agent.custom_types import CustomLlmAgent
 from auto_agent.subagents.kernel_writing.kernel_compilation import (
@@ -45,7 +45,7 @@ class KernelCompilationValidationLoop(BaseAgent):
   compilation_checker: Optional[BaseAgent] = None
   fix_agent: Optional[BaseAgent] = None
   debug_agent: Optional[BaseAgent] = None
-  max_retries: int = 4
+  max_retries: int = 6
 
   def __init__(
     self,
@@ -53,7 +53,7 @@ class KernelCompilationValidationLoop(BaseAgent):
     compilation_checker: BaseAgent,
     fix_agent: BaseAgent,
     debug_agent: Optional[BaseAgent] = None,
-    max_retries: int = 4,
+    max_retries: int = 6,
   ):
     super().__init__(
       name=name,
@@ -351,7 +351,7 @@ kernel_compilation_validation_loop = KernelCompilationValidationLoop(
   compilation_checker=kernel_compilation_checker_for_validation,
   fix_agent=fix_kernel_compilation_agent,
   debug_agent=add_debug_statements_agent,
-  max_retries=6,
+  max_retries=MAX_COMPILATION_RETRIES,
 )
 
 kernel_compilation_summary_agent = CustomLlmAgent(

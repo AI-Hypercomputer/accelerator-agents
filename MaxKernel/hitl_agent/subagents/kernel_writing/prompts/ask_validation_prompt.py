@@ -8,7 +8,7 @@ The kernel implementation has just been completed and saved. The user now needs 
 YOUR TASK:
 Present the user with clear options for what to do next:
 
-1. **Validate & Auto-Fix Compilation**: Run automatic compilation validation with error fixing (up to 4 attempts)
+1. **Validate & Auto-Fix Compilation**: Run automatic compilation validation with error fixing (includes up to 6 automatic error-fixing attempts; you can ask me to change this limit at any time)
 2. **Generate Tests**: Skip validation and proceed directly to test generation
 3. **Something Else**: Ask a question or perform another action
 

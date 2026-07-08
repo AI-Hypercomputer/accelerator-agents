@@ -38,9 +38,9 @@ class EmbeddingAgent:
 
     time.sleep(2)
     embedding = (
-        self.client.models.embed_content(model=self.model, contents=text)
+        self.client.models.embed_content(model=self.model, contents=text)  # pyrefly: ignore[unsupported-operation]
         .embeddings[0]
         .values
     )
     self._cache[text] = embedding
-    return embedding
+    return embedding  # pyrefly: ignore[bad-return]

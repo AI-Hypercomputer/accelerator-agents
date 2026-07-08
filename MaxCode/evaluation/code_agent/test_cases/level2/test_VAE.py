@@ -79,7 +79,7 @@ def test_jax_independent():
   variables = model.init(keys, dummy_input)
 
   # The .apply() call was already correct using rngs=...
-  recon, mu, log_var = model.apply(
+  recon, mu, log_var = model.apply(  # pyrefly: ignore[bad-unpacking]
       variables, dummy_input, rngs={"sampling": jax.random.PRNGKey(0)}
   )
   # Shape and NaN checks
@@ -96,7 +96,7 @@ def test_jax_independent():
       f" {(config['batch_size'], config['latent_dim'])}, got {log_var.shape}"
   )
   assert not jnp.isnan(recon).any(), "JAX Reconstruction contains NaNs"
-  assert not jnp.isnan(mu).any(), "JAX Mu contains NaNs"
+  assert not jnp.isnan(mu).any(), "JAX Mu contains NaNs"  # pyrefly: ignore[bad-argument-type]
   assert not jnp.isnan(log_var).any(), "JAX LogVar contains NaNs"
 
 

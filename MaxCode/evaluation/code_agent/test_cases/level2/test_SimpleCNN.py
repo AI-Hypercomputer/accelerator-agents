@@ -52,11 +52,11 @@ def test_jax_model_validity():
   params = model.init(key, dummy_input)
   output = model.apply(params, dummy_input)
 
-  assert output.shape == (
+  assert output.shape == (  # pyrefly: ignore[missing-attribute]
       4,
       10,
   ), f'Expected output shape (4, 10), got {output.shape}'
-  assert not jnp.isnan(output).any(), 'Output contains NaNs'
+  assert not jnp.isnan(output).any(), 'Output contains NaNs'  # pyrefly: ignore[bad-argument-type]
 
 
 def test_pytorch_jax_equivalence():
@@ -130,7 +130,7 @@ def test_pytorch_jax_equivalence():
   diff = np.abs(out_torch - jax_numpy)
   max_diff = np.max(diff)
   print(f'\n   >> Max Absolute Difference: {max_diff:.2e}')
-  np.testing.assert_allclose(out_torch, out_jax, rtol=1e-5, atol=1e-5)
+  np.testing.assert_allclose(out_torch, out_jax, rtol=1e-5, atol=1e-5)  # pyrefly: ignore[no-matching-overload]
 
 
 # pylint: disable=unused-argument

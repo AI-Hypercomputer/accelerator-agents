@@ -43,10 +43,10 @@ async def _execute_adk_agent(
       break
   if handler_to_reset:
     handler_to_reset.close()
-    handler_to_reset.mode = "w"
+    handler_to_reset.mode = "w"  # pyrefly: ignore[missing-attribute]
   logging.info("Job started, clearing agent server log.")
   if handler_to_reset:
-    handler_to_reset.mode = "a"
+    handler_to_reset.mode = "a"  # pyrefly: ignore[missing-attribute]
   logging.info("Received agent call. Prompt: %s, API Key: %s", prompt, api_key)
   await ctx.info("Starting ADK Agent task...")
   logging.info("Starting ADK Agent task...")

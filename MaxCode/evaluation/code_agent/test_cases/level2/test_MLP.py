@@ -73,9 +73,9 @@ def test_jax_independent():
   # Checks
   expected_shape = (TEST_CONFIG["batch_size"], 1)
   assert (
-      y.shape == expected_shape
+      y.shape == expected_shape  # pyrefly: ignore[missing-attribute]
   ), f"JAX Shape Mismatch: Expected {expected_shape}, got {y.shape}"
-  assert not jnp.isnan(y).any(), "JAX Output contains NaNs"
+  assert not jnp.isnan(y).any(), "JAX Output contains NaNs"  # pyrefly: ignore[bad-argument-type]
 
 
 # pylint: disable=unused-argument

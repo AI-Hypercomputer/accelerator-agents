@@ -15,6 +15,7 @@ RAG_CORPUS = os.environ.get("RAG_CORPUS", "")
 INCLUDE_THOUGHTS = os.environ.get("INCLUDE_THOUGHTS", "true").lower() == "true"
 MAX_COMPILATION_RETRIES = int(os.environ.get("MAX_COMPILATION_RETRIES", "6"))
 
+
 # Set events compaction policy to avoid memory overflow
 def get_compaction_config():
   return EventsCompactionConfig(
@@ -23,6 +24,7 @@ def get_compaction_config():
     compaction_interval=1,
     overlap_size=0,
   )
+
 
 # Model configuration
 model_config = types.GenerateContentConfig(

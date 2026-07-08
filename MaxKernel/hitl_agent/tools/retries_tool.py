@@ -2,11 +2,12 @@
 
 import logging
 import os
+
 from google.adk.tools import FunctionTool, ToolContext
 
 
 async def set_max_compilation_retries_fn(
-    retries: int, tool_context: ToolContext, persist: bool = False
+  retries: int, tool_context: ToolContext, persist: bool = False
 ) -> str:
   """Set the maximum number of compilation validation and auto-fixing attempts.
 
@@ -24,6 +25,7 @@ async def set_max_compilation_retries_fn(
 
   # Update in-memory config variables
   import hitl_agent.config as hitl_cfg
+
   hitl_cfg.MAX_COMPILATION_RETRIES = retries
   os.environ["MAX_COMPILATION_RETRIES"] = str(retries)
 
@@ -49,7 +51,10 @@ async def set_max_compilation_retries_fn(
 
   # Update the active validation loops in-memory
   try:
-    from hitl_agent.subagents.kernel_writing.agent import kernel_compilation_validation_loop as hitl_loop
+    from hitl_agent.subagents.kernel_writing.agent import (
+      kernel_compilation_validation_loop as hitl_loop,
+    )
+
     hitl_loop.max_retries = retries
   except Exception as e:
     logging.warning(f"Could not update hitl_loop max_retries: {e}")

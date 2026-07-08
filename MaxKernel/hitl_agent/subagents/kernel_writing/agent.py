@@ -15,7 +15,11 @@ from hitl_agent.callbacks import (
   load_single_kernel_to_state,
   save_kernel_and_plan_paths,
 )
-from hitl_agent.config import model_config, thinking_planner, MAX_COMPILATION_RETRIES
+from hitl_agent.config import (
+  MAX_COMPILATION_RETRIES,
+  model_config,
+  thinking_planner,
+)
 from hitl_agent.constants import MODEL_NAME
 from hitl_agent.custom_types import CustomLlmAgent
 from hitl_agent.subagents.kernel_writing.kernel_compilation import (

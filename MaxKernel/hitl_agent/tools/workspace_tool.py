@@ -2,15 +2,19 @@
 
 import logging
 import os
+
 from google.adk.tools import FunctionTool, ToolContext
 from google.adk.tools.mcp_tool.mcp_session_manager import MCPSessionManager
 
 import hitl_agent.config as config
-from hitl_agent.tools.filesystem_tools import filesystem_tool_r, filesystem_tool_rw
+from hitl_agent.tools.filesystem_tools import (
+  filesystem_tool_r,
+  filesystem_tool_rw,
+)
 
 
 async def set_working_directory_fn(
-    path: str, tool_context: ToolContext, persist: bool = False
+  path: str, tool_context: ToolContext, persist: bool = False
 ) -> str:
   """Set the active workspace/working directory path for the session.
 
@@ -65,10 +69,10 @@ async def set_working_directory_fn(
     server_params_r.args[-1] = abs_path
     await filesystem_tool_r.close()
     filesystem_tool_r._mcp_session_manager = MCPSessionManager(
-        connection_params=filesystem_tool_r._connection_params,
-        errlog=filesystem_tool_r._errlog,
-        sampling_callback=filesystem_tool_r._sampling_callback,
-        sampling_capabilities=filesystem_tool_r._sampling_capabilities,
+      connection_params=filesystem_tool_r._connection_params,
+      errlog=filesystem_tool_r._errlog,
+      sampling_callback=filesystem_tool_r._sampling_callback,
+      sampling_capabilities=filesystem_tool_r._sampling_capabilities,
     )
 
   # Update read-write filesystem tool
@@ -78,10 +82,10 @@ async def set_working_directory_fn(
     server_params_rw.args[-1] = abs_path
     await filesystem_tool_rw.close()
     filesystem_tool_rw._mcp_session_manager = MCPSessionManager(
-        connection_params=filesystem_tool_rw._connection_params,
-        errlog=filesystem_tool_rw._errlog,
-        sampling_callback=filesystem_tool_rw._sampling_callback,
-        sampling_capabilities=filesystem_tool_rw._sampling_capabilities,
+      connection_params=filesystem_tool_rw._connection_params,
+      errlog=filesystem_tool_rw._errlog,
+      sampling_callback=filesystem_tool_rw._sampling_callback,
+      sampling_capabilities=filesystem_tool_rw._sampling_capabilities,
     )
 
   return f"Successfully switched working directory to: {abs_path} (persisted: {persist})"

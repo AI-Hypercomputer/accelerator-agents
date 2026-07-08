@@ -2,10 +2,11 @@
 
 import os
 
+from google.adk.apps.app import EventsCompactionConfig
 from google.adk.planners import BuiltInPlanner
 from google.genai import types
 
-from auto_agent.constants import EVENTS_COMPACTION, TEMPERATURE, TOP_K, TOP_P
+from auto_agent.constants import TEMPERATURE, TOP_K, TOP_P
 
 # Environment variables
 WORKDIR = os.environ.get("WORKDIR", os.path.dirname(os.path.abspath(__file__)))
@@ -13,8 +14,14 @@ TPU_VERSION = os.environ.get("TPU_VERSION", "")
 RAG_CORPUS = os.environ.get("RAG_CORPUS", "")
 INCLUDE_THOUGHTS = os.environ.get("INCLUDE_THOUGHTS", "true").lower() == "true"
 
-# Events Compaction Configuration
-EVENTS_COMPACTION = EVENTS_COMPACTION
+# Set events compaction policy to avoid memory overflow
+def get_compaction_config():
+  return EventsCompactionConfig(
+    token_threshold=200000,
+    event_retention_size=100,
+    compaction_interval=1,
+    overlap_size=0,
+  )
 
 # Model configuration
 model_config = types.GenerateContentConfig(

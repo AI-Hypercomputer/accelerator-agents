@@ -25,18 +25,25 @@ from auto_agent.tools.file_tools import (
 )
 from auto_agent.tools.search_api_tool import search_api_tool
 
+
 # 1. Planner Agent
 # This agent identifies parameters, creates the template, and defines the search space.
 # It saves them to session state instead of calling the tool directly.
-autotune_planner_agent = CustomLlmAgent(
-  name="AutotunePlannerAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=get_thinking_planner("high"),
-  instruction=autotune_prompt.PROMPT,
-  description="Prepares code template and search space for auto-tuning Pallas kernels.",
-  tools=[filesystem_tool_r, write_autotune_specs_tool, search_api_tool],
-)
+def create_autotune_planner_agent(
+  model_name: str = MODEL_NAME,
+) -> CustomLlmAgent:
+  return CustomLlmAgent(
+    name="AutotunePlannerAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    planner=get_thinking_planner("high"),
+    instruction=autotune_prompt.PROMPT,
+    description="Prepares code template and search space for auto-tuning Pallas kernels.",
+    tools=[filesystem_tool_r, write_autotune_specs_tool, search_api_tool],
+  )
+
+
+autotune_planner_agent = create_autotune_planner_agent()
 
 
 # 2. Runner Agent
@@ -154,52 +161,86 @@ class AutotuneRunner(BaseAgent):
       )
 
 
-autotune_runner = AutotuneRunner(
-  name="AutotuneRunner",
-  output_key="autotune_results",
-)
+def create_autotune_runner(model_name: str = MODEL_NAME) -> AutotuneRunner:
+  return AutotuneRunner(
+    name="AutotuneRunner",
+    output_key="autotune_results",
+  )
+
+
+autotune_runner = create_autotune_runner()
 
 
 # 3. Apply Best Config Agent
-apply_best_config_agent = CustomLlmAgent(
-  name="ApplyBestConfigAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=get_thinking_planner("high"),
-  instruction=apply_best_config_prompt.PROMPT,
-  description="Applies autotuning results to the optimized kernel file.",
-  tools=[filesystem_tool_r, write_optimized_kernel_tool],
-)
+def create_apply_best_config_agent(
+  model_name: str = MODEL_NAME,
+) -> CustomLlmAgent:
+  return CustomLlmAgent(
+    name="ApplyBestConfigAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    planner=get_thinking_planner("high"),
+    instruction=apply_best_config_prompt.PROMPT,
+    description="Applies autotuning results to the optimized kernel file.",
+    tools=[filesystem_tool_r, write_optimized_kernel_tool],
+  )
+
+
+apply_best_config_agent = create_apply_best_config_agent()
 
 
 # 4. Summarizer Agent
 # This agent reads results from state and talks to the user.
-autotune_summary_agent = CustomLlmAgent(
-  name="AutotuneSummaryAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  instruction=summary_prompt.PROMPT,
-  description="Summarizes autotuning results.",
-  tools=[filesystem_tool_r],
-  output_key="autotuning_summary",
-)
+def create_autotune_summary_agent(
+  model_name: str = MODEL_NAME,
+) -> CustomLlmAgent:
+  return CustomLlmAgent(
+    name="AutotuneSummaryAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    instruction=summary_prompt.PROMPT,
+    description="Summarizes autotuning results.",
+    tools=[filesystem_tool_r],
+    output_key="autotuning_summary",
+  )
+
+
+autotune_summary_agent = create_autotune_summary_agent()
 
 
 class CombinedAutotuneAgent(BaseAgent):
   """Chains autotuning steps and conditionally applies best config."""
 
-  def __init__(self, name: str):
-    super().__init__(name=name)
+  planner_agent: Optional[BaseAgent] = None
+  runner_agent: Optional[BaseAgent] = None
+  apply_config_agent: Optional[BaseAgent] = None
+  summary_agent: Optional[BaseAgent] = None
+
+  def __init__(
+    self,
+    name: str,
+    planner_agent: BaseAgent,
+    runner_agent: BaseAgent,
+    apply_config_agent: BaseAgent,
+    summary_agent: BaseAgent,
+  ):
+    super().__init__(
+      name=name,
+      planner_agent=planner_agent,
+      runner_agent=runner_agent,
+      apply_config_agent=apply_config_agent,
+      summary_agent=summary_agent,
+    )
 
   async def _run_async_impl(
     self, ctx: InvocationContext
   ) -> AsyncGenerator[Event, None]:
     logging.info(f"[{self.name}] Running AutotunePlannerAgent...")
-    async for event in autotune_planner_agent.run_async(ctx):
+    async for event in self.planner_agent.run_async(ctx):
       yield event
 
     logging.info(f"[{self.name}] Running AutotuneRunner...")
-    async for event in autotune_runner.run_async(ctx):
+    async for event in self.runner_agent.run_async(ctx):
       yield event
 
     autotune_results = ctx.session.state.get("autotune_results", {})
@@ -209,7 +250,7 @@ class CombinedAutotuneAgent(BaseAgent):
       and autotune_results.get("best_time_ms") is not None
     ):
       logging.info(f"[{self.name}] Running ApplyBestConfigAgent...")
-      async for event in apply_best_config_agent.run_async(ctx):
+      async for event in self.apply_config_agent.run_async(ctx):
         yield event
     else:
       logging.warning(
@@ -218,10 +259,22 @@ class CombinedAutotuneAgent(BaseAgent):
       )
 
     logging.info(f"[{self.name}] Running AutotuneSummaryAgent...")
-    async for event in autotune_summary_agent.run_async(ctx):
+    async for event in self.summary_agent.run_async(ctx):
       yield event
 
 
-autotune_agent = CombinedAutotuneAgent(name="AutotuneAgent")
+def create_autotune_agent(
+  model_name: str = MODEL_NAME,
+) -> CombinedAutotuneAgent:
+  return CombinedAutotuneAgent(
+    name="AutotuneAgent",
+    planner_agent=create_autotune_planner_agent(model_name),
+    runner_agent=create_autotune_runner(model_name),
+    apply_config_agent=create_apply_best_config_agent(model_name),
+    summary_agent=create_autotune_summary_agent(model_name),
+  )
 
-__all__ = ["autotune_agent"]
+
+autotune_agent = create_autotune_agent()
+
+__all__ = ["autotune_agent", "create_autotune_agent"]

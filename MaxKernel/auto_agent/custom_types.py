@@ -8,10 +8,6 @@ from google.adk.events import Event, EventActions
 from google.adk.models.google_llm import Gemini
 from google.genai import Client, types
 
-from auto_agent.constants import (
-  MODEL_NAME,
-)
-
 
 class TimeoutGemini(Gemini):
   @cached_property
@@ -46,7 +42,7 @@ class CustomLlmAgent(LlmAgent):
     # If model is a string, use the pre-configured gemini_model with retry support
     if "model" in kwargs and isinstance(kwargs["model"], str):
       gemini_model = TimeoutGemini(
-        model=MODEL_NAME,
+        model=kwargs["model"],
         retry_options=types.HttpRetryOptions(
           initial_delay=1,
           attempts=10,

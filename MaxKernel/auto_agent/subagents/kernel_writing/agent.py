@@ -14,7 +14,6 @@ from auto_agent.callbacks import (
   load_single_kernel_to_state,
 )
 from auto_agent.config import (
-  MAX_COMPILATION_RETRIES,
   get_thinking_planner,
   model_config,
 )
@@ -265,130 +264,203 @@ class ValidateKernelCompilationAgent(BaseAgent):
 # Plan-based kernel writing agents (separate, not sequential)
 # These are called independently by the root orchestrator to allow user interaction between steps
 
-plan_kernel_agent = CustomLlmAgent(
-  name="PlanKernelAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=get_thinking_planner("high"),
-  instruction=kernel_planning_prompt.PROMPT,
-  description="Creates or revises a detailed optimization plan for a Pallas kernel.",
-  tools=(
-    [search_api_tool, filesystem_tool_rw, vertex_ai_rag_tool]
-    if vertex_ai_rag_tool
-    else [search_api_tool, filesystem_tool_rw]
-  ),
-)
+
+def create_plan_kernel_agent(model_name: str = MODEL_NAME) -> CustomLlmAgent:
+  return CustomLlmAgent(
+    name="PlanKernelAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    planner=get_thinking_planner("high"),
+    instruction=kernel_planning_prompt.PROMPT,
+    description="Creates or revises a detailed optimization plan for a Pallas kernel.",
+    tools=(
+      [search_api_tool, filesystem_tool_rw, vertex_ai_rag_tool]
+      if vertex_ai_rag_tool
+      else [search_api_tool, filesystem_tool_rw]
+    ),
+  )
+
+
+plan_kernel_agent = create_plan_kernel_agent()
+
 
 # Kernel compilation validation agents
 # Read file agent for validation - extracts kernel path from user message or state
-read_file_for_validation_agent = CustomLlmAgent(
-  name="ReadFileForValidationAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  instruction=read_file_prompt.PROMPT,
-  description="Reads the kernel file mentioned by the user or from state for validation.",
-  tools=[filesystem_tool_r],
+def create_read_file_for_validation_agent(
+  model_name: str = MODEL_NAME,
+) -> CustomLlmAgent:
+  return CustomLlmAgent(
+    name="ReadFileForValidationAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    instruction=read_file_prompt.PROMPT,
+    description="Reads the kernel file mentioned by the user or from state for validation.",
+    tools=[filesystem_tool_r],
+  )
+
+
+read_file_for_validation_agent = create_read_file_for_validation_agent()
+
+
+def create_fix_kernel_compilation_agent(
+  model_name: str = MODEL_NAME,
+) -> CustomLlmAgent:
+  return CustomLlmAgent(
+    name="FixKernelCompilationAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    planner=get_thinking_planner("high"),
+    instruction=fix_kernel_compilation.PROMPT,
+    description="Fixes compilation errors in the generated kernel while preserving optimization strategy.",
+    tools=(
+      [
+        search_api_tool,
+        filesystem_tool_r,
+        write_optimized_kernel_tool,
+        vertex_ai_rag_tool,
+      ]
+      if vertex_ai_rag_tool
+      else [search_api_tool, filesystem_tool_r, write_optimized_kernel_tool]
+    ),
+    before_agent_callback=load_kernel_and_plan_to_state,
+    after_model_callback=extract_fix_summary,
+    include_contents="none",
+  )
+
+
+fix_kernel_compilation_agent = create_fix_kernel_compilation_agent()
+
+
+def create_add_debug_statements_agent(
+  model_name: str = MODEL_NAME,
+) -> CustomLlmAgent:
+  return CustomLlmAgent(
+    name="AddDebugStatementsAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    planner=get_thinking_planner("high"),
+    instruction=add_debug_statements.PROMPT,
+    description="Adds strategic debugging statements to diagnose persistent compilation issues.",
+    tools=[filesystem_tool_r, write_optimized_kernel_tool],
+    before_agent_callback=load_kernel_and_plan_to_state,
+    include_contents="none",
+  )
+
+
+add_debug_statements_agent = create_add_debug_statements_agent()
+
+
+def create_cleanup_debug_statements_agent(
+  model_name: str = MODEL_NAME,
+) -> CustomLlmAgent:
+  return CustomLlmAgent(
+    name="CleanupDebugStatementsAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    planner=get_thinking_planner("high"),
+    instruction=cleanup_debug_statements.PROMPT,
+    description="Removes debugging statements from successfully compiled kernel.",
+    tools=[filesystem_tool_r, write_optimized_kernel_tool],
+    before_agent_callback=load_single_kernel_to_state,
+    include_contents="none",
+  )
+
+
+cleanup_debug_statements_agent = create_cleanup_debug_statements_agent()
+
+
+def create_kernel_compilation_checker_for_validation(
+  model_name: str = MODEL_NAME,
+) -> KernelCompilationChecker:
+  return KernelCompilationChecker(
+    name="KernelCompilationCheckerForValidation",
+    input_key="kernel_code",
+    output_key="compilation_results",
+    before_agent_callback=load_single_kernel_to_state,
+  )
+
+
+kernel_compilation_checker_for_validation = (
+  create_kernel_compilation_checker_for_validation()
 )
 
-fix_kernel_compilation_agent = CustomLlmAgent(
-  name="FixKernelCompilationAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=get_thinking_planner("high"),
-  instruction=fix_kernel_compilation.PROMPT,
-  description="Fixes compilation errors in the generated kernel while preserving optimization strategy.",
-  tools=(
-    [
-      search_api_tool,
-      filesystem_tool_r,
-      write_optimized_kernel_tool,
-      vertex_ai_rag_tool,
-    ]
-    if vertex_ai_rag_tool
-    else [search_api_tool, filesystem_tool_r, write_optimized_kernel_tool]
-  ),
-  before_agent_callback=load_kernel_and_plan_to_state,
-  after_model_callback=extract_fix_summary,
-  include_contents="none",
-)
 
-add_debug_statements_agent = CustomLlmAgent(
-  name="AddDebugStatementsAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=get_thinking_planner("high"),
-  instruction=add_debug_statements.PROMPT,
-  description="Adds strategic debugging statements to diagnose persistent compilation issues.",
-  tools=[filesystem_tool_r, write_optimized_kernel_tool],
-  before_agent_callback=load_kernel_and_plan_to_state,
-  include_contents="none",
-)
+def create_kernel_compilation_validation_loop(
+  model_name: str = MODEL_NAME,
+) -> KernelCompilationValidationLoop:
+  return KernelCompilationValidationLoop(
+    name="KernelCompilationValidationLoop",
+    compilation_checker=create_kernel_compilation_checker_for_validation(
+      model_name
+    ),
+    fix_agent=create_fix_kernel_compilation_agent(model_name),
+    debug_agent=create_add_debug_statements_agent(model_name),
+    max_retries=6,
+  )
 
-cleanup_debug_statements_agent = CustomLlmAgent(
-  name="CleanupDebugStatementsAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=get_thinking_planner("high"),
-  instruction=cleanup_debug_statements.PROMPT,
-  description="Removes debugging statements from successfully compiled kernel.",
-  tools=[filesystem_tool_r, write_optimized_kernel_tool],
-  before_agent_callback=load_single_kernel_to_state,
-  include_contents="none",
-)
 
-kernel_compilation_checker_for_validation = KernelCompilationChecker(
-  name="KernelCompilationCheckerForValidation",
-  input_key="kernel_code",
-  output_key="compilation_results",
-  before_agent_callback=load_single_kernel_to_state,
-)
+kernel_compilation_validation_loop = create_kernel_compilation_validation_loop()
 
-kernel_compilation_validation_loop = KernelCompilationValidationLoop(
-  name="KernelCompilationValidationLoop",
-  compilation_checker=kernel_compilation_checker_for_validation,
-  fix_agent=fix_kernel_compilation_agent,
-  debug_agent=add_debug_statements_agent,
-  max_retries=MAX_COMPILATION_RETRIES,
-)
 
-kernel_compilation_summary_agent = CustomLlmAgent(
-  name="KernelCompilationSummaryAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  instruction=kernel_compilation_summary.PROMPT,
-  description="Summarizes kernel compilation validation results with full trace on failure.",
-  include_contents="none",
-)
+def create_kernel_compilation_summary_agent(
+  model_name: str = MODEL_NAME,
+) -> CustomLlmAgent:
+  return CustomLlmAgent(
+    name="KernelCompilationSummaryAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    instruction=kernel_compilation_summary.PROMPT,
+    description="Summarizes kernel compilation validation results with full trace on failure.",
+    include_contents="none",
+  )
+
+
+kernel_compilation_summary_agent = create_kernel_compilation_summary_agent()
+
 
 # Standalone validation orchestration agent (invoked by root when user requests validation)
-validate_kernel_compilation_agent = ValidateKernelCompilationAgent(
-  name="ValidateKernelCompilationAgent",
-  read_file_agent=read_file_for_validation_agent,
-  validation_loop_agent=kernel_compilation_validation_loop,
-  cleanup_agent=cleanup_debug_statements_agent,
-  summary_agent=kernel_compilation_summary_agent,
-  description="Validates kernel compilation with automatic error fixing, debugging, and provides summary. Invoked when user requests validation.",
-)
+def create_validate_kernel_compilation_agent(
+  model_name: str = MODEL_NAME,
+) -> ValidateKernelCompilationAgent:
+  return ValidateKernelCompilationAgent(
+    name="ValidateKernelCompilationAgent",
+    read_file_agent=create_read_file_for_validation_agent(model_name),
+    validation_loop_agent=create_kernel_compilation_validation_loop(model_name),
+    cleanup_agent=create_cleanup_debug_statements_agent(model_name),
+    summary_agent=create_kernel_compilation_summary_agent(model_name),
+    description="Validates kernel compilation with automatic error fixing, debugging, and provides summary. Invoked when user requests validation.",
+  )
+
+
+validate_kernel_compilation_agent = create_validate_kernel_compilation_agent()
+
 
 # Implementation agent - implements kernel
-implement_kernel_agent = CustomLlmAgent(
-  name="ImplementKernelAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=get_thinking_planner("high"),
-  instruction=kernel_implementation_prompt.PROMPT,
-  description="Implements the optimized Pallas kernel following the plan.",
-  tools=(
-    [
-      search_api_tool,
-      filesystem_tool_r,
-      write_optimized_kernel_tool,
-      vertex_ai_rag_tool,
-    ]
-    if vertex_ai_rag_tool
-    else [search_api_tool, filesystem_tool_r, write_optimized_kernel_tool]
-  ),
-)
+def create_implement_kernel_agent(
+  model_name: str = MODEL_NAME,
+) -> CustomLlmAgent:
+  return CustomLlmAgent(
+    name="ImplementKernelAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    planner=get_thinking_planner("high"),
+    instruction=kernel_implementation_prompt.PROMPT,
+    description="Implements the optimized Pallas kernel following the plan.",
+    tools=(
+      [
+        search_api_tool,
+        filesystem_tool_r,
+        write_optimized_kernel_tool,
+        vertex_ai_rag_tool,
+      ]
+      if vertex_ai_rag_tool
+      else [search_api_tool, filesystem_tool_r, write_optimized_kernel_tool]
+    ),
+  )
+
+
+implement_kernel_agent = create_implement_kernel_agent()
+
 
 __all__ = [
   "KernelCompilationValidationLoop",

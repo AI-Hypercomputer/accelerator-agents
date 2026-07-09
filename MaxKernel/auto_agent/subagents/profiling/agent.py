@@ -27,35 +27,54 @@ from auto_agent.tools.file_tools import (
 )
 from auto_agent.tools.tools import vertex_ai_rag_tool
 
+
 # Profiling script generation agent - writes profiling script to file
-generate_profiling_script_agent = CustomLlmAgent(
-  name="GenerateProfilingScriptAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=get_thinking_planner("high"),
-  instruction=gen_profiling_script.PROMPT,
-  description="Generates a profiling script to identify performance bottlenecks in the kernel code and writes it to a file.",
-  tools=[filesystem_tool_r, write_profiling_script_tool],
-  before_agent_callback=load_single_kernel_to_state,
-)
+def create_generate_profiling_script_agent(
+  model_name: str = MODEL_NAME,
+) -> CustomLlmAgent:
+  return CustomLlmAgent(
+    name="GenerateProfilingScriptAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    planner=get_thinking_planner("medium"),
+    instruction=gen_profiling_script.PROMPT,
+    description="Generates a profiling script to identify performance bottlenecks in the kernel code and writes it to a file.",
+    tools=[filesystem_tool_r, write_profiling_script_tool],
+    before_agent_callback=load_single_kernel_to_state,
+  )
+
+
+generate_profiling_script_agent = create_generate_profiling_script_agent()
+
 
 # Read profiling script agent - loads the generated profiling script file contents into state
-read_profiling_script_agent = CustomLlmAgent(
-  name="ReadProfilingScriptAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  instruction=read_profiling_script_prompt.PROMPT,
-  description="Loads the generated profiling script file contents from disk into memory for execution.",
-  before_agent_callback=load_profiling_script_to_state,
-  include_contents="none",
-)
+def create_read_profiling_script_agent(
+  model_name: str = MODEL_NAME,
+) -> CustomLlmAgent:
+  return CustomLlmAgent(
+    name="ReadProfilingScriptAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    instruction=read_profiling_script_prompt.PROMPT,
+    description="Loads the generated profiling script file contents from disk into memory for execution.",
+    before_agent_callback=load_profiling_script_to_state,
+    include_contents="none",
+  )
+
+
+read_profiling_script_agent = create_read_profiling_script_agent()
+
 
 # Profiling execution agent
-eval_profile_agent = KernelProfiler(
-  name="ProfileEvalAgent",
-  input_key="profiling_script",
-  output_key="profiling_results",
-)
+def create_eval_profile_agent(model_name: str = MODEL_NAME) -> KernelProfiler:
+  return KernelProfiler(
+    name="ProfileEvalAgent",
+    input_key="profiling_script",
+    output_key="profiling_results",
+  )
+
+
+eval_profile_agent = create_eval_profile_agent()
 
 
 class SummarizeProfileAgent(CustomLlmAgent):
@@ -105,38 +124,50 @@ class SummarizeProfileAgent(CustomLlmAgent):
 
 
 # Profiling summary agent
-summarize_profile_agent = SummarizeProfileAgent(
-  name="SummarizeProfileAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=get_thinking_planner("high"),
-  instruction=analyze_profile_prompt.PROMPT,
-  description=(
-    "Summarizes the profiling results of the kernel and performs deep"
-    " analysis using offline XProf tools."
-  ),
-  output_key="profiling_summary",
-  include_contents="none",
-  tools=[
-    offline_tools.load_xplane_and_query,
-    offline_tools.get_hlo_dump,
-    offline_tools.create_chart_from_xplane,
-    offline_tools.get_overview_page_metrics,
-  ]
-  + ([vertex_ai_rag_tool] if vertex_ai_rag_tool else []),
-)
+def create_summarize_profile_agent(
+  model_name: str = MODEL_NAME,
+) -> SummarizeProfileAgent:
+  return SummarizeProfileAgent(
+    name="SummarizeProfileAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    planner=get_thinking_planner("high"),
+    instruction=analyze_profile_prompt.PROMPT,
+    description=(
+      "Summarizes the profiling results of the kernel and performs deep"
+      " analysis using offline XProf tools."
+    ),
+    output_key="profiling_summary",
+    include_contents="none",
+    tools=[
+      offline_tools.load_xplane_and_query,
+      offline_tools.get_hlo_dump,
+      offline_tools.create_chart_from_xplane,
+      offline_tools.get_overview_page_metrics,
+    ]
+    + ([vertex_ai_rag_tool] if vertex_ai_rag_tool else []),
+  )
+
+
+summarize_profile_agent = create_summarize_profile_agent()
+
 
 # Main profiling orchestrator agent
-profile_agent = SequentialAgent(
-  name="ProfileAgentOrchestrator",
-  sub_agents=[
-    generate_profiling_script_agent,
-    read_profiling_script_agent,
-    eval_profile_agent,
-    summarize_profile_agent,
-  ],
-  description="Profiles the Pallas kernel to identify performance bottlenecks.",
-)
+def create_profile_agent(model_name: str = MODEL_NAME) -> SequentialAgent:
+  return SequentialAgent(
+    name="ProfileAgentOrchestrator",
+    sub_agents=[
+      create_generate_profiling_script_agent(model_name),
+      create_read_profiling_script_agent(model_name),
+      create_eval_profile_agent(model_name),
+      create_summarize_profile_agent(model_name),
+    ],
+    description="Profiles the Pallas kernel to identify performance bottlenecks.",
+  )
+
+
+profile_agent = create_profile_agent()
+
 
 __all__ = [
   "profile_agent",

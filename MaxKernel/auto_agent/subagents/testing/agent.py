@@ -856,123 +856,203 @@ class TestValidationLoopAgent(BaseAgent):
 
 
 # Validation Summary Agent
-validation_summary_agent = CustomLlmAgent(
-  name="ValidationSummaryAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  instruction=validation_summary.PROMPT,
-  description="Summarizes validation results and provides next steps to the user.",
-)
+def create_validation_summary_agent(
+  model_name: str = MODEL_NAME,
+) -> CustomLlmAgent:
+  return CustomLlmAgent(
+    name="ValidationSummaryAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    instruction=validation_summary.PROMPT,
+    description="Summarizes validation results and provides next steps to the user.",
+  )
+
+
+validation_summary_agent = create_validation_summary_agent()
+
 
 # Test file generation agent
-generate_test_file_agent = CustomLlmAgent(
-  name="GenerateTestFileAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=get_thinking_planner("high"),
-  instruction=gen_test_file.PROMPT,
-  description="Generates a comprehensive pytest test file.",
-  tools=(
-    [
-      search_api_tool,
-      filesystem_tool_r,
-      write_test_file_tool,
-      vertex_ai_rag_tool,
-    ]
-    if vertex_ai_rag_tool
-    else [search_api_tool, filesystem_tool_r, write_test_file_tool]
-  ),
-)
+def create_generate_test_file_agent(
+  model_name: str = MODEL_NAME,
+) -> CustomLlmAgent:
+  return CustomLlmAgent(
+    name="GenerateTestFileAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    planner=get_thinking_planner("high"),
+    instruction=gen_test_file.PROMPT,
+    description="Generates a comprehensive pytest test file.",
+    tools=(
+      [
+        search_api_tool,
+        filesystem_tool_r,
+        write_test_file_tool,
+        vertex_ai_rag_tool,
+      ]
+      if vertex_ai_rag_tool
+      else [search_api_tool, filesystem_tool_r, write_test_file_tool]
+    ),
+  )
+
+
+generate_test_file_agent = create_generate_test_file_agent()
+
 
 # Validation agents
-syntax_validation_agent = SyntaxValidationAgent(
-  name="SyntaxValidationAgent",
-  input_key="test_file_path",
-  output_key="syntax_validation",
-)
+def create_syntax_validation_agent(
+  model_name: str = MODEL_NAME,
+) -> SyntaxValidationAgent:
+  return SyntaxValidationAgent(
+    name="SyntaxValidationAgent",
+    input_key="test_file_path",
+    output_key="syntax_validation",
+  )
 
-import_validation_agent = ImportValidationAgent(
-  name="ImportValidationAgent",
-  input_key="test_file_path",
-  output_key="import_validation",
-)
 
-structure_validation_agent = TestStructureValidationAgent(
-  name="TestStructureValidationAgent",
-  input_key="test_file_path",
-  output_key="structure_validation",
-)
+syntax_validation_agent = create_syntax_validation_agent()
 
-mock_execution_validation_agent = MockTestExecutionAgent(
-  name="MockTestExecutionAgent",
-  input_key="test_file_path",
-  output_key="mock_execution_validation",
-)
 
-fix_test_script_agent = CustomLlmAgent(
-  name="FixTestScriptAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=get_thinking_planner("high"),
-  instruction=fix_test_script.PROMPT,
-  description="Fixes validation errors in the generated test file.",
-  tools=[filesystem_tool_r, write_test_file_tool, search_api_tool],
-  include_contents="none",
-)
+def create_import_validation_agent(
+  model_name: str = MODEL_NAME,
+) -> ImportValidationAgent:
+  return ImportValidationAgent(
+    name="ImportValidationAgent",
+    input_key="test_file_path",
+    output_key="import_validation",
+  )
+
+
+import_validation_agent = create_import_validation_agent()
+
+
+def create_structure_validation_agent(
+  model_name: str = MODEL_NAME,
+) -> TestStructureValidationAgent:
+  return TestStructureValidationAgent(
+    name="TestStructureValidationAgent",
+    input_key="test_file_path",
+    output_key="structure_validation",
+  )
+
+
+structure_validation_agent = create_structure_validation_agent()
+
+
+def create_mock_execution_validation_agent(
+  model_name: str = MODEL_NAME,
+) -> MockTestExecutionAgent:
+  return MockTestExecutionAgent(
+    name="MockTestExecutionAgent",
+    input_key="test_file_path",
+    output_key="mock_execution_validation",
+  )
+
+
+mock_execution_validation_agent = create_mock_execution_validation_agent()
+
+
+def create_fix_test_script_agent(
+  model_name: str = MODEL_NAME,
+) -> CustomLlmAgent:
+  return CustomLlmAgent(
+    name="FixTestScriptAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    planner=get_thinking_planner("high"),
+    instruction=fix_test_script.PROMPT,
+    description="Fixes validation errors in the generated test file.",
+    tools=[filesystem_tool_r, write_test_file_tool, search_api_tool],
+    include_contents="none",
+  )
+
+
+fix_test_script_agent = create_fix_test_script_agent()
+
 
 # Validation loop agent
-validation_loop_agent = TestValidationLoopAgent(
-  name="TestValidationLoopAgent",
-  syntax_agent=syntax_validation_agent,
-  import_agent=import_validation_agent,
-  structure_agent=structure_validation_agent,
-  mock_execution_agent=mock_execution_validation_agent,
-  fix_agent=fix_test_script_agent,
-  max_retries=6,
-)
+def create_validation_loop_agent(
+  model_name: str = MODEL_NAME,
+) -> TestValidationLoopAgent:
+  return TestValidationLoopAgent(
+    name="TestValidationLoopAgent",
+    syntax_agent=create_syntax_validation_agent(model_name),
+    import_agent=create_import_validation_agent(model_name),
+    structure_agent=create_structure_validation_agent(model_name),
+    mock_execution_agent=create_mock_execution_validation_agent(model_name),
+    fix_agent=create_fix_test_script_agent(model_name),
+    max_retries=6,
+  )
+
+
+validation_loop_agent = create_validation_loop_agent()
+
 
 # Sequential agent that generates and validates test files
-validated_test_generation_agent = SequentialAgent(
-  name="ValidatedTestGenerationAgent",
-  sub_agents=[
-    generate_test_file_agent,
-    validation_loop_agent,
-    validation_summary_agent,
-  ],
-  description="Generates a validated pytest test file with automatic iterative error detection and fixing.",
-)
+def create_validated_test_generation_agent(
+  model_name: str = MODEL_NAME,
+) -> SequentialAgent:
+  return SequentialAgent(
+    name="ValidatedTestGenerationAgent",
+    sub_agents=[
+      create_generate_test_file_agent(model_name),
+      create_validation_loop_agent(model_name),
+      create_validation_summary_agent(model_name),
+    ],
+    description="Generates a validated pytest test file with automatic iterative error detection and fixing.",
+  )
+
+
+validated_test_generation_agent = create_validated_test_generation_agent()
+
 
 # Test execution agents
-run_tests_agent = TestRunner(
-  name="RunTestsAgent",
-  input_key="test_file_path",
-  output_key="test_results",
-)
+def create_run_tests_agent(model_name: str = MODEL_NAME) -> TestRunner:
+  return TestRunner(
+    name="RunTestsAgent",
+    input_key="test_file_path",
+    output_key="test_results",
+  )
 
-summarize_test_results_agent = CustomLlmAgent(
-  name="SummarizeTestResultsAgent",
-  model=MODEL_NAME,
-  generate_content_config=model_config,
-  planner=get_thinking_planner("high"),
-  instruction=summarize_test_results_prompt.PROMPT,
-  description="Analyzes pytest test results and provides recommendations.",
-  tools=(
-    [search_api_tool, vertex_ai_rag_tool]
-    if vertex_ai_rag_tool
-    else [search_api_tool]
-  ),
-  output_key="test_summary",
-  include_contents="none",
-)
 
-unified_test_agent = SequentialAgent(
-  name="UnifiedTestAgent",
-  sub_agents=[
-    run_tests_agent,
-    summarize_test_results_agent,
-  ],
-  description="Executes the generated pytest test file and provides a comprehensive summary.",
-)
+run_tests_agent = create_run_tests_agent()
+
+
+def create_summarize_test_results_agent(
+  model_name: str = MODEL_NAME,
+) -> CustomLlmAgent:
+  return CustomLlmAgent(
+    name="SummarizeTestResultsAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    planner=get_thinking_planner("high"),
+    instruction=summarize_test_results_prompt.PROMPT,
+    description="Analyzes pytest test results and provides recommendations.",
+    tools=(
+      [search_api_tool, vertex_ai_rag_tool]
+      if vertex_ai_rag_tool
+      else [search_api_tool]
+    ),
+    output_key="test_summary",
+    include_contents="none",
+  )
+
+
+summarize_test_results_agent = create_summarize_test_results_agent()
+
+
+def create_unified_test_agent(model_name: str = MODEL_NAME) -> SequentialAgent:
+  return SequentialAgent(
+    name="UnifiedTestAgent",
+    sub_agents=[
+      create_run_tests_agent(model_name),
+      create_summarize_test_results_agent(model_name),
+    ],
+    description="Executes the generated pytest test file and provides a comprehensive summary.",
+  )
+
+
+unified_test_agent = create_unified_test_agent()
+
 
 __all__ = [
   "TestRunner",

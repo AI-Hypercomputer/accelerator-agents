@@ -40,9 +40,7 @@ async def run_batch_search(
 ):
   """Coordinates concurrent problem execution across the dataset."""
   if not os.path.isdir(data_dir):
-    logger.error(
-      f"Dataset directory not found or not a directory: {data_dir}"
-    )
+    logger.error(f"Dataset directory not found or not a directory: {data_dir}")
     return
 
   data_dir_valid = [
@@ -135,6 +133,25 @@ def parse_args() -> argparse.Namespace:
     default=None,
     help="File to save logs to",
   )
+  orch_group.add_argument(
+    "--max_worker_retries",
+    type=int,
+    default=1,
+    help="Max worker retries per expansion task",
+  )
+  orch_group.add_argument(
+    "--strategies",
+    nargs="+",
+    type=str,
+    default=None,
+    help="List of strategy strings to explore",
+  )
+  orch_group.add_argument(
+    "--agent_config",
+    type=str,
+    default=None,
+    help="JSON string of agent config parameters (e.g. '{\"max_iterations\": 5}')",
+  )
   # Parallel Search Arguments
   parallel_group = parser.add_argument_group(
     "Parallel Search Arguments",
@@ -146,24 +163,34 @@ def parse_args() -> argparse.Namespace:
     default=2,
     help="Number of parallel runs",
   )
-  parallel_group.add_argument(
-    "--max_retries",
+  # Beam Search Arguments
+  beam_group = parser.add_argument_group(
+    "Beam Search Arguments",
+    "Parameters specific to the 'beam' search algorithm.",
+  )
+  beam_group.add_argument(
+    "--beam_size",
     type=int,
-    default=1,
-    help="Max worker retries per expansion task",
+    default=2,
+    help="Size of the beam (number of candidates to keep per depth)",
   )
-  parallel_group.add_argument(
-    "--strategies",
-    nargs="+",
-    type=str,
-    default=None,
-    help="List of strategy strings to explore",
+  beam_group.add_argument(
+    "--branches_per_node",
+    type=int,
+    default=2,
+    help="Number of branches/strategies to explore per node in the beam",
   )
-  parallel_group.add_argument(
-    "--agent_config",
-    type=str,
-    default=None,
-    help="JSON string of agent config parameters (e.g. '{\"max_iterations\": 5}')",
+  beam_group.add_argument(
+    "--max_depth",
+    type=int,
+    default=2,
+    help="Maximum depth of the beam search",
+  )
+  beam_group.add_argument(
+    "--keep_factor",
+    type=float,
+    default=1.0,
+    help="Factor of parent latency to keep candidates (e.g. 1.0 means must not be worse than parent)",
   )
   return parser.parse_args()
 
@@ -182,10 +209,14 @@ def main():
 
   kwargs = {
     "max_concurrency": args.max_concurrency,
-    "num_parallel_runs": args.num_parallel_runs,
-    "max_worker_retries": args.max_retries,
+    "max_worker_retries": args.max_worker_retries,
     "strategies": args.strategies,
     "agent_config": parsed_agent_config,
+    "num_parallel_runs": args.num_parallel_runs,
+    "beam_size": args.beam_size,
+    "branches_per_node": args.branches_per_node,
+    "max_depth": args.max_depth,
+    "keep_factor": args.keep_factor,
   }
 
   asyncio.run(

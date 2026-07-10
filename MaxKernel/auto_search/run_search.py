@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import time
 from typing import Any, Optional, Tuple
 
@@ -15,6 +16,7 @@ except ImportError:
     "dotenv not installed, skipping loading environment variables"
   )
 
+from auto_search.algorithms.beam_search import BeamSearchOrchestrator
 from auto_search.algorithms.parallel_search import (
   SimpleParallelSearchOrchestrator,
 )
@@ -42,7 +44,25 @@ def get_orchestrator(
       max_worker_retries=kwargs.get("max_worker_retries", 1),
       agent_config=kwargs.get("agent_config"),
     )
-  elif algorithm in ("beam", "agentic"):
+  elif algorithm == "beam":
+    strategies_kwargs = {}
+    if kwargs.get("strategies"):
+      strategies_kwargs["strategies"] = kwargs.get("strategies")
+
+    return BeamSearchOrchestrator(
+      problem_id=problem_id,
+      reference_code=reference_code,
+      graph_db_path=graph_db_path,
+      max_concurrency=kwargs.get("max_concurrency", 2),
+      max_worker_retries=kwargs.get("max_worker_retries", 2),
+      beam_size=kwargs.get("beam_size", 2),
+      branches_per_node=kwargs.get("branches_per_node", 2),
+      max_depth=kwargs.get("max_depth", 2),
+      keep_factor=kwargs.get("keep_factor", 1.0),
+      agent_config=kwargs.get("agent_config"),
+      **strategies_kwargs,
+    )
+  elif algorithm == "agentic":
     raise NotImplementedError(
       f"Algorithm '{algorithm}' is currently a placeholder."
     )
@@ -107,6 +127,8 @@ async def run_search(
   )
 
   try:
+    graph_exist = os.path.exists(graph_db_path)
+
     orchestrator = get_orchestrator(
       algorithm=algorithm,
       problem_id=problem_id,
@@ -115,7 +137,7 @@ async def run_search(
       **kwargs,
     )
 
-    if os.path.exists(graph_db_path):
+    if graph_exist:
       logger.info(f"Existing graph found for {problem_id}. Resuming...")
       orchestrator.resume()
 
@@ -173,6 +195,25 @@ def parse_args() -> argparse.Namespace:
     default=None,
     help="File to save logs to",
   )
+  orch_group.add_argument(
+    "--max_worker_retries",
+    type=int,
+    default=1,
+    help="Max worker retries per expansion task",
+  )
+  orch_group.add_argument(
+    "--strategies",
+    nargs="+",
+    type=str,
+    default=None,
+    help="List of strategy strings to explore",
+  )
+  orch_group.add_argument(
+    "--agent_config",
+    type=str,
+    default=None,
+    help="JSON string of agent config parameters (e.g. '{\"max_iterations\": 5}')",
+  )
   # Parallel Search Arguments
   parallel_group = parser.add_argument_group(
     "Parallel Search Arguments",
@@ -184,24 +225,34 @@ def parse_args() -> argparse.Namespace:
     default=2,
     help="Number of parallel runs",
   )
-  parallel_group.add_argument(
-    "--max_retries",
+  # Beam Search Arguments
+  beam_group = parser.add_argument_group(
+    "Beam Search Arguments",
+    "Parameters specific to the 'beam' search algorithm.",
+  )
+  beam_group.add_argument(
+    "--beam_size",
     type=int,
-    default=1,
-    help="Max worker retries per expansion task",
+    default=2,
+    help="Size of the beam (number of candidates to keep per depth)",
   )
-  parallel_group.add_argument(
-    "--strategies",
-    nargs="+",
-    type=str,
-    default=None,
-    help="List of strategy strings to explore",
+  beam_group.add_argument(
+    "--branches_per_node",
+    type=int,
+    default=2,
+    help="Number of branches/strategies to explore per node in the beam",
   )
-  parallel_group.add_argument(
-    "--agent_config",
-    type=str,
-    default=None,
-    help="JSON string of agent config parameters (e.g. '{\"max_iterations\": 5}')",
+  beam_group.add_argument(
+    "--max_depth",
+    type=int,
+    default=2,
+    help="Maximum depth of the beam search",
+  )
+  beam_group.add_argument(
+    "--keep_factor",
+    type=float,
+    default=1.0,
+    help="Factor of parent latency to keep candidates (e.g. 1.0 means must not be worse than parent)",
   )
   return parser.parse_args()
 
@@ -209,32 +260,43 @@ def parse_args() -> argparse.Namespace:
 def setup_logging(log_file: Optional[str]):
   """Configures console and file logging."""
   log_format = "%(asctime)s - %(levelname)s - %(message)s"
+  formatter = logging.Formatter(log_format)
+
   if log_file:
-    # 1. Configure the main runner logger (write only main script progress to the main log file)
-    main_logger = logging.getLogger("__main__")
-    main_logger.propagate = False
-
-    batch_handler = logging.FileHandler(log_file)
-    batch_handler.setFormatter(logging.Formatter(log_format))
-    main_logger.addHandler(batch_handler)
-    main_logger.setLevel(logging.INFO)
-
-    # 2. Configure the root logger (write all internal and dependency logs to a separate file)
     base, ext = os.path.splitext(log_file)
-    agent_log_file = f"{base}_agent{ext}"
-    logging.basicConfig(
-      filename=agent_log_file,
-      level=logging.INFO,
-      format=log_format,
-      force=True,
-    )
+    agent_log_path = f"{base}_agent{ext}"
+    main_log_path = log_file
   else:
-    # Route all logs to the console/terminal
-    logging.basicConfig(
-      level=logging.INFO,
-      format=log_format,
-      force=True,
-    )
+    agent_log_path = "agent.log"
+    main_log_path = None
+
+  # 1. Catch the rest of the logs in the Root Logger and route to agent_log_path
+  logging.basicConfig(
+    filename=agent_log_path,
+    level=logging.INFO,
+    format=log_format,
+    force=True,
+  )
+
+  # 2. Explicitly route only auto_search and __main__ to the main_log_path
+  auto_search_loggers = [
+    logging.getLogger("auto_search"),
+    logging.getLogger("__main__"),
+  ]
+
+  if main_log_path:
+    auto_search_handler = logging.FileHandler(main_log_path)
+  else:
+    auto_search_handler = logging.StreamHandler(sys.stdout)
+
+  auto_search_handler.setFormatter(formatter)
+
+  for logger in auto_search_loggers:
+    logger.propagate = False
+    logger.setLevel(logging.INFO)
+    if logger.hasHandlers():
+      logger.handlers.clear()
+    logger.addHandler(auto_search_handler)
 
 
 def main():
@@ -251,11 +313,16 @@ def main():
 
   kwargs = {
     "max_concurrency": args.max_concurrency,
-    # Parallel Search Arguments
-    "num_parallel_runs": args.num_parallel_runs,
-    "max_worker_retries": args.max_retries,
+    "max_worker_retries": args.max_worker_retries,
     "strategies": args.strategies,
     "agent_config": agent_config,
+    # Parallel Search Arguments
+    "num_parallel_runs": args.num_parallel_runs,
+    # Beam Search Arguments
+    "beam_size": args.beam_size,
+    "branches_per_node": args.branches_per_node,
+    "max_depth": args.max_depth,
+    "keep_factor": args.keep_factor,
   }
 
   prob_id, status = asyncio.run(

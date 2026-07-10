@@ -16,15 +16,17 @@ CONFIG = {
 def create_inputs(dtype=jnp.float32):
     """Create all inputs including weights."""
     key = jax.random.key(0)
+    rand_key = jax.random.key(0xBADC0DE)
+    ka, kb, kc = jax.random.split(rand_key, 3)
     batch_size, in_features, out_features = 4096, 8192, 8192
     x = jax.random.uniform(key, (batch_size, in_features), dtype=dtype)
-    weight = jnp.zeros((in_features, out_features), dtype=dtype)
-    linear_bias = jnp.zeros(out_features, dtype=dtype)
+    weight = jax.random.normal(ka, (in_features, out_features), dtype=dtype) * 0.02
+    linear_bias = jax.random.normal(kb, out_features, dtype=dtype) * 0.02
     bn_scale = jnp.ones(out_features, dtype=dtype)
     bn_bias = jnp.zeros(out_features, dtype=dtype)
     bn_mean = jnp.zeros(out_features, dtype=dtype)
     bn_var = jnp.ones(out_features, dtype=dtype)
-    bias = jnp.zeros((1,), dtype=dtype)
+    bias = jax.random.normal(kc, (1,), dtype=dtype) * 0.02
     return x, weight, linear_bias, bn_scale, bn_bias, bn_mean, bn_var, bias
 
 

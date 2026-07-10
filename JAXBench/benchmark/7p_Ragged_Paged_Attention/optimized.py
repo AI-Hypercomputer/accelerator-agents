@@ -672,7 +672,16 @@ def ragged_paged_attention_kernel(
   # Reset seq_idx for next kv_heads_blk if run out of seqs!
   seq_buf_idx_ref[0] = lax.select(seq_idx < num_seqs, seq_idx, 0)
   seq_buf_idx_ref[1] = buf_idx
-  o_ref[...] = acc_ref[...].astype(q_ref.dtype)
+  # acc_ref rows outside the packed query prefix are never written. Mask them
+  # explicitly so inactive capacity has deterministic zeros rather than
+  # uninitialized VMEM contents (including the tail of the final partial block).
+  q_ids = q_len_start + lax.broadcasted_iota(jnp.int32, o_ref.shape, 0)
+  q_is_active = q_ids < cu_q_lens_ref[num_seqs]
+  o_ref[...] = jnp.where(
+      q_is_active,
+      acc_ref[...].astype(q_ref.dtype),
+      jnp.zeros(o_ref.shape, dtype=q_ref.dtype),
+  )
 
 
 
@@ -832,7 +841,7 @@ def ragged_paged_attention(
   )
   in_specs = [
       q_block_spec,
-      pl.BlockSpec(memory_space=pltpu.ANY),
+      pl.BlockSpec(memory_space=pl.ANY),
   ]
   out_specs = q_block_spec
   lm_scratch = pltpu.VMEM(
@@ -914,11 +923,23 @@ CONFIG = {
     'head_dim': 128,
     'page_size': 16,
     'pages_per_seq': 256,
+    'scenario': 'continuous_batching_48_decode_8_chunked_prefill',
+    'num_active_seqs': 56,
     'atol': 0.2,
     'rtol': 0.2,
 }
 
-# Tuned by autotune_block_sizes.py. Re-run to update.
+# IMPORTANT: This benchmark tests ONE representative serving scenario, not a
+# distribution of all possible RPA inputs. See baseline.py for the scenario
+# definition: 48 decodes plus eight chunked prefills fill a 4096-token step.
+ACTIVE_Q_LENS = (1,) * 48 + (512,) * 7 + (464,)
+ACTIVE_KV_LENS = tuple(
+    257 + ((i * 73) % 240) * 16 for i in range(48)
+) + (1023, 1535, 2047, 2559, 3071, 3583, 4095, 4095)
+NUM_ACTIVE_SEQS = len(ACTIVE_Q_LENS)
+
+# Inherited from the former uniform workload. Re-run tune_pallas.py for this
+# ragged trace before treating the optimized latency as a tuned human baseline.
 TUNED_PARAMS = {
     'num_kv_pages_per_block': 64,  # autotuned (was 32)
     'num_queries_per_block': 64,  # autotuned
@@ -927,17 +948,17 @@ TUNED_PARAMS = {
 
 
 def get_flops():
-    max_seqs = CONFIG['max_num_seqs']
     H_q = CONFIG['num_q_heads']
     D = CONFIG['head_dim']
-    tokens_per_seq = CONFIG['max_num_batched_tokens'] // max_seqs
-    kv_len = CONFIG['pages_per_seq'] * CONFIG['page_size']
-    return max_seqs * H_q * (4 * tokens_per_seq * kv_len * D)
+    return H_q * 4 * D * sum(
+        q_len * kv_len
+        for q_len, kv_len in zip(ACTIVE_Q_LENS, ACTIVE_KV_LENS)
+    )
 
 
 def create_inputs(dtype=jnp.bfloat16):
     key = jax.random.key(42)
-    k1, k2 = jax.random.split(key, 2)
+    k1, k2, k3 = jax.random.split(key, 3)
     max_tokens = CONFIG['max_num_batched_tokens']
     max_seqs = CONFIG['max_num_seqs']
     H_q = CONFIG['num_q_heads']
@@ -951,14 +972,23 @@ def create_inputs(dtype=jnp.bfloat16):
     kv_pages = jax.random.normal(
         k2, (total_num_pages, page_size, num_combined_kv_heads, D), dtype=dtype
     )
-    tokens_per_seq = max_tokens // max_seqs
-    kv_len_per_seq = pages_per_seq * page_size
-    kv_lens = jnp.full((max_seqs,), kv_len_per_seq, dtype=jnp.int32)
-    page_indices = jnp.arange(total_num_pages, dtype=jnp.int32).reshape(
-        max_seqs, pages_per_seq
+    q_lens = jnp.array(ACTIVE_Q_LENS, dtype=jnp.int32)
+    kv_lens = jnp.pad(
+        jnp.array(ACTIVE_KV_LENS, dtype=jnp.int32),
+        (0, max_seqs - NUM_ACTIVE_SEQS),
     )
-    cu_q_lens = jnp.arange(max_seqs + 1, dtype=jnp.int32) * tokens_per_seq
-    num_seqs = jnp.array([max_seqs], dtype=jnp.int32)
+    active_cu_q_lens = jnp.concatenate(
+        (jnp.zeros((1,), dtype=jnp.int32), jnp.cumsum(q_lens))
+    )
+    cu_q_lens = jnp.pad(
+        active_cu_q_lens,
+        (0, max_seqs + 1 - active_cu_q_lens.shape[0]),
+        constant_values=active_cu_q_lens[-1],
+    )
+    page_indices = jax.random.permutation(
+        k3, total_num_pages, independent=True
+    ).astype(jnp.int32).reshape(max_seqs, pages_per_seq)
+    num_seqs = jnp.array([NUM_ACTIVE_SEQS], dtype=jnp.int32)
     return q, kv_pages, kv_lens, page_indices, cu_q_lens, num_seqs
 
 

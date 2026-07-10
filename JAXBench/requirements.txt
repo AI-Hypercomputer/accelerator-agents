@@ -1,0 +1,5 @@
+# JAXBench's published baselines and Pallas references were validated with this
+# JAX release. Keep this pin local to JAXBench; other accelerator-agents
+# components manage their own dependencies.
+jax[tpu]==0.9.2
+absl-py

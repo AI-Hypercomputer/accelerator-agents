@@ -32,6 +32,11 @@ def get_flops(): ...                        # Optional: manual FLOP count
 From the repository root (`accelerator-agents/`):
 
 ```bash
+# Install the JAXBench-specific, reproducible TPU environment. This dependency
+# file is intentionally scoped to JAXBench and does not modify other agents.
+python -m pip install -r JAXBench/requirements.txt \
+  -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+
 # List all workloads
 python -m JAXBench list
 
@@ -48,7 +53,7 @@ python -m JAXBench evaluate --workload 1p_Flash_Attention --kernel path/to/my_ke
 ### Requirements
 
 - Python 3.10+
-- JAX with TPU support (`jax[tpu]`)
+- JAX 0.9.2 with TPU support (pinned in `JAXBench/requirements.txt`)
 - A TPU VM (v5e or v6e)
 
 ## Evaluation Harness

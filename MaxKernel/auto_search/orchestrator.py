@@ -17,7 +17,13 @@ class SearchOrchestrator(abc.ABC):
     reference_code: str,
     graph_db_path: Optional[str] = None,
     max_concurrency: int = 2,
+    max_worker_retries: int = 1,
   ):
+    if max_worker_retries < 1:
+      raise ValueError(
+        f"max_worker_retries must be at least 1, got {max_worker_retries}."
+      )
+    self.max_worker_retries = max_worker_retries
     # Resolve graph db path and run directory
     if not graph_db_path:
       workdir = os.environ.get("WORKDIR", os.getcwd())
@@ -152,8 +158,6 @@ class SearchOrchestrator(abc.ABC):
     """
     pass
 
-  # --- Concrete Flow ---
-
   @abc.abstractmethod
   async def _execute_expansions(self, tasks: Any) -> List[Node]:
     """Executes expansion tasks to evaluate new kernels.
@@ -163,6 +167,7 @@ class SearchOrchestrator(abc.ABC):
     """
     pass
 
+  # --- Workflow ---
   async def run(self) -> Node:
     logger.info(
       f"Starting search orchestration for problem: {self.graph.problem_id}"

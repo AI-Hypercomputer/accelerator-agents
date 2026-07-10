@@ -16,17 +16,12 @@ class SimpleParallelSearchOrchestrator(SearchOrchestrator):
     self,
     num_parallel_runs: int = 2,
     strategies: Optional[List[str]] = None,
-    max_worker_retries: int = 1,
     agent_config: Optional[dict] = None,
     **kwargs,
   ):
     if num_parallel_runs <= 0:
       raise ValueError(
         f"num_parallel_runs must be a positive integer, got {num_parallel_runs}."
-      )
-    if max_worker_retries < 1:
-      raise ValueError(
-        f"max_worker_retries must be at least 1, got {max_worker_retries}."
       )
 
     self.num_parallel_runs = num_parallel_runs
@@ -43,7 +38,6 @@ class SimpleParallelSearchOrchestrator(SearchOrchestrator):
       self.strategies = [""] * num_parallel_runs
 
     self.remaining_strategies = list(self.strategies)
-    self.max_worker_retries = max_worker_retries
     self.agent_config = agent_config
     self.worker = ADKSessionWorker()
 

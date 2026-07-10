@@ -1,17 +1,20 @@
 import asyncio
+import atexit
 import logging
+import subprocess
 import time
 import uuid
+from contextlib import asynccontextmanager
 from enum import Enum
 from typing import Optional
 
 import aiohttp
+import requests
 import yaml
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from pydantic import BaseModel
 
 from auto_agent.constants import EVAL_SERVER_PORT
-from auto_agent.server_utils.tpu_server import get_tpu_version
 
 logging.basicConfig(
   level=logging.INFO,
@@ -19,7 +22,52 @@ logging.basicConfig(
   datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-app = FastAPI(title="Agent Evaluation Server", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+  # Start background task to clean up old completed tasks (TTL: 30 mins / 1800 seconds)
+  cleanup_task = asyncio.create_task(
+    clean_old_tasks_periodically(ttl_seconds=1800, check_interval_seconds=60)
+  )
+  yield
+  # Clean up background task on shutdown
+  cleanup_task.cancel()
+  try:
+    await cleanup_task
+  except asyncio.CancelledError:
+    pass
+  logging.info("Shutting down eval_server, cleaning up tunnels...")
+  evaluator._cleanup_tunnels()
+
+
+async def clean_old_tasks_periodically(
+  ttl_seconds: int = 1800, check_interval_seconds: int = 60
+):
+  """Periodically removes completed tasks older than ttl_seconds."""
+  while True:
+    try:
+      await asyncio.sleep(check_interval_seconds)
+      now = time.time()
+      to_remove = []
+      for task_id, task_info in list(_tasks.items()):
+        # Only clean up tasks that have finished (are not queued or running)
+        if task_info["status"] not in [TaskStatus.QUEUED, TaskStatus.RUNNING]:
+          completed_at = task_info.get("completed_at")
+          if completed_at and (now - completed_at) > ttl_seconds:
+            to_remove.append(task_id)
+
+      for task_id in to_remove:
+        _tasks.pop(task_id, None)
+        logging.info(f"Cleaned up expired task {task_id} from memory.")
+    except asyncio.CancelledError:
+      break
+    except Exception as e:
+      logging.error(f"Error in task cleanup loop: {e}")
+
+
+app = FastAPI(
+  title="Agent Evaluation Server", version="1.0.0", lifespan=lifespan
+)
 
 backend_semaphore = asyncio.Semaphore(1)
 
@@ -34,7 +82,20 @@ class Backend:
 
     # Get version info for display purposes
     if backend_type == "tpu":
-      self.version = get_tpu_version()
+      url = f"http://{self.ip}:{self.port}/get_tpu_version"
+      try:
+        resp = requests.post(url, timeout=10)
+        if resp.status_code == 200:
+          data = resp.json()
+          if isinstance(data, dict):
+            self.version = data.get("tpu_version", "TPU version not found")
+          else:
+            self.version = str(data)
+        else:
+          self.version = f"HTTP Error {resp.status_code}"
+      except Exception as e:
+        logging.warning(f"Failed to get TPU version from {url}: {e}")
+        self.version = "Unknown TPU"
     else:
       self.version = "CPU"
 
@@ -100,9 +161,18 @@ class Evaluator:
 
     self.backends = []
 
+    self.tunnels = []
+    self._load_backends()
+
+    logging.info(f"Evaluator initialized with backends: {self.backends}")
+
+  def _load_backends(self):
     if "backends" in self.config and self.config["backends"]:
       logging.info("Using 'backends' configuration format")
       for backend_config in self.config["backends"]:
+        # Check if gcloud TPU VM tunnel is requested
+        self._create_tunnel(backend_config)
+
         backend_obj = Backend(
           name=backend_config["name"],
           ip=backend_config["ip"],
@@ -110,12 +180,67 @@ class Evaluator:
           backend_type=backend_config.get("type", "tpu"),
         )
         self.backends.append(backend_obj)
+
+      # Register cleanup
+      if self.tunnels:
+        logging.info(f"Registering cleanup for {len(self.tunnels)} tunnels.")
+        atexit.register(self._cleanup_tunnels)
+
     else:
       raise ValueError(
         "No backends configured in eval_config.yaml. Please use the 'backends' format."
       )
 
-    logging.info(f"Evaluator initialized with backends: {self.backends}")
+  def _create_tunnel(self, backend_config):
+    if "tpu_vm" in backend_config:
+      local_port = backend_config["port"]
+      gt = backend_config["tpu_vm"]
+      tpu_name = gt["tpu_name"]
+      zone = gt["zone"]
+      project = gt["project"]
+      remote_port = gt["port"]
+
+      logging.info(f"Constructing gcloud SSH tunnel to {tpu_name}...")
+
+      cmd = [
+        "gcloud",
+        "compute",
+        "tpus",
+        "tpu-vm",
+        "ssh",
+        tpu_name,
+        f"--zone={zone}",
+        f"--project={project}",
+        "--",
+        "-N",
+        "-L",
+        f"{local_port}:localhost:{remote_port}",
+      ]
+
+      try:
+        process = subprocess.Popen(cmd)
+        self.tunnels.append(process)
+        logging.info(
+          f"Gcloud SSH tunnel started for {backend_config['name']} (PID: {process.pid})"
+        )
+        time.sleep(10)  # Blocking sleep as requested
+      except Exception as e:
+        logging.error(f"Failed to start gcloud SSH tunnel: {e}")
+
+  def _cleanup_tunnels(self):
+    if self.tunnels:
+      logging.info("Cleaning up SSH tunnels...")
+      for p in self.tunnels:
+        try:
+          p.terminate()
+          p.wait(timeout=5)
+          logging.info(f"Tunnel PID {p.pid} terminated.")
+        except Exception as e:
+          logging.error(f"Failed to terminate tunnel PID {p.pid}: {e}")
+          try:
+            p.kill()
+          except:
+            pass
 
   def get_available_backend(self, backend_type: Optional[str] = None):
     """
@@ -173,6 +298,8 @@ async def run_evaluation_task(task_id: str, request: EvalRequest):
   except Exception as e:
     _tasks[task_id]["status"] = TaskStatus.FAILED
     _tasks[task_id]["error"] = str(e)
+  finally:
+    _tasks[task_id]["completed_at"] = time.time()
 
 
 async def _perform_evaluation(request: EvalRequest):

@@ -15,7 +15,11 @@ from hitl_agent.callbacks import (
   load_single_kernel_to_state,
   save_kernel_and_plan_paths,
 )
-from hitl_agent.config import model_config, thinking_planner
+from hitl_agent.config import (
+  MAX_COMPILATION_RETRIES,
+  model_config,
+  thinking_planner,
+)
 from hitl_agent.constants import MODEL_NAME
 from hitl_agent.custom_types import CustomLlmAgent
 from hitl_agent.subagents.kernel_writing.kernel_compilation import (
@@ -41,7 +45,7 @@ class KernelCompilationValidationLoop(BaseAgent):
   compilation_checker: Optional[BaseAgent] = None
   fix_agent: Optional[BaseAgent] = None
   debug_agent: Optional[BaseAgent] = None
-  max_retries: int = 4
+  max_retries: int = 6
 
   def __init__(
     self,
@@ -49,7 +53,7 @@ class KernelCompilationValidationLoop(BaseAgent):
     compilation_checker: BaseAgent,
     fix_agent: BaseAgent,
     debug_agent: Optional[BaseAgent] = None,
-    max_retries: int = 4,
+    max_retries: int = 6,
   ):
     super().__init__(
       name=name,
@@ -372,7 +376,7 @@ kernel_compilation_validation_loop = KernelCompilationValidationLoop(
   compilation_checker=kernel_compilation_checker_for_validation,
   fix_agent=fix_kernel_compilation_agent,
   debug_agent=add_debug_statements_agent,
-  max_retries=4,
+  max_retries=MAX_COMPILATION_RETRIES,
 )
 
 kernel_compilation_summary_agent = CustomLlmAgent(

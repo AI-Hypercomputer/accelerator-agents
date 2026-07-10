@@ -11,7 +11,7 @@ from auto_agent.callbacks import (
   load_profiling_script_to_state,
   load_single_kernel_to_state,
 )
-from auto_agent.config import model_config, thinking_planner
+from auto_agent.config import get_thinking_planner, model_config
 from auto_agent.constants import MODEL_NAME
 from auto_agent.custom_types import CustomLlmAgent
 from auto_agent.subagents.profiling import offline_tools
@@ -32,7 +32,7 @@ generate_profiling_script_agent = CustomLlmAgent(
   name="GenerateProfilingScriptAgent",
   model=MODEL_NAME,
   generate_content_config=model_config,
-  planner=thinking_planner,
+  planner=get_thinking_planner("high"),
   instruction=gen_profiling_script.PROMPT,
   description="Generates a profiling script to identify performance bottlenecks in the kernel code and writes it to a file.",
   tools=[filesystem_tool_r, write_profiling_script_tool],
@@ -44,7 +44,6 @@ read_profiling_script_agent = CustomLlmAgent(
   name="ReadProfilingScriptAgent",
   model=MODEL_NAME,
   generate_content_config=model_config,
-  planner=thinking_planner,
   instruction=read_profiling_script_prompt.PROMPT,
   description="Loads the generated profiling script file contents from disk into memory for execution.",
   before_agent_callback=load_profiling_script_to_state,
@@ -110,7 +109,7 @@ summarize_profile_agent = SummarizeProfileAgent(
   name="SummarizeProfileAgent",
   model=MODEL_NAME,
   generate_content_config=model_config,
-  planner=thinking_planner,
+  planner=get_thinking_planner("high"),
   instruction=analyze_profile_prompt.PROMPT,
   description=(
     "Summarizes the profiling results of the kernel and performs deep"
@@ -123,8 +122,8 @@ summarize_profile_agent = SummarizeProfileAgent(
     offline_tools.get_hlo_dump,
     offline_tools.create_chart_from_xplane,
     offline_tools.get_overview_page_metrics,
-    vertex_ai_rag_tool,
-  ],
+  ]
+  + ([vertex_ai_rag_tool] if vertex_ai_rag_tool else []),
 )
 
 # Main profiling orchestrator agent

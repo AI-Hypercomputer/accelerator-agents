@@ -4,6 +4,10 @@ This module contains the root orchestrator that coordinates all subagents
 for the human-in-the-loop kernel generation process.
 """
 
+from google.adk.apps.app import App
+
+from auto_agent.config import get_compaction_config
+from auto_agent.constants import EVENTS_COMPACTION
 from auto_agent.subagents.autotuning.agent import autotune_agent
 from auto_agent.subagents.kernel_writing import (
   implement_kernel_agent,
@@ -29,4 +33,16 @@ root_agent = AutonomousPipelineAgent(
   max_iterations=5,
 )
 
-__all__ = ["root_agent"]
+if EVENTS_COMPACTION:
+  compaction_config = get_compaction_config()
+else:
+  compaction_config = None
+
+
+app = App(
+  name="auto_agent",
+  root_agent=root_agent,
+  events_compaction_config=compaction_config,
+)
+
+__all__ = ["root_agent", "app"]

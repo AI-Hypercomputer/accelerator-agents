@@ -32,7 +32,7 @@ WORKFLOW:
 2. Find the original GPU code path and simplified code from conversation history
 3. Create the comprehensive README
 4. Call write_file_direct with path="SIMPLIFICATION_SUMMARY.md" and your README content
-5. After successfully writing, IMMEDIATELY transfer to ConvertToJaxAgent in the SAME response:
+5. After successfully writing the file, transfer to ConvertToJaxAgent. Do NOT call transfer_to_agent in the same turn/response as write_file_direct. Wait for the write_file_direct tool response first, and then call:
    transfer_to_agent('ConvertToJaxAgent')
 
-CRITICAL: Do NOT output any message, confirmation, or status update before calling transfer_to_agent. The transfer must be the ONLY action after writing the file."""
+CRITICAL: Do NOT output any message, confirmation, or status update. The transfer must be the only action after the file has been successfully written."""

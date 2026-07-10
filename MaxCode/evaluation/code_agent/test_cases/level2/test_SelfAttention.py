@@ -84,9 +84,9 @@ def test_jax_independent():
       config["embed_size"],
   )
   assert (
-      out.shape == expected_shape
+      out.shape == expected_shape  # pyrefly: ignore[missing-attribute]
   ), f"JAX Shape Mismatch: Expected {expected_shape}, got {out.shape}"
-  assert not jnp.isnan(out).any(), "JAX Output contains NaNs"
+  assert not jnp.isnan(out).any(), "JAX Output contains NaNs"  # pyrefly: ignore[bad-argument-type]
   return True
 
 
@@ -143,7 +143,7 @@ def test_attention_equivalence():
   print(f"   >> Head Dim: {head_dim}, Scaling Factor: {scale}")
 
   # Final Assertion
-  np.testing.assert_allclose(pt_out, jax_out, rtol=1e-4, atol=1e-5)
+  np.testing.assert_allclose(pt_out, jax_out, rtol=1e-4, atol=1e-5)  # pyrefly: ignore[no-matching-overload]
   return True
 
 

@@ -45,8 +45,8 @@ def test_jax_independent():
   x = jnp.ones((2, 5, 4))
   variables = model.init(jax.random.PRNGKey(42), x)
   y = model.apply(variables, x)
-  assert y.shape == (2, 3)
-  assert not jnp.isnan(y).any()
+  assert y.shape == (2, 3)  # pyrefly: ignore[missing-attribute]
+  assert not jnp.isnan(y).any()  # pyrefly: ignore[bad-argument-type]
 
 
 def test_rnn_equivalence(
@@ -118,7 +118,7 @@ def test_rnn_equivalence(
   diff = np.abs(pt_out - jax_numpy)
   max_diff = np.max(diff)
   print(f'\n   >> Max Absolute Difference: {max_diff:.2e}')
-  np.testing.assert_allclose(pt_out, jax_out, rtol=1e-5, atol=1e-5)
+  np.testing.assert_allclose(pt_out, jax_out, rtol=1e-5, atol=1e-5)  # pyrefly: ignore[no-matching-overload]
 
 
 # pylint: disable=unused-argument

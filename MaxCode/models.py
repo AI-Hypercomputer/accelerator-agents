@@ -71,7 +71,7 @@ class GeminiTool:
     headers = {"Content-Type": "application/json"}
     payload = {"contents": [{"parts": [{"text": user_prompt}], "role": "user"}]}
     if self.system_instruction:
-      payload["system_instruction"] = {
+      payload["system_instruction"] = {  # pyrefly: ignore[bad-assignment]
           "parts": [{"text": self.system_instruction}]
       }
 

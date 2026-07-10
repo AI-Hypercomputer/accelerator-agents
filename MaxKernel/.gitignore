@@ -5,3 +5,4 @@ session_info/
 *.txt
 .adk
 eval_config.yaml
+gke_config.yaml

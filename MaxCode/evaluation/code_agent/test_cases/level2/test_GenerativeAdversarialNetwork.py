@@ -72,11 +72,11 @@ def test_jax_validity():
   gen_params = generator.init(key, dummy_z)
   gen_out = generator.apply(gen_params, dummy_z, train=False)
   expected_gen_shape = (batch_size, int(np.prod(img_shape)))
-  assert gen_out.shape == expected_gen_shape, (
+  assert gen_out.shape == expected_gen_shape, (  # pyrefly: ignore[missing-attribute]
       f'JAX Generator Shape Mismatch: Expected {expected_gen_shape}, got'
       f' {gen_out.shape}'
   )
-  assert not jnp.isnan(gen_out).any(), 'JAX Generator Output contains NaNs'
+  assert not jnp.isnan(gen_out).any(), 'JAX Generator Output contains NaNs'  # pyrefly: ignore[bad-argument-type]
 
   # Test Discriminator
   discriminator = model_jax.Discriminator()
@@ -84,11 +84,11 @@ def test_jax_validity():
   disc_params = discriminator.init(key, dummy_img)
   disc_out = discriminator.apply(disc_params, dummy_img)
   expected_disc_shape = (batch_size, 1)
-  assert disc_out.shape == expected_disc_shape, (
+  assert disc_out.shape == expected_disc_shape, (  # pyrefly: ignore[missing-attribute]
       f'JAX Discriminator Shape Mismatch: Expected {expected_disc_shape}, got'
       f' {disc_out.shape}'
   )
-  assert not jnp.isnan(disc_out).any(), 'JAX Discriminator Output contains NaNs'
+  assert not jnp.isnan(disc_out).any(), 'JAX Discriminator Output contains NaNs'  # pyrefly: ignore[bad-argument-type]
 
 
 def test_generator_equivalence():
@@ -148,7 +148,7 @@ def test_generator_equivalence():
   out_jax = jax_model.apply(params, z_jax, train=False)
 
   print(f'Generator Output Max Diff: {np.max(np.abs(out_torch - out_jax))}')
-  np.testing.assert_allclose(out_torch, out_jax, rtol=1e-5, atol=1e-5)
+  np.testing.assert_allclose(out_torch, out_jax, rtol=1e-5, atol=1e-5)  # pyrefly: ignore[no-matching-overload]
   print('Generator Equivalence: PASS')
 
 
@@ -196,7 +196,7 @@ def test_discriminator_equivalence():
   out_jax = jax_model.apply(params, img_jax)
 
   print(f'Discriminator Output Max Diff: {np.max(np.abs(out_torch - out_jax))}')
-  np.testing.assert_allclose(out_torch, out_jax, rtol=1e-5, atol=1e-5)
+  np.testing.assert_allclose(out_torch, out_jax, rtol=1e-5, atol=1e-5)  # pyrefly: ignore[no-matching-overload]
   print('Discriminator Equivalence: PASS')
 
 

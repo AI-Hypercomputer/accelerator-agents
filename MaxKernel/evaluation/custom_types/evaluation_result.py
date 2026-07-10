@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import List, Optional
 
 
 @dataclass
@@ -14,9 +14,16 @@ class EvaluationResult:
   xprof_reference_time_ms: float = 0.0
   xprof_optimized_time_ms: float = 0.0
   error_trace: Optional[str] = None
+  logs: List[str] = field(default_factory=list)
 
   @property
   def speedup(self) -> Optional[float]:
     if self.optimized_time_ms == 0 or self.reference_time_ms == 0:
       return None
     return self.reference_time_ms / self.optimized_time_ms
+
+  @property
+  def speed_up_xprof(self) -> Optional[float]:
+    if self.xprof_optimized_time_ms == 0 or self.xprof_reference_time_ms == 0:
+      return None
+    return self.xprof_reference_time_ms / self.xprof_optimized_time_ms

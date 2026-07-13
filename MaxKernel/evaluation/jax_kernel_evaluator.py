@@ -174,9 +174,9 @@ class JAXKernelEvaluator:
           f"Local execution timed out after {timeout_seconds} seconds for "
           f"task {task.task_id}."
         )
-        eval_result.error_trace = (
+        eval_result.error_trace = [
           f"Local execution timed out after {timeout_seconds} seconds."
-        )
+        ]
         return eval_result
       except subprocess.CalledProcessError as e:
         # Handle crashes like Segfaults
@@ -185,9 +185,9 @@ class JAXKernelEvaluator:
             "CRITICAL: Local interpreter crashed. This is likely due to an "
             "invalid Pallas kernel performing an illegal memory access."
           )
-        eval_result.error_trace = (
+        eval_result.error_trace = [
           f"Command failed with exit code {e.returncode}. Stderr: {e.stderr}"
-        )
+        ]
 
       # Parse the result
       data = None
@@ -202,12 +202,8 @@ class JAXKernelEvaluator:
         error_msg = "No data found in result.json. Local execution may have failed without producing output."
         logger.error(error_msg)
         if not eval_result.error_trace:
-          eval_result.error_trace = error_msg
+          eval_result.error_trace = [error_msg]
       else:
-        if "error" in data:
-          error_msg = data.get("error")
-          eval_result.error_trace = data.get("traceback", error_msg)
-
         # Populate the eval result
         for key, value in data.items():
           if hasattr(eval_result, key):
@@ -344,14 +340,14 @@ class JAXKernelEvaluator:
           logger.error(
             f"Failed to kill remote process, TPU may remain locked: {kill_e}"
           )
-        eval_result.error_trace = (
+        eval_result.error_trace = [
           f"Remote execution timed out after {timeout_seconds} seconds."
-        )
+        ]
         # Give some time for the kill to take effect
         time.sleep(60)
         return eval_result
       except RuntimeError as e:
-        eval_result.error_trace = str(e)
+        eval_result.error_trace = [str(e)]
         # Detect if the remote interpreter crashed (e.g., Segfault from Pallas)
         if any(
           sig in str(e).lower()
@@ -377,12 +373,8 @@ class JAXKernelEvaluator:
       if not data:
         error_msg = "No data found in result.json. Remote execution may have failed without producing output."
         logger.error(error_msg)
-        eval_result.error_trace = error_msg
+        eval_result.error_trace = [error_msg]
       else:
-        if "error" in data:
-          error_msg = data.get("error")
-          eval_result.error_trace = data.get("traceback", error_msg)
-
         # Populate the eval result
         for key, value in data.items():
           if hasattr(eval_result, key):

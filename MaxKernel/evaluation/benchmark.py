@@ -160,7 +160,7 @@ def benchmark(
     # Append to the main list and save immediately
     results.append(res_dict)
     with open(output_file, "w") as f:
-      json.dump(results, f, indent=4)
+      json.dump(results, f, indent=2)
     logger.info(
       f"Saved result for {problem_name}. Total results: {len(results)}."
     )

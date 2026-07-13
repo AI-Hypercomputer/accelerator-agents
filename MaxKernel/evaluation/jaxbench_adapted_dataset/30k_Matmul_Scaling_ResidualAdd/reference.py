@@ -8,9 +8,11 @@ def get_inputs(dtype=jnp.float32):
     in_features = 4096
     out_features = 4096
     key = jax.random.key(0)
+    rand_key = jax.random.key(0xBADC0DE)
+    ka, kb = jax.random.split(rand_key, 2)
     x = jax.random.uniform(key, (batch_size, in_features), dtype=dtype)
-    weight = jnp.zeros((in_features, out_features), dtype=dtype)
-    bias = jnp.zeros(out_features, dtype=dtype)
+    weight = jax.random.normal(ka, (in_features, out_features), dtype=dtype) * 0.02
+    bias = jax.random.normal(kb, out_features, dtype=dtype) * 0.02
     dynamic_args = [x, weight, bias]
     static_args = []
     return dynamic_args, static_args

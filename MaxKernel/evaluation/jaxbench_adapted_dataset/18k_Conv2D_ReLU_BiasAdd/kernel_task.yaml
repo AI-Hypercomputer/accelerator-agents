@@ -12,11 +12,13 @@ input_gen_code: |-
       height = width = 128
 
       key = jax.random.key(0)
+      rand_key = jax.random.key(0xBADC0DE)
+      ka, kb, kc = jax.random.split(rand_key, 3)
       k1, k2 = jax.random.split(key)
       x = jax.random.uniform(k1, (batch_size, in_channels, height, width), dtype=dtype)
-      weight = jnp.zeros((out_channels, in_channels, kernel_size, kernel_size), dtype=dtype)
-      conv_bias = jnp.zeros(out_channels, dtype=dtype)
-      bias = jnp.zeros((out_channels, 1, 1), dtype=dtype)
+      weight = jax.random.normal(ka, (out_channels, in_channels, kernel_size, kernel_size), dtype=dtype) * 0.02
+      conv_bias = jax.random.normal(kb, out_channels, dtype=dtype) * 0.02
+      bias = jax.random.normal(kc, (out_channels, 1, 1), dtype=dtype) * 0.02
 
       dynamic_args = [x, weight, conv_bias, bias]
       static_args = []

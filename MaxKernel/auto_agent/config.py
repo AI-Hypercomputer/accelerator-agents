@@ -19,9 +19,9 @@ MAX_COMPILATION_RETRIES = int(os.environ.get("MAX_COMPILATION_RETRIES", "6"))
 # Set events compaction policy to avoid memory overflow
 def get_compaction_config():
   return EventsCompactionConfig(
-    token_threshold=200000,
-    event_retention_size=100,
-    compaction_interval=1,
+    token_threshold=300000,
+    event_retention_size=5,
+    compaction_interval=0,
     overlap_size=0,
   )
 

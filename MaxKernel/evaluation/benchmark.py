@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 import os
+import re
 from dataclasses import asdict
 from typing import List, Optional
 
@@ -159,8 +160,19 @@ def benchmark(
 
     # Append to the main list and save immediately
     results.append(res_dict)
+    json_str = json.dumps(results, indent=2)
+    # Collapse lists containing only scalar values onto a single line
+    json_str = re.sub(
+      r"\[\s*([^\[\]\{\}]*?)\s*\]",
+      lambda m: (
+        "[" + re.sub(r"\n\s*", " ", m.group(1)).strip() + "]"
+        if m.group(1).strip()
+        else "[]"
+      ),
+      json_str,
+    )
     with open(output_file, "w") as f:
-      json.dump(results, f, indent=2)
+      f.write(json_str)
     logger.info(
       f"Saved result for {problem_name}. Total results: {len(results)}."
     )

@@ -96,30 +96,30 @@ def print_eval_result(result: EvaluationResult):
   if result.max_abs_diff:
     print(
       "Max Absolute Diff:     ",
-      f"{[f'{d:.6e}' if d is not None else 'N/A' for d in result.max_abs_diff]}"
+      f"{[f'{d:.6e}' if d is not None else 'N/A' for d in result.max_abs_diff]}",
     )
   if result.max_rel_diff:
     print(
       "Max Relative Diff:     ",
-      f"{[f'{d:.6e}' if d is not None else 'N/A' for d in result.max_rel_diff]}"
+      f"{[f'{d:.6e}' if d is not None else 'N/A' for d in result.max_rel_diff]}",
     )
 
   print("-" * 40)
   if result.reference_time_ms:
     print(
       "Reference times:       ",
-      f"{[f'{t:.3f}' for t in result.reference_time_ms]} ms"
+      f"{[f'{t:.3f}' for t in result.reference_time_ms]} ms",
     )
   if result.optimized_time_ms:
     print(
       "Optimized times:       ",
-      f"{[f'{t:.3f}' for t in result.optimized_time_ms]} ms"
+      f"{[f'{t:.3f}' for t in result.optimized_time_ms]} ms",
     )
   wall_time_speedup = result.speedup
   if wall_time_speedup:
     print(
       "Wall time speedups:    ",
-      f"{[f'{s:.2f}x' if s is not None else 'N/A' for s in wall_time_speedup]}"
+      f"{[f'{s:.2f}x' if s is not None else 'N/A' for s in wall_time_speedup]}",
     )
   else:
     print("Wall time speedups:    N/A")
@@ -128,7 +128,7 @@ def print_eval_result(result: EvaluationResult):
   if xprof_speedup:
     print(
       "XProf speedups:        ",
-      f"{[f'{s:.2f}x' if s is not None else 'N/A' for s in xprof_speedup]}"
+      f"{[f'{s:.2f}x' if s is not None else 'N/A' for s in xprof_speedup]}",
     )
   else:
     print("XProf speedups:        N/A")

@@ -82,11 +82,12 @@ Once you have identified both kernel files:
    - **Note**: During validation, the optimized kernel import will be temporarily disabled to verify the test structure works with baseline only
 
 3. **TestPerformance class**: Tests that benchmark performance
-   - If the base kernel file (`{base_kernel_path?}`) contains a function to generate inputs (e.g., `get_inputs` or similar). If it is defined, you should directly copy and reuse it in the test file.
-   - Compare execution time between base and optimized kernels
+   - If the base kernel file (`{base_kernel_path?}`) contains a function to generate inputs (e.g., `get_inputs`), you must directly copy and reuse it.
+   - **CRITICAL**: If the input generation function returns MULTIPLE configurations (e.g., a list of inputs), you MUST select exactly ONE configuration (the last one) to run the performance benchmark on. Do NOT use `@pytest.mark.parametrize` for the performance test to ensure we get a single, consistent baseline measurement.
+   - Compare execution time between base and optimized kernels on this single configuration
    - Include warmup runs before timing
    - Use .block_until_ready() for accurate JAX timing
-   - Run 10 iterations for each benchmark to get reliable timing measurements
+   - Run 10 iterations for the benchmark to get reliable timing measurements
 
 ## Requirements
 
@@ -136,9 +137,10 @@ except ImportError:
 if 'optimized_kernel' not in globals():
     optimized_kernel = base_kernel
 
-def report_perf_metrics(execution_time_ms):
+def report_perf_metrics(execution_time_ms, speedup):
     import sys
     sys.__stdout__.write("PERF_METRICS: " + str(execution_time_ms) + "\n")
+    sys.__stdout__.write("SPEEDUP: " + str(speedup) + "\n")
 
 class TestCompilation:
     def test_optimized_kernel_compiles(self):
@@ -161,7 +163,7 @@ class TestPerformance:
         pass
 
 if __name__ == "__main__":
-    sys.exit(pytest.main([__file__, "-v", "-s", "--tb=short"]))
+    sys.exit(pytest.main([__file__, "-v", "--tb=short"]))
 ```
 
 ### Important Guidelines
@@ -188,7 +190,7 @@ if __name__ == "__main__":
    - Report speedup ratios
    - Include warmup iterations
    - Use multiple runs for statistical stability
-   - **Structured Output**: At the end of the performance test, you MUST call the `report_perf_metrics(execution_time_ms)` helper function provided in the template to report the final average execution time of the optimized kernel. Do not use standard `print()` for this.
+   - **Structured Output**: At the end of the performance test, you MUST call the `report_perf_metrics(execution_time_ms, speedup)` helper function provided in the template to report the final average execution time and the speedup of the optimized kernel over the base kernel. Do not use standard `print()` for this.
 
 ## Output Format
 When you have generated the test file:

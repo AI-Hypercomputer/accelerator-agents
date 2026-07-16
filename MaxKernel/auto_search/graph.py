@@ -13,6 +13,7 @@ class EvaluationResult(BaseModel):
   correct: bool = False
   latency_ms: Optional[float] = None
   profiling_summary: Optional[str] = None
+  autotuning_summary: Optional[str] = None
   compilation_error: Optional[str] = None
   test_error: Optional[str] = None
 

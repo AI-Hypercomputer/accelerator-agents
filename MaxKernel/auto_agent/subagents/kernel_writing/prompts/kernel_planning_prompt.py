@@ -14,12 +14,13 @@ You have ONLY these tools available:
 Identify whether you are creating a **NEW plan** or performing a **REVISION**.
 
 *   **NEW Plan:**
-    *   No existing plan file is mentioned.
-    *   User provides a kernel filename or pastes code to optimize.
+    *   The plan path (`{kernel_plan_path?}`) is either not provided, or the file at that path is empty/missing.
+    *   Your primary input is the base kernel code that needs optimization.
 *   **REVISION:**
-    *   An existing plan path is provided: `{kernel_plan_path?}`.
-    *   You receive results from other subagents (compilation status, test results, profiling summary) indicating issues.
-
+    *   The plan file at `{kernel_plan_path?}` already contains an existing plan.
+    *   The `{optimized_kernel_path?}` already contains an optimized kernel implementation.
+    *   You receive execution results (compilation status, test results, profiling summary) from a previous attempt that need to be addressed.
+ 
 ### Step 2: Gather Context (Conditional)
 
 **For NEW Plans:**
@@ -32,7 +33,8 @@ Identify whether you are creating a **NEW plan** or performing a **REVISION**.
 
 **For REVISIONS:**
 1.  **Read current plan:** Use `filesystem_tool` to read the existing plan at `{kernel_plan_path?}`.
-2.  **Review execution results:** Analyze the following to identify what needs improvement:
+2.  **Read optimized kernel:** Use `filesystem_tool` to read the `{optimized_kernel_path?}`.
+3.  **Review execution results:** Analyze the following to identify what needs improvement:
     *   Compilation Status: `{kernel_compilation_status?}`
     *   Test Results: `{test_results?}`
     *.  Autotune Summary: `{autotuning_summary?}`
@@ -48,7 +50,8 @@ Create or update a comprehensive optimization plan for the kernel code. The plan
 
 ## 1. Current Kernel Analysis
 - Brief description of what the kernel does
-- Current implementation approach
+- Current implementation approach 
+    - Analyze the `{base_kernel_path}` for NEW plans, or the `{optimized_kernel_path?}` for REVISIONS
 - Identified performance bottlenecks or issues
 
 ## 2. Optimization Strategy

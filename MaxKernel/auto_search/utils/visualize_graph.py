@@ -61,7 +61,7 @@ def visualize_graph(
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-  
+
   if len(sys.argv) < 2:
     print(
       "Usage: python -m auto_search.utils.visualize_graph <path_to_graph.json> [output_graph_path]"

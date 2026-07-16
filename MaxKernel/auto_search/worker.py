@@ -26,6 +26,8 @@ class ADKSessionWorker:
 
     # Prepare inputs files for the agent based on reference_code and parent_node
     self._prepare_inputs(session_dir, parent_node, reference_code)
+    # Prepare initial state
+    initial_state = self._prepare_initial_state(parent_node)
 
     # Run the agent and process results
     try:
@@ -34,6 +36,7 @@ class ADKSessionWorker:
         session_dir=session_dir,
         strategy=strategy,
         agent_config=agent_config,
+        initial_state=initial_state,
       )
       return self._process_results(
         node_id=node_id,
@@ -76,12 +79,29 @@ class ADKSessionWorker:
       with open(kernel_plan_path, "w") as f:
         f.write(parent_node.plan)
 
+  def _prepare_initial_state(self, parent_node: Node) -> Dict[str, Any]:
+    initial_state = {}
+    if parent_node.evaluation:
+      initial_state = {
+        "kernel_compilation_status": {
+          "success": parent_node.evaluation.compiled,
+          "message": parent_node.evaluation.compilation_error,
+        },
+        "test_results": {
+          "success": parent_node.evaluation.correct,
+          "output": parent_node.evaluation.test_error,
+        },
+        "profiling_summary": parent_node.evaluation.profiling_summary,
+      }
+    return initial_state
+
   async def _run_agent(
     self,
     node_id: str,
     session_dir: str,
     strategy: Optional[str],
     agent_config: Optional[Dict[str, Any]] = None,
+    initial_state: Optional[Dict[str, Any]] = None,
   ) -> Dict[str, Any]:
     """Sets up a custom AutonomousPipelineAgent and runs the client."""
     agent_config = agent_config or {}
@@ -111,7 +131,8 @@ class ADKSessionWorker:
       query=query,
       agent=custom_agent,
     )
-    await client.create_session()
+
+    await client.create_session(initial_state)
     await client.run_async()
     try:
       session_json_path = os.path.join(session_dir, "session.json")
@@ -144,7 +165,13 @@ class ADKSessionWorker:
 
     comp_status = best_run.get("compilation_status", {})
     compiled = comp_status.get("success", False)
-    compilation_error = comp_status.get("message") if not compiled else None
+    compilation_error = None
+    if not compiled:
+      compilation_error = comp_status.get("message", "")
+      if comp_status.get("final_errors"):
+        compilation_error += "\n\nFinal Errors:\n" + comp_status.get(
+          "final_errors"
+        )
 
     test_status = best_run.get("test_status", {})
     correct = test_status.get("success", False)

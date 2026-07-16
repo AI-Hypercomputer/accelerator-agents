@@ -43,11 +43,14 @@ class AutoAgentClient:
     self.session_service = InMemorySessionService()
     self.session = None
 
-  async def create_session(self) -> None:
+  async def create_session(
+    self, initial_state: Optional[dict[str, Any]] = None
+  ) -> None:
     self.session = await self.session_service.create_session(
       app_name=self.app_name,
       user_id=self.user_id,
       session_id=self.session_id,
+      state=initial_state,
     )
 
   def get_session_data(self) -> dict:

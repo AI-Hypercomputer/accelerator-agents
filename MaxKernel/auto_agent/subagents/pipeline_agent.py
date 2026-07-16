@@ -251,6 +251,7 @@ class AutonomousPipelineAgent(BaseAgent):
       ),
       "test_status": ctx.session.state.get("test_results", {}),
       "latency_ms": latency,
+      "autotuning_summary": ctx.session.state.get("autotuning_summary", ""),
       "profiling_summary": ctx.session.state.get("profiling_summary", ""),
     }
 

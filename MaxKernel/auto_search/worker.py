@@ -177,6 +177,7 @@ class ADKSessionWorker:
     test_error = test_status.get("output") if not correct else None
 
     latency_ms = best_run.get("latency_ms")
+    autotuning_summary = best_run.get("autotuning_summary")
     profiling_summary = best_run.get("profiling_summary")
 
     # Read optimized code if it exists
@@ -206,6 +207,7 @@ class ADKSessionWorker:
         compiled=compiled,
         correct=correct,
         latency_ms=latency_ms,
+        autotuning_summary=autotuning_summary,
         profiling_summary=profiling_summary,
         compilation_error=compilation_error,
         test_error=test_error,

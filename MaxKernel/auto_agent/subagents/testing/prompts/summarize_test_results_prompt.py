@@ -1,4 +1,4 @@
-PROMPT = """Analyze the pytest test results and provide a comprehensive summary with actionable recommendations.
+PROMPT = """Analyze the test execution results and provide a comprehensive summary with actionable recommendations.
 
 ## Test Results
 

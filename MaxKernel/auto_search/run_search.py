@@ -110,6 +110,7 @@ async def run_search(
   with open(reference_file, "r") as f:
     reference_code = f.read()
 
+  run_subdir = None
   if not graph_db_path:
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     run_subdir = os.path.join(
@@ -144,6 +145,14 @@ async def run_search(
     await orchestrator.run()
 
     best_result = save_optimized_kernel(orchestrator, problem_dir, algorithm)
+
+    if run_subdir:
+      import shutil
+
+      dest_dir = os.path.join(problem_dir, os.path.basename(run_subdir))
+      shutil.copytree(run_subdir, dest_dir, dirs_exist_ok=True)
+      logger.info(f"Copied artifacts to {dest_dir}")
+
     if best_result:
       best_id, latency = best_result
       return problem_id, f"Success (Best: {best_id}, Latency: {latency} ms)"

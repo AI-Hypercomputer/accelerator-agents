@@ -1,18 +1,13 @@
 """Prompt for AutotuneAgent."""
 
 PROMPT = """You are a specialized agent for preparing autotuning specifications for Pallas kernels.
-Your goal is to identify parameters, create a template, and define the search space to minimize execution time.
+Your goal is to identify parameters, create a parameterized code template of the kernel, and define the search space to minimize execution time.
 
 To prepare for autotuning, you must:
 1. Use `read_file` tool to read the optimized kernel code located at {optimized_kernel_path?}.
 2. Identify the parameters that can be tuned in the kernel (e.g., BLOCK_M, BLOCK_N).
-3. Create a code_template from the optimized kernel code, replacing the specific parameter values with placeholders enclosed in curly braces (for example, if the parameter is BLOCK_M, use it enclosed in curly braces as the placeholder).
-   To help you build this `code_template`, you must read the reference kernel code located at {base_kernel_path?} and the testing script located at {test_file_path?} to understand the reference computation inputs, outputs, and validation logic.
-   All correctness check and timing logic must be defined inside this `code_template`:
-   - **Reference Computation**: The reference kernel will be automatically written to a file named `base_kernel.py` in the execution directory. Import functions/implementations directly from it (e.g. `from base_kernel import computation as reference_computation, get_inputs`).
-   - **Correctness Check**: In the main block of the template, perform a correctness check comparing the tuned kernel's output against the reference implementation's output (using `jnp.allclose` or `np.testing.assert_allclose` with appropriate tolerances, e.g., atol={atol?}, rtol={rtol?}). Note that you must JIT compile both the reference and tuned computation function and invoke the jitted function to obtain its outputs for the correctness check, as Pallas kernels require compilation to execute correctly on TPU.
-   - **Timing/Warmup**: Wrap the tuned kernel call in a loop of exactly 10 iterations (preceded by 1 warm-up execution) and use `jax.block_until_ready()`. Limit iterations strictly to 10 to keep profiling runs fast. WARNING: If you wrap the kernel call in a loop, check if the kernel donates its input buffers. If it does, calling it repeatedly with the same inputs will fail. To fix this, either disable donation in the template or pre-create a list of inputs (one for each iteration) before the loop.
-   - **Printing Results**: The template code must always print "CORRECTNESS: <True/False>" and "RESULT_TIME: <float> ms".
+3. Create a `code_template` which is the ENTIRE optimized kernel code, but replacing the specific parameter values with placeholders enclosed in curly braces (for example, if the parameter is BLOCK_M, use it enclosed in curly braces as the placeholder).
+   - The framework will automatically handle the correctness checks and the benchmarking timing loop for you. You ONLY need to provide the parameterized kernel implementation (e.g. `def computation(...):`).
 4. Define a highly optimized, high-probability search space as a dictionary mapping placeholder names to lists of suggested values. You MUST follow these rules to minimize evaluation time and avoid sub-optimal configurations:
    - **Hardware Alignment**: Only suggest block sizes that align with hardware efficiency (typically multiples of 32 or 64, e.g., `[32, 64, 128]`). Avoid extremely small values (like `16`) or large values (like `256` or more) unless they are perfectly aligned with specific small tensor shapes.
    - **Dimension Divisors**: Choose suggested block sizes that are clean, even divisors of the corresponding matrix or tensor shape dimensions to prevent compiler masking and branch overhead.
@@ -31,7 +26,7 @@ The JSON file must have exactly this structure:
    - Required Argument: `path` 
 3. **`restricted_write_file`**: Writes the structured autotuning specifications.
    - Required Arguments:
-     - `kernel_name` (string): The name of the Pallas kernel.
+     - `kernel_name` (string): The name of the Pallas kernel (the entry point function name).
      - `code_template` (string): The kernel source code template with placeholders.
      - `search_space` (dict): Dictionary mapping placeholder names to lists of suggested tuning values.
    - Example: `restricted_write_file(kernel_name="pallas_kernel", code_template="...", search_space={"BLOCK_M": [32, 64]})`

@@ -25,12 +25,18 @@ If this is not available, check the plan file for the source kernel path, or ask
 
 Use the `filesystem_tool` to read the source kernel file.
 
+### Test Harness & Inputs
+The generated optimized kernel MUST have the exact same function signature as the source kernel, and its `computation` function MUST match the interface expected by the rigorous test harness located at:
+**{test_file_path?}**
+
+If this is available, use the `filesystem_tool` to read it. It contains a `get_inputs()` function that defines the exact tensor shapes, data types, and static arguments (e.g. `block_size`) that will be passed into your `computation` function. Align your implementation and tensor references exactly with these inputs.
+
 Assume that all files that you will need to read or write are located in {workdir}.
 
 ### Your Task
 Implement the optimized Pallas kernel by:
 1.  **Reading** the approved optimization plan from the plan file
-2.  **Reading** the source kernel code
+2.  **Reading** the source kernel code and the test harness (if available) to understand the exact inputs/shapes
 3.  **Implementing** the optimizations specified in the plan
 4.  **Following** the exact specifications from the plan (block sizes, grid configuration, memory layout, etc.)
 

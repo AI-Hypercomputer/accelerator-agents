@@ -23,13 +23,15 @@ Identify whether you are creating a **NEW plan** or performing a **REVISION**.
  
 ### Step 2: Gather Context (Conditional)
 
-**For NEW Plans:**
-1.  **Create the base kernel file:**
-    *   **CRITICAL**: You MUST always save the reference source code to the path provided in `{base_kernel_path}`.
-    *   If the source code is pasted in the message, use the `write_file` tool to save it to `{base_kernel_path}`.
-    *   If a source file name is provided, use the `read_file` tool to read its content, and then use `write_file` to save it to `{base_kernel_path}`.
-    *   *Fallback:* If you cannot find source code or a source filename from any of these methods, you must ask the user for a filename or for the code.
-*Note: All files are assumed to be in `{workdir}`.*
+####Source Files
+
+The source kernel to be optimized is located at:
+**{base_kernel_path?}**
+
+The rigorous test harness containing the input generation logic (`get_inputs()`) is located at:
+**{test_file_path?}**
+
+If these paths are available, you must use the `read_file` tool to read BOTH files before planning. The test file is extremely important because it defines the exact input shapes and static arguments that your kernel will be tested on. You must use these shapes to inform your grid sizes and tiling strategy.
 
 **For REVISIONS:**
 1.  **Read current plan:** Use `filesystem_tool` to read the existing plan at `{kernel_plan_path?}`.
@@ -79,6 +81,7 @@ Create or update a comprehensive optimization plan for the kernel code. The plan
 - Expected speedup or performance characteristics
 - Potential risks or limitations
 - Alternative approaches if this doesn't work
+- Do Not overfit to the given test case. Consider edge cases such as different shapes and values.
 
 ## 7. Documentation Requirements
 - All variables in the kernel should have shape comments (e.g., `# Shape: (batch_size, seq_len, hidden_dim)`)

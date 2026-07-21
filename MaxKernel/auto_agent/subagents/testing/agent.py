@@ -25,7 +25,10 @@ from auto_agent.subagents.testing.prompts import (
   summarize_test_results_prompt,
   validation_summary,
 )
-from auto_agent.tools.file_tools import filesystem_tool_r, write_test_file_tool
+from auto_agent.tools.file_tools import (
+  filesystem_tool_r,
+  write_test_file_tool,
+)
 from auto_agent.tools.search_api_tool import search_api_tool
 from auto_agent.tools.tools import vertex_ai_rag_tool
 
@@ -37,7 +40,7 @@ TEST_EXECUTION_POLL_INTERVAL = 20
 
 
 class TestRunner(BaseAgent):
-  """Executes pytest on a generated test file and captures results with full tracebacks."""
+  """Executes the generated test file and captures results with full tracebacks."""
 
   input_key: Optional[str] = None
   output_key: Optional[str] = None
@@ -95,7 +98,7 @@ class TestRunner(BaseAgent):
 
     try:
       logging.info(
-        f"[{self.name}] Dispatching pytest on {test_file_path} to eval server"
+        f"[{self.name}] Dispatching tests on {test_file_path} to eval server"
       )
 
       with open(test_file_path, "r") as f:
@@ -107,7 +110,7 @@ class TestRunner(BaseAgent):
 
       if base_kernel_path and os.path.exists(base_kernel_path):
         with open(base_kernel_path, "r") as f:
-          dependencies[os.path.basename(base_kernel_path)] = f.read()
+          dependencies["base_kernel.py"] = f.read()
       else:
         logging.error(f"[{self.name}] Base kernel path not found")
         yield Event(
@@ -126,7 +129,7 @@ class TestRunner(BaseAgent):
 
       if optimized_kernel_path and os.path.exists(optimized_kernel_path):
         with open(optimized_kernel_path, "r") as f:
-          dependencies[os.path.basename(optimized_kernel_path)] = f.read()
+          dependencies["optimized_kernel.py"] = f.read()
       else:
         logging.error(f"[{self.name}] Optimized kernel path not found")
         yield Event(
@@ -389,143 +392,6 @@ class ImportValidationAgent(BaseAgent):
       )
 
 
-class TestStructureValidationAgent(BaseAgent):
-  """Validates pytest test structure and conventions by attempting test setup."""
-
-  input_key: Optional[str] = None
-  output_key: Optional[str] = None
-
-  def __init__(self, name: str, input_key: str, output_key: str):
-    super().__init__(name=name)
-    self.input_key = input_key
-    self.output_key = output_key
-
-  async def _run_async_impl(
-    self, ctx: InvocationContext
-  ) -> AsyncGenerator[Event, None]:
-    test_file_path = ctx.session.state.get(self.input_key, "")
-
-    if not test_file_path or not os.path.exists(test_file_path):
-      error_msg = f"Test file not found at {test_file_path}"
-      logging.error(f"[{self.name}] {error_msg}")
-      yield Event(
-        author=self.name,
-        actions=EventActions(
-          state_delta={
-            self.output_key: {
-              "valid": False,
-              "errors": [error_msg],
-              "validation_type": "structure",
-            }
-          }
-        ),
-      )
-      return
-
-    try:
-      collect_result = subprocess.run(
-        ["pytest", test_file_path, "--collect-only", "-q"],
-        capture_output=True,
-        text=True,
-        cwd=os.path.dirname(test_file_path),
-        timeout=30,
-      )
-
-      if (
-        "no tests ran" in collect_result.stdout.lower()
-        or collect_result.returncode != 0
-      ):
-        error_msg = f"No valid pytest tests found or collection failed: {collect_result.stdout}"
-        logging.warning(f"[{self.name}] {error_msg}")
-        yield Event(
-          author=self.name,
-          actions=EventActions(
-            state_delta={
-              self.output_key: {
-                "valid": False,
-                "errors": [error_msg],
-                "validation_type": "structure",
-                "details": collect_result.stdout + "\n" + collect_result.stderr,
-              }
-            }
-          ),
-        )
-        return
-
-      setup_result = subprocess.run(
-        ["pytest", test_file_path, "--setup-only", "-q"],
-        capture_output=True,
-        text=True,
-        cwd=os.path.dirname(test_file_path),
-        timeout=30,
-      )
-
-      if setup_result.returncode != 0:
-        error_msg = f"Test setup failed (imports or fixtures broken): {setup_result.stdout}"
-        logging.error(f"[{self.name}] {error_msg}")
-        yield Event(
-          author=self.name,
-          actions=EventActions(
-            state_delta={
-              self.output_key: {
-                "valid": False,
-                "errors": [error_msg],
-                "validation_type": "structure",
-                "details": setup_result.stdout + "\n" + setup_result.stderr,
-              }
-            }
-          ),
-        )
-      else:
-        logging.info(
-          f"[{self.name}] Test structure validation passed for {test_file_path}"
-        )
-        yield Event(
-          author=self.name,
-          actions=EventActions(
-            state_delta={
-              self.output_key: {
-                "valid": True,
-                "errors": [],
-                "validation_type": "structure",
-                "tests_collected": collect_result.stdout,
-              }
-            }
-          ),
-        )
-
-    except subprocess.TimeoutExpired:
-      error_msg = "Test structure validation timed out"
-      logging.error(f"[{self.name}] {error_msg}")
-      yield Event(
-        author=self.name,
-        actions=EventActions(
-          state_delta={
-            self.output_key: {
-              "valid": False,
-              "errors": [error_msg],
-              "validation_type": "structure",
-            }
-          }
-        ),
-      )
-    except Exception as e:
-      error_msg = f"Unexpected error during structure validation: {str(e)}"
-      logging.error(f"[{self.name}] {error_msg}")
-      yield Event(
-        author=self.name,
-        actions=EventActions(
-          state_delta={
-            self.output_key: {
-              "valid": False,
-              "errors": [error_msg],
-              "validation_type": "structure",
-            }
-          }
-        ),
-      )
-
-
 class MockTestExecutionAgent(BaseAgent):
   """Validates tests can execute using JAX baseline code as a mock for the kernel."""
 
@@ -566,10 +432,7 @@ class MockTestExecutionAgent(BaseAgent):
       has_baseline_ref = any(
         keyword in test_content.lower()
         for keyword in [
-          "baseline",
-          "jax_baseline",
-          "reference_impl",
-          "converted_jax",
+          "base_kernel",
         ]
       )
 
@@ -614,7 +477,7 @@ class MockTestExecutionAgent(BaseAgent):
         dependencies = {}
         if base_kernel_path and os.path.exists(base_kernel_path):
           with open(base_kernel_path, "r") as f:
-            dependencies[os.path.basename(base_kernel_path)] = f.read()
+            dependencies["base_kernel.py"] = f.read()
 
         payload = {
           "eval_type": "unified_test",
@@ -718,7 +581,6 @@ class TestValidationLoopAgent(BaseAgent):
 
   syntax_agent: Optional[BaseAgent] = None
   import_agent: Optional[BaseAgent] = None
-  structure_agent: Optional[BaseAgent] = None
   mock_execution_agent: Optional[BaseAgent] = None
   fix_agent: Optional[BaseAgent] = None
   max_retries: int = 3
@@ -728,7 +590,6 @@ class TestValidationLoopAgent(BaseAgent):
     name: str,
     syntax_agent: BaseAgent,
     import_agent: BaseAgent,
-    structure_agent: BaseAgent,
     mock_execution_agent: BaseAgent,
     fix_agent: BaseAgent,
     max_retries: int = 3,
@@ -737,7 +598,6 @@ class TestValidationLoopAgent(BaseAgent):
       name=name,
       syntax_agent=syntax_agent,
       import_agent=import_agent,
-      structure_agent=structure_agent,
       mock_execution_agent=mock_execution_agent,
       fix_agent=fix_agent,
       max_retries=max_retries,
@@ -765,7 +625,6 @@ class TestValidationLoopAgent(BaseAgent):
               "message": "No test file was generated. Cannot validate.",
               "syntax_valid": False,
               "import_valid": False,
-              "structure_valid": False,
               "mock_execution_valid": False,
             }
           }
@@ -786,9 +645,6 @@ class TestValidationLoopAgent(BaseAgent):
       async for event in self.import_agent.run_async(ctx):
         yield event
 
-      async for event in self.structure_agent.run_async(ctx):
-        yield event
-
       async for event in self.mock_execution_agent.run_async(ctx):
         yield event
 
@@ -798,19 +654,11 @@ class TestValidationLoopAgent(BaseAgent):
       import_valid = ctx.session.state.get("import_validation", {}).get(
         "valid", False
       )
-      structure_valid = ctx.session.state.get("structure_validation", {}).get(
-        "valid", False
-      )
       mock_execution_valid = ctx.session.state.get(
         "mock_execution_validation", {}
       ).get("valid", False)
 
-      if (
-        syntax_valid
-        and import_valid
-        and structure_valid
-        and mock_execution_valid
-      ):
+      if syntax_valid and import_valid and mock_execution_valid:
         logging.info(f"[{self.name}] ✓ All validations passed!")
 
         yield Event(
@@ -845,7 +693,6 @@ class TestValidationLoopAgent(BaseAgent):
                 "message": f"Test file validation failed after {self.max_retries} attempts",
                 "syntax_valid": syntax_valid,
                 "import_valid": import_valid,
-                "structure_valid": structure_valid,
                 "mock_execution_valid": mock_execution_valid,
                 "all_checks_passed": False,
               }
@@ -881,7 +728,7 @@ def create_generate_test_file_agent(
     generate_content_config=model_config,
     planner=get_thinking_planner("high"),
     instruction=gen_test_file.PROMPT,
-    description="Generates a comprehensive pytest test file.",
+    description="Generates a comprehensive test file.",
     tools=(
       [
         search_api_tool,
@@ -925,19 +772,6 @@ def create_import_validation_agent(
 import_validation_agent = create_import_validation_agent()
 
 
-def create_structure_validation_agent(
-  model_name: str = MODEL_NAME,
-) -> TestStructureValidationAgent:
-  return TestStructureValidationAgent(
-    name="TestStructureValidationAgent",
-    input_key="test_file_path",
-    output_key="structure_validation",
-  )
-
-
-structure_validation_agent = create_structure_validation_agent()
-
-
 def create_mock_execution_validation_agent(
   model_name: str = MODEL_NAME,
 ) -> MockTestExecutionAgent:
@@ -977,7 +811,6 @@ def create_validation_loop_agent(
     name="TestValidationLoopAgent",
     syntax_agent=create_syntax_validation_agent(model_name),
     import_agent=create_import_validation_agent(model_name),
-    structure_agent=create_structure_validation_agent(model_name),
     mock_execution_agent=create_mock_execution_validation_agent(model_name),
     fix_agent=create_fix_test_script_agent(model_name),
     max_retries=6,
@@ -998,7 +831,7 @@ def create_validated_test_generation_agent(
       create_validation_loop_agent(model_name),
       create_validation_summary_agent(model_name),
     ],
-    description="Generates a validated pytest test file with automatic iterative error detection and fixing.",
+    description="Generates a validated test file with automatic iterative error detection and fixing.",
   )
 
 
@@ -1026,7 +859,7 @@ def create_summarize_test_results_agent(
     generate_content_config=model_config,
     planner=get_thinking_planner("high"),
     instruction=summarize_test_results_prompt.PROMPT,
-    description="Analyzes pytest test results and provides recommendations.",
+    description="Analyzes test results and provides recommendations.",
     tools=(
       [search_api_tool, vertex_ai_rag_tool]
       if vertex_ai_rag_tool
@@ -1047,7 +880,7 @@ def create_unified_test_agent(model_name: str = MODEL_NAME) -> SequentialAgent:
       create_run_tests_agent(model_name),
       create_summarize_test_results_agent(model_name),
     ],
-    description="Executes the generated pytest test file and provides a comprehensive summary.",
+    description="Executes the generated test file and provides a comprehensive summary.",
   )
 
 
@@ -1058,7 +891,6 @@ __all__ = [
   "TestRunner",
   "SyntaxValidationAgent",
   "ImportValidationAgent",
-  "TestStructureValidationAgent",
   "MockTestExecutionAgent",
   "TestValidationLoopAgent",
   "validated_test_generation_agent",

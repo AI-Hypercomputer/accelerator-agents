@@ -11,6 +11,7 @@ from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset
 from mcp import StdioServerParameters
 
 from auto_agent.config import WORKDIR
+from auto_agent.tools.test_harness import TEST_TEMPLATE
 
 # Read-only filesystem tool for orchestration agent (no write access)
 filesystem_tool_r = MCPToolset(
@@ -115,9 +116,56 @@ def write_autotune_specs_tool_fn(
   return f"Successfully wrote structured autotuning specs to {target}"
 
 
-write_test_file_tool = restricted_write_file(
-  "test_file_path", "Writes the generated pytest file."
-)
+def write_test_file_tool_fn(
+  content: str,
+  kernel_name: str,
+  tool_context: ToolContext,
+  atol: float = 1e-2,
+  rtol: float = 1e-2,
+) -> str:
+  """Writes the generated input generation snippet to the test file using the rigorous harness template.
+
+  Args:
+      content: The Python code snippet containing the `get_inputs()` function.
+      kernel_name: The exact function name of the base kernel entry point (e.g., "computation").
+      atol: Absolute tolerance for numerical correctness checks. Default 1e-2. Set lower for F32.
+      rtol: Relative tolerance for numerical correctness checks. Default 1e-2. Set lower for F32.
+  """
+  target_path = tool_context.state.get("test_file_path")
+  if not target_path:
+    return "Error: Path variable 'test_file_path' not found in session state."
+
+  base = Path(WORKDIR).resolve()
+  target = Path(target_path).resolve()
+
+  try:
+    if not target.is_relative_to(base):
+      return f"Error: Access denied. Path is outside {WORKDIR}"
+  except ValueError:
+    return "Error: Invalid path or access denied."
+
+  target.parent.mkdir(parents=True, exist_ok=True)
+
+  import re
+
+  content = re.sub(r"^```(python)?\n", "", content.strip())
+  content = re.sub(r"\n```$", "", content)
+
+  # Save kernel_name and tolerances to state for downstream agents
+  tool_context.state["kernel_name"] = kernel_name
+  tool_context.state["atol"] = atol
+  tool_context.state["rtol"] = rtol
+
+  full_content = TEST_TEMPLATE.format(
+    input_gen_code=content, atol=atol, rtol=rtol, kernel_name=kernel_name
+  )
+
+  target.write_text(full_content)
+  return f"Successfully wrote to {target}"
+
+
+write_test_file_tool_fn.__name__ = "restricted_write_file"
+write_test_file_tool = FunctionTool(write_test_file_tool_fn)
 write_optimized_kernel_tool = restricted_write_file(
   "optimized_kernel_path", "Writes the optimized Pallas kernel file."
 )
@@ -129,6 +177,9 @@ write_profiling_script_tool = restricted_write_file(
 )
 write_autotune_specs_tool_fn.__name__ = "restricted_write_file"
 write_autotune_specs_tool = FunctionTool(write_autotune_specs_tool_fn)
+write_base_kernel_tool = restricted_write_file(
+  "base_kernel_path", "Writes the base kernel file."
+)
 
 __all__ = [
   "filesystem_tool_r",
@@ -138,4 +189,5 @@ __all__ = [
   "write_optimization_plan_tool",
   "write_profiling_script_tool",
   "write_autotune_specs_tool",
+  "write_base_kernel_tool",
 ]

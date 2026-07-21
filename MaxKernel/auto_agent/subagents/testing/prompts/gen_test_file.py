@@ -1,200 +1,68 @@
-PROMPT = """You are tasked with generating a comprehensive pytest test file for a Pallas kernel optimization.
+PROMPT = """You are tasked with generating the input generation function `get_inputs()` for testing a Pallas kernel.
 
-## Finding the Kernel Files
+The testing harness is already provided by the framework and handles testing, correctness checking, benchmarking, and layout alignment. It expects you to provide a function called `get_inputs()` that returns a list of `(dynamic_args, static_args)` tuples.
 
-You need TWO kernel files to generate tests:
-1. **Base kernel** - The reference implementation (JAX or simple Pallas)
-2. **Optimized kernel** - The kernel to test
-
-### How to Find the Kernel Files:
-
-**IMPORTANT: Do NOT explore or search for files. Follow this process:**
+## Finding the Base Kernel
+You need to read the base kernel to understand what inputs are required.
 
 **Step 1: Check Session State**
 - Base kernel: `{base_kernel_path?}`
-- Optimized kernel: `{optimized_kernel_path?}`
 
-If BOTH paths are available → proceed to read them.
+If the path is available → proceed to read it using the `read_file` tool.
 
-**Step 2: Check User's Message**
-Look for explicit file paths in the user's message like:
-- "test BASE_FILE and OPTIMIZED_FILE"
-- "create tests for BASE_FILE vs OPTIMIZED_FILE"
-- "base: BASE_FILE, optimized: OPTIMIZED_FILE"
-
-If BOTH files are explicitly specified → proceed to read them.
-
-**Step 3: If Either Path is Missing**
+**Step 2: If Path is Missing**
 **STOP immediately and ask the user. DO NOT use list_directory or search for files.**
-
-Ask:
-"I need two kernel files to generate tests. Please specify:
-- Which file is your base/reference implementation?
-- Which file is your optimized Pallas kernel?
-
-All files are located in: {workdir}"
-
-
-## Tool Usage
-
-You have three tools to help you:
-1.  **`retrieval_tool`**: Use this to retrieve Pallas/JAX/TPU documentation for test writing. Essential for:
-    - Understanding how to properly test Pallas kernels (compilation, JIT, execution)
-    - Learning correct timing patterns for JAX performance benchmarks (`.block_until_ready()`, warmup runs)
-    - Verifying correct API usage in test code (jax.jit, jax.random, etc.)
-    - Understanding tolerance requirements for numerical tests with Pallas kernels
-    - Learning about common pitfalls when testing JAX code (tracing, random keys, etc.)
-
-    **Retrieval strategy:**
-    - Query for testing patterns (e.g., "testing Pallas kernels", "JAX benchmarking best practices")
-    - Query for timing APIs (e.g., "block_until_ready timing", "JAX performance measurement")
-    - Query for specific APIs you're using in tests when you need examples or discussions (e.g., "pytest parametrize with JAX")
-
-2.  **`search_api`**: For looking up specific API definitions and signatures when you need precise technical details about JAX, Pallas, or pytest APIs.
-    - **Strategy**: Use this when you need the exact signature, parameters, or docstring of a specific function (e.g., `jax.random.PRNGKey`, `pytest.mark.parametrize`).
-
-3.  **`filesystem_tool`**: To **read** the kernel files and to **write** the final test file.
-
-**Important:** Use `retrieval_tool` and `search_api` to ensure your tests follow JAX/Pallas/TPU best practices, use correct API signatures, and implement robust validation.
 
 ## Your Task
 
-Once you have identified both kernel files:
+1. **Read the base kernel file** using the `read_file` tool to understand:
+   - The function name and signature
+   - Input shapes and types (especially `jax.numpy` arrays)
 
-1. **Read both kernel files** using the `read_file` tool to understand:
-   - The function names and signatures
-   - Input/output shapes and types
-   - Any configuration parameters (block_size, tile_size, etc.)
-   - Check if the base kernel (`{base_kernel_path?}`) contains an input generation function (e.g., `get_inputs` or similar). If it is defined, you should directly copy and reuse it in the test file.
+2. **CRITICAL: Check for existing input generation function or test cases**
+   - Examine the base kernel (`{base_kernel_path?}`) to see if it already contains an input generation function (e.g., `get_inputs()` or similar) or specific test shapes.
+   - If test cases or input generation logic ALREADY EXIST in the base kernel, you MUST use those exact test cases. Adapt them into the required `get_inputs()` format (a list of `(dynamic_args, static_args)` tuples). Do NOT write completely new shapes or inputs from scratch if they are already provided.
 
-2. **Generate a complete pytest test file** that includes:
+3. **Generate a Python snippet containing ONLY `def get_inputs():` and necessary imports**
+   - If no input generation function was found, write one from scratch:
+     - Import necessary libraries (e.g., `import jax`, `import jax.numpy as jnp`).
+     - Define `def get_inputs():`
+     - Create test inputs with multiple sizes and test edge cases (e.g., zeros, ones, random inputs).
+   - Separate the arguments for each case into `dynamic_args` (arrays/tensors) and `static_args` (scalars, block sizes).
+   - Return a list of `(dynamic_args, static_args)` tuples to match the test harness.
+   - Example:
+     ```python
+     import jax
+     import jax.numpy as jnp
 
-1. **TestCompilation class**: Tests that verify both kernels compile without errors
-   - Test that the optimized kernel compiles and can be JIT-compiled
-   - Test that the base kernel compiles (for reference)
+     def get_inputs():
+         key = jax.random.PRNGKey(0)
+         cases = []
+         
+         # Case 1: Standard random inputs
+         x1 = jax.random.normal(key, (1024, 1024), dtype=jnp.float32)
+         y1 = jax.random.normal(key, (1024, 1024), dtype=jnp.float32)
+         cases.append(([x1, y1], []))
+         
+         # Case 2: Edge case with zeros
+         x2 = jnp.zeros((256, 256), dtype=jnp.float32)
+         y2 = jnp.zeros((256, 256), dtype=jnp.float32)
+         cases.append(([x2, y2], []))
 
-2. **TestCorrectness class**: Tests that verify numerical correctness
-   - Compare outputs between base and optimized kernels with the tolerance specified in the state: rtol={rtol?}, atol={atol?}. If they are not specified, use appropriate tolerance (rtol=1e-3, atol=1e-3 or adjust based on kernel) 
-   - If the base kernel file (`{base_kernel_path?}`) contains an input generation function (e.g., `get_inputs` or similar). If it is defined, you should directly copy and reuse it in the test file.
-   - If no input generation function is defined, 
-     - Test with multiple input sizes using pytest.mark.parametrize
-     - Test edge cases (zeros, ones, random inputs)
-   - **Note**: During validation, the optimized kernel import will be temporarily disabled to verify the test structure works with baseline only
-
-3. **TestPerformance class**: Tests that benchmark performance
-   - If the base kernel file (`{base_kernel_path?}`) contains a function to generate inputs (e.g., `get_inputs`), you must directly copy and reuse it.
-   - **CRITICAL**: If the input generation function returns MULTIPLE configurations (e.g., a list of inputs), you MUST select exactly ONE configuration (the last one) to run the performance benchmark on. Do NOT use `@pytest.mark.parametrize` for the performance test to ensure we get a single, consistent baseline measurement.
-   - Compare execution time between base and optimized kernels on this single configuration
-   - Include warmup runs before timing
-   - Use .block_until_ready() for accurate JAX timing
-   - Run 10 iterations for the benchmark to get reliable timing measurements
-
-## Requirements
-
-### Imports
-- Import pytest, jax, jax.numpy as jnp
-- Add the working directory to sys.path for imports
-- Import the kernel functions with a safe fallback for mock execution:
-  ```python
-  # Import base kernel (required)
-  from base_kernel import computation as base_kernel
-  
-  # Safe import for optimized_kernel to handle mock execution environments
-  try:
-      from optimized_kernel import computation as optimized_kernel
-  except ImportError:
-      pass
-  
-  # Fallback for mock execution environments where the import might fail
-  if 'optimized_kernel' not in globals():
-      optimized_kernel = base_kernel
-  ```
-  **Important**: Use this exact structure. It allows tests to run with the base kernel in mock environments where the optimized kernel is not available.
-- Extract function names from the kernel code
-
-### Test Structure
-```python
-import pytest
-import jax
-import jax.numpy as jnp
-from pathlib import Path
-import sys
-import time
-
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
-# Import base kernel (required)
-from base_kernel_file import kernel_function_name as base_kernel
-
-# Safe import for optimized_kernel to handle mock execution environments
-try:
-    from optimized_kernel_file import kernel_function_name as optimized_kernel
-except ImportError:
-    pass
-
-# Fallback for mock execution environments where the import might fail
-if 'optimized_kernel' not in globals():
-    optimized_kernel = base_kernel
-
-def report_perf_metrics(execution_time_ms, speedup):
-    import sys
-    sys.__stdout__.write("PERF_METRICS: " + str(execution_time_ms) + "\n")
-    sys.__stdout__.write("SPEEDUP: " + str(speedup) + "\n")
-
-class TestCompilation:
-    def test_optimized_kernel_compiles(self):
-        # Test implementation
-        pass
-    
-    def test_base_kernel_compiles(self):
-        # Test implementation
-        pass
-
-class TestCorrectness:
-    @pytest.mark.parametrize("size", [64, 128, 256])
-    def test_output_matches_baseline(self, size):
-        # Test implementation
-        pass
-    
-class TestPerformance:
-    def test_performance_comparison(self):
-        # Test implementation with timing
-        pass
-
-if __name__ == "__main__":
-    sys.exit(pytest.main([__file__, "-v", "--tb=short"]))
-```
-
-### Important Guidelines
-1. **File paths and imports**: 
-   - Use the file paths from session state (if available) or from reading the files
-   - Extract the directory and filename from the paths
-   - Import the kernel modules using proper Python import statements
-   - Inspect the imported modules to find the main kernel function (usually a function decorated with @jax.jit or containing pallas operations)
-
-2. **Function discovery**: 
-   - After importing, use inspection or assume common naming patterns
-   - Look for functions that match the operation (e.g., matmul, flash_attention, conv2d)
-   - Test with appropriate input shapes based on the kernel type
-
-3. **Realistic test data & Input Generation**: 
-   - If the base kernel file (`{base_kernel_path?}`) defines a function to generate inputs (such as `get_test_inputs(...)`), you MUST directly reuse/import or copy and use it to construct test inputs.
-   - If no input generation function is defined, generate random data with `jax.random` suitable for the kernel.
-     - Use appropriate input sizes based on the kernel configuration.
-     - Use larger sizes for performance tests if needed.
-
-4. **Error handling**: Include try-catch where compilation might fail
-
-5. **Performance metrics**:
-   - Report speedup ratios
-   - Include warmup iterations
-   - Use multiple runs for statistical stability
-   - **Structured Output**: At the end of the performance test, you MUST call the `report_perf_metrics(execution_time_ms, speedup)` helper function provided in the template to report the final average execution time and the speedup of the optimized kernel over the base kernel. Do not use standard `print()` for this.
-
+         # Case 3: Edge case with ones
+         x3 = jnp.ones((512, 512), dtype=jnp.float32)
+         y3 = jnp.ones((512, 512), dtype=jnp.float32)
+         cases.append(([x3, y3], []))
+         
+         return cases
+     ```
 ## Output Format
-When you have generated the test file:
-1. **Write the complete test file to disk** using the restricted_write_file tool. The tool will automatically save it to the path specified in `{test_file_path?}`. You only need to provide the `content`.
+1. **Write the complete snippet** containing `get_inputs()` using the `restricted_write_file` tool. The tool will automatically wrap your snippet in the rigorous testing harness and save it.
+   - Required Arguments:
+     - `content` (string): The Python code snippet.
+     - `kernel_name` (string): The exact function name of the base kernel entry point (e.g., `"computation"`, `"matmul"`, etc.).
+     - `atol` (float, optional): Absolute tolerance for correctness checks (default 1e-2). Set appropriately based on precision (BF16 should be 1e-2 or higher).
+     - `rtol` (float, optional): Relative tolerance for correctness checks (default 1e-2). Set appropriately based on precision.
 
-Generate a complete, runnable pytest test file now.
+Generate the `get_inputs()` Python snippet now.
 """

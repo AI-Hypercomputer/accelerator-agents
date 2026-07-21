@@ -14,14 +14,12 @@ from auto_agent.constants import MODEL_NAME
 from auto_agent.custom_types import CustomLlmAgent
 from auto_agent.subagents.autotuning.autotune_tool import autotune_kernel
 from auto_agent.subagents.autotuning.prompts import (
-  apply_best_config_prompt,
   autotune_prompt,
   summary_prompt,
 )
 from auto_agent.tools.file_tools import (
   filesystem_tool_r,
   write_autotune_specs_tool,
-  write_optimized_kernel_tool,
 )
 from auto_agent.tools.search_api_tool import search_api_tool
 
@@ -118,18 +116,35 @@ class AutotuneRunner(BaseAgent):
     if base_kernel_path and os.path.exists(base_kernel_path):
       try:
         with open(base_kernel_path, "r") as f:
-          dependencies[os.path.basename(base_kernel_path)] = f.read()
+          dependencies["base_kernel.py"] = f.read()
       except Exception as e:
         logging.warning(
           f"[{self.name}] Failed to read base kernel file {base_kernel_path}: {e}"
         )
+
+    # Read the pre-generated test file (which is the rigorous harness)
+    test_file_path = ctx.session.state.get("test_file_path", "")
+    harness_code = ""
+    if test_file_path and os.path.exists(test_file_path):
+      with open(test_file_path, "r") as f:
+        harness_code = f.read()
+
+    # Construct a full script for eval_server by placing the kernel and then the harness.
+    # Override optimized_mod by defining a dummy class in the script.
+    # Since optimized_mod always expects a 'computation' function, alias it here.
+    full_code_template = (
+      f"{code_template}\n\nclass _optimized_mod:\n"
+      f"     computation = computation\n"
+      "import sys\n"
+      "sys.modules['optimized_kernel'] = _optimized_mod\n\n" + harness_code
+    )
 
     logging.info(f"[{self.name}] Running autotune for {kernel_name}")
 
     try:
       results = await autotune_kernel(
         kernel_name=kernel_name,
-        code_template=code_template,
+        code_template=full_code_template,
         search_space=search_space,
         backend="tpu",
         dependencies=dependencies,
@@ -171,19 +186,83 @@ def create_autotune_runner(model_name: str = MODEL_NAME) -> AutotuneRunner:
 autotune_runner = create_autotune_runner()
 
 
-# 3. Apply Best Config Agent
-def create_apply_best_config_agent(
-  model_name: str = MODEL_NAME,
-) -> CustomLlmAgent:
-  return CustomLlmAgent(
-    name="ApplyBestConfigAgent",
-    model=model_name,
-    generate_content_config=model_config,
-    planner=get_thinking_planner("high"),
-    instruction=apply_best_config_prompt.PROMPT,
-    description="Applies autotuning results to the optimized kernel file.",
-    tools=[filesystem_tool_r, write_optimized_kernel_tool],
-  )
+class ApplyBestConfigAgent(BaseAgent):
+  """Programmatic agent that applies autotuning best_config to the optimized kernel file."""
+
+  def __init__(self, name: str):
+    super().__init__(name=name)
+
+  async def _run_async_impl(
+    self, ctx: InvocationContext
+  ) -> AsyncGenerator[Event, None]:
+
+    # Get the best config directly from state (already verified by CombinedAutotuneAgent)
+    best_config = ctx.session.state.get("autotune_results", {}).get(
+      "best_config", {}
+    )
+
+    # Read the original code template
+    autotune_specs_path = ctx.session.state.get("autotune_specs_path", "")
+    try:
+      with open(autotune_specs_path, "r") as f:
+        specs = json.load(f)
+      code_template = specs.get("code_template", "")
+    except Exception as e:
+      error_msg = (
+        f"Failed to read code_template from {autotune_specs_path}: {e}"
+      )
+      logging.error(f"[{self.name}] {error_msg}")
+      yield Event(
+        author=self.name,
+        actions=EventActions(
+          state_delta={
+            "apply_config_status": {"status": "error", "message": error_msg}
+          }
+        ),
+      )
+      return
+
+    # Replace placeholders with best values
+    final_code = code_template
+    for k, v in best_config.items():
+      final_code = final_code.replace(f"{{{k}}}", str(v))
+
+    # Write to optimized kernel
+    optimized_kernel_path = ctx.session.state.get("optimized_kernel_path", "")
+    try:
+      with open(optimized_kernel_path, "w") as f:
+        f.write(final_code)
+      logging.info(
+        f"[{self.name}] Applied best config to {optimized_kernel_path}: {best_config}"
+      )
+      yield Event(
+        author=self.name,
+        actions=EventActions(
+          state_delta={
+            "apply_config_status": {
+              "status": "success",
+              "best_config": best_config,
+            }
+          }
+        ),
+      )
+    except Exception as e:
+      error_msg = (
+        f"Failed to write optimized kernel to {optimized_kernel_path}: {e}"
+      )
+      logging.error(f"[{self.name}] {error_msg}")
+      yield Event(
+        author=self.name,
+        actions=EventActions(
+          state_delta={
+            "apply_config_status": {"status": "error", "message": error_msg}
+          }
+        ),
+      )
+
+
+def create_apply_best_config_agent() -> ApplyBestConfigAgent:
+  return ApplyBestConfigAgent(name="ApplyBestConfigAgent")
 
 
 apply_best_config_agent = create_apply_best_config_agent()
@@ -270,7 +349,7 @@ def create_autotune_agent(
     name="AutotuneAgent",
     planner_agent=create_autotune_planner_agent(model_name),
     runner_agent=create_autotune_runner(model_name),
-    apply_config_agent=create_apply_best_config_agent(model_name),
+    apply_config_agent=create_apply_best_config_agent(),
     summary_agent=create_autotune_summary_agent(model_name),
   )
 

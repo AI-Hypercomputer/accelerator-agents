@@ -108,6 +108,7 @@ class ADKSessionWorker:
 
     custom_agent = AutonomousPipelineAgent(
       name="AutonomousPipelineAgent",
+      prepare_base_kernel_agent=root_agent.prepare_base_kernel_agent,
       plan_agent=root_agent.plan_agent,
       implement_agent=root_agent.implement_agent,
       validate_agent=root_agent.validate_agent,

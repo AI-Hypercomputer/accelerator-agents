@@ -20,6 +20,7 @@ from auto_agent.knowledge_base import pallas_docs, pallas_profiling_docs
 class AutonomousPipelineAgent(BaseAgent):
   """Chains kernel generation sub-agents automatically with an improvement loop."""
 
+  prepare_base_kernel_agent: BaseAgent
   plan_agent: BaseAgent
   implement_agent: BaseAgent
   validate_agent: BaseAgent
@@ -34,6 +35,7 @@ class AutonomousPipelineAgent(BaseAgent):
   def __init__(
     self,
     name: str,
+    prepare_base_kernel_agent: BaseAgent,
     plan_agent: BaseAgent,
     implement_agent: BaseAgent,
     validate_agent: BaseAgent,
@@ -50,6 +52,7 @@ class AutonomousPipelineAgent(BaseAgent):
       plan_agent=plan_agent,
       implement_agent=implement_agent,
       validate_agent=validate_agent,
+      prepare_base_kernel_agent=prepare_base_kernel_agent,
       test_gen_agent=test_gen_agent,
       test_run_agent=test_run_agent,
       autotune_agent=autotune_agent,
@@ -65,6 +68,27 @@ class AutonomousPipelineAgent(BaseAgent):
     iteration = 0
 
     yield self._initialize_state(ctx)
+
+    logging.info(f"[{self.name}] Running PrepareBaseKernelAgent (once)...")
+    async for event in self.prepare_base_kernel_agent.run_async(ctx):
+      yield event
+
+    logging.info(
+      f"[{self.name}] Running ValidatedTestGenerationAgent (once)..."
+    )
+    async for event in self.test_gen_agent.run_async(ctx):
+      yield event
+
+    validation_status = ctx.session.state.get("validation_loop_status", {})
+    if not validation_status.get("success", False):
+      logging.error(
+        f"[{self.name}] Initial test generation/validation failed. "
+        "Pipeline may not function correctly."
+      )
+      raise ValueError(
+        f"[{self.name}] Initial test generation/validation failed. "
+        "Pipeline may not function correctly."
+      )
 
     while iteration < self.max_iterations:
       logging.info(
@@ -113,28 +137,8 @@ class AutonomousPipelineAgent(BaseAgent):
         iteration += 1
         continue
 
-      # Step 4: Test Gen
-      logging.info(f"[{self.name}] Running ValidatedTestGenerationAgent...")
-      async for event in self.test_gen_agent.run_async(ctx):
-        yield event
 
-      # Check if test generation succeeded
-      validation_status = ctx.session.state.get("validation_loop_status", {})
-      if not validation_status.get("success", False):
-        logging.error(
-          f"[{self.name}] Test generation/validation failed. Looping back to planning."
-        )
-        self._save_iteration_files_and_snapshot(
-          ctx, iteration, step_name="test_gen"
-        )
-        iteration += 1
-        continue
-
-      if self._should_end_at_step(ctx, iteration, "test_gen"):
-        iteration += 1
-        continue
-
-      # Step 5: Test Run
+      # Step 4: Test Run
       logging.info(f"[{self.name}] Running UnifiedTestAgent...")
       async for event in self.test_run_agent.run_async(ctx):
         yield event
@@ -153,7 +157,7 @@ class AutonomousPipelineAgent(BaseAgent):
         iteration += 1
         continue
 
-      # Step 6: Autotune
+      # Step 5: Autotune
       logging.info(f"[{self.name}] Running AutotuneAgent...")
       async for event in self.autotune_agent.run_async(ctx):
         yield event
@@ -161,7 +165,7 @@ class AutonomousPipelineAgent(BaseAgent):
         iteration += 1
         continue
 
-      # Step 7: Profile
+      # Step 6: Profile
       logging.info(f"[{self.name}] Running ProfileAgentOrchestrator...")
       async for event in self.profile_agent.run_async(ctx):
         yield event
@@ -269,7 +273,6 @@ class AutonomousPipelineAgent(BaseAgent):
     all_keys = [
       "kernel_plan_path",
       "optimized_kernel_path",
-      "test_file_path",
       "autotune_specs_path",
       "autotune_results_path",
     ]
@@ -278,8 +281,7 @@ class AutonomousPipelineAgent(BaseAgent):
         "plan": "kernel_plan_path",
         "implement": "optimized_kernel_path",
         "validate": "optimized_kernel_path",
-        "test_gen": "test_file_path",
-        "test_run": "test_file_path",
+        "test_run": "optimized_kernel_path",
         "autotune": "autotune_results_path",
         "profile": "autotune_results_path",
       }

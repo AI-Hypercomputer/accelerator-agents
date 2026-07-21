@@ -12,6 +12,7 @@ from auto_agent.subagents.autotuning.agent import autotune_agent
 from auto_agent.subagents.kernel_writing import (
   implement_kernel_agent,
   plan_kernel_agent,
+  prepare_base_kernel_agent,
   validate_kernel_compilation_agent,
 )
 from auto_agent.subagents.pipeline_agent import AutonomousPipelineAgent
@@ -23,6 +24,7 @@ from auto_agent.subagents.testing import (
 
 root_agent = AutonomousPipelineAgent(
   name="AutonomousPipelineAgent",
+  prepare_base_kernel_agent=prepare_base_kernel_agent,
   plan_agent=plan_kernel_agent,
   implement_agent=implement_kernel_agent,
   validate_agent=validate_kernel_compilation_agent,

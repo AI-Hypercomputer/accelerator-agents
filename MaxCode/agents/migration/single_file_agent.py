@@ -6,7 +6,7 @@ from typing import Any
 from agents import base
 from agents import utils
 from agents.migration.prompts import prompts
-from rag import rag_agent
+from rag_pipeline.retrieval import retrieval_service
 
 
 class PytorchToJaxSingleFileAgent(base.Agent):
@@ -19,14 +19,18 @@ class PytorchToJaxSingleFileAgent(base.Agent):
   consider using the ModelConversionAgent.
   """
 
-  def __init__(self, model: Any, rag_agent_instance: rag_agent.RAGAgent):
+  def __init__(
+      self,
+      model: Any,
+      retrieval_service_instance: retrieval_service.RetrievalService,
+  ):
     """Initializes the agent."""
     super().__init__(
         model=model,
         agent_domain=utils.AgentDomain.MIGRATION,
         agent_type=utils.AgentType.PYTORCH_TO_JAX_SINGLE_FILE,
     )
-    self._rag_agent = rag_agent_instance
+    self._rag_agent = retrieval_service_instance
 
   def _strip_markdown_formatting(self, text: str) -> str:
     """Strips markdown and returns only the first python code block."""
@@ -46,7 +50,9 @@ class PytorchToJaxSingleFileAgent(base.Agent):
     Returns:
       The converted JAX code.
     """
-    rag_context_list = self._rag_agent.retrieve_context(pytorch_code, top_k=7)
+    rag_context_list = self._rag_agent.search_and_retrieve(
+        pytorch_code, top_k=7
+    )
     rag_context = "\n\n".join([
         f"File: {c['file']}\n```python\n{c['text']}\n```"
         for c in rag_context_list

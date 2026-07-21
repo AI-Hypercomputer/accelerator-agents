@@ -8,12 +8,13 @@ JAX_BEST_PRACTICES = """
 3. **Causal Conv1d**: Implement causal operations using custom modular structures or standalone functions that support both prefill and single-step decode execution paths. For depthwise convolutions, utilize high-performance `jax.lax.conv_general_dilated` primitives with exact feature configurations.
 4. **MaxText Native Libraries First**: Do NOT implement layers (e.g. Attention, MoE, Normalization, Linears) if they exist in `maxtext.layers.*`. Import and use them directly. Avoid writing custom implementations of these layers. **CRITICAL**: To allow MaxText imports to resolve during internal validation runs, you MUST prepend the following path setup block at the very beginning of the generated JAX file (before any other imports):
 ```python
+import os
 import sys
 from unittest.mock import MagicMock
 sys.modules['pathwaysutils'] = MagicMock()
 sys.modules['pathwaysutils.elastic'] = MagicMock()
 sys.modules['pathwaysutils.elastic.manager'] = MagicMock()
-sys.path.append('/usr/local/google/home/katiao/accelerator-agents/MaxCode/third_party/maxtext/src')
+sys.path.append(os.path.expanduser('~/accelerator-agents/MaxCode/third_party/maxtext/src'))
 ```
 **CRITICAL**: Do NOT attempt to import from `maxtext.layers.attention` (which does not exist). If you need `AttentionOp`, import it from `maxtext.layers.attention_op`.
 5. **Static Compilation Shapes**: Tensors must remain static at trace-time for `jax.jit` optimization. Do NOT use Python loops over dynamic lengths or dynamic slicing blocks that break compiler execution.

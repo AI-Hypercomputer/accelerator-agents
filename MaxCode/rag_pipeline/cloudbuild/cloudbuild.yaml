@@ -1,0 +1,73 @@
+# Multi-Repository Continuous Indexing Pipeline
+steps:
+  # Step 1: Clone the repository from GitHub and checkout branch or PR
+  - name: 'gcr.io/cloud-builders/git'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        git clone https://github.com/AI-Hypercomputer/maxtext.git maxtext
+        cd maxtext
+        if [ "${_PR_NUMBER}" != "0" ] && [ "${_PR_NUMBER}" != "main" ] && [ -n "${_PR_NUMBER}" ]; then
+          echo "Fetching Pull Request #${_PR_NUMBER}..."
+          git fetch origin pull/${_PR_NUMBER}/head:pr-${_PR_NUMBER}
+          git checkout pr-${_PR_NUMBER}
+        else
+          echo "Using branch ${_BRANCH_NAME}..."
+          git checkout ${_BRANCH_NAME}
+        fi
+
+  # Step 2: Stage ONLY modified python files to GCS
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        cd maxtext
+        if [ "${_PR_NUMBER}" != "0" ] && [ "${_PR_NUMBER}" != "main" ] && [ -n "${_PR_NUMBER}" ]; then
+          # Get list of modified files in the PR compared to origin/main
+          git diff --name-only origin/main | grep '\.py$' > modified_files.txt || true
+        else
+          # If main/branch, copy everything
+          find . -name "*.py" > modified_files.txt
+        fi
+
+        echo "Staging modified files to GCS..."
+        cat modified_files.txt
+
+        while read -r file; do
+          if [ -f "$file" ]; then
+            # Recreate directory structure on GCS
+            gcloud storage cp "$file" "gs://${_INGESTION_BUCKET}/raw_code/${_REPO_NAME}/${_COMMIT_SHA}/$file"
+          fi
+        done < modified_files.txt
+
+  # Step 3: Run Dataproc Spark Job (Parsing & Chunking)
+  # We assume code_chunker.py is uploaded to gs://${_INGESTION_BUCKET}/scripts/
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - >
+        gcloud dataproc jobs submit pyspark gs://${_INGESTION_BUCKET}/scripts/code_chunker.py
+        --cluster=${_DATAPROC_CLUSTER}
+        --region=${_REGION}
+        --
+        gs://${_INGESTION_BUCKET}/raw_code/${_REPO_NAME}/${_COMMIT_SHA}/
+        gs://${_INGESTION_BUCKET}/processed_chunks/${_REPO_NAME}/${_COMMIT_SHA}/
+        ${_REPO_NAME}
+        ${_COMMIT_SHA}
+        ${_BRANCH_NAME}
+
+# Configuration for substitutions
+substitutions:
+  _PR_NUMBER: '0'
+  _INGESTION_BUCKET: 'your-ingestion-bucket'
+  _DATAPROC_CLUSTER: 'chunking-cluster'
+  _REGION: 'us-central1'
+  _REPO_NAME: 'MaxText'
+  _COMMIT_SHA: 'HEAD'
+  _BRANCH_NAME: 'main'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

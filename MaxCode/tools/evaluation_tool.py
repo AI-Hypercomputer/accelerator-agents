@@ -88,6 +88,7 @@ def generate_equivalence_tests(
     output_test_path: str,
     api_key: str,
     model_name: str | None = None,
+    jax_module_name: str | None = None,
 ) -> str:
   """Generates an equivalence test script for JAX and PyTorch models.
 
@@ -97,6 +98,7 @@ def generate_equivalence_tests(
     output_test_path: Path to save the generated test script.
     api_key: The Google AI API key to use for test generation.
     model_name: The Gemini model to use for test generation.
+    jax_module_name: The module name of the JAX file.
 
   Returns:
     A string indicating the result of the test generation.
@@ -112,7 +114,16 @@ def generate_equivalence_tests(
       model_kwargs["model_name"] = model_name
     model = models.GeminiTool(**model_kwargs)
     agent = test_generation_agent.TestGenerationAgent(model)
-    response = agent.run(jax_code=jax_code, pytorch_code=pytorch_code)
+
+    # Extract module name from path if not provided
+    if not jax_module_name:
+      jax_module_name = pathlib.Path(jax_file_path).stem
+
+    response = agent.run(
+        jax_code=jax_code,
+        pytorch_code=pytorch_code,
+        jax_module_name=jax_module_name,
+    )
 
     if response.startswith("```python"):
       response = response[len("```python") : -3].strip()
@@ -218,6 +229,7 @@ def run_equivalence_tests(
             str(output_test_path),
             api_key,
             model_name=model_name,
+            jax_module_name=module_stem,
         )
         logging.info("%s", test_gen_result)
 

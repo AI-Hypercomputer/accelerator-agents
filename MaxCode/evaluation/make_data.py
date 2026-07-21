@@ -11,6 +11,7 @@ import logging
 import os
 import pickle
 import sys
+import types
 from typing import Any
 
 import torch
@@ -85,7 +86,16 @@ def generate_data(
         try:
           # Instantiate the model
           init_kwargs = config.get("init_kwargs", {})
+
+          for kwarg_key, kwarg_val in list(init_kwargs.items()):
+            if kwarg_key == "config" and isinstance(kwarg_val, dict):
+              init_kwargs[kwarg_key] = types.SimpleNamespace(**kwarg_val)
           model = obj(**init_kwargs)
+          # Initialize parameters to prevent NaNs/garbage from torch.empty
+          for param in model.parameters():
+            if param.requires_grad:
+              with torch.no_grad():
+                nn.init.normal_(param, mean=0.0, std=0.02)
           model.eval()
 
           # Input Analysis & Generation
@@ -103,7 +113,23 @@ def generate_data(
 
           # Generate dummy input(s)
           if isinstance(input_shape[0], list):
-            dummy_input = tuple(torch.randn(*shape) for shape in input_shape)
+            sig = inspect.signature(obj.forward)
+            params = [p for p in sig.parameters.keys() if p != "self"]
+            inputs = []
+            for idx, shape in enumerate(input_shape):
+              param_name = params[idx] if idx < len(params) else ""
+              if (
+                  "index" in param_name
+                  or "idx" in param_name
+                  or "pos" in param_name
+              ):
+                high = getattr(model, "num_experts", 10)
+                if not isinstance(high, int) or high <= 0:
+                  high = 10
+                inputs.append(torch.randint(0, high, shape))
+              else:
+                inputs.append(torch.randn(*shape))
+            dummy_input = tuple(inputs)
             output = model(*dummy_input)
           else:
             dummy_input = torch.randn(*input_shape)

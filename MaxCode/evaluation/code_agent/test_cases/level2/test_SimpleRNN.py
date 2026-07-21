@@ -16,7 +16,6 @@ import torch
 
 from google3.net.proto2.python.public import text_format
 
-
 os.environ['JAX_PLATFORMS'] = 'cpu'
 
 FLAGS = flags.FLAGS

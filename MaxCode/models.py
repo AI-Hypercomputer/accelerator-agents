@@ -80,7 +80,7 @@ class GeminiTool:
       try:
         time.sleep(2 if attempt == 0 else min(30, 2 ** (attempt + 1)))
         response = requests.post(
-            self.endpoint, headers=headers, json=payload, timeout=600
+            self.endpoint, headers=headers, json=payload, timeout=(5, 600)
         )
         response.raise_for_status()
         json_response = response.json()

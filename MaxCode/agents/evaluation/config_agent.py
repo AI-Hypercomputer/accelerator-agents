@@ -17,6 +17,8 @@ Output **only** a valid JSON object containing the class name of each `nn.Module
 Each class entry must contain:
 1. `init_kwargs`: A dictionary with reasonable default arguments needed to instantiate the class. If no arguments are needed, provide an empty dictionary.
 2. `input_shape`: A list of integers representing the dimensions for a `torch.randn` dummy input tensor, including a batch size of 1. If the model expects multiple inputs, provide a list of lists.
+3. If a class constructor expects a configuration object (typically named `config`), do NOT set it to `null` or `None`. Instead, inspect the code for attributes accessed on `config` (like `layer_types`, `hidden_size`, `hc_mult`, etc.) and populate `config` as a dictionary containing those parameters with reasonable default values. This allows the evaluator to dynamically convert the dictionary to a namespace at runtime.
+4. **CRITICAL**: If a class's `forward` method requires non-tensor inputs that cannot be represented as standard float/int tensors (for example, dictionaries like `position_embeddings`, lists of tuples, or custom objects), do NOT include this class in the output JSON. Only include classes whose `forward` method takes standard tensors (or a list/tuple of standard tensors) as inputs. Classes with complex signatures must be skipped.
 
 Example output for a simple model:
 ```json

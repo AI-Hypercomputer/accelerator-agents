@@ -1,13 +1,15 @@
 """Utility functions and classes for agents."""
 
 import ast
+import asyncio
 import collections
 from collections.abc import Mapping, Set
 import enum
 import logging
 import os
 import pathlib
-from typing import Dict
+import threading
+from typing import Any, Coroutine, Dict
 
 
 class AgentDomain(enum.Enum):
@@ -192,3 +194,25 @@ def topological_sort(graph: Mapping[str, Set[str]]) -> list[str]:
       result.append(node)
 
   return result
+
+
+def run_async(coro: Coroutine[Any, Any, Any]) -> Any:
+  """Runs a coroutine synchronously, avoiding conflicts if an event loop is running."""
+
+  try:
+    loop = asyncio.get_running_loop()
+  except RuntimeError:
+    return asyncio.run(coro)
+
+  if loop.is_running():
+    var_cache = []
+
+    def run_in_thread():
+      var_cache.append(asyncio.run(coro))
+
+    t = threading.Thread(target=run_in_thread)
+    t.start()
+    t.join()
+    return var_cache[0]
+  else:
+    return asyncio.run(coro)

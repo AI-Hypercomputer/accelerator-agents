@@ -1,18 +1,23 @@
-"""Primary orchestration agent for repository migration."""
+"""Primary migration agent implementation."""
+
 import logging
 import os
 import re
 import subprocess
+import sys
 import tempfile
 from typing import Any, Tuple
 
-import models
 from agents import base
 from agents import utils
 from agents.migration import model_conversion_agent
 from agents.migration import single_file_agent
 from agents.migration.prompts import prompts
-from rag import rag_agent
+from rag_pipeline.retrieval import retrieval_service
+import dotenv
+
+# Load .env file
+dotenv.load_dotenv()
 
 MAX_DEBUG_ITERATIONS = 10
 
@@ -22,22 +27,47 @@ def _strip_markdown_formatting(text: str) -> str:
   code_block_match = re.search(r"```(?:python)?\n?(.*?)\n?```", text, re.DOTALL)
   if code_block_match:
     return code_block_match.group(1).strip()
+  text_stripped = text.strip()
+  if text_stripped.startswith("```python"):
+    lines = text_stripped.split("\n")
+    if lines[0].startswith("```python"):
+      lines = lines[1:]
+    if lines and lines[-1].strip() == "```":
+      lines = lines[:-1]
+    return "\n".join(lines).strip()
   return text
 
 
 class PrimaryAgent(base.Agent):
   """Primary orchestration agent for repository migration."""
 
-  def __init__(self, model: Any, api_key: str | None = None):
+  def __init__(
+      self,
+      model: Any,
+      api_key: str | None = None,
+      db_config: dict[str, Any] | None = None,
+      embedding_model_name: str = "text-embedding-005",
+      top_k: int = 10,
+  ):
     """Initializes the agent."""
     super().__init__(
         model=model,
         agent_domain=utils.AgentDomain.MIGRATION,
         agent_type=utils.AgentType.PRIMARY,
     )
-    self._rag_agent = rag_agent.RAGAgent(
-        model,
-        embedding_model_name=models.EmbeddingModel.GEMINI_EMBEDDING_001,
+    if db_config is None:
+      db_config = {
+          "host": os.environ.get("ALLOYDB_HOST"),
+          "database": os.environ.get("ALLOYDB_DB", "postgres"),
+          "user": os.environ.get("ALLOYDB_USER", "postgres"),
+          "password": os.environ.get("ALLOYDB_PASS"),
+          "port": int(os.environ.get("ALLOYDB_PORT", "5432")),
+      }
+    self._top_k = top_k
+    self._rag_agent = retrieval_service.RetrievalService(
+        model=model,
+        db_config=db_config,
+        embedding_model_name=embedding_model_name,
         api_key=api_key,
     )
     self._single_file_agent = single_file_agent.PytorchToJaxSingleFileAgent(
@@ -71,7 +101,7 @@ class PrimaryAgent(base.Agent):
 
       try:
         result = subprocess.run(
-            ["python3", test_script_path],
+            [sys.executable, test_script_path],
             capture_output=True,
             text=True,
             check=True,
@@ -101,14 +131,28 @@ class PrimaryAgent(base.Agent):
         pytorch_code = f.read()
 
       if context is None:
-        rag_context_list = self._rag_agent.retrieve_context(
-            pytorch_code, top_k=7
+        logging.info("[RAG] Context is None. Triggering RAG retrieval...")
+        rag_context_list = self._rag_agent.search_and_retrieve(
+            pytorch_code, top_k=self._top_k
         )
+        logging.info(
+            "[RAG] Retrieved %d snippets from database.", len(rag_context_list)
+        )
+        for idx, c in enumerate(rag_context_list):
+          logging.info(
+              "[RAG] Snippet %d from %s:\n%s...",
+              idx + 1,
+              c["file"],
+              c["text"][:200],
+          )
         rag_context = "\n\n".join([
             f"File: {c['file']}\n```python\n{c['text']}\n```"
             for c in rag_context_list
         ])
       else:
+        logging.info(
+            "[RAG] Using explicitly provided context. Skipping RAG retrieval."
+        )
         rag_context = context
 
       jax_code = _strip_markdown_formatting(

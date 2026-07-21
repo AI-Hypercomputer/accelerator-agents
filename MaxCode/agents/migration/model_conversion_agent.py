@@ -6,7 +6,7 @@ from typing import Any
 from agents import base
 from agents import utils
 from agents.migration.prompts import prompts
-from rag import rag_agent
+from rag_pipeline.retrieval import retrieval_service
 
 _CODE_BLOCK_PATTERN = re.compile(r"```(?:python)?\n?(.*?)\n?```", re.DOTALL)
 
@@ -23,19 +23,23 @@ class ModelConversionAgent(base.Agent):
   """Agent for converting a model from PyTorch to JAX.
 
   This agent specializes in converting PyTorch torch.nn.Module class
-  definitions into idiomatic JAX/Flax equivalents (flax.linen.Module).
+  definitions into idiomatic JAX/Flax NNX equivalents (flax.nnx.Module).
   It uses a prompt optimized for architectural model conversions, which is
   distinct from general API syntax conversion.
   """
 
-  def __init__(self, model: Any, rag_agent_instance: rag_agent.RAGAgent):
+  def __init__(
+      self,
+      model: Any,
+      retrieval_service_instance: retrieval_service.RetrievalService,
+  ):
     """Initializes the agent."""
     super().__init__(
         model=model,
         agent_domain=utils.AgentDomain.MIGRATION,
         agent_type=utils.AgentType.MODEL_CONVERSION,
     )
-    self._rag_agent = rag_agent_instance
+    self._rag_agent = retrieval_service_instance
 
   def run(self, pytorch_model_code: str) -> str:
     """Converts a model from PyTorch to JAX.
@@ -46,13 +50,23 @@ class ModelConversionAgent(base.Agent):
     Returns:
       The converted JAX code.
     """
-    rag_context_list = self._rag_agent.retrieve_context(
-        pytorch_model_code, top_k=7
-    )
+    try:
+      if hasattr(self._rag_agent, "search_and_retrieve"):
+        rag_context_list = self._rag_agent.search_and_retrieve(
+            pytorch_model_code, top_k=7
+        )
+      else:
+        rag_context_list = getattr(self._rag_agent, "retrieve_context")(
+            pytorch_model_code, top_k=7
+        )
+    except Exception:  # pylint: disable=broad-exception-caught
+      rag_context_list = []
+
     rag_context = "\n\n".join([
-        f"File: {c['file']}\n```python\n{c['text']}\n```"
+        f"File: {c.get('file', 'ref')}\n```python\n{c.get('text', '')}\n```"
         for c in rag_context_list
     ])
+
     return _strip_markdown_formatting(
         self.generate(
             prompts.MODEL_CONVERSION_PROMPT,

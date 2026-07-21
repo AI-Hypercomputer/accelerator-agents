@@ -1,6 +1,9 @@
 """ADK agent definitions."""
 
-import models
+# pylint: disable=g-importing-member
+
+from agents.migration.prompts.static_prompt import MAXTEXT_STATIC_INSTRUCTION
+from models import GeminiModel
 from tools import evaluation_tool
 from tools import migration_tool
 from google.adk.agents.llm_agent import LlmAgent as Agent
@@ -8,7 +11,8 @@ from google.adk.models.google_llm import Gemini
 
 migration_agent = Agent(
     name="migration_agent",
-    model=Gemini(model=models.GeminiModel.GEMINI_3_1_PRO_PREVIEW.value),
+    model=Gemini(model=GeminiModel.GEMINI_3_1_PRO_PREVIEW.value),
+    static_instruction=MAXTEXT_STATIC_INSTRUCTION,
     description=(
         "Handles end-to-end code migration tasks, such as converting PyTorch"
         " to JAX, generating oracle data, and creating equivalence tests."
@@ -47,7 +51,8 @@ Always wait for a tool to succeed before moving to the next step. If a step fail
 
 evaluation_agent = Agent(
     name="evaluation_agent",
-    model=Gemini(model=models.GeminiModel.GEMINI_3_1_PRO_PREVIEW.value),
+    model=Gemini(model=GeminiModel.GEMINI_3_1_PRO_PREVIEW.value),
+    static_instruction=MAXTEXT_STATIC_INSTRUCTION,
     description=(
         "Handles the generation of evaluation configurations and scripts."
     ),

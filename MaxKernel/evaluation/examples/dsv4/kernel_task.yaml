@@ -1,0 +1,45 @@
+task_id: dsv4
+description: dsv4
+input_gen_code: |-
+  def get_inputs():
+      import jax
+      import jax.numpy as jnp
+      from functools import partial
+
+      configs = [
+          ("decode_small", 2, 1, 4, 128, 256, 64),
+          ("prefill_small", 2, 16, 4, 128, 256, 64),
+          ("prefill_medium", 1, 128, 2, 256, 512, 128),
+          ("odd_seq_len", 1, 9, 2, 128, 256, 64),
+          ("large_topk", 1, 16, 2, 128, 1024, 512),
+          ("user_decode_shape", 8, 1, 64, 512, 1024, 512),
+          ("user_prefill_shape", 8, 512, 64, 512, 1024, 512),
+          ("user_prefill_1024", 8, 1024, 64, 512, 1024, 512),
+      ]
+
+      outputs = []
+      key = jax.random.PRNGKey(42)
+      dtype = jnp.float32
+
+      for name, batch, seq_len, num_heads, head_dim, kv_seq_len, topk in configs:
+          key, k1, k2, k3, k4, k5 = jax.random.split(key, 6)
+
+          q = jax.random.normal(k1, (batch, seq_len, num_heads, head_dim), dtype=dtype)
+          kv = jax.random.normal(k2, (batch, kv_seq_len, head_dim), dtype=dtype)
+          attn_sink = jax.random.normal(k3, (num_heads,), dtype=dtype)
+
+          topk_idxs = jax.random.randint(k4, (batch, seq_len, topk), 0, kv_seq_len, dtype=jnp.int32)
+
+          mask = jax.random.uniform(k5, (batch, seq_len, topk)) > 0.8
+          topk_idxs = jnp.where(mask, -1, topk_idxs)
+
+          softmax_scale = float(1.0 / jnp.sqrt(head_dim))
+          
+          q = jnp.array(q, dtype=jnp.bfloat16)
+          kv = jnp.array(kv, dtype=jnp.bfloat16) 
+
+          dynamic_args = [q, kv, attn_sink, topk_idxs]
+          static_args = [softmax_scale]
+          outputs.append((dynamic_args, static_args))
+
+      return outputs

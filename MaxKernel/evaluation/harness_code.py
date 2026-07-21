@@ -121,13 +121,45 @@ def main():
         raise RuntimeError("input_gen_code must define get_inputs()")
 
       try:
-        inputs = ldict["get_inputs"]()
+        raw_inputs = ldict["get_inputs"]()
       except Exception as e:
         raise RuntimeError(f"Error while running get_inputs(): {e}")
 
+      # Check if the input is a list of tuples or a single tuple
+      if isinstance(raw_inputs, list):
+        inputs_list = raw_inputs
+      elif isinstance(raw_inputs, tuple) and len(raw_inputs) == 2:
+        inputs_list = [raw_inputs]
+      else:
+        raise ValueError(
+            f"get_inputs() must return a list of tuples or a single (dynamic_args, static_args) tuple. Got: {type(raw_inputs)}"
+        )
+    else:
+      raise ValueError("input_gen_code must be provided.")
+
+    # Import the uploaded scripts as modules
+    base_mod = load_module_from_path("reference", "reference.py")
+    optimized_mod = load_module_from_path("optimized", "optimized.py")
+
+    harness_logs = []
+
+    result = {
+        "compiled_successfully": [],
+        "numerically_correct": [],
+        "max_abs_diff": [],
+        "max_rel_diff": [],
+        "reference_time_ms": [],
+        "optimized_time_ms": [],
+        "xprof_reference_time_ms": [],
+        "xprof_optimized_time_ms": [],
+        "error_trace": [],
+    }
+
+    # Iterate over all input configurations
+    for idx, inputs in enumerate(inputs_list):
       if not isinstance(inputs, tuple) or len(inputs) != 2:
         raise ValueError(
-            f"get_inputs() must return exactly 2 elements: (dynamic_args, static_args). Got: {type(inputs)}"
+            f"Each input config must return exactly 2 elements: (dynamic_args, static_args). Got: {type(inputs)}"
         )
 
       dynamic_args, static_args = inputs
@@ -136,93 +168,108 @@ def main():
 
       args = tuple(dynamic_args) + tuple(static_args)
       static_argnums = tuple(range(len(dynamic_args), len(args)))
-    else:
-      raise ValueError("input_gen_code must be provided.")
 
-    # Import the uploaded scripts as modules
-    base_mod = load_module_from_path("reference", "reference.py")
-    optimized_mod = load_module_from_path("optimized", "optimized.py")
+      # 1. Correctness Check
+      try:
+        jit_base = jax.jit(base_mod.computation, static_argnums=static_argnums)
+        out_base = jax.block_until_ready(jit_base(*args))
+        out_base_cpu = jax.device_get(out_base)
+        del out_base
+      except Exception as e:
+        result["compiled_successfully"].append(False)
+        result["error_trace"].append(f"Reference model failed: {traceback.format_exc()}")
+        result["numerically_correct"].append(False)
+        result["max_abs_diff"].append(None)
+        result["max_rel_diff"].append(None)
+        result["reference_time_ms"].append(0.0)
+        result["optimized_time_ms"].append(0.0)
+        result["xprof_reference_time_ms"].append(0.0)
+        result["xprof_optimized_time_ms"].append(0.0)
+        continue
 
-    # 1. Correctness Check
-    jit_base = jax.jit(base_mod.computation, static_argnums=static_argnums)
-    out_base = jax.block_until_ready(jit_base(*args))
-    out_base_cpu = jax.device_get(out_base)
-    del out_base
+      # Dirty all HBM memory leaves with NaN / Sentinel values to prevent cache reuse
+      try:
+        for leaf in jax.tree_util.tree_leaves(out_base_cpu):
+          if hasattr(leaf, "shape") and hasattr(leaf, "dtype"):
+            if jnp.issubdtype(leaf.dtype, jnp.floating) or jnp.issubdtype(leaf.dtype, jnp.complexfloating):
+              val = jnp.nan
+            elif jnp.issubdtype(leaf.dtype, jnp.bool_):
+              val = True
+            else:
+              val = 123  # Fits within int8/uint8 and all larger integer dtypes
 
-    harness_logs = []
+            dummy = jnp.full(leaf.shape, val, dtype=leaf.dtype)
+            dummy.block_until_ready()
+            del dummy
+      except Exception as e:
+        harness_logs.append(f"Failed to dirty HBM memory: {e}")
 
-    # Dirty all HBM memory leaves with NaN / Sentinel values to prevent cache reuse
-    try:
-      for leaf in jax.tree_util.tree_leaves(out_base_cpu):
-        if hasattr(leaf, "shape") and hasattr(leaf, "dtype"):
-          if jnp.issubdtype(leaf.dtype, jnp.floating) or jnp.issubdtype(leaf.dtype, jnp.complexfloating):
-            val = jnp.nan
-          elif jnp.issubdtype(leaf.dtype, jnp.bool_):
-            val = True
-          else:
-            val = 123  # Fits within int8/uint8 and all larger integer dtypes
+      try:
+        jit_optimized = jax.jit(optimized_mod.computation, static_argnums=static_argnums)
+        out_optimized = jax.block_until_ready(jit_optimized(*args))
+        out_optimized_cpu = jax.device_get(out_optimized)
+        del out_optimized
+      except Exception as e:
+        result["compiled_successfully"].append(False)
+        result["error_trace"].append(traceback.format_exc())
+        result["numerically_correct"].append(False)
+        result["max_abs_diff"].append(None)
+        result["max_rel_diff"].append(None)
+        result["reference_time_ms"].append(0.0)
+        result["optimized_time_ms"].append(0.0)
+        result["xprof_reference_time_ms"].append(0.0)
+        result["xprof_optimized_time_ms"].append(0.0)
+        continue
 
-          dummy = jnp.full(leaf.shape, val, dtype=leaf.dtype)
-          dummy.block_until_ready()
-          del dummy
-    except Exception as e:
-      harness_logs.append(f"Failed to dirty HBM memory: {e}")
+      result["compiled_successfully"].append(True)
+      result["error_trace"].append(None)
 
-    try:
-      jit_optimized = jax.jit(optimized_mod.computation, static_argnums=static_argnums)
-      out_optimized = jax.block_until_ready(jit_optimized(*args))
-      out_optimized_cpu = jax.device_get(out_optimized)
-      del out_optimized
-    except Exception as e:
-      result = {
-          "compiled_successfully": False,
-          "error": str(e),
-          "traceback": traceback.format_exc()
-      }
-      if harness_logs:
-        result["logs"] = harness_logs
-      with open("result.json", "w", encoding="utf-8") as f:
-        json.dump(result, f)
-      return
+      out_base_flat = jax.tree_util.tree_leaves(out_base_cpu)
+      out_optimized_flat = jax.tree_util.tree_leaves(out_optimized_cpu)
 
-    out_base_flat = jax.tree_util.tree_leaves(out_base_cpu)
-    out_optimized_flat = jax.tree_util.tree_leaves(out_optimized_cpu)
+      is_correct = True
+      max_abs_diff = 0.0
+      max_rel_diff = 0.0
 
-    is_correct = True
-    max_abs_diff = 0.0
-    max_rel_diff = 0.0
+      try:
+        if len(out_base_flat) != len(out_optimized_flat):
+           raise ValueError(f"Output count mismatch: {len(out_base_flat)} vs {len(out_optimized_flat)}")
+        for b, o in zip(out_base_flat, out_optimized_flat):
+          if b.shape != o.shape:
+             raise ValueError(f"Shape mismatch: {b.shape} vs {o.shape}")
+          is_correct = is_correct and bool(jnp.allclose(b, o, atol={atol}, rtol={rtol}))
+          max_abs_diff = max(max_abs_diff, float(jnp.max(jnp.abs(b - o))))
+          max_rel_diff = max(max_rel_diff, float(jnp.max(jnp.abs((b - o) / b))))
+      except Exception as e:
+        harness_logs.append(f"Correctness check failed for input {idx}: {e}")
+        is_correct = False
 
-    for b, o in zip(out_base_flat, out_optimized_flat):
-      is_correct = is_correct and bool(jnp.allclose(b, o, atol={atol}, rtol={rtol}))
-      max_abs_diff = max(max_abs_diff, float(jnp.max(jnp.abs(b - o))))
-      max_rel_diff = max(max_rel_diff, float(jnp.max(jnp.abs((b - o) / b))))
+      result["numerically_correct"].append(bool(is_correct))
+      result["max_abs_diff"].append(max_abs_diff)
+      result["max_rel_diff"].append(max_rel_diff)
 
-    if not is_correct:
-      result = {
-          "compiled_successfully": True,
-          "numerically_correct": False,
-          "max_abs_diff": max_abs_diff,
-          "max_rel_diff": max_rel_diff,
-      }
-      if harness_logs:
-        result["logs"] = harness_logs
-      with open("result.json", "w", encoding="utf-8") as f:
-        json.dump(result, f)
-      return
+      if not is_correct:
+        result["reference_time_ms"].append(0.0)
+        result["optimized_time_ms"].append(0.0)
+        result["xprof_reference_time_ms"].append(0.0)
+        result["xprof_optimized_time_ms"].append(0.0)
+        continue
 
-    time_base, xprof_time_base = benchmark(base_mod.computation, args, static_argnums, trace_dir="trace_base")
-    time_optimized, xprof_time_optimized = benchmark(optimized_mod.computation, args, static_argnums, trace_dir="trace_opt")
+      # Benchmark and collect timing results
+      try:
+        time_base, xprof_time_base = benchmark(base_mod.computation, args, static_argnums, trace_dir=f"trace_base_{idx}")
+        time_optimized, xprof_time_optimized = benchmark(optimized_mod.computation, args, static_argnums, trace_dir=f"trace_opt_{idx}")
+        result["reference_time_ms"].append(time_base * 1000)
+        result["optimized_time_ms"].append(time_optimized * 1000)
+        result["xprof_reference_time_ms"].append(xprof_time_base)
+        result["xprof_optimized_time_ms"].append(xprof_time_optimized)
+      except Exception as e:
+        harness_logs.append(f"Benchmarking failed for input {idx}: {e}")
+        result["reference_time_ms"].append(0.0)
+        result["optimized_time_ms"].append(0.0)
+        result["xprof_reference_time_ms"].append(0.0)
+        result["xprof_optimized_time_ms"].append(0.0)
 
-    result = {
-        "compiled_successfully": True,
-        "numerically_correct": bool(is_correct),
-        "max_abs_diff": max_abs_diff,
-        "max_rel_diff": max_rel_diff,
-        "reference_time_ms": time_base * 1000,
-        "optimized_time_ms": time_optimized * 1000,
-        "xprof_reference_time_ms": xprof_time_base,
-        "xprof_optimized_time_ms": xprof_time_optimized,
-    }
     if harness_logs:
       result["logs"] = harness_logs
     with open("result.json", "w", encoding="utf-8") as f:
@@ -230,8 +277,7 @@ def main():
   except Exception as e:
     with open("result.json", "w", encoding="utf-8") as f:
       json.dump({
-          "error": str(e),
-          "traceback": traceback.format_exc()
+          "error_trace": [traceback.format_exc()]
       }, f)
 
 

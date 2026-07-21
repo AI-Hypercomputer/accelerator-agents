@@ -77,35 +77,66 @@ def print_eval_result(result: EvaluationResult):
   print("\n" + "=" * 40)
   print("JAX KERNEL EVALUATION REPORT")
   print("=" * 40)
-  if result.error_trace:
-    print(f"Error:          {result.error_trace}")
+  if result.error_trace and any(result.error_trace):
+    print("Errors:")
+    for idx, err in enumerate(result.error_trace):
+      if err:
+        # Extract last line of traceback for cleaner display
+        err_lines = err.strip().splitlines()
+        last_err = err_lines[-1] if err_lines else err
+        print(f"  Input {idx}: {last_err}")
+      else:
+        print(f"  Input {idx}: None")
+
+  if result.numerically_correct:
+    print(f"Correctness:           {result.numerically_correct}")
   else:
+    print("Correctness:           N/A")
+
+  if result.max_abs_diff:
     print(
-      f"Correctness:    [{'PASS' if result.numerically_correct else 'FAIL'}]"
+      "Max Absolute Diff:     ",
+      f"{[f'{d:.6e}' if d is not None else 'N/A' for d in result.max_abs_diff]}",
     )
-    if result.max_abs_diff is not None:
-      print(f"Max Absolute Difference: {result.max_abs_diff:.6e}")
-    if result.max_rel_diff is not None:
-      print(f"Max Relative Difference: {result.max_rel_diff:.6e}")
-    print("-" * 40)
-    print(f"Reference time:       {result.reference_time_ms:.3f} ms")
-    print(f"Optimized time:       {result.optimized_time_ms:.3f} ms")
-    wall_time_speedup = result.speedup
-    if wall_time_speedup is not None:
-      print(f"Wall time speedup:  {wall_time_speedup:.2f}x")
-    else:
-      print("Wall time speedup:  N/A")
+  if result.max_rel_diff:
+    print(
+      "Max Relative Diff:     ",
+      f"{[f'{d:.6e}' if d is not None else 'N/A' for d in result.max_rel_diff]}",
+    )
 
-    xprof_speedup = result.speed_up_xprof
-    if xprof_speedup is not None:
-      print(f"XProf speedup:      {xprof_speedup:.2f}x")
-    else:
-      print("XProf speedup:      N/A")
+  print("-" * 40)
+  if result.reference_time_ms:
+    print(
+      "Reference times:       ",
+      f"{[f'{t:.3f}' for t in result.reference_time_ms]} ms",
+    )
+  if result.optimized_time_ms:
+    print(
+      "Optimized times:       ",
+      f"{[f'{t:.3f}' for t in result.optimized_time_ms]} ms",
+    )
+  wall_time_speedup = result.speedup
+  if wall_time_speedup:
+    print(
+      "Wall time speedups:    ",
+      f"{[f'{s:.2f}x' if s is not None else 'N/A' for s in wall_time_speedup]}",
+    )
+  else:
+    print("Wall time speedups:    N/A")
 
-    if result.logs:
-      print("Harness Logs:")
-      for log_msg in result.logs:
-        print(f"  - {log_msg}")
+  xprof_speedup = result.speed_up_xprof
+  if xprof_speedup:
+    print(
+      "XProf speedups:        ",
+      f"{[f'{s:.2f}x' if s is not None else 'N/A' for s in xprof_speedup]}",
+    )
+  else:
+    print("XProf speedups:        N/A")
+
+  if result.logs:
+    print("Harness Logs:")
+    for log_msg in result.logs:
+      print(f"  - {log_msg}")
   print("=" * 40 + "\n")
 
 
@@ -129,27 +160,41 @@ def summarize_results(
     logger.info("No results found to summarize and no tasks discovered.")
     return
 
-  compiled_tasks = [r for r in results if r.get("compiled_successfully")]
+  compiled_tasks = []
+  for r in results:
+    compiled = r.get("compiled_successfully")
+    if compiled and all(compiled):
+      compiled_tasks.append(r)
   num_compiled = len(compiled_tasks)
 
-  correct_tasks = [r for r in compiled_tasks if r.get("numerically_correct")]
+  correct_tasks = [
+    r
+    for r in compiled_tasks
+    if r.get("numerically_correct") and all(r.get("numerically_correct"))
+  ]
   num_correct = len(correct_tasks)
 
   # Speedup calculations should only be on tasks that are numerically correct.
   speedups = []
   for r in correct_tasks:
-    s = None
+    s_list = None
     if use_xprof_speedup:
-      if r.get("speed_up_xprof") is not None:
-        s = r["speed_up_xprof"]
-      elif r.get("speedup") is not None:
-        s = r["speedup"]
+      if r.get("speed_up_xprof"):
+        s_list = r["speed_up_xprof"]
+      elif r.get("speedup"):
+        s_list = r["speedup"]
     else:
-      if r.get("speedup") is not None:
-        s = r["speedup"]
+      if r.get("speedup"):
+        s_list = r["speedup"]
 
-    if s is not None:
-      speedups.append(s)
+    if s_list:
+      # Aggregate speedups for the task using geometric mean
+      task_speedups = [s for s in s_list if s is not None]
+      if task_speedups:
+        s = math.exp(
+          sum(math.log(s) for s in task_speedups) / len(task_speedups)
+        )
+        speedups.append(s)
 
   improvements = [s for s in speedups if s > speedup_threshold]
   num_improved = len(improvements)
@@ -233,7 +278,7 @@ def summarize_results(
     with open(
       os.path.join(output_dir, "summary.json"), "w", encoding="utf-8"
     ) as f:
-      json.dump(stats, f, indent=4)
+      json.dump(stats, f, indent=2)
 
     logger.info(f"Saved evaluation summary and stats to {output_dir}")
 
@@ -264,16 +309,35 @@ def visualize_speed_up(
   # Prepare data
   plot_data = []
   for r in results:
-    is_valid = r.get("compiled_successfully") and r.get("numerically_correct")
+    compiled = r.get("compiled_successfully")
+    if isinstance(compiled, list):
+      compiled_ok = bool(compiled) and all(compiled)
+    else:
+      compiled_ok = bool(compiled)
+
+    is_valid = (
+      compiled_ok
+      and r.get("numerically_correct")
+      and all(r.get("numerically_correct"))
+    )
+    s_list = None
     s = None
     if is_valid:
       if use_xprof_speedup:
-        if r.get("speed_up_xprof") is not None:
-          s = r["speed_up_xprof"]
-        else:
-          s = r.get("speedup")
+        if r.get("speed_up_xprof"):
+          s_list = r["speed_up_xprof"]
+        elif r.get("speedup"):
+          s_list = r["speedup"]
       else:
-        s = r.get("speedup")
+        if r.get("speedup"):
+          s_list = r["speedup"]
+
+      if s_list:
+        task_speedups = [v for v in s_list if v is not None]
+        if task_speedups:
+          s = math.exp(
+            sum(math.log(v) for v in task_speedups) / len(task_speedups)
+          )
 
     log_s = math.log2(s) if s and s > 0 else -10.0
     plot_data.append((r["task_id"], log_s, not is_valid))

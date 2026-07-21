@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 import os
+import re
 from dataclasses import asdict
 from typing import List, Optional
 
@@ -26,6 +27,7 @@ def benchmark(
   optimized_file_name: str = "optimized.py",
   task_file_name: str = "kernel_task.yaml",
   adapt: Optional[List[str]] = None,
+  timeout_seconds: int = 300,
   atol: float = 1e-3,
   rtol: float = 1e-3,
 ):
@@ -140,6 +142,7 @@ def benchmark(
           reference_code_path=reference_code_path,
           optimized_code_path=optimized_code_path,
           adapt=adapt,
+          timeout_seconds=timeout_seconds,
           atol=atol,
           rtol=rtol,
         )
@@ -159,8 +162,19 @@ def benchmark(
 
     # Append to the main list and save immediately
     results.append(res_dict)
+    json_str = json.dumps(results, indent=2)
+    # Collapse lists containing only scalar values onto a single line
+    json_str = re.sub(
+      r"\[\s*([^\[\]\{\}]*?)\s*\]",
+      lambda m: (
+        "[" + re.sub(r"\n\s*", " ", m.group(1)).strip() + "]"
+        if m.group(1).strip()
+        else "[]"
+      ),
+      json_str,
+    )
     with open(output_file, "w") as f:
-      json.dump(results, f, indent=4)
+      f.write(json_str)
     logger.info(
       f"Saved result for {problem_name}. Total results: {len(results)}."
     )
@@ -251,6 +265,12 @@ if __name__ == "__main__":
     default=1e-3,
     help="Relative tolerance for comparison.",
   )
+  parser.add_argument(
+    "--timeout_seconds",
+    type=int,
+    default=300,
+    help="Maximum time in seconds to wait for execution.",
+  )
   args = parser.parse_args()
 
   benchmark(
@@ -264,6 +284,7 @@ if __name__ == "__main__":
     optimized_file_name=args.optimized_file_name,
     task_file_name=args.task_file_name,
     adapt=args.adapt,
+    timeout_seconds=args.timeout_seconds,
     atol=args.atol,
     rtol=args.rtol,
   )

@@ -81,7 +81,7 @@ class ADKSessionWorker:
 
   def _prepare_initial_state(self, parent_node: Node) -> Dict[str, Any]:
     initial_state = {}
-    if parent_node.evaluation:
+    if parent_node and parent_node.evaluation:
       initial_state = {
         "kernel_compilation_status": {
           "success": parent_node.evaluation.compiled,
@@ -163,17 +163,16 @@ class ADKSessionWorker:
     elif history:
       best_run = history[-1]
 
-    comp_status = best_run.get("compilation_status", {})
+    comp_status = best_run.get("compilation_status") or {}
     compiled = comp_status.get("success", False)
     compilation_error = None
     if not compiled:
-      compilation_error = comp_status.get("message", "")
-      if comp_status.get("final_errors"):
-        compilation_error += "\n\nFinal Errors:\n" + comp_status.get(
-          "final_errors"
-        )
+      compilation_error = comp_status.get("message") or ""
+      final_errors = comp_status.get("final_errors")
+      if final_errors:
+        compilation_error += "\n\nFinal Errors:\n" + final_errors
 
-    test_status = best_run.get("test_status", {})
+    test_status = best_run.get("test_status") or {}
     correct = test_status.get("success", False)
     test_error = test_status.get("output") if not correct else None
 

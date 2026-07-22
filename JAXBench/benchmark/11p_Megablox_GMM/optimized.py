@@ -834,8 +834,11 @@ def create_inputs(dtype=jnp.bfloat16):
     N = CONFIG['moe_mlp_dim']
     S = CONFIG['seq_len']
     M = S * top_k
-    lhs = jax.random.normal(k1, (M, K), dtype=dtype)
-    rhs = jax.random.normal(k2, (G, K, N), dtype=dtype) * 0.02
+    limit = 1 / (M * K)
+    lhs = jax.random.uniform(k1, (M, K), dtype=dtype, minval=-limit, maxval=limit)
+    lhs = lhs.astype(jnp.bfloat16).astype(dtype)
+    rhs = jax.random.uniform(k2, (G, K, N), dtype=dtype, minval=-limit, maxval=limit)
+    rhs = rhs.astype(jnp.bfloat16).astype(dtype)
     tokens_per_expert = M // G
     group_sizes = jnp.full((G,), tokens_per_expert, dtype=jnp.int32)
     return lhs, rhs, group_sizes

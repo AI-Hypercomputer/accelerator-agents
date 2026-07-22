@@ -1,20 +1,13 @@
 import argparse
+import asyncio
 import json
 import logging
 import os
-import random
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any
 
-from auto_agent.agent_client.auto_agent_client import (
-  AutoAgentClient,
-  run_agent,
-)
+from auto_agent.agent_client.auto_agent_client import AutoAgentClient
 
-# Configure logging
-logging.basicConfig(
-  level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 
@@ -27,9 +20,6 @@ def parse_args():
   )
   parser.add_argument(
     "--num_concurrent", type=int, default=1, help="Number of concurrent calls"
-  )
-  parser.add_argument(
-    "--port", type=int, default=8000, help="Port for AutoAgentClient"
   )
   parser.add_argument(
     "--max_retries",
@@ -58,102 +48,97 @@ def get_optimized_kernel_path(session_file_path: str):
   return optimized_kernel_path
 
 
-def save_session_to_file(client: AutoAgentClient, file_path: str):
+def save_session_to_file(client: Any, file_path: str):
   """Fetches full session data and saves it to a local JSON file."""
-  session_data = client._get_session_data()
+  session_data = client.get_session_data()
   with open(file_path, "w") as f:
     json.dump(session_data, f, indent=2)
   logger.info(f"Saved session data to {file_path}")
 
 
-def process_problem(
-  problem_id: str, data_dir: str, port: int, max_retries: int
+async def process_problem(
+  problem_id: str,
+  data_dir: str,
+  max_retries: int,
+  sem: asyncio.Semaphore,
 ):
-  problem_dir = os.path.join(data_dir, problem_id)
-  reference_file = os.path.join(problem_dir, "reference.py")
+  async with sem:
+    problem_dir = os.path.join(data_dir, problem_id)
+    reference_file = os.path.join(problem_dir, "reference.py")
 
-  if not os.path.exists(reference_file):
-    logger.error(f"reference.py not found in {problem_dir}")
-    return problem_id, "Failed: reference.py missing"
+    if not os.path.exists(reference_file):
+      logger.error(f"reference.py not found in {problem_dir}")
+      return problem_id, "Failed: reference.py missing"
 
-  with open(reference_file, "r") as f:
-    reference_code = f.read()
+    with open(reference_file, "r") as f:
+      reference_code = f.read()
 
-  query = (
-    "Optimize the code below for peak performance with pallas kernel\n\n"
-    + reference_code
-  )
-
-  # Retry logic
-  for attempt in range(1, max_retries + 1):
-    logger.info(f"Processing {problem_id} - Attempt {attempt}/{max_retries}")
-    user_id = "user_0"
-    session_id = f"session_{problem_id}_attempt_{attempt}_{int(time.time())}"
-
-    # Add random jitter to avoid SQLite database lock contention
-    jitter = random.uniform(0.1, 2.0)
-    logger.info(f"Sleeping for {jitter:.2f}s (jitter) to avoid DB lock.")
-    time.sleep(jitter)
-
-    client = AutoAgentClient(
-      user_id=user_id,
-      session_id=session_id,
-      query=query,
-      base_url=f"http://localhost:{port}",
+    query = (
+      "Optimize the code below for peak performance with pallas kernel\n\n"
+      + reference_code
     )
 
-    session_file = os.path.join(problem_dir, f"session_attempt_{attempt}.json")
-    try:
-      run_agent(client)
+    # Retry logic
+    for attempt in range(1, max_retries + 1):
+      logger.info(f"Processing {problem_id} - Attempt {attempt}/{max_retries}")
+      user_id = "user_0"
+      session_id = f"session_{problem_id}_attempt_{attempt}_{int(time.time())}"
 
-      # Save session file
-      save_session_to_file(client, session_file)
+      client = AutoAgentClient(
+        user_id=user_id,
+        session_id=session_id,
+        query=query,
+      )
 
-      # Save optimized code
-      optimized_path = get_optimized_kernel_path(session_file)
-      if not optimized_path:
-        logger.error(
-          f"Optimized kernel path not found in state for {problem_id}"
-        )
-        continue  # Try next attempt
-
-      # Read the code from the path
-      with open(optimized_path, "r") as f:
-        optimized_code = f.read()
-
-      # Paste the code to the problem folder in the dataset
-      output_file = os.path.join(problem_dir, "optimized.py")
-      with open(output_file, "w") as f:
-        f.write(optimized_code)
-
-      logger.info(f"Successfully saved optimized kernel to {output_file}")
-      return problem_id, "Success"
-
-    except Exception as e:
-      logger.error(f"Error on attempt {attempt} for {problem_id}: {e}")
+      session_file = os.path.join(
+        problem_dir, f"session_attempt_{attempt}.json"
+      )
       try:
+        # Run in-process asynchronously
+        await client.run_async()
+
+        # Save session file
         save_session_to_file(client, session_file)
-        logger.info(
-          f"Saved session file for {problem_id} after attempt failure"
-        )
-      except Exception as se:
-        logger.error(f"Failed to save session file after attempt failure: {se}")
-      if attempt == max_retries:
-        return problem_id, f"Failed after {max_retries} attempts: {e}"
 
-  return problem_id, "Failed"
+        # Save optimized code
+        optimized_path = get_optimized_kernel_path(session_file)
+        if not optimized_path:
+          logger.error(
+            f"Optimized kernel path not found in state for {problem_id}"
+          )
+          continue  # Try next attempt
+
+        # Read the code from the path
+        with open(optimized_path, "r") as f:
+          optimized_code = f.read()
+
+        # Paste the code to the problem folder in the dataset
+        output_file = os.path.join(problem_dir, "optimized.py")
+        with open(output_file, "w") as f:
+          f.write(optimized_code)
+
+        logger.info(f"Successfully saved optimized kernel to {output_file}")
+        return problem_id, "Success"
+
+      except Exception as e:
+        logger.error(f"Error on attempt {attempt} for {problem_id}: {e}")
+        try:
+          save_session_to_file(client, session_file)
+          logger.info(
+            f"Saved session file for {problem_id} after attempt failure"
+          )
+        except Exception as se:
+          logger.error(
+            f"Failed to save session file after attempt failure: {se}"
+          )
+        if attempt == max_retries:
+          return problem_id, f"Failed after {max_retries} attempts: {e}"
+
+    return problem_id, "Failed"
 
 
-def main():
-  args = parse_args()
-
-  if args.log_file:
-    file_handler = logging.FileHandler(args.log_file)
-    file_handler.setFormatter(
-      logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    )
-    logging.getLogger().addHandler(file_handler)
-
+async def main_async(args):
+  """Async main function coordinating the concurrent problem runs."""
   if not os.path.exists(args.data_dir):
     logger.error(f"Data directory not found: {args.data_dir}")
     return
@@ -170,25 +155,60 @@ def main():
     f"Concurrent workers: {args.num_concurrent}, Max retries: {args.max_retries}"
   )
 
-  with ThreadPoolExecutor(max_workers=args.num_concurrent) as executor:
-    future_to_problem = {
-      executor.submit(
-        process_problem, problem, args.data_dir, args.port, args.max_retries
-      ): problem
-      for problem in problems
-    }
+  # Semaphore to limit the number of concurrent active sessions
+  sem = asyncio.Semaphore(args.num_concurrent)
 
-    completed = 0
-    for future in as_completed(future_to_problem):
-      problem = future_to_problem[future]
-      try:
-        prob_id, status = future.result()
-        completed += 1
-        logger.info(
-          f"[{completed}/{len(problems)}] Problem {prob_id}: {status}"
-        )
-      except Exception as e:
-        logger.error(f"Problem {problem} raised an exception: {e}")
+  tasks = [
+    process_problem(problem, args.data_dir, args.max_retries, sem)
+    for problem in problems
+  ]
+
+  completed = 0
+  for future in asyncio.as_completed(tasks):
+    try:
+      prob_id, status = await future
+      completed += 1
+      logger.info(f"[{completed}/{len(problems)}] Problem {prob_id}: {status}")
+    except Exception as e:
+      logger.error(f"A task raised an exception: {e}")
+
+
+def main():
+  args = parse_args()
+
+  # Configure logging dynamically
+  log_format = "%(asctime)s - %(levelname)s - %(message)s"
+  if args.log_file:
+    # 1. Configure the batch runner logger (write only batch progress to the main log file)
+    main_logger = logging.getLogger("__main__")
+    main_logger.propagate = (
+      False  # Prevent batch logs from going to the root logger
+    )
+
+    batch_handler = logging.FileHandler(args.log_file)
+    batch_handler.setFormatter(logging.Formatter(log_format))
+    main_logger.addHandler(batch_handler)
+    main_logger.setLevel(logging.INFO)
+
+    # 2. Configure the root logger (write all agent internal logs to a separate file)
+    base, ext = os.path.splitext(args.log_file)
+    agent_log_file = f"{base}_agent{ext}"
+    logging.basicConfig(
+      filename=agent_log_file,
+      level=logging.INFO,
+      format=log_format,
+      force=True,
+    )
+  else:
+    # Route all logs to the console/terminal
+    logging.basicConfig(
+      level=logging.INFO,
+      format=log_format,
+      force=True,
+    )
+
+  # Start the asyncio event loop
+  asyncio.run(main_async(args))
 
 
 if __name__ == "__main__":

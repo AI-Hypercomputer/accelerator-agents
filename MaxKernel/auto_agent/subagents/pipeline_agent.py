@@ -79,6 +79,7 @@ class AutonomousPipelineAgent(BaseAgent):
       self._clear_iteration_metrics(ctx)
 
       if self._should_end_at_step(ctx, iteration, "plan"):
+        yield self._create_history_event(ctx)
         iteration += 1
         continue
 
@@ -87,6 +88,7 @@ class AutonomousPipelineAgent(BaseAgent):
       async for event in self.implement_agent.run_async(ctx):
         yield event
       if self._should_end_at_step(ctx, iteration, "implement"):
+        yield self._create_history_event(ctx)
         iteration += 1
         continue
 
@@ -106,10 +108,12 @@ class AutonomousPipelineAgent(BaseAgent):
         self._save_iteration_files_and_snapshot(
           ctx, iteration, step_name="validate"
         )
+        yield self._create_history_event(ctx)
         iteration += 1
         continue
 
       if self._should_end_at_step(ctx, iteration, "validate"):
+        yield self._create_history_event(ctx)
         iteration += 1
         continue
 
@@ -146,10 +150,12 @@ class AutonomousPipelineAgent(BaseAgent):
         self._save_iteration_files_and_snapshot(
           ctx, iteration, step_name="test_run"
         )
+        yield self._create_history_event(ctx)
         iteration += 1
         continue
 
       if self._should_end_at_step(ctx, iteration, "test_run"):
+        yield self._create_history_event(ctx)
         iteration += 1
         continue
 
@@ -158,6 +164,7 @@ class AutonomousPipelineAgent(BaseAgent):
       async for event in self.autotune_agent.run_async(ctx):
         yield event
       if self._should_end_at_step(ctx, iteration, "autotune"):
+        yield self._create_history_event(ctx)
         iteration += 1
         continue
 
@@ -166,17 +173,13 @@ class AutonomousPipelineAgent(BaseAgent):
       async for event in self.profile_agent.run_async(ctx):
         yield event
       if self._should_end_at_step(ctx, iteration, "profile"):
+        yield self._create_history_event(ctx)
         iteration += 1
         continue
 
       self._save_iteration_files_and_snapshot(ctx, iteration)
 
-      yield Event(
-        author=self.name,
-        actions=EventActions(
-          state_delta={"history": ctx.session.state.get("history", [])}
-        ),
-      )
+      yield self._create_history_event(ctx)
 
       # Step 7: Check if improvement is needed
       # needs_improvement = ctx.session.state.get("needs_improvement", False)
@@ -207,6 +210,14 @@ class AutonomousPipelineAgent(BaseAgent):
           "pipeline_iteration": iteration,
           "best_iteration": best_solution["iteration"] if best_solution else -1,
         }
+      ),
+    )
+
+  def _create_history_event(self, ctx: InvocationContext) -> Event:
+    return Event(
+      author=self.name,
+      actions=EventActions(
+        state_delta={"history": ctx.session.state.get("history", [])}
       ),
     )
 

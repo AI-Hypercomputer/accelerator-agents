@@ -1,0 +1,18 @@
+task_id: 12p_RMSNorm
+description: Kernel task for 12p_RMSNorm
+input_gen_code: |-
+  def get_inputs(dtype=jnp.bfloat16):
+      import jax
+      import jax.numpy as jnp
+      from jax import lax
+
+      batch = 8
+      seq_len = 4096
+      emb_dim = 8192
+      epsilon = 1e-5
+
+      key = jax.random.key(42)
+      k1, k2 = jax.random.split(key, 2)
+      x = jax.random.normal(k1, (batch, seq_len, emb_dim), dtype=dtype)
+      scale = jax.random.normal(k2, (emb_dim,), dtype=dtype) * 0.1 + 1.0
+      return [x, scale], [epsilon]

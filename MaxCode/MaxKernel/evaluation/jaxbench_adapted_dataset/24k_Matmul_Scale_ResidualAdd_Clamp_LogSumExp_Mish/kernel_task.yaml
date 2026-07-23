@@ -1,0 +1,23 @@
+task_id: 24k_Matmul_Scale_ResidualAdd_Clamp_LogSumExp_Mish
+description: Kernel task for 24k_Matmul_Scale_ResidualAdd_Clamp_LogSumExp_Mish
+input_gen_code: |-
+  def get_inputs():
+      import jax
+      import jax.numpy as jnp
+
+      batch_size = 4096
+      input_size = 8192
+      hidden_size = 8192
+      scale_factor = 2.0
+      clamp_min = -10.0
+      clamp_max = 10.0
+      dtype = jnp.float32
+
+      key = jax.random.key(0)
+      x = jax.random.uniform(key, (batch_size, input_size), dtype=dtype)
+      weight = jnp.zeros((input_size, hidden_size), dtype=dtype)
+      bias = jnp.zeros(hidden_size, dtype=dtype)
+
+      dynamic_args = [x, weight, bias]
+      static_args = [scale_factor, clamp_min, clamp_max]
+      return dynamic_args, static_args

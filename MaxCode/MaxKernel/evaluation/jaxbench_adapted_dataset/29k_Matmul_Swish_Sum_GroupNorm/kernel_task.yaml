@@ -1,0 +1,20 @@
+task_id: 29k_Matmul_Swish_Sum_GroupNorm
+description: Kernel task for 29k_Matmul_Swish_Sum_GroupNorm
+input_gen_code: |-
+  def get_inputs(dtype=jnp.float32):
+      import jax
+      import jax.numpy as jnp
+
+      key = jax.random.key(0)
+      batch_size = 8192
+      in_features = 4096
+      out_features = 4096
+      num_groups = 64
+      x = jax.random.uniform(key, (batch_size, in_features), dtype=dtype)
+      weight = jnp.zeros((in_features, out_features), dtype=dtype)
+      bias = jnp.zeros(out_features, dtype=dtype)
+      gn_weight = jnp.ones(out_features, dtype=dtype)
+      gn_bias = jnp.zeros(out_features, dtype=dtype)
+      dynamic_args = [x, weight, bias, gn_weight, gn_bias]
+      static_args = [num_groups, out_features]
+      return dynamic_args, static_args

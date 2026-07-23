@@ -14,27 +14,26 @@ except ImportError:
     "dotenv not installed, skipping loading environment variables"
   )
 
+from google.adk.apps.app import App
 from google.adk.runners import Runner
 from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from google.genai.types import Content, Part
 
 from auto_agent.agent import root_agent
+from auto_agent.config import get_compaction_config
 
 logger = logging.getLogger(__name__)
 
 
 class AutoAgentClient:
-  user_id: str
-  session_id: str
-  query: str
-  app_name: str = "auto_agent"
-
   def __init__(
     self,
     user_id: str,
     session_id: str,
     query: str,
     agent: Optional[Any] = None,
+    app_name: str = "auto_agent",
+    events_compaction: bool = False,
   ):
     self.user_id = user_id
     self.session_id = session_id
@@ -42,6 +41,8 @@ class AutoAgentClient:
     self.agent = agent or root_agent
     self.session_service = InMemorySessionService()
     self.session = None
+    self.app_name = app_name
+    self.events_compaction = events_compaction
 
   async def create_session(
     self, initial_state: Optional[dict[str, Any]] = None
@@ -77,9 +78,19 @@ class AutoAgentClient:
     if not self.session:
       await self.create_session()
 
+    # Compaction configuration must be passed via an App object
+    if self.events_compaction:
+      compaction_config = get_compaction_config()
+    else:
+      compaction_config = None
+    app = App(
+      name=self.app_name,
+      root_agent=self.agent,
+      events_compaction_config=compaction_config,
+    )
+
     runner = Runner(
-      app_name=self.app_name,
-      agent=self.agent,
+      app=app,
       session_service=self.session_service,
     )
 
@@ -124,6 +135,11 @@ def main():
     default="client_query.txt",
     help="File containing the query to send",
   )
+  parser.add_argument(
+    "--events_compaction",
+    action="store_true",
+    help="Enable event compaction",
+  )
   args = parser.parse_args()
 
   user_id = args.user_id
@@ -132,7 +148,12 @@ def main():
   query = read_query_from_file(args.query_file)
 
   # Create client instance
-  client = AutoAgentClient(user_id, session_id, query)
+  client = AutoAgentClient(
+    user_id=user_id,
+    session_id=session_id,
+    query=query,
+    events_compaction=args.events_compaction,
+  )
 
   logger.info(
     f"Generating script for user {user_id} in session {session_id} with query: {query}"

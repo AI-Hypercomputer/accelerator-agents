@@ -161,7 +161,7 @@ class AutotuneRunner(BaseAgent):
       )
 
 
-def create_autotune_runner(model_name: str = MODEL_NAME) -> AutotuneRunner:
+def create_autotune_runner() -> AutotuneRunner:
   return AutotuneRunner(
     name="AutotuneRunner",
     output_key="autotune_results",
@@ -269,8 +269,8 @@ def create_autotune_agent(
   return CombinedAutotuneAgent(
     name="AutotuneAgent",
     planner_agent=create_autotune_planner_agent(model_name),
-    runner_agent=create_autotune_runner(model_name),
-    apply_config_agent=create_apply_best_config_agent(model_name),
+    runner_agent=create_autotune_runner(),
+    apply_config_agent=create_apply_best_config_agent(),
     summary_agent=create_autotune_summary_agent(model_name),
   )
 

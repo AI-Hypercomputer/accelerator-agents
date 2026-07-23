@@ -369,9 +369,9 @@ def create_cleanup_debug_statements_agent(
 cleanup_debug_statements_agent = create_cleanup_debug_statements_agent()
 
 
-def create_kernel_compilation_checker_for_validation(
-  model_name: str = MODEL_NAME,
-) -> KernelCompilationChecker:
+def create_kernel_compilation_checker_for_validation() -> (
+  KernelCompilationChecker
+):
   return KernelCompilationChecker(
     name="KernelCompilationCheckerForValidation",
     input_key="kernel_code",
@@ -390,9 +390,7 @@ def create_kernel_compilation_validation_loop(
 ) -> KernelCompilationValidationLoop:
   return KernelCompilationValidationLoop(
     name="KernelCompilationValidationLoop",
-    compilation_checker=create_kernel_compilation_checker_for_validation(
-      model_name
-    ),
+    compilation_checker=create_kernel_compilation_checker_for_validation(),
     fix_agent=create_fix_kernel_compilation_agent(model_name),
     debug_agent=create_add_debug_statements_agent(model_name),
     max_retries=6,

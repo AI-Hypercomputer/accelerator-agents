@@ -899,9 +899,7 @@ generate_test_file_agent = create_generate_test_file_agent()
 
 
 # Validation agents
-def create_syntax_validation_agent(
-  model_name: str = MODEL_NAME,
-) -> SyntaxValidationAgent:
+def create_syntax_validation_agent() -> SyntaxValidationAgent:
   return SyntaxValidationAgent(
     name="SyntaxValidationAgent",
     input_key="test_file_path",
@@ -912,9 +910,7 @@ def create_syntax_validation_agent(
 syntax_validation_agent = create_syntax_validation_agent()
 
 
-def create_import_validation_agent(
-  model_name: str = MODEL_NAME,
-) -> ImportValidationAgent:
+def create_import_validation_agent() -> ImportValidationAgent:
   return ImportValidationAgent(
     name="ImportValidationAgent",
     input_key="test_file_path",
@@ -925,9 +921,7 @@ def create_import_validation_agent(
 import_validation_agent = create_import_validation_agent()
 
 
-def create_structure_validation_agent(
-  model_name: str = MODEL_NAME,
-) -> TestStructureValidationAgent:
+def create_structure_validation_agent() -> TestStructureValidationAgent:
   return TestStructureValidationAgent(
     name="TestStructureValidationAgent",
     input_key="test_file_path",
@@ -938,9 +932,7 @@ def create_structure_validation_agent(
 structure_validation_agent = create_structure_validation_agent()
 
 
-def create_mock_execution_validation_agent(
-  model_name: str = MODEL_NAME,
-) -> MockTestExecutionAgent:
+def create_mock_execution_validation_agent() -> MockTestExecutionAgent:
   return MockTestExecutionAgent(
     name="MockTestExecutionAgent",
     input_key="test_file_path",
@@ -975,10 +967,10 @@ def create_validation_loop_agent(
 ) -> TestValidationLoopAgent:
   return TestValidationLoopAgent(
     name="TestValidationLoopAgent",
-    syntax_agent=create_syntax_validation_agent(model_name),
-    import_agent=create_import_validation_agent(model_name),
-    structure_agent=create_structure_validation_agent(model_name),
-    mock_execution_agent=create_mock_execution_validation_agent(model_name),
+    syntax_agent=create_syntax_validation_agent(),
+    import_agent=create_import_validation_agent(),
+    structure_agent=create_structure_validation_agent(),
+    mock_execution_agent=create_mock_execution_validation_agent(),
     fix_agent=create_fix_test_script_agent(model_name),
     max_retries=6,
   )
@@ -1006,7 +998,7 @@ validated_test_generation_agent = create_validated_test_generation_agent()
 
 
 # Test execution agents
-def create_run_tests_agent(model_name: str = MODEL_NAME) -> TestRunner:
+def create_run_tests_agent() -> TestRunner:
   return TestRunner(
     name="RunTestsAgent",
     input_key="test_file_path",
@@ -1044,7 +1036,7 @@ def create_unified_test_agent(model_name: str = MODEL_NAME) -> SequentialAgent:
   return SequentialAgent(
     name="UnifiedTestAgent",
     sub_agents=[
-      create_run_tests_agent(model_name),
+      create_run_tests_agent(),
       create_summarize_test_results_agent(model_name),
     ],
     description="Executes the generated pytest test file and provides a comprehensive summary.",

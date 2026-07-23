@@ -66,7 +66,7 @@ read_profiling_script_agent = create_read_profiling_script_agent()
 
 
 # Profiling execution agent
-def create_eval_profile_agent(model_name: str = MODEL_NAME) -> KernelProfiler:
+def create_eval_profile_agent() -> KernelProfiler:
   return KernelProfiler(
     name="ProfileEvalAgent",
     input_key="profiling_script",
@@ -159,7 +159,7 @@ def create_profile_agent(model_name: str = MODEL_NAME) -> SequentialAgent:
     sub_agents=[
       create_generate_profiling_script_agent(model_name),
       create_read_profiling_script_agent(model_name),
-      create_eval_profile_agent(model_name),
+      create_eval_profile_agent(),
       create_summarize_profile_agent(model_name),
     ],
     description="Profiles the Pallas kernel to identify performance bottlenecks.",

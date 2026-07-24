@@ -308,6 +308,7 @@ async def autotune(request: AutotuneRequest):
       combinations = list(itertools.product(*values))
 
       best_time = float("inf")
+      best_speedup = float("-inf")
       best_cfg = None
       best_output = ""
       all_results = []
@@ -361,12 +362,18 @@ async def autotune(request: AutotuneRequest):
             time_match = re.search(
               r"RESULT_TIME:\s*([0-9.]+)\s*ms", output, re.IGNORECASE
             )
+            speedup_match = re.search(
+              r"SPEEDUP:\s*([0-9.]+)", output, re.IGNORECASE
+            )
 
             correctness_passed = False
             if correctness_match:
               correctness_passed = correctness_match.group(1).lower() == "true"
 
             time_taken = float(time_match.group(1)) if time_match else None
+            speedup_achieved = (
+              float(speedup_match.group(1)) if speedup_match else None
+            )
 
             if not correctness_passed:
               logging.warning(
@@ -379,19 +386,26 @@ async def autotune(request: AutotuneRequest):
                   "output": output,
                 }
               )
-            elif time_taken is None:
+            elif speedup_achieved is None:
               logging.warning(
-                f"No RESULT_TIME found in output for config {cfg}"
+                f"No SPEEDUP found in output for config {cfg}"
               )
               all_results.append(
-                {"cfg": cfg, "status": "no_result_time", "output": output}
+                {"cfg": cfg, "status": "no_speedup", "output": output}
               )
             else:
-              all_results.append(
-                {"cfg": cfg, "time": time_taken, "status": "success"}
-              )
-              if time_taken < best_time:
-                best_time = time_taken
+              result_entry = {
+                "cfg": cfg,
+                "time": time_taken,
+                "status": "success",
+              }
+              if speedup_achieved is not None:
+                result_entry["speedup"] = speedup_achieved
+              all_results.append(result_entry)
+              if speedup_achieved > best_speedup:
+                best_speedup = speedup_achieved
+                if time_taken is not None:
+                  best_time = time_taken
                 best_cfg = cfg
                 best_output = output
           else:
@@ -433,6 +447,7 @@ async def autotune(request: AutotuneRequest):
           {
             "best_cfg": best_cfg,
             "best_time": best_time,
+            "best_speedup": best_speedup,
             "best_output": best_output,
             "all_results": all_results,
           }

@@ -71,13 +71,15 @@ async def autotune_kernel(
           output_data = json.loads(result["output"])
           logging.info(
             f"Autotuning completed. Best config: {output_data['best_cfg']}"
-            f" with time {output_data['best_time']} ms"
+            f" with time {output_data['best_time']} ms and "
+            f" speedup {output_data.get('best_speedup')}"
           )
           return {
             "status": "success",
             "message": "Autotuning completed",
             "best_config": output_data["best_cfg"],
             "best_time_ms": output_data["best_time"],
+            "best_speedup": output_data.get("best_speedup"),
             "best_output": output_data["best_output"],
             "all_results": output_data.get("all_results", []),
           }

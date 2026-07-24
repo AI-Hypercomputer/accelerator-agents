@@ -923,8 +923,6 @@ CONFIG = {
     'head_dim': 128,
     'page_size': 16,
     'pages_per_seq': 256,
-    'scenario': 'continuous_batching_48_decode_8_chunked_prefill',
-    'num_active_seqs': 56,
     'atol': 0.2,
     'rtol': 0.2,
 }

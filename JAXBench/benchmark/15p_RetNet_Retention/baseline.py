@@ -61,7 +61,7 @@ def workload(query, key, value):
     causal_mask = (distance >= 0).astype(jnp.float32)
     # γ^distance: (H, S, S)
     log_gamma = jnp.log(gammas)  # (H,)
-    decay = jnp.exp(log_gamma[:, None, None] * distance[None, :, :])  # (H, S, S)
+    decay = jnp.exp(log_gamma[:, None, None] * jnp.maximum(distance, 0.0)[None, :, :])  # (H, S, S)
     decay = decay * causal_mask[None, :, :]  # apply causal mask
 
     # Retention: (Q K^T ⊙ D) V

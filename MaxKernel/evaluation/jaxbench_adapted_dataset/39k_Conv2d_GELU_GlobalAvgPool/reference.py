@@ -5,11 +5,13 @@ import jax.numpy as jnp
 # Initialization
 def get_inputs():
     key = jax.random.key(0)
+    rand_key = jax.random.key(0xBADC0DE)
+    ka, kb = jax.random.split(rand_key, 2)
     batch_size, in_channels, out_channels, kernel_size = 128, 8, 64, 3
     height, width = 256, 256
     x = jax.random.uniform(key, (batch_size, in_channels, height, width), dtype=jnp.float32)
-    weight = jnp.zeros((out_channels, in_channels, kernel_size, kernel_size), dtype=jnp.float32)
-    bias = jnp.zeros(out_channels, dtype=jnp.float32)
+    weight = jax.random.normal(ka, (out_channels, in_channels, kernel_size, kernel_size), dtype=jnp.float32) * 0.02
+    bias = jax.random.normal(kb, out_channels, dtype=jnp.float32) * 0.02
     dynamic_args = [x, weight, bias]
     static_args = []
     return dynamic_args, static_args

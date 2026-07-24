@@ -141,7 +141,6 @@ class AutonomousPipelineAgent(BaseAgent):
         iteration += 1
         continue
 
-
       # Step 4: Test Run
       logging.info(f"[{self.name}] Running UnifiedTestAgent...")
       async for event in self.test_run_agent.run_async(ctx):
@@ -256,7 +255,7 @@ class AutonomousPipelineAgent(BaseAgent):
           f"[{self.name}] Failed to read kernel file for snapshot: {e}"
         )
 
-    latency = self._extract_latency(ctx)
+    speedup = self._extract_speedup(ctx)
 
     snapshot = {
       "iteration": iteration,
@@ -265,7 +264,7 @@ class AutonomousPipelineAgent(BaseAgent):
         "kernel_compilation_status", {}
       ),
       "test_status": ctx.session.state.get("test_results", {}),
-      "latency_ms": latency,
+      "speedup": speedup,
       "autotuning_summary": ctx.session.state.get("autotuning_summary", ""),
       "profiling_summary": ctx.session.state.get("profiling_summary", ""),
     }
@@ -474,16 +473,16 @@ class AutonomousPipelineAgent(BaseAgent):
       ),
     )
 
-  def _extract_latency(self, ctx: InvocationContext):
-    """Extracts execution time from autotune results or test results output."""
+  def _extract_speedup(self, ctx: InvocationContext):
+    """Extracts speedup from autotune results or test results output."""
     autotune_results = ctx.session.state.get("autotune_results", {})
     if autotune_results.get("status") == "success":
-      latency = autotune_results.get("best_time_ms")
-      if latency is not None:
+      speedup = autotune_results.get("best_speedup")
+      if speedup is not None:
         logging.info(
-          f"[{self.name}] Extracted latency from autotune results: {latency} ms"
+          f"[{self.name}] Extracted speedup from autotune results: {speedup}"
         )
-        return latency
+        return speedup
 
     test_output = ctx.session.state.get("test_results", {}).get("output", "")
     if not test_output:
@@ -491,14 +490,14 @@ class AutonomousPipelineAgent(BaseAgent):
     try:
       match = re.search(r"PERF_METRICS:\s*([\d.]+)", test_output)
       if match:
-        latency = float(match.group(1))
+        speedup = float(match.group(1))
         logging.info(
-          f"[{self.name}] Extracted execution time from test results: {latency} ms (fallback)"
+          f"[{self.name}] Extracted speedup from test results: {speedup} (fallback)"
         )
-        return latency
+        return speedup
     except Exception as e:
       logging.error(
-        f"[{self.name}] Failed to parse execution time from test output: {e}"
+        f"[{self.name}] Failed to parse speedup from test output: {e}"
       )
     return None
 
@@ -514,28 +513,28 @@ class AutonomousPipelineAgent(BaseAgent):
 
     best_solution = None
     if valid_solutions:
-      # Try to sort by latency (lower is better)
-      solutions_with_latency = [
-        s for s in valid_solutions if s.get("latency_ms") is not None
+      # Try to sort by speedup (higher is better)
+      solutions_with_speedup = [
+        s for s in valid_solutions if s.get("speedup") is not None
       ]
-      if solutions_with_latency:
+      if solutions_with_speedup:
         try:
-          best_solution = min(
-            solutions_with_latency, key=lambda x: x["latency_ms"]
+          best_solution = max(
+            solutions_with_speedup, key=lambda x: x["speedup"]
           )
-          if len(solutions_with_latency) < len(valid_solutions):
+          if len(solutions_with_speedup) < len(valid_solutions):
             logging.warning(
-              f"[{self.name}] {len(valid_solutions) - len(solutions_with_latency)} "
-              f"valid solution(s) were missing latency metrics and ignored."
+              f"[{self.name}] {len(valid_solutions) - len(solutions_with_speedup)} "
+              f"valid solution(s) were missing speedup metrics and ignored."
             )
         except Exception as e:
           logging.error(
-            f"[{self.name}] Error selecting best solution by latency: {e}"
+            f"[{self.name}] Error selecting best solution by speedup: {e}"
           )
           best_solution = await self._select_best_with_llm(valid_solutions)
       else:
         logging.warning(
-          f"[{self.name}] No latency metrics found. Falling back to LLM selection."
+          f"[{self.name}] No speedup metrics found. Falling back to LLM selection."
         )
         best_solution = await self._select_best_with_llm(valid_solutions)
 

@@ -1,6 +1,7 @@
 """Rigorous test harness template for Pallas kernels."""
 
 TEST_TEMPLATE = """
+import math
 import time
 import json
 import jax
@@ -98,6 +99,7 @@ def main():
         all_correct = True
         times_base = []
         times_optimized = []
+        speedups = []
 
         for idx, inputs in enumerate(inputs_list):
             if not isinstance(inputs, tuple) or len(inputs) != 2:
@@ -165,6 +167,7 @@ def main():
             times_base.append(time_base)
             times_optimized.append(time_optimized)
             speedup = (time_base / time_optimized) if time_optimized > 0 else 0
+            speedups.append(speedup)
             print(f"SPEEDUP_CASE_{{idx}}: {{speedup:.2f}}")
 
         print(f"CORRECTNESS: {{all_correct}}")
@@ -172,18 +175,16 @@ def main():
         if not all_correct:
             sys.exit(1)
 
-        import math
         valid_opt = [t for t in times_optimized if t > 0]
-        valid_base = [t for t in times_base if t > 0]
+        valid_speedups = [s for s in speedups if s > 0]
         
-        if valid_opt and valid_base:
+        if valid_opt and valid_speedups:
             geo_mean_time_opt = math.exp(sum(math.log(t) for t in valid_opt) / len(valid_opt))
-            geo_mean_time_base = math.exp(sum(math.log(t) for t in valid_base) / len(valid_base))
-            geo_mean_speedup = (geo_mean_time_base / geo_mean_time_opt) if geo_mean_time_opt > 0 else 0
+            geo_mean_speedup = math.exp(sum(math.log(s) for s in valid_speedups) / len(valid_speedups))
 
-            print(f"PERF_METRICS: {{geo_mean_time_opt * 1000:.6f}}")
             print(f"RESULT_TIME: {{geo_mean_time_opt * 1000:.6f}} ms")
             print(f"SPEEDUP: {{geo_mean_speedup:.2f}}")
+            print(f"PERF_METRICS: {{geo_mean_speedup:.2f}}")
     except Exception as e:
         print(f"ERROR: {{e}}")
         traceback.print_exc()

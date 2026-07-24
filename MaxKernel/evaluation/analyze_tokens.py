@@ -5,6 +5,7 @@ generate a markdown report, and plot a visualization of token usage over time.
 """
 
 import argparse
+import glob
 import json
 import os
 from typing import Any, Dict, List, Tuple
@@ -45,7 +46,7 @@ def analyze_token(file_path: str) -> None:
   )
 
   # Analyze events and generate report
-  plot_data, compaction_indices = generate_token_report(
+  plot_data, compaction_indices, sums = generate_token_report(
     events, file_path, md_output_file, img_output_file
   )
 
@@ -57,13 +58,15 @@ def analyze_token(file_path: str) -> None:
   print(f"\n✅ Visualization successfully saved to: {img_output_file}")
   print(f"✅ Markdown log successfully saved to: {md_output_file}")
 
+  return sums
+
 
 def generate_token_report(
   events: List[Dict[str, Any]],
   file_path: str,
   md_output_file: str,
   img_output_file: str,
-) -> Tuple[Tuple[List[int], List[int]], List[int]]:
+) -> Tuple[Tuple[List[int], List[int]], List[int], Tuple[int, int, int, int]]:
   """Processes events, calculates token statistics, and writes the markdown report."""
   total_tokens_sum = 0
   prompt_tokens_sum = 0
@@ -131,7 +134,16 @@ def generate_token_report(
       md_f,
     )
 
-  return (plot_indices, plot_tokens), compaction_indices
+  return (
+    (plot_indices, plot_tokens),
+    compaction_indices,
+    (
+      total_tokens_sum,
+      prompt_tokens_sum,
+      candidates_tokens_sum,
+      thoughts_tokens_sum,
+    ),
+  )
 
 
 def write_summary(
@@ -193,14 +205,76 @@ def generate_visualization(
   plt.close()
 
 
+def generate_overall_visualization(
+  labels: List[str], totals: List[int], output_dir: str
+):
+  plt.figure(figsize=(12, 6))
+  plt.bar(labels, totals, color="skyblue")
+  plt.xticks(rotation=45, ha="right")
+  plt.xlabel("Session")
+  plt.ylabel("Total Tokens")
+  plt.title("Total Token Usage Across Sessions")
+  plt.tight_layout()
+
+  if not os.path.isdir(output_dir):
+    output_dir = os.path.dirname(os.path.abspath(output_dir))
+
+  out_path = os.path.join(output_dir, "overall_token_visualization.png")
+  plt.savefig(out_path, dpi=150)
+  plt.close()
+  print(f"✅ Overall visualization successfully saved to: {out_path}")
+
+
 def main():
   parser = argparse.ArgumentParser(
-    description="Analyze token usage from an ADK session JSON file."
+    description="Analyze token usage from an ADK session JSON file or directory."
   )
-  parser.add_argument("file_path", help="Path to the session JSON file.")
+  parser.add_argument(
+    "file_path", help="Path to the session JSON file or directory."
+  )
   args = parser.parse_args()
 
-  analyze_token(args.file_path)
+  path = args.file_path
+  if os.path.isdir(path):
+    files = glob.glob(os.path.join(path, "**", "session.json"), recursive=True)
+  else:
+    files = [path]
+
+  if not files:
+    print(f"No session.json files found in {path}")
+    return
+
+  grand_total = 0
+  grand_prompt = 0
+  grand_candidates = 0
+  grand_thoughts = 0
+
+  labels = []
+  totals = []
+
+  for f in files:
+    res = analyze_token(f)
+    if res:
+      total, prompt, candidates, thoughts = res
+      grand_total += total
+      grand_prompt += prompt
+      grand_candidates += candidates
+      grand_thoughts += thoughts
+
+      # Use the parent directory name (e.g., node_001_attempt_1) for the label
+      labels.append(os.path.basename(os.path.dirname(f)))
+      totals.append(total)
+
+  if len(files) > 1:
+    print(f"\n\n{'=' * 40}")
+    print(f"GRAND TOTAL ACROSS {len(files)} FILES")
+    print(f"Token Count: {grand_total:,}")
+    print(f"Prompt Token Count: {grand_prompt:,}")
+    print(f"Candidates Token Count: {grand_candidates:,}")
+    print(f"Thoughts Token Count: {grand_thoughts:,}")
+    print(f"{'=' * 40}\n")
+
+    generate_overall_visualization(labels, totals, path)
 
 
 if __name__ == "__main__":

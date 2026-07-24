@@ -133,14 +133,16 @@ class ADKSessionWorker:
     )
 
     await client.create_session(initial_state)
-    await client.run_async()
     try:
-      session_json_path = os.path.join(session_dir, "session.json")
-      with open(session_json_path, "w") as f:
-        json.dump(client.get_session_data(), f, indent=2)
-      logger.info(f"Saved session data to {session_json_path}")
-    except Exception as se:
-      logger.warning(f"Failed to save session data for {node_id}: {se}")
+      await client.run_async()
+    finally:
+      try:
+        session_json_path = os.path.join(session_dir, "session.json")
+        with open(session_json_path, "w") as f:
+          json.dump(client.get_session_data(), f, indent=2)
+        logger.info(f"Saved session data to {session_json_path}")
+      except Exception as se:
+        logger.warning(f"Failed to save session data for {node_id}: {se}")
     return client.get_state()
 
   def _process_results(

@@ -23,8 +23,6 @@ CONFIG = {
     'head_dim': 128,
     'page_size': 16,
     'pages_per_seq': 256,
-    'scenario': 'continuous_batching_48_decode_8_chunked_prefill',
-    'num_active_seqs': 56,
 }
 
 # IMPORTANT: This benchmark tests ONE representative serving scenario, not a

@@ -72,10 +72,9 @@ def get_orchestrator(
 
 def save_optimized_kernel(
   orchestrator: SearchOrchestrator,
-  problem_dir: str,
-  algorithm: str,
+  optimized_file_path: str,
 ) -> Optional[Tuple[str, float]]:
-  """Saves the best kernel code found during search to the problem directory."""
+  """Saves the best kernel code found during search to the optimized file path."""
   best_id = orchestrator.graph.best_node_id
   if not best_id or best_id not in orchestrator.graph.nodes:
     return None
@@ -84,30 +83,44 @@ def save_optimized_kernel(
   if not best_node.code:
     return None
 
-  output_file = os.path.join(problem_dir, f"optimized_{algorithm}.py")
-  with open(output_file, "w") as f:
+  os.makedirs(
+    os.path.dirname(os.path.abspath(optimized_file_path)), exist_ok=True
+  )
+  with open(optimized_file_path, "w") as f:
     f.write(best_node.code)
 
-  logger.info(f"Saved best kernel ({best_id}) to {output_file}")
+  logger.info(f"Saved best kernel ({best_id}) to {optimized_file_path}")
   latency = best_node.evaluation.latency_ms or -1.0
   return best_id, latency
 
 
 async def run_search(
-  problem_dir: str,
+  reference_file_path: str,
+  optimized_file_path: Optional[str] = None,
   algorithm: str = "parallel",
   graph_db_path: Optional[str] = None,
+  problem_id: Optional[str] = None,
   **kwargs: Any,
 ) -> Tuple[str, str]:
-  """Executes the search algorithm asynchronously for a single problem directory."""
-  problem_id = os.path.basename(os.path.normpath(problem_dir))
-  reference_file = os.path.join(problem_dir, "reference.py")
+  """Executes the search algorithm asynchronously for a single reference file."""
+  problem_dir = os.path.dirname(os.path.abspath(reference_file_path))
+  default_problem_id, ext = os.path.splitext(
+    os.path.basename(reference_file_path)
+  )
+  if not problem_id:
+    problem_id = default_problem_id
 
-  if not os.path.exists(reference_file):
-    logger.error(f"reference.py not found in {problem_dir}")
-    return problem_id, "Failed: reference.py missing"
+  if not optimized_file_path:
+    optimized_file_path = os.path.join(
+      problem_dir, f"{problem_id}_optimized_{algorithm}{ext}"
+    )
+    logger.info(f"No optimized file path provided. Using {optimized_file_path}")
 
-  with open(reference_file, "r") as f:
+  if not os.path.exists(reference_file_path):
+    logger.error(f"{reference_file_path} not found")
+    return problem_id, f"Failed: {reference_file_path} missing"
+
+  with open(reference_file_path, "r") as f:
     reference_code = f.read()
 
   run_subdir = None
@@ -144,7 +157,7 @@ async def run_search(
 
     await orchestrator.run()
 
-    best_result = save_optimized_kernel(orchestrator, problem_dir, algorithm)
+    best_result = save_optimized_kernel(orchestrator, optimized_file_path)
 
     if run_subdir:
       import shutil
@@ -174,10 +187,29 @@ def parse_args() -> argparse.Namespace:
     "Arguments shared across all algorithms and orchestrators.",
   )
   orch_group.add_argument(
-    "--problem_dir",
+    "--reference_file_path",
     type=str,
     required=True,
-    help="Path to problem directory containing reference.py",
+    help="Path to the reference kernel file",
+  )
+  orch_group.add_argument(
+    "--optimized_file_path",
+    type=str,
+    default=None,
+    help=(
+      "Path to save the optimized kernel. "
+      "Defaults to <problem_id>_optimized_{algorithm}.py"
+      "in the reference file's directory."
+    ),
+  )
+  orch_group.add_argument(
+    "--problem_id",
+    type=str,
+    default=None,
+    help=(
+      "Explicitly assign a problem ID to this search. "
+      "Defaults to the reference file name."
+    ),
   )
   orch_group.add_argument(
     "--algorithm",
@@ -336,9 +368,11 @@ def main():
 
   prob_id, status = asyncio.run(
     run_search(
-      problem_dir=args.problem_dir,
+      reference_file_path=args.reference_file_path,
+      optimized_file_path=args.optimized_file_path,
       algorithm=args.algorithm,
       graph_db_path=args.graph_db_path,
+      problem_id=args.problem_id,
       **kwargs,
     )
   )

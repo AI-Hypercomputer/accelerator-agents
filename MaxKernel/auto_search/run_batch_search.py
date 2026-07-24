@@ -18,14 +18,28 @@ async def process_problem(
 ) -> Tuple[str, str]:
   """Executes the search algorithm for a single benchmark problem in the batch."""
   async with sem:
+    problem_id = os.path.basename(os.path.normpath(problem_dir))
     try:
+      reference_file_path = os.path.join(problem_dir, "reference.py")
+      if not os.path.exists(reference_file_path):
+        error_msg = (
+          f"Missing reference file in {problem_dir}. "
+          "Please ensure your file to be optimized is named 'reference.py'."
+        )
+        logger.error(error_msg)
+        return problem_id, f"Failed: {error_msg}"
+
+      optimized_file_path = os.path.join(
+        problem_dir, f"optimized_{algorithm}.py"
+      )
       return await run_search(
-        problem_dir=problem_dir,
+        reference_file_path=reference_file_path,
+        optimized_file_path=optimized_file_path,
         algorithm=algorithm,
+        problem_id=problem_id,
         **kwargs,
       )
     except Exception as e:
-      problem_id = os.path.basename(os.path.normpath(problem_dir))
       logger.error(
         f"Error executing search on {problem_id}: {e}", exc_info=True
       )

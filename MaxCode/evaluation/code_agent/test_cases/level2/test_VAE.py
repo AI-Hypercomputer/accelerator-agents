@@ -87,7 +87,7 @@ def test_jax_independent():
       "JAX Recon Shape Mismatch: Expected"
       f" {(config['batch_size'], config['input_dim'])}, got {recon.shape}"
   )
-  assert mu.shape == (config["batch_size"], config["latent_dim"]), (
+  assert mu.shape == (config["batch_size"], config["latent_dim"]), (  # pyrefly: ignore[missing-attribute]
       "JAX Mu Shape Mismatch: Expected"
       f" {(config['batch_size'], config['latent_dim'])}, got {mu.shape}"
   )

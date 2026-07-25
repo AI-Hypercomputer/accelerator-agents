@@ -183,7 +183,7 @@ class ADKSessionWorker:
     correct = test_status.get("success", False)
     test_error = test_status.get("output") if not correct else None
 
-    latency_ms = best_run.get("latency_ms")
+    speedup = best_run.get("speedup")
     autotuning_summary = best_run.get("autotuning_summary")
     profiling_summary = best_run.get("profiling_summary")
 
@@ -213,7 +213,7 @@ class ADKSessionWorker:
       evaluation=EvaluationResult(
         compiled=compiled,
         correct=correct,
-        latency_ms=latency_ms,
+        speedup=speedup,
         autotuning_summary=autotuning_summary,
         profiling_summary=profiling_summary,
         compilation_error=compilation_error,

@@ -387,9 +387,7 @@ async def autotune(request: AutotuneRequest):
                 }
               )
             elif speedup_achieved is None:
-              logging.warning(
-                f"No SPEEDUP found in output for config {cfg}"
-              )
+              logging.warning(f"No SPEEDUP found in output for config {cfg}")
               all_results.append(
                 {"cfg": cfg, "status": "no_speedup", "output": output}
               )

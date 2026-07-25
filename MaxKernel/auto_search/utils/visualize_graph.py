@@ -33,8 +33,8 @@ def visualize_graph(
 
   for node_id, node_data in nodes_data.items():
     eval_data = node_data.get("evaluation") or {}
-    latency_ms = eval_data.get("latency_ms")
-    latency = f"{latency_ms:.4f} ms" if latency_ms is not None else "N/A"
+    speedup_val = eval_data.get("speedup")
+    speedup_str = f"{speedup_val:.2f}x" if speedup_val is not None else "N/A"
 
     execution_status = node_data.get("execution_status", "UNKNOWN")
     depth = node_data.get("depth", 0)
@@ -45,7 +45,7 @@ def visualize_graph(
     elif execution_status != "SUCCESS":
       color = "lightpink"
 
-    label = f"ID: {node_id}\nDepth: {depth}\nLatency: {latency}"
+    label = f"ID: {node_id}\nDepth: {depth}\nSpeedup: {speedup_str}"
     dot.node(node_id, label, fillcolor=color)
 
     parent_id = node_data.get("parent_id")

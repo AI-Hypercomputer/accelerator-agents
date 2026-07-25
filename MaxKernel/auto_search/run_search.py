@@ -92,8 +92,8 @@ def save_optimized_kernel(
     f.write(best_node.code)
 
   logger.info(f"Saved best kernel ({best_id}) to {optimized_file_path}")
-  latency = best_node.evaluation.latency_ms or -1.0
-  return best_id, latency
+  speedup = best_node.evaluation.speedup or 0.0
+  return best_id, speedup
 
 
 async def run_search(
@@ -169,8 +169,8 @@ async def run_search(
       logger.info(f"Copied artifacts to {dest_dir}")
 
     if best_result:
-      best_id, latency = best_result
-      return problem_id, f"Success (Best: {best_id}, Latency: {latency} ms)"
+      best_id, speedup = best_result
+      return problem_id, f"Success (Best: {best_id}, Speedup: {speedup}x)"
 
     return problem_id, "Completed (No valid candidate found)"
 
@@ -300,7 +300,7 @@ def parse_args() -> argparse.Namespace:
     "--keep_factor",
     type=float,
     default=1.0,
-    help="Factor of parent latency to keep candidates (e.g. 1.0 means must not be worse than parent)",
+    help="Factor of parent speedup to keep candidates (e.g. 1.0 means must not be worse than parent)",
   )
   return parser.parse_args()
 

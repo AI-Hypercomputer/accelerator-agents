@@ -209,7 +209,7 @@ def parse_args() -> argparse.Namespace:
     "--keep_factor",
     type=float,
     default=1.0,
-    help="Factor of parent latency to keep candidates (e.g. 1.0 means must not be worse than parent)",
+    help="Factor of parent speedup to keep candidates (e.g. 1.0 means must not be worse than parent)",
   )
   return parser.parse_args()
 

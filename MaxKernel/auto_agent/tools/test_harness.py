@@ -168,7 +168,7 @@ def main():
             times_optimized.append(time_optimized)
             speedup = (time_base / time_optimized) if time_optimized > 0 else 0
             speedups.append(speedup)
-            print(f"SPEEDUP_CASE_{{idx}}: {{speedup:.2f}}")
+            print(f"SPEEDUP_CASE_{{idx}}: {{speedup:.4f}}")
 
         print(f"CORRECTNESS: {{all_correct}}")
 
@@ -183,8 +183,8 @@ def main():
             geo_mean_speedup = math.exp(sum(math.log(s) for s in valid_speedups) / len(valid_speedups))
 
             print(f"RESULT_TIME: {{geo_mean_time_opt * 1000:.6f}} ms")
-            print(f"SPEEDUP: {{geo_mean_speedup:.2f}}")
-            print(f"PERF_METRICS: {{geo_mean_speedup:.2f}}")
+            print(f"SPEEDUP: {{geo_mean_speedup:.4f}}")
+            print(f"PERF_METRICS: {{geo_mean_speedup:.4f}}")
     except Exception as e:
         print(f"ERROR: {{e}}")
         traceback.print_exc()

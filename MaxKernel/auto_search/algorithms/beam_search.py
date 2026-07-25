@@ -102,17 +102,13 @@ class BeamSearchOrchestrator(SearchOrchestrator):
         continue
 
       parent = self.graph.get_node(node.parent_id)
-      parent_latency = parent.evaluation.latency_ms
-      parent_latency = (
-        parent_latency if parent_latency is not None else float("inf")
-      )
+      parent_speedup = parent.evaluation.speedup
+      parent_speedup = parent_speedup if parent_speedup is not None else 0.0
 
-      current_latency = node.evaluation.latency_ms
-      current_latency = (
-        current_latency if current_latency is not None else float("inf")
-      )
+      current_speedup = node.evaluation.speedup
+      current_speedup = current_speedup if current_speedup is not None else 0.0
 
-      if current_latency < parent_latency * self.keep_factor:
+      if current_speedup > parent_speedup * self.keep_factor:
         candidates.append(node)
       else:
         logger.info(
@@ -121,7 +117,7 @@ class BeamSearchOrchestrator(SearchOrchestrator):
         )
         regressed_candidates.append(node)
 
-    candidates.sort(key=lambda n: n.evaluation.latency_ms)
+    candidates.sort(key=lambda n: n.evaluation.speedup, reverse=True)
 
     if len(candidates) < self.beam_size and regressed_candidates:
       shortage = self.beam_size - len(candidates)
@@ -131,10 +127,9 @@ class BeamSearchOrchestrator(SearchOrchestrator):
       )
       regressed_candidates.sort(
         key=lambda n: (
-          n.evaluation.latency_ms
-          if n.evaluation.latency_ms is not None
-          else float("inf")
-        )
+          n.evaluation.speedup if n.evaluation.speedup is not None else 0.0
+        ),
+        reverse=True,
       )
       candidates.extend(regressed_candidates)
 
@@ -177,7 +172,7 @@ class BeamSearchOrchestrator(SearchOrchestrator):
             self.graph.add_node(node)
             logger.info(
               f"Task {task_idx}: Finished {node_id} with status {node.execution_status} "
-              f"(Latency: {node.evaluation.latency_ms} ms)"
+              f"(Speedup: {node.evaluation.speedup}x)"
             )
             return node
 

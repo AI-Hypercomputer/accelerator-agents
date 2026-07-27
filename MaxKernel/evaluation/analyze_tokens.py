@@ -86,9 +86,6 @@ def generate_token_report(
     md_f.write("| Index | Author | Tokens | Notes |\n")
     md_f.write("|-------|--------|--------------|-------|\n")
 
-    print(f"{'Index':<6} | {'Author':<32} | {'Tokens':<12} | {'Notes'}")
-    print("-" * 75)
-
     for i, event in enumerate(events):
       author = event.get("author", "unknown")
       usage = event.get("usageMetadata", {})
@@ -112,14 +109,9 @@ def generate_token_report(
       if is_compaction:
         notes = "COMPACTION HAPPENED"
         compaction_indices.append(i)
-        print("-" * 75)
 
-      # Log to console and file
-      print(f"{i:<6} | {author:<32} | {token_str:<12} | {notes}")
+      # Log to file
       md_f.write(f"| {i} | {author} | {token_str} | {notes} |\n")
-
-      if is_compaction:
-        print("-" * 75)
 
       if total_tokens > 0:
         plot_indices.append(i)

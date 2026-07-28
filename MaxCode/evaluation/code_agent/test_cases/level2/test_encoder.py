@@ -154,17 +154,22 @@ def transfer_and_align_weights(pt_model, jax_variables):
     w_q, w_k, w_v = np.split(w_t, 3, axis=1)
     b_q, b_k, b_v = np.split(in_proj_bias, 3, axis=0)
 
-    # Step C: Stack for MaxText Fused Format (Kernel: D, 3, D)
-    w_fused = np.stack([w_q, w_k, w_v], axis=1)
-    b_fused = np.stack([b_q, b_k, b_v], axis=0)
-
-    # Step D: Reshape for Heads
+    # Reshape PyTorch Q, K, V to (embed, heads, head_dim) -> (32, 4, 8)
     hidden_dim = CONFIG["ninp"]
     num_heads = CONFIG["nhead"]
     head_dim = hidden_dim // num_heads
 
-    w_fused = w_fused.reshape(hidden_dim, 3, num_heads, head_dim)
-    b_fused = b_fused.reshape(3, num_heads, head_dim)
+    w_q_reshaped = w_q.reshape(hidden_dim, num_heads, head_dim)
+    w_k_reshaped = w_k.reshape(hidden_dim, num_heads, head_dim)
+    w_v_reshaped = w_v.reshape(hidden_dim, num_heads, head_dim)
+
+    b_q_reshaped = b_q.reshape(num_heads, head_dim)
+    b_k_reshaped = b_k.reshape(num_heads, head_dim)
+    b_v_reshaped = b_v.reshape(num_heads, head_dim)
+
+    # Concatenate along heads dimension to JAX format (32, 12, 8)
+    w_fused = np.concatenate([w_q_reshaped, w_k_reshaped, w_v_reshaped], axis=1)
+    b_fused = np.concatenate([b_q_reshaped, b_k_reshaped, b_v_reshaped], axis=0)
 
     # Assign to JAX 'qkv_proj'
     if "qkv_proj" in attn_block:

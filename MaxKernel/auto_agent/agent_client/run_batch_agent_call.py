@@ -28,6 +28,11 @@ def parse_args():
     help="Maximum number of retries for failed tasks",
   )
   parser.add_argument(
+    "--events_compaction",
+    action="store_true",
+    help="Enable event compaction",
+  )
+  parser.add_argument(
     "--log_file", type=str, default=None, help="File to save logs to"
   )
   return parser.parse_args()
@@ -61,6 +66,7 @@ async def process_problem(
   data_dir: str,
   max_retries: int,
   sem: asyncio.Semaphore,
+  events_compaction: bool = False,
 ):
   async with sem:
     problem_dir = os.path.join(data_dir, problem_id)
@@ -88,6 +94,7 @@ async def process_problem(
         user_id=user_id,
         session_id=session_id,
         query=query,
+        events_compaction=events_compaction,
       )
 
       session_file = os.path.join(
@@ -159,7 +166,9 @@ async def main_async(args):
   sem = asyncio.Semaphore(args.num_concurrent)
 
   tasks = [
-    process_problem(problem, args.data_dir, args.max_retries, sem)
+    process_problem(
+      problem, args.data_dir, args.max_retries, sem, args.events_compaction
+    )
     for problem in problems
   ]
 

@@ -13,9 +13,10 @@ def get_inputs():
     }
     dtype = jnp.float32
     key = jax.random.key(0)
-    x = jax.random.uniform(key, (config['batch_size'], config['in_features']), dtype=dtype)
-    weight = jnp.zeros((config['in_features'], config['out_features']), dtype=dtype)
-    bias = jnp.zeros(config['out_features'], dtype=dtype)
+    k_x, k_w, k_b = jax.random.split(key, 3)
+    x = jax.random.uniform(k_x, (config['batch_size'], config['in_features']), dtype=dtype)
+    weight = jax.random.normal(k_w, (config['in_features'], config['out_features']), dtype=dtype) * 0.02
+    bias = jax.random.normal(k_b, config['out_features'], dtype=dtype) * 0.02
     dynamic_args = [x, weight, bias]
     static_args = []
     return dynamic_args, static_args
@@ -23,7 +24,7 @@ def get_inputs():
 # Computation
 def computation(x, weight, bias):
     x = jnp.matmul(x, weight) + bias
-    x = jnp.max(x, axis=1, keepdims=True)
     x = x - jnp.mean(x, axis=1, keepdims=True)
+    x = jnp.max(x, axis=1, keepdims=True)
     x = jax.nn.gelu(x)
     return x

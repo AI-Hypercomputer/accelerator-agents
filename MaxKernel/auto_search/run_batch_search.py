@@ -166,6 +166,11 @@ def parse_args() -> argparse.Namespace:
     default=None,
     help="JSON string of agent config parameters (e.g. '{\"max_iterations\": 5}')",
   )
+  orch_group.add_argument(
+    "--events_compaction",
+    action="store_true",
+    help="Enable event compaction",
+  )
   # Parallel Search Arguments
   parallel_group = parser.add_argument_group(
     "Parallel Search Arguments",
@@ -226,6 +231,7 @@ def main():
     "max_worker_retries": args.max_worker_retries,
     "strategies": args.strategies,
     "agent_config": parsed_agent_config,
+    "events_compaction": args.events_compaction,
     "num_parallel_runs": args.num_parallel_runs,
     "beam_size": args.beam_size,
     "branches_per_node": args.branches_per_node,

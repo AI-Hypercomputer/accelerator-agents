@@ -5,6 +5,7 @@ import os
 import socket
 import sys
 import tempfile
+from pathlib import Path
 from typing import Optional
 
 import uvicorn
@@ -78,6 +79,27 @@ def extract_code(code: str) -> str:
   return code_content
 
 
+def _save_dependencies(dependencies: Optional[dict], temp_dir: str):
+  """Safely writes dependencies to temp_dir, preventing path traversal attacks."""
+  if not dependencies:
+    return
+  base_dir = Path(temp_dir).resolve()
+  for filename, content in dependencies.items():
+    if not filename:
+      raise HTTPException(
+        status_code=400, detail="Invalid dependency filename: empty"
+      )
+    normalized_filename = filename.replace("\\", "/")
+    target_path = (base_dir / normalized_filename).resolve()
+    if not target_path.is_relative_to(base_dir) or target_path == base_dir:
+      raise HTTPException(
+        status_code=400,
+        detail=f"Path traversal detected in dependency filename: {filename}",
+      )
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_text(content)
+
+
 @app.get("/health")
 async def health_check():
   return {"status": "healthy", "backend": "cpu"}
@@ -96,12 +118,7 @@ async def compilation_test(request: CodeRequest):
       temp_dir = tempfile.mkdtemp()
       temp_file_path = os.path.join(temp_dir, "run_code.py")
 
-      if request.dependencies:
-        for filename, content in request.dependencies.items():
-          file_path = os.path.join(temp_dir, filename)
-          os.makedirs(os.path.dirname(file_path), exist_ok=True)
-          with open(file_path, "w") as f:
-            f.write(content)
+      _save_dependencies(request.dependencies, temp_dir)
 
       with open(temp_file_path, "w") as f:
         f.write(request.code)
@@ -176,12 +193,7 @@ async def correctness_test(request: CodeRequest):
       temp_dir = tempfile.mkdtemp()
       temp_file_path = os.path.join(temp_dir, "run_code.py")
 
-      if request.dependencies:
-        for filename, content in request.dependencies.items():
-          file_path = os.path.join(temp_dir, filename)
-          os.makedirs(os.path.dirname(file_path), exist_ok=True)
-          with open(file_path, "w") as f:
-            f.write(content)
+      _save_dependencies(request.dependencies, temp_dir)
 
       with open(temp_file_path, "w") as f:
         f.write(request.code)
@@ -255,12 +267,7 @@ async def performance_test(request: CodeRequest):
       temp_dir = tempfile.mkdtemp()
       temp_file_path = os.path.join(temp_dir, "run_code.py")
 
-      if request.dependencies:
-        for filename, content in request.dependencies.items():
-          file_path = os.path.join(temp_dir, filename)
-          os.makedirs(os.path.dirname(file_path), exist_ok=True)
-          with open(file_path, "w") as f:
-            f.write(content)
+      _save_dependencies(request.dependencies, temp_dir)
 
       with open(temp_file_path, "w") as f:
         f.write(request.code)
@@ -334,12 +341,7 @@ async def unified_test(request: CodeRequest):
       temp_dir = tempfile.mkdtemp()
       temp_file_path = os.path.join(temp_dir, "run_code.py")
 
-      if request.dependencies:
-        for filename, content in request.dependencies.items():
-          file_path = os.path.join(temp_dir, filename)
-          os.makedirs(os.path.dirname(file_path), exist_ok=True)
-          with open(file_path, "w") as f:
-            f.write(content)
+      _save_dependencies(request.dependencies, temp_dir)
 
       with open(temp_file_path, "w") as f:
         f.write(request.code)
@@ -410,12 +412,7 @@ async def profile(request: CodeRequest):
       temp_dir = tempfile.mkdtemp()
       logging.info("temp_dir: " + str(temp_dir))
 
-      if request.dependencies:
-        for filename, content in request.dependencies.items():
-          file_path = os.path.join(temp_dir, filename)
-          os.makedirs(os.path.dirname(file_path), exist_ok=True)
-          with open(file_path, "w") as f:
-            f.write(content)
+      _save_dependencies(request.dependencies, temp_dir)
 
       # Create a temporary file to store the code within temp_dir
       temp_file_path = os.path.join(temp_dir, "profile_code.py")

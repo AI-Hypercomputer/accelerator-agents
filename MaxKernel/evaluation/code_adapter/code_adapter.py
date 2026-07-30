@@ -1,5 +1,6 @@
 import logging
 import time
+from typing import List, Optional, Union
 
 from google import genai
 
@@ -92,7 +93,12 @@ class CodeAdapter:
     )
 
   def generate_kernel_task(
-    self, task_id: str, description: str, jax_code: str
+    self,
+    task_id: str,
+    description: str,
+    jax_code: str,
+    atol: Optional[Union[float, List[float]]] = None,
+    rtol: Optional[Union[float, List[float]]] = None,
   ) -> KernelTask:
     """
     Generates a KernelTask YAML by extracting the relevant sections
@@ -105,6 +111,8 @@ class CodeAdapter:
       task_id=task_id,
       description=description,
       input_gen_code=input_gen_code,
+      atol=atol,
+      rtol=rtol,
     )
 
     return kernel_task

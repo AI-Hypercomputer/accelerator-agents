@@ -43,6 +43,7 @@ def get_orchestrator(
       strategies=kwargs.get("strategies"),
       max_worker_retries=kwargs.get("max_worker_retries", 1),
       agent_config=kwargs.get("agent_config"),
+      events_compaction=kwargs.get("events_compaction", False),
     )
   elif algorithm == "beam":
     strategies_kwargs = {}
@@ -60,6 +61,7 @@ def get_orchestrator(
       max_depth=kwargs.get("max_depth", 2),
       keep_factor=kwargs.get("keep_factor", 1.0),
       agent_config=kwargs.get("agent_config"),
+      events_compaction=kwargs.get("events_compaction", False),
       **strategies_kwargs,
     )
   elif algorithm == "agentic":
@@ -255,6 +257,11 @@ def parse_args() -> argparse.Namespace:
     default=None,
     help="JSON string of agent config parameters (e.g. '{\"max_iterations\": 5}')",
   )
+  orch_group.add_argument(
+    "--events_compaction",
+    action="store_true",
+    help="Enable event compaction",
+  )
   # Parallel Search Arguments
   parallel_group = parser.add_argument_group(
     "Parallel Search Arguments",
@@ -357,6 +364,7 @@ def main():
     "max_worker_retries": args.max_worker_retries,
     "strategies": args.strategies,
     "agent_config": agent_config,
+    "events_compaction": args.events_compaction,
     # Parallel Search Arguments
     "num_parallel_runs": args.num_parallel_runs,
     # Beam Search Arguments

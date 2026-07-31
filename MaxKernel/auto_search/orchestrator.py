@@ -18,12 +18,15 @@ class SearchOrchestrator(abc.ABC):
     graph_db_path: Optional[str] = None,
     max_concurrency: int = 2,
     max_worker_retries: int = 1,
+    events_compaction: bool = False,
   ):
     if max_worker_retries < 1:
       raise ValueError(
         f"max_worker_retries must be at least 1, got {max_worker_retries}."
       )
     self.max_worker_retries = max_worker_retries
+    self.events_compaction = events_compaction
+
     # Resolve graph db path and run directory
     if not graph_db_path:
       workdir = os.environ.get("WORKDIR", os.getcwd())

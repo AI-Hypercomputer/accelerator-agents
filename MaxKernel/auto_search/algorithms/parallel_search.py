@@ -116,6 +116,7 @@ class SimpleParallelSearchOrchestrator(SearchOrchestrator):
             session_dir=session_dir,
             reference_code=self.reference_code,
             agent_config=self.agent_config,
+            events_compaction=self.events_compaction,
           )
           if (
             node.execution_status == "SUCCESS"

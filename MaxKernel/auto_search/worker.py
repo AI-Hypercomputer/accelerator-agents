@@ -20,6 +20,7 @@ class ADKSessionWorker:
     reference_code: str,
     strategy: Optional[str] = None,
     agent_config: Optional[Dict[str, Any]] = None,
+    events_compaction: bool = False,
   ) -> Node:
     """Expand an ADK session to get a new optimized kernel."""
     os.makedirs(session_dir, exist_ok=True)
@@ -37,6 +38,7 @@ class ADKSessionWorker:
         strategy=strategy,
         agent_config=agent_config,
         initial_state=initial_state,
+        events_compaction=events_compaction,
       )
       return self._process_results(
         node_id=node_id,
@@ -102,6 +104,7 @@ class ADKSessionWorker:
     strategy: Optional[str],
     agent_config: Optional[Dict[str, Any]] = None,
     initial_state: Optional[Dict[str, Any]] = None,
+    events_compaction: bool = False,
   ) -> Dict[str, Any]:
     """Sets up a custom AutonomousPipelineAgent and runs the client."""
     agent_config = agent_config or {}
@@ -130,6 +133,7 @@ class ADKSessionWorker:
       session_id=node_id,
       query=query,
       agent=custom_agent,
+      events_compaction=events_compaction,
     )
 
     await client.create_session(initial_state)

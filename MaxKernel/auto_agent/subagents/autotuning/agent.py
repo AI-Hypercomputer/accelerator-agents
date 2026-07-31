@@ -9,6 +9,7 @@ from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 
+from auto_agent.callbacks import prune_intermediate_tool_history
 from auto_agent.config import get_thinking_planner, model_config
 from auto_agent.constants import MODEL_NAME
 from auto_agent.custom_types import CustomLlmAgent
@@ -38,6 +39,7 @@ def create_autotune_planner_agent(
     instruction=autotune_prompt.PROMPT,
     description="Prepares code template and search space for auto-tuning Pallas kernels.",
     tools=[filesystem_tool_r, write_autotune_specs_tool, search_api_tool],
+    before_model_callback=prune_intermediate_tool_history,
   )
 
 
@@ -281,6 +283,7 @@ def create_autotune_summary_agent(
     description="Summarizes autotuning results.",
     tools=[filesystem_tool_r],
     output_key="autotuning_summary",
+    include_contents="none",
   )
 
 

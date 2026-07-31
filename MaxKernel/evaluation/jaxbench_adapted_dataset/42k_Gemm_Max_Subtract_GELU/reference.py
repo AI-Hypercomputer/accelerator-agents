@@ -24,7 +24,7 @@ def get_inputs():
 # Computation
 def computation(x, weight, bias):
     x = jnp.matmul(x, weight) + bias
-    x = x - jnp.mean(x, axis=1, keepdims=True)
-    x = jnp.max(x, axis=1, keepdims=True)
+    x_max = jnp.max(x, axis=1, keepdims=True)
+    x = x - x_max
     x = jax.nn.gelu(x)
     return x

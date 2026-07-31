@@ -22,10 +22,10 @@ def create_inputs(dtype=jnp.float32):
 
 
 def workload(x, weight, bias):
-    """Gemm + Subtract(mean) + Max + GELU."""
+    """Gemm + Max + Subtract(max) + GELU."""
     x = jnp.matmul(x, weight) + bias
-    x = x - jnp.mean(x, axis=1, keepdims=True)
-    x = jnp.max(x, axis=1, keepdims=True)
+    x_max = jnp.max(x, axis=1, keepdims=True)
+    x = x - x_max
     x = jax.nn.gelu(x)
     return x
 

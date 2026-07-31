@@ -12,6 +12,7 @@ from auto_agent.callbacks import (
   extract_fix_summary,
   load_kernel_and_plan_to_state,
   load_single_kernel_to_state,
+  prune_intermediate_tool_history,
 )
 from auto_agent.config import (
   get_thinking_planner,
@@ -285,6 +286,7 @@ def create_plan_kernel_agent(model_name: str = MODEL_NAME) -> CustomLlmAgent:
       if vertex_ai_rag_tool
       else [search_api_tool, filesystem_tool_r, write_optimization_plan_tool]
     ),
+    before_model_callback=prune_intermediate_tool_history,
   )
 
 
@@ -301,6 +303,7 @@ def create_prepare_base_kernel_agent(
     instruction=prepare_base_kernel.PROPOSE_PROMPT,
     description="Bootstraps the initial reference base kernel.",
     tools=[search_api_tool, filesystem_tool_r, write_base_kernel_tool],
+    include_contents="none",
   )
 
 
@@ -319,6 +322,7 @@ def create_read_file_for_validation_agent(
     instruction=read_file_prompt.PROMPT,
     description="Reads the kernel file mentioned by the user or from state for validation.",
     tools=[filesystem_tool_r],
+    include_contents="none",
   )
 
 
@@ -477,6 +481,7 @@ def create_implement_kernel_agent(
       if vertex_ai_rag_tool
       else [search_api_tool, filesystem_tool_r, write_optimized_kernel_tool]
     ),
+    before_model_callback=prune_intermediate_tool_history,
   )
 
 

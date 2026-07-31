@@ -6,6 +6,8 @@ import os
 import time
 from typing import Any
 
+import yaml
+
 from auto_agent.agent_client.auto_agent_client import AutoAgentClient
 
 logger = logging.getLogger(__name__)
@@ -79,6 +81,22 @@ async def process_problem(
     with open(reference_file, "r") as f:
       reference_code = f.read()
 
+    atol = None
+    rtol = None
+    kernel_task_file = os.path.join(problem_dir, "kernel_task.yaml")
+    if os.path.exists(kernel_task_file):
+      with open(kernel_task_file, "r") as f:
+        try:
+          task_data = yaml.safe_load(f)
+          if "atol" in task_data:
+            atol = float(task_data["atol"])
+          if "rtol" in task_data:
+            rtol = float(task_data["rtol"])
+        except Exception as e:
+          logger.warning(
+            f"Failed to parse kernel_task.yaml for {problem_id}: {e}"
+          )
+
     query = (
       "Optimize the code below for peak performance with pallas kernel\n\n"
       + reference_code
@@ -95,6 +113,8 @@ async def process_problem(
         session_id=session_id,
         query=query,
         events_compaction=events_compaction,
+        atol=atol,
+        rtol=rtol,
       )
 
       session_file = os.path.join(

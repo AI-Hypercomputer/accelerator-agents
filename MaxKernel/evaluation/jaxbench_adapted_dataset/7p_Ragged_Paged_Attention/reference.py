@@ -1,27 +1,36 @@
 # Imports
 import math
+from typing import List, Optional
 
 import jax
 import jax.numpy as jnp
 
+# Configuration Constants
+ACTIVE_Q_LENS = (1,) * 48 + (512,) * 7 + (464,)
+ACTIVE_KV_LENS = tuple(
+    257 + ((i * 73) % 240) * 16 for i in range(48)
+) + (1023, 1535, 2047, 2559, 3071, 3583, 4095, 4095)
+NUM_ACTIVE_SEQS = len(ACTIVE_Q_LENS)
+
+CONFIG = {
+    'name': 'ragged_paged_attention_llama70b',
+    'model': 'Llama-3.1-70B',
+    'operator': 'ragged_paged_attention',
+    'max_num_batched_tokens': 4096,
+    'max_num_seqs': 64,
+    'num_q_heads': 64,
+    'num_kv_heads': 8,
+    'head_dim': 128,
+    'page_size': 16,
+    'pages_per_seq': 256,
+}
+
+
 # Initialization
 def get_inputs():
-    CONFIG = {
-        'name': 'ragged_paged_attention_llama70b',
-        'model': 'Llama-3.1-70B',
-        'operator': 'ragged_paged_attention',
-        'max_num_batched_tokens': 4096,
-        'max_num_seqs': 64,
-        'num_q_heads': 64,
-        'num_kv_heads': 8,
-        'head_dim': 128,
-        'page_size': 16,
-        'pages_per_seq': 256,
-    }
-    
     dtype = jnp.bfloat16
     key = jax.random.key(42)
-    k1, k2 = jax.random.split(key, 2)
+    k1, k2, k3 = jax.random.split(key, 3)
     max_tokens = CONFIG['max_num_batched_tokens']
     max_seqs = CONFIG['max_num_seqs']
     H_q = CONFIG['num_q_heads']
@@ -29,31 +38,41 @@ def get_inputs():
     D = CONFIG['head_dim']
     page_size = CONFIG['page_size']
     pages_per_seq = CONFIG['pages_per_seq']
-    head_dim = CONFIG['head_dim']
-    max_num_seqs = CONFIG['max_num_seqs']
-    max_num_batched_tokens = CONFIG['max_num_batched_tokens']
     num_combined_kv_heads = 2 * H_kv
     total_num_pages = max_seqs * pages_per_seq
+    
     q = jax.random.normal(k1, (max_tokens, H_q, D), dtype=dtype)
     kv_pages = jax.random.normal(
         k2, (total_num_pages, page_size, num_combined_kv_heads, D), dtype=dtype
     )
-    tokens_per_seq = max_tokens // max_seqs
-    kv_len_per_seq = pages_per_seq * page_size
-    kv_lens = jnp.full((max_seqs,), kv_len_per_seq, dtype=jnp.int32)
-    page_indices = jnp.arange(total_num_pages, dtype=jnp.int32).reshape(
-        max_seqs, pages_per_seq
+    q_lens = jnp.array(ACTIVE_Q_LENS, dtype=jnp.int32)
+    kv_lens = jnp.pad(
+        jnp.array(ACTIVE_KV_LENS, dtype=jnp.int32),
+        (0, max_seqs - NUM_ACTIVE_SEQS),
     )
-    cu_q_lens = jnp.arange(max_seqs + 1, dtype=jnp.int32) * tokens_per_seq
-    num_seqs = jnp.array([max_seqs], dtype=jnp.int32)
+    active_cu_q_lens = jnp.concatenate(
+        (jnp.zeros((1,), dtype=jnp.int32), jnp.cumsum(q_lens))
+    )
+    cu_q_lens = jnp.pad(
+        active_cu_q_lens,
+        (0, max_seqs + 1 - active_cu_q_lens.shape[0]),
+        constant_values=active_cu_q_lens[-1],
+    )
+
+    page_indices = jax.random.permutation(
+        k3, total_num_pages, independent=True
+    ).astype(jnp.int32).reshape(max_seqs, pages_per_seq)
+    
+    num_seqs = jnp.array([NUM_ACTIVE_SEQS], dtype=jnp.int32)
 
     dynamic_args = [q, kv_pages, kv_lens, page_indices, cu_q_lens, num_seqs]
-    static_args = [head_dim, max_num_seqs, max_num_batched_tokens]
+    static_args = [D, max_tokens]
     return dynamic_args, static_args
+
 
 # Computation
 def computation(queries, kv_pages, kv_lens, page_indices, cu_q_lens, num_seqs,
-                head_dim, max_num_seqs, max_num_batched_tokens):
+                head_dim, max_tokens):
     DEFAULT_MASK_VALUE = -0.7 * float(jnp.finfo(jnp.dtype("float32")).max)
 
     sm_scale = 1.0 / math.sqrt(head_dim)
@@ -63,18 +82,17 @@ def computation(queries, kv_pages, kv_lens, page_indices, cu_q_lens, num_seqs,
     num_q_heads = queries.shape[1]
     num_query_per_kv = num_q_heads // num_kv_heads
 
-    max_seqs = max_num_seqs
-    tokens_per_seq = max_num_batched_tokens // max_seqs
+    output = jnp.zeros_like(queries)
 
-    outputs = []
-    for i in range(max_seqs):
+    for i, q_capacity in enumerate(ACTIVE_Q_LENS):
         q_start = cu_q_lens[i]
+        q_len = cu_q_lens[i + 1] - q_start
         kv_len = kv_lens[i]
         indices = page_indices[i]
 
-        q = jax.lax.dynamic_slice(
-            queries, (q_start, 0, 0), (tokens_per_seq, num_q_heads, head_dim)
-        )
+        q_offsets = jnp.arange(q_capacity, dtype=jnp.int32)
+        q_positions = jnp.minimum(q_start + q_offsets, max_tokens - 1)
+        q = queries[q_positions]
 
         k = kv_pages[indices, :, 0::2, :].reshape(-1, num_kv_heads, head_dim)
         v = kv_pages[indices, :, 1::2, :].reshape(-1, num_kv_heads, head_dim)
@@ -87,7 +105,7 @@ def computation(queries, kv_pages, kv_lens, page_indices, cu_q_lens, num_seqs,
         )
         attn *= sm_scale
 
-        q_span = (kv_len - tokens_per_seq) + jax.lax.broadcasted_iota(
+        q_span = (kv_len - q_len) + jax.lax.broadcasted_iota(
             jnp.int32, attn.shape, 1
         )
         kv_span = jax.lax.broadcasted_iota(jnp.int32, attn.shape, 2)
@@ -98,9 +116,9 @@ def computation(queries, kv_pages, kv_lens, page_indices, cu_q_lens, num_seqs,
         attn = jax.nn.softmax(attn, axis=-1).astype(v.dtype)
         out = jnp.einsum("hqk,khd->qhd", attn, v).astype(queries.dtype)
 
+        q_valid = q_offsets < q_len
         is_valid = i < num_seqs[0]
-        out = jnp.where(is_valid, out, 0.0)
+        out = jnp.where(q_valid[:, None, None] & is_valid, out, 0.0)
+        output = output.at[q_positions].add(out)
 
-        outputs.append(out)
-
-    return jnp.concatenate(outputs, axis=0)
+    return output

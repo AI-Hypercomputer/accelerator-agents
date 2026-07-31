@@ -18,3 +18,6 @@ input_gen_code: |-
       dynamic_args = [x, weight, linear_bias, gn_weight, gn_bias, bias]
       static_args = []
       return dynamic_args, static_args
+
+rtol: 0.01
+atol: 0.01

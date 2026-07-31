@@ -21,3 +21,6 @@ input_gen_code: |-
       static_args = [scaling_factor]
 
       return dynamic_args, static_args
+
+rtol: 0.1
+atol: 0.1

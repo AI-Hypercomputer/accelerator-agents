@@ -28,3 +28,6 @@ input_gen_code: |-
       dynamic_args = [pair_act, mask, left_proj, right_proj, left_gate, right_gate, center_scale, out_proj, out_gate]
       static_args = []
       return dynamic_args, static_args
+
+rtol: 0.01
+atol: 0.01

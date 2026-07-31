@@ -43,3 +43,6 @@ input_gen_code: |-
           outputs.append((dynamic_args, static_args))
 
       return outputs
+
+rtol: 0.01
+atol: 0.01

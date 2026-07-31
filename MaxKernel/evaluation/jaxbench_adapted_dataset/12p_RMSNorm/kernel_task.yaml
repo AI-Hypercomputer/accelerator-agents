@@ -16,3 +16,6 @@ input_gen_code: |-
       x = jax.random.normal(k1, (batch, seq_len, emb_dim), dtype=dtype)
       scale = jax.random.normal(k2, (emb_dim,), dtype=dtype) * 0.1 + 1.0
       return [x, scale], [epsilon]
+
+rtol: 0.01
+atol: 0.01

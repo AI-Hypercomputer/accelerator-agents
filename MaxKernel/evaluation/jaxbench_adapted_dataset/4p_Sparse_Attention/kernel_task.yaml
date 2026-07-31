@@ -28,3 +28,6 @@ input_gen_code: |-
       dynamic_args = [q, k, v]
       static_args = [S, H_q, H_kv, D]
       return dynamic_args, static_args
+
+rtol: 0.01
+atol: 0.01

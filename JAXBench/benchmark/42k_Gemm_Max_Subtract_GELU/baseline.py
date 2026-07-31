@@ -14,17 +14,18 @@ CONFIG = {
 def create_inputs(dtype=jnp.float32):
     """Create all inputs including weights."""
     key = jax.random.key(0)
-    x = jax.random.uniform(key, (4096, 8192), dtype=dtype)
-    weight = jnp.zeros((8192, 8192), dtype=dtype)
-    bias = jnp.zeros(8192, dtype=dtype)
+    k_x, k_w, k_b = jax.random.split(key, 3)
+    x = jax.random.uniform(k_x, (4096, 8192), dtype=dtype)
+    weight = jax.random.normal(k_w, (8192, 8192), dtype=dtype) * 0.02
+    bias = jax.random.normal(k_b, 8192, dtype=dtype) * 0.02
     return x, weight, bias
 
 
 def workload(x, weight, bias):
-    """Gemm + Max + Subtract(mean) + GELU."""
+    """Gemm + Max + Subtract(max) + GELU."""
     x = jnp.matmul(x, weight) + bias
-    x = jnp.max(x, axis=1, keepdims=True)
-    x = x - jnp.mean(x, axis=1, keepdims=True)
+    x_max = jnp.max(x, axis=1, keepdims=True)
+    x = x - x_max
     x = jax.nn.gelu(x)
     return x
 

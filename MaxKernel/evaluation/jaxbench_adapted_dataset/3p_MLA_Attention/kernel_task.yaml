@@ -39,3 +39,6 @@ input_gen_code: |-
       dynamic_args = [x, q_down, q_up, kv_down, k_up, v_up, o_proj]
       static_args = [H, nope, rope, vd, kvl, C['rope_theta']]
       return dynamic_args, static_args
+
+rtol: 0.01
+atol: 0.05

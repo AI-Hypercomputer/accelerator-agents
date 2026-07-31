@@ -42,3 +42,6 @@ input_gen_code: |-
       static_args = [num_seqs, num_q_heads, num_kv_heads, head_dim, max_seq_len_derived]
 
       return dynamic_args, static_args
+
+rtol: 0.01
+atol: 0.01

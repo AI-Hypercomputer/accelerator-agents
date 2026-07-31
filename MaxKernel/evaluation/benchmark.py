@@ -4,7 +4,7 @@ import logging
 import os
 import re
 from dataclasses import asdict
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from evaluation.custom_types.evaluation_result import EvaluationResult
 from evaluation.evaluation_utils import summarize_results, visualize_speed_up
@@ -28,8 +28,8 @@ def benchmark(
   task_file_name: str = "kernel_task.yaml",
   adapt: Optional[List[str]] = None,
   timeout_seconds: int = 300,
-  atol: float = 1e-3,
-  rtol: float = 1e-3,
+  atol: Optional[Union[float, List[float]]] = None,
+  rtol: Optional[Union[float, List[float]]] = None,
 ):
   """
   Evaluates JAX kernels across a dataset of problems on a remote TPU VM.
@@ -256,14 +256,16 @@ if __name__ == "__main__":
   parser.add_argument(
     "--atol",
     type=float,
-    default=1e-3,
-    help="Absolute tolerance for comparison.",
+    nargs="+",
+    default=None,
+    help="Absolute tolerance for comparison. Can be a single float or list of floats.",
   )
   parser.add_argument(
     "--rtol",
     type=float,
-    default=1e-3,
-    help="Relative tolerance for comparison.",
+    nargs="+",
+    default=None,
+    help="Relative tolerance for comparison. Can be a single float or list of floats.",
   )
   parser.add_argument(
     "--timeout_seconds",
@@ -272,6 +274,14 @@ if __name__ == "__main__":
     help="Maximum time in seconds to wait for execution.",
   )
   args = parser.parse_args()
+
+  atol = args.atol
+  if atol is not None and len(atol) == 1:
+    atol = atol[0]
+
+  rtol = args.rtol
+  if rtol is not None and len(rtol) == 1:
+    rtol = rtol[0]
 
   benchmark(
     local=args.local,
@@ -285,6 +295,6 @@ if __name__ == "__main__":
     task_file_name=args.task_file_name,
     adapt=args.adapt,
     timeout_seconds=args.timeout_seconds,
-    atol=args.atol,
-    rtol=args.rtol,
+    atol=atol,
+    rtol=rtol,
   )

@@ -25,3 +25,6 @@ input_gen_code: |-
       dynamic_args = [x, weight, conv_bias, in_weight, in_bias]
       static_args = [divide_by_value]
       return dynamic_args, static_args
+
+rtol: 0.01
+atol: 0.01

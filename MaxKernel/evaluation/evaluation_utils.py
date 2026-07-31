@@ -65,6 +65,8 @@ def load_kernel_task_from_yaml(yaml_path: str) -> KernelTask:
     task_id=data.get("task_id"),
     description=data.get("description"),
     input_gen_code=data.get("input_gen_code"),
+    atol=data.get("atol"),
+    rtol=data.get("rtol"),
   )
 
 

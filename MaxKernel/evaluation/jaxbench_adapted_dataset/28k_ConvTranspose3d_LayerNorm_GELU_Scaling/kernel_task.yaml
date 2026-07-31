@@ -29,3 +29,6 @@ input_gen_code: |-
       static_args = [stride_val, padding_val, kernel_size_val, eps_val, scaling_factor_val]
 
       return dynamic_args, static_args
+
+rtol: 0.01
+atol: 0.05

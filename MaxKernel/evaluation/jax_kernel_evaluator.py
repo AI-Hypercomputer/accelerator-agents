@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import time
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 from google import genai
 
@@ -24,6 +24,9 @@ from evaluation.harness_code import HARNESS_TEMPLATE
 from evaluation.remote_client.tpu_client import TPUVMClient
 
 logger = logging.getLogger(__name__)  # Get a logger for this module
+
+DEFAULT_ATOL = 1e-3
+DEFAULT_RTOL = 1e-3
 
 
 class JAXKernelEvaluator:
@@ -71,8 +74,8 @@ class JAXKernelEvaluator:
     adapt: Optional[List[str]] = None,
     timeout_seconds: int = 300,  # Default timeout of 5 minutes
     cleanup: bool = True,
-    atol: float = 1e-3,
-    rtol: float = 1e-3,
+    atol: Optional[Union[float, List[float]]] = None,
+    rtol: Optional[Union[float, List[float]]] = None,
   ) -> EvaluationResult:
     """Runs the evaluation pipeline for a given reference and kernel script."""
     if self.local:
@@ -106,8 +109,8 @@ class JAXKernelEvaluator:
     adapt: Optional[List[str]] = None,
     timeout_seconds: int = 300,
     cleanup: bool = True,
-    atol: float = 1e-3,
-    rtol: float = 1e-3,
+    atol: Optional[Union[float, List[float]]] = None,
+    rtol: Optional[Union[float, List[float]]] = None,
   ) -> EvaluationResult:
     """Runs the evaluation pipeline locally on the current machine."""
     # Adapt the provided code and generate kernel task if necessary
@@ -140,8 +143,8 @@ class JAXKernelEvaluator:
       xprof_local = os.path.join(local_base_dir, "xprof_utils.py")
 
       # Build JSON and harness
-      self._build_task_json(task, task_json_local)
-      self._build_harness_code(harness_local, atol, rtol)
+      self._build_task_json(task, task_json_local, atol=atol, rtol=rtol)
+      self._build_harness_code(harness_local)
 
       # Copy reference, optimized code and xprof_utils.py
       shutil.copy(reference_code_path, ref_local)
@@ -227,8 +230,8 @@ class JAXKernelEvaluator:
     adapt: Optional[List[str]] = None,
     timeout_seconds: int = 300,  # Default timeout of 5 minutes
     cleanup: bool = True,
-    atol: float = 1e-3,
-    rtol: float = 1e-3,
+    atol: Optional[Union[float, List[float]]] = None,
+    rtol: Optional[Union[float, List[float]]] = None,
   ) -> EvaluationResult:
     """Runs the evaluation pipeline for a given reference and kernel script.
 
@@ -264,10 +267,10 @@ class JAXKernelEvaluator:
       remote_base_dir_created = False
 
       task = load_kernel_task_from_yaml(task_yaml_path)
-      self._build_task_json(task, task_json_local)
+      self._build_task_json(task, task_json_local, atol=atol, rtol=rtol)
 
       eval_result = EvaluationResult(task_id=task.task_id)
-      self._build_harness_code(harness_local, atol, rtol)
+      self._build_harness_code(harness_local)
 
       xprof_src = os.path.join(os.path.dirname(__file__), "xprof_utils.py")
       files_to_upload = {
@@ -409,33 +412,45 @@ class JAXKernelEvaluator:
       if os.path.exists(task_json_local):
         os.remove(task_json_local)
 
-  def _build_task_json(self, task: KernelTask, local_path: str):
+  def _build_task_json(
+    self,
+    task: KernelTask,
+    local_path: str,
+    atol: Optional[Union[float, List[float]]] = None,
+    rtol: Optional[Union[float, List[float]]] = None,
+  ):
     """Creates a JSON file with task input specifications.
 
     Args:
         task: KernelTask object containing input specifications.
         local_path: Local path to save the JSON file.
+        atol: Evaluator level fallback for atol.
+        rtol: Evaluator level fallback for rtol.
     """
+    effective_atol = (
+      atol if atol is not None else
+      (task.atol if task.atol is not None else DEFAULT_ATOL)
+    )
+    effective_rtol = (
+      rtol if rtol is not None else
+      (task.rtol if task.rtol is not None else DEFAULT_RTOL)
+    )
+
     task_info = {
       "input_gen_code": task.input_gen_code,
+      "atol": effective_atol,
+      "rtol": effective_rtol,
     }
     with open(local_path, "w") as f:
       json.dump(task_info, f)
 
-  def _build_harness_code(
-    self, local_path: str, atol: float = 1e-3, rtol: float = 1e-3
-  ):
+  def _build_harness_code(self, local_path: str):
     """Creates the remote evaluation harness script locally.
 
     Args:
         local_path: Local path to save the harness script.
-        atol: Absolute tolerance for correctness check.
-        rtol: Relative tolerance for correctness check.
     """
     harness_content = HARNESS_TEMPLATE.template
-    harness_content = harness_content.replace("{atol}", str(atol))
-    harness_content = harness_content.replace("{rtol}", str(rtol))
-
     with open(local_path, "w", encoding="utf-8") as f_write:
       f_write.write(harness_content)
 
@@ -595,14 +610,16 @@ if __name__ == "__main__":
   parser.add_argument(
     "--atol",
     type=float,
-    default=1e-3,
-    help="Absolute tolerance for correctness check.",
+    nargs="+",
+    default=None,
+    help="Absolute tolerance for correctness check. Can be a single float or list of floats.",
   )
   parser.add_argument(
     "--rtol",
     type=float,
-    default=1e-3,
-    help="Relative tolerance for correctness check.",
+    nargs="+",
+    default=None,
+    help="Relative tolerance for correctness check. Can be a single float or list of floats.",
   )
 
   args = parser.parse_args()
@@ -623,6 +640,14 @@ if __name__ == "__main__":
     remote_base_dir=args.remote_base_dir,
   )
 
+  atol = args.atol
+  if atol is not None and len(atol) == 1:
+    atol = atol[0]
+
+  rtol = args.rtol
+  if rtol is not None and len(rtol) == 1:
+    rtol = rtol[0]
+
   evaluator.evaluate(
     reference_code_path=args.reference_code_path,
     optimized_code_path=args.optimized_code_path,
@@ -630,6 +655,6 @@ if __name__ == "__main__":
     adapt=args.adapt,
     timeout_seconds=args.timeout_seconds,
     cleanup=args.cleanup,
-    atol=args.atol,
-    rtol=args.rtol,
+    atol=atol,
+    rtol=rtol,
   )

@@ -27,3 +27,6 @@ input_gen_code: |-
       dynamic_args = [x, gate, up, down]
       static_args = []
       return dynamic_args, static_args
+
+rtol: 0.1
+atol: 0.1

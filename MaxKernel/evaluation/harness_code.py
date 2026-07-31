@@ -109,6 +109,8 @@ def main():
       task_data = json.load(f)
 
     input_gen_code = task_data.get("input_gen_code")
+    task_atol = task_data.get("atol")
+    task_rtol = task_data.get("rtol")
 
     if input_gen_code:
       ldict = {}
@@ -168,6 +170,32 @@ def main():
 
       args = tuple(dynamic_args) + tuple(static_args)
       static_argnums = tuple(range(len(dynamic_args), len(args)))
+
+      if isinstance(task_atol, list):
+        if idx < len(task_atol):
+          curr_atol = task_atol[idx]
+        else:
+          curr_atol = task_atol[-1]
+          harness_logs.append(
+              f"atol list length ({len(task_atol)}) is shorter than input "
+              f"count ({len(inputs_list)}). Reusing last atol ({curr_atol}) "
+              f"for input {idx}."
+          )
+      else:
+        curr_atol = float(task_atol) if task_atol is not None else 1e-3
+
+      if isinstance(task_rtol, list):
+        if idx < len(task_rtol):
+          curr_rtol = task_rtol[idx]
+        else:
+          curr_rtol = task_rtol[-1]
+          harness_logs.append(
+              f"rtol list length ({len(task_rtol)}) is shorter than input "
+              f"count ({len(inputs_list)}). Reusing last rtol ({curr_rtol}) "
+              f"for input {idx}."
+          )
+      else:
+        curr_rtol = float(task_rtol) if task_rtol is not None else 1e-3
 
       # 1. Correctness Check
       try:
@@ -237,7 +265,7 @@ def main():
         for b, o in zip(out_base_flat, out_optimized_flat):
           if b.shape != o.shape:
              raise ValueError(f"Shape mismatch: {b.shape} vs {o.shape}")
-          is_correct = is_correct and bool(jnp.allclose(b, o, atol={atol}, rtol={rtol}))
+          is_correct = is_correct and bool(jnp.allclose(b, o, atol=curr_atol, rtol=curr_rtol))
           max_abs_diff = max(max_abs_diff, float(jnp.max(jnp.abs(b - o))))
           max_rel_diff = max(max_rel_diff, float(jnp.max(jnp.abs((b - o) / b))))
       except Exception as e:

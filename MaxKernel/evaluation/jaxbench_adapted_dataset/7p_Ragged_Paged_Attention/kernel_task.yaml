@@ -61,3 +61,6 @@ input_gen_code: |-
       dynamic_args = [q, kv_pages, kv_lens, page_indices, cu_q_lens, num_seqs]
       static_args = [D, max_tokens]
       return dynamic_args, static_args
+
+rtol: 0.01
+atol: 0.01

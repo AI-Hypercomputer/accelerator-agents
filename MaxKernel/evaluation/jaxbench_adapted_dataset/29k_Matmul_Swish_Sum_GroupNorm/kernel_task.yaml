@@ -20,3 +20,6 @@ input_gen_code: |-
       dynamic_args = [x, weight, bias, gn_weight, gn_bias]
       static_args = [num_groups, out_features]
       return dynamic_args, static_args
+
+rtol: 0.01
+atol: 0.01

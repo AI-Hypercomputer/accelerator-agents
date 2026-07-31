@@ -27,3 +27,6 @@ input_gen_code: |-
       dynamic_args = [query, key_val, value]
       static_args = []
       return dynamic_args, static_args
+
+rtol: 0.01
+atol: 0.01

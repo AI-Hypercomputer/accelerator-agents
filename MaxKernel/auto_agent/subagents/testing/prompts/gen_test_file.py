@@ -7,8 +7,10 @@ You need to read the base kernel to understand what inputs are required.
 
 **Step 1: Check Session State**
 - Base kernel: `{base_kernel_path?}`
+- User-specified atol: `{atol?}`
+- User-specified rtol: `{rtol?}`
 
-If the path is available → proceed to read it using the `read_file` tool.
+If the base kernel path is available → proceed to read it using the `read_file` tool.
 
 **Step 2: If Path is Missing**
 **STOP immediately and ask the user. DO NOT use list_directory or search for files.**
@@ -61,8 +63,8 @@ If the path is available → proceed to read it using the `read_file` tool.
    - Required Arguments:
      - `content` (string): The Python code snippet.
      - `kernel_name` (string): The exact function name of the base kernel entry point (e.g., `"computation"`, `"matmul"`, etc.).
-     - `atol` (float, optional): Absolute tolerance for correctness checks (default 1e-2). Set appropriately based on precision (BF16 should be 1e-2 or higher).
-     - `rtol` (float, optional): Relative tolerance for correctness checks (default 1e-2). Set appropriately based on precision.
+     - `atol` (float, optional): Absolute tolerance for correctness checks. If user-specified atol (`{atol?}`) is provided, you MUST use it and not generate it randomly. Otherwise, set appropriately based on precision (default 1e-2, BF16 should be 1e-2 or higher).
+     - `rtol` (float, optional): Relative tolerance for correctness checks. If user-specified rtol (`{rtol?}`) is provided, you MUST use it and not generate it randomly. Otherwise, set appropriately based on precision (default 1e-2).
 
 Generate the `get_inputs()` Python snippet now.
 """

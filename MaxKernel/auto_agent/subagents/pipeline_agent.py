@@ -31,6 +31,8 @@ class AutonomousPipelineAgent(BaseAgent):
   max_iterations: int = 2
   session_dir: Optional[str] = None
   end_agent: Optional[str] = None
+  atol: Optional[float] = None
+  rtol: Optional[float] = None
 
   def __init__(
     self,
@@ -46,6 +48,8 @@ class AutonomousPipelineAgent(BaseAgent):
     max_iterations: int = 2,
     session_dir: Optional[str] = None,
     end_agent: Optional[str] = None,
+    atol: Optional[float] = None,
+    rtol: Optional[float] = None,
   ):
     super().__init__(
       name=name,
@@ -60,6 +64,8 @@ class AutonomousPipelineAgent(BaseAgent):
       max_iterations=max_iterations,
       session_dir=session_dir,
       end_agent=end_agent,
+      atol=atol,
+      rtol=rtol,
     )
 
   async def _run_async_impl(
@@ -438,13 +444,13 @@ class AutonomousPipelineAgent(BaseAgent):
         f"[{self.name}] Set autotune_results_path: {ctx.session.state['autotune_results_path']}"
       )
 
-    # Test related states
-    if "atol" not in ctx.session.state:
-      ctx.session.state["atol"] = 1e-2
+    # Use atol/rtol from pipeline agent initialization if provided
+    if self.atol is not None and "atol" not in ctx.session.state:
+      ctx.session.state["atol"] = self.atol
       logging.info(f"[{self.name}] Set atol: {ctx.session.state['atol']}")
 
-    if "rtol" not in ctx.session.state:
-      ctx.session.state["rtol"] = 1e-2
+    if self.rtol is not None and "rtol" not in ctx.session.state:
+      ctx.session.state["rtol"] = self.rtol
       logging.info(f"[{self.name}] Set rtol: {ctx.session.state['rtol']}")
 
     logging.info(f"[{self.name}] Published explicit path state update Event.")
@@ -458,8 +464,8 @@ class AutonomousPipelineAgent(BaseAgent):
           "kernel_plan_path": ctx.session.state["kernel_plan_path"],
           "test_file_path": ctx.session.state["test_file_path"],
           "profiling_script_path": ctx.session.state["profiling_script_path"],
-          "atol": ctx.session.state["atol"],
-          "rtol": ctx.session.state["rtol"],
+          "atol": ctx.session.state.get("atol"),
+          "rtol": ctx.session.state.get("rtol"),
           "autotune_specs_path": ctx.session.state["autotune_specs_path"],
           "autotune_results_path": ctx.session.state["autotune_results_path"],
           "xplane_pb_path": ctx.session.state["xplane_pb_path"],

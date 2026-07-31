@@ -3,9 +3,8 @@ import logging
 import os
 from typing import Any, Dict, Optional
 
-from auto_agent.agent import root_agent
+from auto_agent.agent import create_root_agent
 from auto_agent.agent_client.auto_agent_client import AutoAgentClient
-from auto_agent.subagents.pipeline_agent import AutonomousPipelineAgent
 from auto_search.graph import EvaluationResult, Node
 
 logger = logging.getLogger(__name__)
@@ -109,16 +108,7 @@ class ADKSessionWorker:
     """Sets up a custom AutonomousPipelineAgent and runs the client."""
     agent_config = agent_config or {}
 
-    custom_agent = AutonomousPipelineAgent(
-      name="AutonomousPipelineAgent",
-      prepare_base_kernel_agent=root_agent.prepare_base_kernel_agent,
-      plan_agent=root_agent.plan_agent,
-      implement_agent=root_agent.implement_agent,
-      validate_agent=root_agent.validate_agent,
-      test_gen_agent=root_agent.test_gen_agent,
-      test_run_agent=root_agent.test_run_agent,
-      autotune_agent=root_agent.autotune_agent,
-      profile_agent=root_agent.profile_agent,
+    custom_agent = create_root_agent(
       session_dir=session_dir,
       **agent_config,
     )

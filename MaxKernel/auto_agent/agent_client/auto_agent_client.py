@@ -19,7 +19,7 @@ from google.adk.runners import Runner
 from google.adk.sessions.in_memory_session_service import InMemorySessionService
 from google.genai.types import Content, Part
 
-from auto_agent.agent import root_agent
+from auto_agent.agent import create_root_agent
 from auto_agent.config import get_compaction_config
 
 logger = logging.getLogger(__name__)
@@ -34,11 +34,16 @@ class AutoAgentClient:
     agent: Optional[Any] = None,
     app_name: str = "auto_agent",
     events_compaction: bool = False,
+    atol: Optional[float] = None,
+    rtol: Optional[float] = None,
   ):
     self.user_id = user_id
     self.session_id = session_id
     self.query = query
-    self.agent = agent or root_agent
+    if agent is not None:
+      self.agent = agent
+    else:
+      self.agent = create_root_agent(atol=atol, rtol=rtol)
     self.session_service = InMemorySessionService()
     self.session = None
     self.app_name = app_name

@@ -27,6 +27,7 @@ from auto_agent.subagents.testing import (
 
 def create_root_agent(
   max_iterations: int = 5,
+  session_dir: Optional[str] = None,
   end_agent: Optional[str] = None,
   atol: Optional[float] = None,
   rtol: Optional[float] = None,
@@ -42,6 +43,7 @@ def create_root_agent(
     autotune_agent=autotune_agent,
     profile_agent=profile_agent,
     max_iterations=max_iterations,
+    session_dir=session_dir,
     end_agent=end_agent,
     atol=atol,
     rtol=rtol,

@@ -6,6 +6,8 @@ import jax.scipy.special
 # Initialization
 def get_inputs(dtype=jnp.float32):
     key = jax.random.key(0)
+    rand_key = jax.random.key(42)
+    ka, kb = jax.random.split(rand_key, 2)
     batch_size = 128
     in_channels = 8
     out_channels = 64
@@ -13,8 +15,8 @@ def get_inputs(dtype=jnp.float32):
     height = 128
     width = 128
     x = jax.random.uniform(key, (batch_size, in_channels, height, width), dtype=dtype)
-    conv_weight = jnp.zeros((out_channels, in_channels, kernel_size, kernel_size), dtype=dtype)
-    conv_bias = jnp.zeros(out_channels, dtype=dtype)
+    conv_weight = jax.random.normal(ka, (out_channels, in_channels, kernel_size, kernel_size), dtype=dtype) * 0.02
+    conv_bias = jax.random.normal(kb, out_channels, dtype=dtype) * 0.02
     gn_weight = jnp.ones(out_channels, dtype=dtype)
     gn_bias = jnp.zeros(out_channels, dtype=dtype)
     dynamic_args = [x, conv_weight, conv_bias, gn_weight, gn_bias]

@@ -34,8 +34,10 @@ from auto_agent.subagents.kernel_writing.prompts import (
   read_file_prompt,
 )
 from auto_agent.tools.file_tools import (
+  discover_kernel_dependencies_tool,
   filesystem_tool_r,
   write_base_kernel_tool,
+  write_dependency_file_tool,
   write_optimization_plan_tool,
   write_optimized_kernel_tool,
 )
@@ -300,9 +302,16 @@ def create_prepare_base_kernel_agent(
     name="PrepareBaseKernelAgent",
     model=model_name,
     generate_content_config=model_config,
-    instruction=prepare_base_kernel.PROPOSE_PROMPT,
+    planner=get_thinking_planner("medium"),
+    instruction=prepare_base_kernel.PROMPT,
     description="Bootstraps the initial reference base kernel.",
-    tools=[search_api_tool, filesystem_tool_r, write_base_kernel_tool],
+    tools=[
+      search_api_tool,
+      filesystem_tool_r,
+      write_base_kernel_tool,
+      write_dependency_file_tool,
+      discover_kernel_dependencies_tool,
+    ],
     include_contents="none",
   )
 

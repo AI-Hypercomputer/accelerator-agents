@@ -106,7 +106,7 @@ class TestRunner(BaseAgent):
 
       base_kernel_path = ctx.session.state.get("base_kernel_path", "")
       optimized_kernel_path = ctx.session.state.get("optimized_kernel_path", "")
-      dependencies = {}
+      dependencies = dict(ctx.session.state.get("dependencies", {}))
 
       if base_kernel_path and os.path.exists(base_kernel_path):
         with open(base_kernel_path, "r") as f:
@@ -474,7 +474,7 @@ class MockTestExecutionAgent(BaseAgent):
           mock_code_content = f.read()
 
         base_kernel_path = ctx.session.state.get("base_kernel_path", "")
-        dependencies = {}
+        dependencies = dict(ctx.session.state.get("dependencies", {}))
         if base_kernel_path and os.path.exists(base_kernel_path):
           with open(base_kernel_path, "r") as f:
             dependencies["base_kernel.py"] = f.read()

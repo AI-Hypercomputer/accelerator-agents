@@ -113,7 +113,7 @@ class AutotuneRunner(BaseAgent):
       )
       return
 
-    dependencies = {}
+    dependencies = dict(ctx.session.state.get("dependencies", {}))
     base_kernel_path = ctx.session.state.get("base_kernel_path", "")
     if base_kernel_path and os.path.exists(base_kernel_path):
       try:

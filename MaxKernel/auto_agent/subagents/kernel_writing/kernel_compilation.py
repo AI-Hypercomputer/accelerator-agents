@@ -53,6 +53,7 @@ class KernelCompilationChecker(BaseAgent):
           "code": code,
           "timeout": COMPILATION_TIMEOUT,
           "backend_type": "tpu",
+          "dependencies": ctx.session.state.get("dependencies", {}),
         }
         result = await call_eval_server_async(
           session,

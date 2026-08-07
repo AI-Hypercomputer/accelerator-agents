@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class EvaluationResult(BaseModel):
   compiled: bool = False
   correct: bool = False
-  latency_ms: Optional[float] = None
+  speedup: Optional[float] = None
   profiling_summary: Optional[str] = None
   autotuning_summary: Optional[str] = None
   compilation_error: Optional[str] = None
@@ -77,27 +77,27 @@ class SearchGraph:
       logger.warning(f"Node {node.node_id} is not a valid candidate. Skip.")
       return
 
-    latency = node.evaluation.latency_ms
-    if latency is None:
-      logger.warning(f"Node {node.node_id} has no latency.")
+    speedup = node.evaluation.speedup
+    if speedup is None:
+      logger.warning(f"Node {node.node_id} has no speedup.")
       return
 
     if self.best_node_id is None:
       self.best_node_id = node.node_id
       logger.info(
-        f"Set initial best node: {node.node_id} (latency: {latency} ms)"
+        f"Set initial best node: {node.node_id} (speedup: {speedup}x)"
       )
       return
 
     best_node = self.nodes[self.best_node_id]
-    best_latency = best_node.evaluation.latency_ms
-    if best_latency is None or latency < best_latency:
+    best_speedup = best_node.evaluation.speedup
+    if best_speedup is None or speedup > best_speedup:
       old_best_id = self.best_node_id
-      old_latency = best_latency
+      old_speedup = best_speedup
       self.best_node_id = node.node_id
       logger.info(
-        f"New best node found: {node.node_id} ({latency} ms). "
-        f"Previous best: {old_best_id} ({old_latency} ms)."
+        f"New best node found: {node.node_id} ({speedup}x). "
+        f"Previous best: {old_best_id} ({old_speedup}x)."
       )
 
   def save(self) -> None:

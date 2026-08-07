@@ -29,11 +29,13 @@ from auto_agent.subagents.kernel_writing.prompts import (
   kernel_compilation_summary,
   kernel_implementation_prompt,
   kernel_planning_prompt,
+  prepare_base_kernel,
   read_file_prompt,
 )
 from auto_agent.tools.file_tools import (
   filesystem_tool_r,
-  filesystem_tool_rw,
+  write_base_kernel_tool,
+  write_optimization_plan_tool,
   write_optimized_kernel_tool,
 )
 from auto_agent.tools.search_api_tool import search_api_tool
@@ -274,14 +276,35 @@ def create_plan_kernel_agent(model_name: str = MODEL_NAME) -> CustomLlmAgent:
     instruction=kernel_planning_prompt.PROMPT,
     description="Creates or revises a detailed optimization plan for a Pallas kernel.",
     tools=(
-      [search_api_tool, filesystem_tool_rw, vertex_ai_rag_tool]
+      [
+        search_api_tool,
+        filesystem_tool_r,
+        write_optimization_plan_tool,
+        vertex_ai_rag_tool,
+      ]
       if vertex_ai_rag_tool
-      else [search_api_tool, filesystem_tool_rw]
+      else [search_api_tool, filesystem_tool_r, write_optimization_plan_tool]
     ),
   )
 
 
 plan_kernel_agent = create_plan_kernel_agent()
+
+
+def create_prepare_base_kernel_agent(
+  model_name: str = MODEL_NAME,
+) -> CustomLlmAgent:
+  return CustomLlmAgent(
+    name="PrepareBaseKernelAgent",
+    model=model_name,
+    generate_content_config=model_config,
+    instruction=prepare_base_kernel.PROPOSE_PROMPT,
+    description="Bootstraps the initial reference base kernel.",
+    tools=[search_api_tool, filesystem_tool_r, write_base_kernel_tool],
+  )
+
+
+prepare_base_kernel_agent = create_prepare_base_kernel_agent()
 
 
 # Kernel compilation validation agents

@@ -13,7 +13,7 @@ Check the status of the autotuning results:
 
 ### Case 1: If the status is "success"
 You must:
-1. Extract the `"best_config"` and `"best_time_ms"` from the results above.
+1. Extract the `"best_config"`, `"best_time_ms"`, and `"best_speedup"` from the results above.
 2. Verify that the best configuration was applied correctly to the kernel code by reading the file located at {optimized_kernel_path?}.
 3. Provide a clear summary in your response. Do NOT list all tested configurations from `all_results`.
 
@@ -29,5 +29,6 @@ Please use the following format for your summary:
 - **Status**: [Success / Failed]
 - **Best Configuration**: `[JSON or description of best config]`
 - **Latency**: `[Time]` ms
+- **Speedup**: `[Speedup]`
 - **Applied to File**: [Yes / No]
 """

@@ -74,7 +74,7 @@ class SearchOrchestrator(abc.ABC):
         evaluation=EvaluationResult(
           compiled=True,
           correct=True,
-          latency_ms=float("inf"),
+          speedup=0.0,
           profiling_summary="",
         ),
       )
@@ -200,14 +200,14 @@ class SearchOrchestrator(abc.ABC):
 
       # Log progress
       best_id = self.graph.best_node_id
-      best_latency = "N/A"
+      best_speedup = "N/A"
       if best_id:
         best_node = self.graph.get_node(best_id)
-        if best_node and best_node.evaluation.latency_ms is not None:
-          best_latency = f"{best_node.evaluation.latency_ms:.3f} ms"
+        if best_node and best_node.evaluation.speedup is not None:
+          best_speedup = f"{best_node.evaluation.speedup:.3f}x"
       logger.info(
         f"Step completed. Total nodes in graph: {len(self.graph.nodes)}. "
-        f"Current best latency: {best_latency}"
+        f"Current best speedup: {best_speedup}"
       )
 
       # 6. Step Cleanup

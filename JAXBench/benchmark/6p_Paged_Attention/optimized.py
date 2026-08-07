@@ -553,10 +553,10 @@ def paged_attention(
   if k_scales_pages is not None and v_scales_pages is not None:
     in_specs = [
         q_block_spec,
-        pl.BlockSpec(memory_space=pltpu.ANY),
-        pl.BlockSpec(memory_space=pltpu.ANY),
-        pl.BlockSpec(memory_space=pltpu.ANY),
-        pl.BlockSpec(memory_space=pltpu.ANY),
+        pl.BlockSpec(memory_space=pl.ANY),
+        pl.BlockSpec(memory_space=pl.ANY),
+        pl.BlockSpec(memory_space=pl.ANY),
+        pl.BlockSpec(memory_space=pl.ANY),
     ]
     scratch_shapes = (
         pltpu.VMEM(
@@ -601,9 +601,9 @@ def paged_attention(
   else:
     in_specs = [
         q_block_spec,
-        pl.BlockSpec(memory_space=pltpu.ANY),
+        pl.BlockSpec(memory_space=pl.ANY),
         None,  # type: ignore[list-item]
-        pl.BlockSpec(memory_space=pltpu.ANY),
+        pl.BlockSpec(memory_space=pl.ANY),
         None,  # type: ignore[list-item]
     ]
     scratch_shapes = (
@@ -704,7 +704,7 @@ def get_flops():
 
 def create_inputs(dtype=jnp.bfloat16):
     key = jax.random.key(42)
-    k1, k2, k3 = jax.random.split(key, 3)
+    keys = jax.random.split(key, 5)
     B = CONFIG['batch']
     H_q = CONFIG['num_q_heads']
     H_kv = CONFIG['num_kv_heads']
@@ -712,9 +712,14 @@ def create_inputs(dtype=jnp.bfloat16):
     page_size = CONFIG['page_size']
     pages_per_seq = CONFIG['pages_per_seq']
     total_num_pages = B * pages_per_seq
-    q = jax.random.normal(k1, (B, H_q, D), dtype=dtype)
-    k_pages = jax.random.normal(k2, (H_kv, total_num_pages, page_size, D), dtype=dtype)
-    v_pages = jax.random.normal(k3, (H_kv, total_num_pages, page_size, D), dtype=dtype)
+    
+    q = jax.random.normal(keys[0], (B, H_q, D), dtype=dtype)
+    k_pages = jax.random.normal(keys[1], (total_num_pages, page_size, H_kv, D), dtype=dtype) * 0.02
+    v_pages = jax.random.normal(keys[2], (total_num_pages, page_size, H_kv, D), dtype=dtype) * 0.02
+    
+    k_pages = k_pages.transpose(2, 0, 1, 3)
+    v_pages = v_pages.transpose(2, 0, 1, 3)
+    
     seq_len = pages_per_seq * page_size
     lengths = jnp.full((B,), seq_len, dtype=jnp.int32)
     page_indices = jnp.arange(total_num_pages, dtype=jnp.int32).reshape(B, pages_per_seq)

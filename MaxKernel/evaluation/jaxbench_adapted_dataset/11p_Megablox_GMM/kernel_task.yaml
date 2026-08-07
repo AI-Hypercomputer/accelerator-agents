@@ -23,11 +23,8 @@ input_gen_code: |-
       N = CONFIG['moe_mlp_dim']
       S = CONFIG['seq_len']
       M = S * top_k
-      limit = 1 / (M * K)
-      lhs = jax.random.uniform(k1, (M, K), dtype=dtype, minval=-limit, maxval=limit)
-      lhs = lhs.astype(jnp.bfloat16).astype(dtype)
-      rhs = jax.random.uniform(k2, (G, K, N), dtype=dtype, minval=-limit, maxval=limit)
-      rhs = rhs.astype(jnp.bfloat16).astype(dtype)
+      lhs = jax.random.normal(k1, (M, K), dtype=dtype)
+      rhs = jax.random.normal(k2, (G, K, N), dtype=dtype) * 0.02
       max_expert_size = M // G
       group_sizes = jnp.full((G,), max_expert_size, dtype=jnp.int32)
 

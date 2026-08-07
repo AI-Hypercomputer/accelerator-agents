@@ -13,9 +13,11 @@ def get_inputs():
     dtype = jnp.float32
 
     key = jax.random.key(0)
+    rand_key = jax.random.key(42)
+    ka, kb = jax.random.split(rand_key, 2)
     x = jax.random.uniform(key, (batch_size, input_size), dtype=dtype)
-    weight = jnp.zeros((input_size, hidden_size), dtype=dtype)
-    bias = jnp.zeros(hidden_size, dtype=dtype)
+    weight = jax.random.normal(ka, (input_size, hidden_size), dtype=dtype) * 0.02
+    bias = jax.random.normal(kb, hidden_size, dtype=dtype) * 0.02
 
     dynamic_args = [x, weight, bias]
     static_args = [scale_factor, clamp_min, clamp_max]

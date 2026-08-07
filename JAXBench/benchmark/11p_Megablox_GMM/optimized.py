@@ -835,7 +835,9 @@ def create_inputs(dtype=jnp.bfloat16):
     S = CONFIG['seq_len']
     M = S * top_k
     lhs = jax.random.normal(k1, (M, K), dtype=dtype)
+    lhs = lhs.astype(jnp.bfloat16).astype(dtype)
     rhs = jax.random.normal(k2, (G, K, N), dtype=dtype) * 0.02
+    rhs = rhs.astype(jnp.bfloat16).astype(dtype)
     tokens_per_expert = M // G
     group_sizes = jnp.full((G,), tokens_per_expert, dtype=jnp.int32)
     return lhs, rhs, group_sizes

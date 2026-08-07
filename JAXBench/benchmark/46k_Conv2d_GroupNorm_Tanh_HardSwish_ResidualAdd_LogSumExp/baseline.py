@@ -15,11 +15,13 @@ CONFIG = {
 def create_inputs(dtype=jnp.float32):
     """Create all inputs including weights."""
     key = jax.random.key(0)
+    rand_key = jax.random.key(42)
+    ka, kb = jax.random.split(rand_key, 2)
     batch_size, in_channels, out_channels, kernel_size, groups = 128, 8, 64, 3, 16
     height, width = 128, 128
     x = jax.random.uniform(key, (batch_size, in_channels, height, width), dtype=dtype)
-    conv_weight = jnp.zeros((out_channels, in_channels, kernel_size, kernel_size), dtype=dtype)
-    conv_bias = jnp.zeros(out_channels, dtype=dtype)
+    conv_weight = jax.random.normal(ka, (out_channels, in_channels, kernel_size, kernel_size), dtype=dtype) * 0.02
+    conv_bias = jax.random.normal(kb, out_channels, dtype=dtype) * 0.02
     gn_weight = jnp.ones(out_channels, dtype=dtype)
     gn_bias = jnp.zeros(out_channels, dtype=dtype)
     return x, conv_weight, conv_bias, gn_weight, gn_bias

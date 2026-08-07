@@ -1,0 +1,10 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "nexus",
+  "version": "0.2.0",
+  "description": "TPU Coworker (Nexus) proof-of-concept: an orchestrator skill, three specialized subagents, a local knowledge-base MCP server, a mock TPU compiler, and budget/consent hooks. All TPU compilation and profiling is simulated.",
+  "author": {
+    "name": "Jacob Platin",
+    "email": "jacobplatin@google.com"
+  }
+}

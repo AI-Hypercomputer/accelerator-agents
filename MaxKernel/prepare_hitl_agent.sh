@@ -1,4 +1,4 @@
-source#!/bin/bash
+#!/bin/bash
 
 set -e  # Exit on any error
 

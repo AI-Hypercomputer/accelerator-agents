@@ -6,7 +6,6 @@ import logging
 import os
 import re
 import shutil
-import socket
 import subprocess
 import sys
 import tempfile
@@ -15,11 +14,10 @@ from pathlib import Path
 from typing import Optional
 
 import uvicorn
-import yaml
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from auto_agent.constants import TPU_SERVER_PORT
+from auto_agent.server_utils.server_config import get_local_tpu_port
 from auto_agent.tools.analyze_profile import analyze_trace
 
 logging.basicConfig(
@@ -514,44 +512,6 @@ def get_tpu_version() -> dict:
     pass
 
   return {"tpu_version": "TPU version not found"}
-
-
-def _get_local_ip():
-  try:
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("8.8.8.8", 80))
-    local_ip = s.getsockname()[0]
-    s.close()
-    return local_ip
-  except Exception:
-    return "127.0.0.1"
-
-
-def get_local_tpu_port(cfg_path: str = "eval_config.yaml") -> Optional[int]:
-  """Checks eval_config.yaml and returns the port if a local TPU server is needed."""
-  try:
-    with open(cfg_path, "r") as file:
-      config = yaml.safe_load(file)
-  except FileNotFoundError:
-    logging.error(f"Config file {cfg_path} not found.")
-    return None
-
-  backends = config.get("backends", [])
-  local_ip = _get_local_ip()
-
-  # Find all backends that are local TPUs
-  local_tpu_backends = [
-    b
-    for b in backends
-    if b.get("type") == "tpu"
-    and b.get("ip") in ["127.0.0.1", "localhost", local_ip]
-    and "tpu_vm" not in b
-  ]
-
-  if not local_tpu_backends:
-    return None
-
-  return local_tpu_backends[0].get("port", TPU_SERVER_PORT)
 
 
 if __name__ == "__main__":

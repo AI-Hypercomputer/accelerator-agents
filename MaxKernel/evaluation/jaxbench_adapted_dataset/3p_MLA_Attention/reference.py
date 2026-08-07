@@ -47,11 +47,11 @@ def _compute_rope(head_dim, seq_len, theta, dtype):
     return jnp.cos(angles).astype(dtype), jnp.sin(angles).astype(dtype)
 
 def _apply_rope(x, cos, sin):
-    x1, x2 = x[..., ::2], x[..., 1::2]
+    d = x.shape[-1]
+    x1, x2 = x[..., :d // 2], x[..., d // 2:]
     cos = cos[None, :, None, :]
     sin = sin[None, :, None, :]
-    rotated = jnp.stack([x1 * cos - x2 * sin, x1 * sin + x2 * cos], axis=-1)
-    return rotated.reshape(x.shape)
+    return jnp.concatenate([x1 * cos - x2 * sin, x2 * cos + x1 * sin], axis=-1)
 
 def computation(x, q_down_proj, q_up_proj, kv_down_proj, k_up_proj, v_up_proj, o_proj,
                 num_heads, qk_nope_head_dim, qk_rope_head_dim, v_head_dim, kv_lora_rank, rope_theta):

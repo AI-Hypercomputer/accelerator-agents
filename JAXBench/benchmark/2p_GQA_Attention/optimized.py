@@ -14,8 +14,6 @@
 
 """Implementation of Sparse Flash Attention, a.k.a. "Splash" attention."""
 
-from __future__ import annotations
-
 from collections.abc import Callable, Mapping
 import dataclasses
 import enum
@@ -2584,6 +2582,7 @@ def workload(query, key, value):
     v = value.transpose(0, 2, 1, 3)   # (B, H_kv, S, D)
 
     B, H_q, S, D = q.shape
+    q = q * (D ** -0.5)
     H_kv = v.shape[1]
     heads_per_group = H_q // H_kv
     mask = mask_lib.CausalMask(shape=(S, S))

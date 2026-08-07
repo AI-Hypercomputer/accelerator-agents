@@ -23,13 +23,14 @@ def create_inputs(dtype=jnp.bfloat16):
     """Returns (q, k, v) tensors in [num_heads, seq_len, head_dim] layout."""
     key = jax.random.key(42)
     k1, k2, k3 = jax.random.split(key, 3)
+    B = CONFIG['batch']
     S = CONFIG['seq_len']
     H_q = CONFIG['num_query_heads']
     H_kv = CONFIG['num_kv_heads']
     D = CONFIG['head_dim']
-    q = jax.random.normal(k1, (H_q, S, D), dtype=dtype) * (D ** -0.5)
-    k = jax.random.normal(k2, (H_kv, S, D), dtype=dtype) * 0.02
-    v = jax.random.normal(k3, (H_kv, S, D), dtype=dtype) * 0.02
+    q = jax.random.normal(k1, (B, H_q, S, D), dtype=dtype) * (D ** -0.5)
+    k = jax.random.normal(k2, (B, H_kv, S, D), dtype=dtype) * 0.02
+    v = jax.random.normal(k3, (B, H_kv, S, D), dtype=dtype) * 0.02
     return q, k, v
 
 
@@ -40,22 +41,17 @@ def workload(q, k, v):
     H_kv = CONFIG['num_kv_heads']
     num_q_per_kv = H_q // H_kv
 
-    # Repeat KV heads for GQA
-    k = jnp.repeat(k, num_q_per_kv, axis=0)  # (H_q, S, D)
-    v = jnp.repeat(v, num_q_per_kv, axis=0)  # (H_q, S, D)
+    @jax.vmap
+    def _attend(q_b, k_b, v_b):
+        k_rep = jnp.repeat(k_b, num_q_per_kv, axis=0)
+        v_rep = jnp.repeat(v_b, num_q_per_kv, axis=0)
+        attn = jnp.einsum('hqd,hkd->hqk', q_b, k_rep)
+        causal = jnp.tril(jnp.ones((S, S), dtype=jnp.bool_))
+        attn = jnp.where(causal[None, :, :], attn, -1e30)
+        attn = jax.nn.softmax(attn, axis=-1)
+        return jnp.einsum('hqk,hkd->hqd', attn, v_rep)
 
-    # Attention scores: (H_q, S, D) x (H_q, S, D) -> (H_q, S, S)
-    attn = jnp.einsum('hqd,hkd->hqk', q, k)
-
-    # Causal mask
-    causal = jnp.tril(jnp.ones((S, S), dtype=jnp.bool_))
-    attn = jnp.where(causal[None, :, :], attn, -1e30)
-
-    attn = jax.nn.softmax(attn, axis=-1)
-
-    # Output: (H_q, S, S) x (H_q, S, D) -> (H_q, S, D)
-    out = jnp.einsum('hqk,hkd->hqd', attn, v)
-    return out
+    return _attend(q, k, v)
 
 
 def benchmark(num_warmup=5, num_iters=100):

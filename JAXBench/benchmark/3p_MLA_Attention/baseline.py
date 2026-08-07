@@ -28,11 +28,11 @@ def _compute_rope(head_dim, seq_len, theta, dtype):
 
 
 def _apply_rope(x, cos, sin):
-    x1, x2 = x[..., ::2], x[..., 1::2]
+    d = x.shape[-1]
+    x1, x2 = x[..., :d // 2], x[..., d // 2:]
     cos = cos[None, :, None, :]
     sin = sin[None, :, None, :]
-    rotated = jnp.stack([x1 * cos - x2 * sin, x1 * sin + x2 * cos], axis=-1)
-    return rotated.reshape(x.shape)
+    return jnp.concatenate([x1 * cos - x2 * sin, x2 * cos + x1 * sin], axis=-1)
 
 
 def create_inputs(dtype=jnp.bfloat16):

@@ -14,8 +14,6 @@
 
 """Implementation of Sparse Flash Attention, a.k.a. "Splash" attention."""
 
-from __future__ import annotations
-
 from collections.abc import Callable, Mapping
 import dataclasses
 import enum
@@ -2575,9 +2573,9 @@ def create_inputs(dtype=jnp.bfloat16):
     H_q = CONFIG['num_query_heads']
     H_kv = CONFIG['num_kv_heads']
     D = CONFIG['head_dim']
-    q = jax.random.normal(k1, (B, H_q, S, D), dtype=dtype)
-    k = jax.random.normal(k2, (B, H_kv, S, D), dtype=dtype)
-    v = jax.random.normal(k3, (B, H_kv, S, D), dtype=dtype)
+    q = jax.random.normal(k1, (B, H_q, S, D), dtype=dtype) * (D ** -0.5)
+    k = jax.random.normal(k2, (B, H_kv, S, D), dtype=dtype) * 0.02
+    v = jax.random.normal(k3, (B, H_kv, S, D), dtype=dtype) * 0.02
     return q, k, v
 
 

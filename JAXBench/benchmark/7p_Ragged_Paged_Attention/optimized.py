@@ -19,6 +19,7 @@ specifically designed for TPU and compatible with a wide range of model
 specifications. It supports mixed prefill and decoding, enhancing throughput
 during inference.
 """
+
 import functools
 import jax
 from jax import lax
@@ -910,7 +911,6 @@ def ragged_paged_attention(
 
 
 import math
-
 
 CONFIG = {
     'name': 'pallas_ragged_paged_attention_llama70b',

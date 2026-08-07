@@ -1,0 +1,8 @@
+{
+  "name": "nexus_kernel_author",
+  "description": "Specialized subagent for performing symbolic/mock hill-climbing kernel optimizations under explicit budget constraints.",
+  "model": "gemini-2.5-pro",
+  "configPath": {
+    "relativePathToConfig": "config.yaml"
+  }
+}

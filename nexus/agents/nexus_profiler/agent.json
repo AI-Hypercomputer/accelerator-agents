@@ -1,0 +1,12 @@
+{
+  "name": "nexus_profiler",
+  "description": "Specialized subagent for parsing verbose xprof and compiler logs, returning compact JSON diagnostic summaries.",
+  "model": "gemini-2.5-flash",
+  "skill": "skills/nexus_profiler/SKILL.md",
+  "permission_policy": "Always Allow",
+  "env": {
+    "NEXUS_MODEL_NAME": "gemini-2.5-flash",
+    "NEXUS_CONFIG_SOURCE": "agents/nexus_profiler/agent.json"
+  }
+}
+

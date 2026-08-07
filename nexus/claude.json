@@ -1,0 +1,32 @@
+{
+  "mcpServers": {
+    "nexus_kb_server": {
+      "command": "python3",
+      "args": [
+        "mcp_servers/kb_server.py"
+      ]
+    }
+  },
+  "customTools": [
+    {
+      "name": "mock_tpu_compiler",
+      "description": "Simulates TPU v5e compilation, VMEM OOM diagnostics, and execution latency.",
+      "command": "python3 tools/mock_tpu_compiler.py"
+    },
+    {
+      "name": "get_agent_runtime_info",
+      "description": "Prints runtime info verifying the active model tier and configuration.",
+      "command": "python3 tools/get_agent_runtime_info.py"
+    },
+    {
+      "name": "csat_tool",
+      "description": "Executes CSAT telemetry tracking. Prompts for user feedback.",
+      "command": "python3 tools/csat_tool.py"
+    },
+    {
+      "name": "get_subagent_tokens",
+      "description": "Calculates and displays input, output, and total tokens consumed in the session as a markdown table.",
+      "command": "python3 tools/get_subagent_tokens.py"
+    }
+  ]
+}

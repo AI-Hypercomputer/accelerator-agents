@@ -1,0 +1,11 @@
+{
+  "name": "nexus_meta",
+  "description": "Primary orchestrator for Nexus TPU Coworker. Routes optimization and analysis tasks to specialized subagents.",
+  "model": "gemini-2.5-pro",
+  "skill": "skills/nexus_meta/SKILL.md",
+  "permission_policy": "Always Ask",
+  "env": {
+    "NEXUS_MODEL_NAME": "gemini-2.5-pro",
+    "NEXUS_CONFIG_SOURCE": "_agents/agents/nexus_meta/agent.json"
+  }
+}

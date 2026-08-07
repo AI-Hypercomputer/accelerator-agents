@@ -1,0 +1,28 @@
+{
+  "csat-permission-guard": {
+    "PreToolUse": [
+      {
+        "matcher": "csat_tool",
+        "hooks": [
+          {
+            "command": "python3 tools/csat_pre_tool_hook.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
+  "token-budget-guard": {
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "command": "python3 tools/token_budget_hook.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

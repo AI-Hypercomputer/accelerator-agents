@@ -1,0 +1,12 @@
+{
+  "name": "nexus_kb_retriever",
+  "description": "Specialized subagent for searching and retrieving technical guidance from the local Nexus Knowledge Base via MCP.",
+  "model": "gemini-2.5-flash",
+  "skill": "skills/nexus_kb_retriever/SKILL.md",
+  "permission_policy": "Always Allow",
+  "env": {
+    "NEXUS_MODEL_NAME": "gemini-2.5-flash",
+    "NEXUS_CONFIG_SOURCE": "agents/nexus_kb_retriever/agent.json"
+  }
+}
+

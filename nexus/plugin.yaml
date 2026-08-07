@@ -1,0 +1,39 @@
+name: nexus-Claude-poc
+version: 0.1.0
+description: |
+  Claude Proof-of-Concept (PoC) for TPU Coworker (Nexus), demonstrating
+  harness-agnostic skills, SDK adapters, token budgeting, multi-tier model
+  routing, local MCP KB integration, and CSAT telemetry.
+author: jacobplatin@google.com
+skills:
+  - skills/nexus_meta/SKILL.md
+  - skills/nexus_kb_retriever/SKILL.md
+  - skills/nexus_profiler/SKILL.md
+  - skills/nexus_kernel_author/SKILL.md
+agents:
+  - agents/nexus_meta/agent.json
+  - agents/nexus_kb_retriever/agent.json
+  - agents/nexus_profiler/agent.json
+  - agents/nexus_kernel_author/agent.json
+mcp_servers:
+  - name: nexus_kb_server
+    command: python3
+    args:
+      - mcp_servers/kb_server.py
+tools:
+  - name: mock_tpu_compiler
+    command: python3
+    args:
+      - tools/mock_tpu_compiler.py
+  - name: get_agent_runtime_info
+    command: python3
+    args:
+      - tools/get_agent_runtime_info.py
+  - name: csat_tool
+    command: python3
+    args:
+      - tools/csat_tool.py
+  - name: get_subagent_tokens
+    command: python3
+    args:
+      - tools/get_subagent_tokens.py

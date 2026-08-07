@@ -8,5 +8,7 @@ setup(
   author_email="your.email@example.com",
   packages=find_packages(),
   python_requires=">=3.7",
-  install_requires=[],
+  install_requires=[
+    "mcp>=1.24,<2",
+  ],
 )

@@ -1,284 +1,230 @@
-# Human-in-the-Loop (HITL) Kernel Generation Agent
+# MaxKernel: Intelligent TPU Kernel Engineering Agents
 
-An intelligent, interactive agent system for generating, optimizing, testing, and profiling TPU kernels with JAX/Pallas. This agent orchestrates a multi-stage workflow that keeps you in control at every step, from initial planning through implementation, testing, and performance optimization.
+**MaxKernel** is a suite of AI-powered agents designed for generating, optimizing, testing, profiling, and autotuning high-performance TPU kernels using [JAX/Pallas](https://jax.readthedocs.io/en/latest/pallas/index.html).
 
-## Overview
+Whether you need interactive, step-by-step kernel development or a fully autonomous optimization pipeline, MaxKernel provides dedicated agents tailored to your workflow.
 
-The HITL Kernel Gen Agent provides a conversational interface for TPU kernel development with:
+---
 
-- **Plan-Driven Development**: Creates detailed optimization plans before implementation, allowing you to review and refine the approach
-- **Automated Testing**: Generates and executes comprehensive pytest test suites with compilation, correctness, and performance validation
-- **Performance Profiling**: Identifies bottlenecks and provides data-driven optimization recommendations
-- **GPU-to-JAX Conversion**: Automatically converts CUDA, Triton, and PyTorch GPU code to JAX/Pallas
-- **RAG-Enhanced**: Leverages documentation retrieval for accurate, context-aware code generation
-- **Safety-First**: Scoped file system access with configurable work directories
+## 🚀 Choose Your Agent
 
-## Features
+MaxKernel provides two primary agent workflows:
 
-### 🎯 Core Capabilities
+| Feature | 🧑‍💻 **HITL Agent** (`hitl_agent`) | 🤖 **Auto Agent** (`auto_agent`) |
+| :--- | :--- | :--- |
+| **Workflow** | **Interactive / Human-in-the-Loop** | **Fully Autonomous Pipeline** |
+| **Best For** | Exploratory development, custom kernels, interactive debugging, learning Pallas | Batch optimization, benchmark evaluation, unattended end-to-end kernel synthesis |
+| **User Interaction** | Reviews & approves plans, guides step-by-step code generation | Automated improvement loop with closed-loop feedback |
+| **Execution Backends**| Local (TPU VM / CPU) | Local (Recommended), GCE / GKE (In progress) |
+| **Setup Script** | `bash prepare_auto_agent.sh` | `bash prepare_auto_agent.sh` |
+| **Run Script** | `bash run_hitl_agent.sh` | `bash run_auto_agent.sh` |
+| **Interfaces** | Interactive CLI & Web UI | Interactive CLI & Web UI |
 
-1. **Interactive Kernel Planning**
-   - Creates detailed optimization plans for Pallas kernels
-   - Automatic approval workflow with revision support
-   - Includes tiling strategies, memory optimization, and performance targets
+---
 
-2. **Kernel Implementation**
-   - Implements kernels following approved plans
-   - Supports various optimization techniques (tiling, pipelining, memory management)
-   - Generates clean, idiomatic JAX/Pallas code
+## ✨ Core Capabilities
 
-3. **Comprehensive Testing**
-   - Automatic pytest test file generation
-   - Compilation validation
-   - Numerical correctness testing
-   - Performance benchmarking
-   - Full traceback reporting for debugging
+Both agents share a rich set of specialized tools and capabilities:
 
-4. **Performance Profiling**
-   - DMA and memory transfer analysis
-   - Compute vs memory ratio profiling
-   - Bottleneck identification with actionable recommendations
+* 📐 **Optimization Planning**: Formulates tiling strategies, memory layouts (VMEM/SMEM/HBM), pipelining, and grid configurations tailored to your TPU generation.
+* 💻 **Kernel Implementation**: Generates clean, idiomatic JAX/Pallas kernels adhering to hardware best practices and approved plans.
+* 🛡️ **Compilation Validation**: Fast pre-validation to catch shape mismatches, syntax errors, and compilation failures before execution.
+* 🧪 **Automated Testing**: Generates and executes comprehensive `pytest` suites validating compilation, numerical correctness (against reference implementations), and execution metrics.
+* ⚡ **Performance Profiling**: Pinpoints hardware bottlenecks, DMA/memory transfer overheads, and compute-to-memory ratios.
+* 🎛️ **Automated Autotuning**: Performs grid search over block sizes, grid layouts, and hyperparameters to maximize TPU throughput.
+* 🔄 **GPU-to-JAX Conversion (only in HITL)**: Automatically ports existing CUDA, Triton, and PyTorch kernels into JAX/Pallas equivalents.
+* 🔒 **Scoped & Safe**: Restricts agent file operations to a user-defined work directory (`WORKDIR`).
 
-5. **GPU-to-JAX Conversion**
-   - Converts CUDA, Triton, PyTorch CUDA code to JAX
-   - Strips hardware-specific optimizations
-   - Includes syntax validation and numerical correctness testing
-   - See [GPU-to-JAX Agent README](gpu_to_jax_agent/README.md) for details
+---
 
-6. **Automated Autotuning**
-   - Finds optimal parameters (like block sizes) via grid search
-   - Automatic server management (starts TPU server if needed)
-   - File-based specs and results passing between sub-agents
+## 🏁 Quickstart
 
-### 🛡️ Safety & Control
+### 1. Prerequisites
 
-- **Scoped Permissions**: Agent operates only within designated work directory
-- **User Approval Required**: All implementations require explicit plan approval
-- **Transparent Operations**: All file operations are logged and visible
-- **Session Persistence**: Save and resume your work across sessions
+* **Python 3.11+** with pip installed
+* **Google Cloud Project** with Vertex AI / Gemini API access
+* **TPU Access** (or CPU testbed) for executing and profiling kernels
 
-## Architecture
+### 2. Environment Setup
 
-### Agent Hierarchy
-
-```
-KernelGenerationOrchestrationAgent (root_agent)
-├── ExplanationAgent - Explains TPU/Pallas concepts
-├── PlanKernelAgent - Creates/revises optimization plans
-├── ImplementKernelAgent - Implements approved plans
-├── ValidatedTestGenerationAgent
-│   ├── GenerateTestFileAgent - Creates pytest test files
-│   ├── TestValidationLoopAgent - Validates test syntax/structure
-│   └── ValidationSummaryAgent - Reports validation results
-├── UnifiedTestAgent
-│   ├── ReadFileForTestingAgent - Locates test files
-│   ├── RunTestsAgent - Executes pytest with server management
-│   └── SummarizeTestResultsAgent - Analyzes and reports results
-├── ProfileAgentOrchestrator
-│   ├── ReadFileForProfilingAgent - Locates kernel files
-│   ├── GenerateProfilingScriptAgent - Creates profiling scripts
-│   ├── EvalProfileAgent - Executes profiling
-│   └── SummarizeProfileAgent - Analyzes bottlenecks
-├── AutotuneAgent - Automated parameter tuning
-│   ├── AutotunePlannerAgent - Prepares specs and search space
-│   ├── AutotuneRunner - Manages server and executes grid search
-│   └── AutotuneSummaryAgent - Reports results to user
-└── GpuToJaxAgent - GPU-to-JAX conversion pipeline
-    └── (10-step conversion pipeline - see gpu_to_jax_agent/README.md)
-```
-
-### Directory Structure
-
-```
-hitl_agent/
-├── hitl_agent
-│   ├── agent.py                        # Main orchestration logic
-│   ├── callbacks.py                    # Agent callbacks
-│   ├── config.py                       # Configuration management   
-│   ├── constants.py                    # Agent constants   
-│   ├── custom_types.py                 # Custom types   
-│   ├── dependency                      # Agent dependencies   
-│   │   ├── adk_cli_patch.py
-│   │   ├── agent_requirements.txt
-│   │   └── main_requirements.txt
-│   ├── isolate_object.py
-│   ├── knowledge_base.                 # Knowledge base for pallas docs
-│   │   ├── pallas_docs.py
-│   │   └── pallas_profiling_docs.py
-│   ├── prompts                         # Main interactive prompt
-│   │   └── interactive_prompt.py
-│   ├── server_utils                    # Server management utilities
-│   │   ├── cpu_server.py
-│   │   ├── eval_config.yaml
-│   │   ├── eval_server.py
-│   │   ├── server_manager_mixin.py
-│   │   ├── setup.sh
-│   │   └── tpu_server.py
-│   ├── subagents                       # Specialized subagents
-│   │   ├── explanation                 # Explanation agent
-│   │   │   ├── agent.py
-│   │   │   └── prompts
-│   │   ├── gpu_to_jax_agent            # GPU-to-JAX conversion subagent
-│   │   │   ├── README.md
-│   │   │   ├── agent.py
-│   │   │   ├── constants.py
-│   │   │   ├── evaluators
-│   │   │   │   ├── compilation_checker.py
-│   │   │   │   ├── correctness_checker.py
-│   │   │   │   ├── jax_syntax_checker.py
-│   │   │   │   └── shape_validator.py
-│   │   │   ├── prompts
-│   │   │   └── test_agent.py
-│   │   ├── kernel_writing              # Kernel planning & implementation
-│   │   │   ├── agent.py
-│   │   │   ├── kernel_compilation.py
-│   │   │   └── prompts
-│   │   ├── profiling                  # Performance profiling
-│   │   │   ├── agent.py
-│   │   │   ├── kernel_profile.py
-│   │   │   ├── offline_tools.py
-│   │   │   └── prompts
-│   │   ├── autotuning                 # Automated parameter tuning
-│   │   │   ├── agent.py
-│   │   │   ├── autotune_tool.py
-│   │   │   └── prompts
-│   │   └── testing                   # Test generation & execution
-│   │       ├── agent.py
-│   │       └── prompts
-│   ├── tests
-│   │   ├── conftest.py
-│   │   ├── test_compilation_validation_loop.py
-│   │   └── test_validate_kernel_compilation_agent.py
-│   ├── tools                         # Agent tools
-│   │   ├── analyze_profile.py
-│   │   ├── api_rag
-│   │   │   └── get_apis.py
-│   │   ├── search_api_tool.py
-│   │   └── tools.py
-│   └── tpu_specs.json
-├── prepare_hitl_agent.sh            # Hitl agent setup script
-├── run_hitl_agent.sh                # Launch script (CLI or UI mode)
-└── setup.py
-```
-## Getting Started
-
-### Prerequisites
-
-1. **Python Environment**: Python 3.9+ with JAX and dependencies installed
-2. **Google Cloud**: Vertex AI access for the agent and RAG retrieval
-3. **TPU Access**: For actual kernel execution and testing
-
-### Installation
-
-1. **Navigate to the directory of this README file**:
-
-2. **Run the setup script**:
-   ```bash
-   bash prepare_hitl_agent.sh
-   ```
-
-   This script will:
-   - Prompt you to choose Python environment setup (Miniconda, venv, or your own)
-   - Install required dependencies
-   - Set up environment variables
-   - Configure your work directory
-   - Create the `.env` file with your settings
-
-3. **Configure Environment Variables**:
-   
-   The setup script creates a `.env` file. You can edit it manually to customize:
-   
-   ```bash
-   # Required
-   GOOGLE_CLOUD_PROJECT=your-project-id
-   GOOGLE_GENAI_API_KEY=your-api-key
-   
-   # Optional - defaults provided
-   WORKDIR=/path/to/your/work/directory  # Default: example_workdir
-   TPU_VERSION=v5e                        # Default: v5e
-   SESSION_ID=hitl_session                # Default: hitl_session
-   
-   # RAG Configuration (optional)
-   VERTEX_AI_RAG_CORPUS=your-corpus-name
-   GOOGLE_CLOUD_REGION=us-central1
-   ```
-
-### Running the Agent
-
-#### Option 1: CLI Mode (Recommended for Development)
+Run the automated setup script (compatible with both **Linux** and **macOS**):
 
 ```bash
-bash run_hitl_agent.sh
+bash prepare_auto_agent.sh
 ```
 
-**CLI Features**:
-- Interactive command-line interface
-- Session stored as JSON files (`*.session.json`)
-- Easy to debug and inspect
-- Lower overhead
+*(Note: `bash prepare_hitl_agent.sh` and `bash prepare_agent.sh` are also available as wrappers.)*
 
-**CLI Options**:
+**What the setup script does automatically:**
+1. **Python Environment Setup**: Prompts to create and activate a `.venv` virtual environment (or uses your active Python environment).
+2. **Dependency Installation**: Installs all required packages from `dependency/main_requirements.txt` and `dependency/agent_requirements.txt`, verifies Node.js/npx, and installs the repository in editable mode (`pip install -e .`).
+3. **Environment Configuration**: Prompts and creates the `.env` configuration file.
+4. **Evaluation Server Config**: Resolves your local IP address across Linux/macOS and generates `eval_config.yaml` for both `auto_agent` and `hitl_agent`.
+
+### 3. Environment Variables (`.env`)
+
+The setup script generates a `.env` file at the repository root. You can view or customize it at any time:
+
 ```bash
-# Start with default session
+# Model & Cloud Configuration
+GOOGLE_CLOUD_PROJECT="your-project-id"   # Required: GCP project ID
+GOOGLE_GENAI_USE_VERTEXAI=TRUE           # Vertex AI authentication
+GOOGLE_CLOUD_LOCATION="global"           # GCP location (e.g. global, us-central1)
+GEMINI_API_KEY="your-api-key"            # Optional: Gemini API key if using API key auth
+RAG_CORPUS="projects/.../ragCorpora/..." # Optional: Vertex AI RAG corpus for Pallas docs
+INCLUDE_THOUGHTS="true"                  # Optional: Show agent reasoning traces
+
+# Hardware & Workspace Settings
+WORKDIR="/path/to/your/workdir"          # Scoped directory for kernel inputs/outputs
+TPU_VERSION="TPU v5e"                    # Options: TPU v4, TPU v5e, TPU v5p, TPU v6e, TPU 7x
+```
+
+---
+
+## 🧑‍💻 Using the HITL Agent (`hitl_agent`)
+
+The Human-in-the-Loop agent is designed for interactive collaboration. It prompts you to review optimization plans and guides each phase of kernel generation.
+
+### Run in CLI Mode (Default)
+
+```bash
+# Start a new interactive session
 bash run_hitl_agent.sh
 
-# Start with specific session ID
+# Resume a specific session
 bash run_hitl_agent.sh --session my_session
 
-# Reset and start fresh
+# Reset and restart existing processes
 bash run_hitl_agent.sh --reset
 ```
 
-#### Option 2: Web UI Mode
+### Run in Web UI Mode
 
 ```bash
 bash run_hitl_agent.sh --ui
 ```
+* Access the web interface at **`http://localhost:1430`**
+* Manage multiple sessions and review visual conversation history.
 
-**UI Features**:
-- Web interface on port 1430
-- Session stored in SQLite database
-- Visual conversation history
-- Better for demos and non-technical users
+---
 
-**Important**: CLI and UI modes use different session storage mechanisms and **cannot share sessions**.
+## 🤖 Using the Auto Agent (`auto_agent`)
 
-### Resuming Sessions
+The Auto Agent runs an end-to-end autonomous loop:
+`Base Kernel Preparation` ➔ `Planning` ➔ `Implementation` ➔ `Compilation Validation` ➔ `Testing` ➔ `Autotuning` ➔ `Profiling` ➔ `Iterative Improvement`.
 
-**CLI Mode**:
+> [!TIP]
+> **Recommended Execution Backend:** We currently encourage using the default **`local` backend directly on a TPU VM**. Remote backend setup for GCE and GKE is currently under development.
+
+### Run in CLI Mode
+
 ```bash
-# Sessions are saved as JSON files
-bash run_hitl_agent.sh --session my_session
+# Start autonomous agent on local backend (Recommended on TPU VM)
+bash run_auto_agent.sh
+
+# Resume an existing session
+bash run_auto_agent.sh --session auto_session_123
+
+# Stop running background servers & processes
+bash run_auto_agent.sh stop
 ```
 
-**UI Mode**:
+### Run in Web UI Mode
+
 ```bash
-# Sessions managed through web interface
-bash run_hitl_agent.sh --ui
-# Browse to http://localhost:1430 and select session
+bash run_auto_agent.sh --ui
 ```
 
-## Work Directory Configuration
+### CLI Options
 
-### What is a Work Directory?
+```text
+Usage: ./run_auto_agent.sh [command] [options]
 
-The work directory is where the agent:
-- Reads your input files (kernels, GPU code, etc.)
-- Writes generated files (plans, implementations, tests, profiles)
-- Executes operations (testing, profiling)
+Commands:
+  start                   Start the agent and background servers (default)
+  stop                    Stop all running agent sessions, servers, and tunnels
 
-**Security**: The agent's file access is **scoped** to this directory - it cannot access files outside it.
+Options:
+  -b, --backend <type>    Execution backend: 'local' (default/recommended), 'gce', or 'gke'
+  --ui                    Start with the web UI on port 1430 (default: CLI mode)
+  -s, --session <id>      Specify session ID to resume or start (CLI mode only)
+  -h, --help              Show help message
+```
 
-### Setting Up Your Work Directory
+---
 
-1. **During Initial Setup**:
-   ```bash
-   bash prepare_hitl_agent.sh
-   # Follow prompts to set WORKDIR
-   ```
+## 🔍 Using Auto-Search (`auto_search`)
 
-2. **Manual Configuration**:
-   Edit the generated `.env` file:
-   ```bash
-   WORKDIR=/absolute/path/to/your/work/directory
-   ```
+**Auto-Search** orchestrates autonomous worker agents to systematically search for optimized TPU kernel implementations across single reference problems or entire benchmark datasets.
+
+### Search Algorithms
+
+1. **Parallel Search (`--algorithm parallel`)**: Dispatches multiple independent worker agents concurrently and returns the candidate with the highest speedup.
+2. **Beam Search (`--algorithm beam`)**: A tree-search approach that explores multiple optimization branches hierarchically, evaluates speedups, and retains the top `beam_size` candidates at each depth.
+
+### 1. Optimize a Single Problem (`run_search.py`)
+
+```bash
+# Run Parallel Search on a single reference kernel
+python -m auto_search.run_search \
+  --reference_file_path /path/to/problem_dir/reference.py \
+  --algorithm parallel \
+  --num_parallel_runs 4 \
+  --max_concurrency 2
+
+# Run Beam Search on a single reference kernel
+python -m auto_search.run_search \
+  --reference_file_path /path/to/problem_dir/reference.py \
+  --algorithm beam \
+  --beam_size 2 \
+  --branches_per_node 2 \
+  --max_depth 3 \
+  --max_concurrency 2
+```
+
+### 2. Run Batch Search on a Dataset (`run_batch_search.py`)
+
+Optimize an entire dataset containing multiple problem subdirectories (each containing a `reference.py`):
+
+```bash
+# Run Batch Parallel Search across dataset problems
+python -m auto_search.run_batch_search \
+  --data_dir /path/to/dataset_dir \
+  --algorithm parallel \
+  --num_parallel_runs 4 \
+  --num_problem_concurrency 2 \
+  --max_concurrency 2
+
+# Run Batch Beam Search across dataset problems
+python -m auto_search.run_batch_search \
+  --data_dir /path/to/dataset_dir \
+  --algorithm beam \
+  --beam_size 2 \
+  --branches_per_node 2 \
+  --max_depth 3 \
+  --num_problem_concurrency 2 \
+  --max_concurrency 2
+```
+
+### Key Auto-Search Options
+
+* `--reference_file_path`: Path to single reference kernel file (`run_search.py`).
+* `--data_dir`: Path to dataset directory containing benchmark problem subdirectories (`run_batch_search.py`).
+* `--algorithm`: Search algorithm to use (`parallel` or `beam`, default: `parallel`).
+* `--max_concurrency`: Maximum concurrent worker agents (default: `2`).
+* `--num_parallel_runs`: Number of independent agents spawned per problem in parallel search (default: `2`).
+* `--beam_size`: Top candidates retained at each tree depth in beam search (default: `2`).
+* `--branches_per_node`: New optimization strategies explored per candidate node (default: `2`).
+* `--max_depth`: Maximum depth of the beam search tree (default: `2`).
+* `--strategies`: (Optional) Space-separated list of explicit strategies to explore (e.g. `--strategies "Fuse ops" "Tiling"`).
+* `--graph_db_path`: Path to a `search_graph.json` to resume an interrupted search.
+
+---
+
+## 📁 Work Directory & File Safety
+
+All agents operate within a **scoped work directory** (`WORKDIR` in `.env`):
+
+* **Inputs**: Place your reference code, GPU kernels, or problem specifications in `WORKDIR`.
+* **Outputs**: Generated plans (`*.md`), JAX/Pallas kernels (`*.py`), test scripts (`test_*.py`), and profile logs are saved directly in `WORKDIR`.
+* **Isolation**: The agent cannot read or modify files outside `WORKDIR`, protecting your host environment.

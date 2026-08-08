@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import random
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from auto_search.graph import Node
 from auto_search.orchestrator import SearchOrchestrator
@@ -18,7 +18,7 @@ class BeamSearchOrchestrator(SearchOrchestrator):
     branches_per_node: int = 2,
     max_depth: int = 2,
     keep_factor: float = 1,
-    strategies: List[str] = TPU_PALLAS_OPTIMIZATION_STRATEGIES,
+    strategies: Optional[List[str]] = TPU_PALLAS_OPTIMIZATION_STRATEGIES,
     agent_config: dict = None,
     **kwargs,
   ):
@@ -81,10 +81,18 @@ class BeamSearchOrchestrator(SearchOrchestrator):
   ) -> List[Tuple[Node, str]]:
     tasks = []
     for node in nodes:
-      selected_strategies = random.sample(
-        self.strategies,
-        min(self.branches_per_node, len(self.strategies)),
-      )
+      if not self.strategies:
+        selected_strategies = [""] * self.branches_per_node
+      elif len(self.strategies) >= self.branches_per_node:
+        selected_strategies = random.sample(
+          self.strategies,
+          self.branches_per_node,
+        )
+      else:
+        selected_strategies = list(self.strategies) + [""] * (
+          self.branches_per_node - len(self.strategies)
+        )
+
       for strategy in selected_strategies:
         tasks.append((node, strategy))
     return tasks

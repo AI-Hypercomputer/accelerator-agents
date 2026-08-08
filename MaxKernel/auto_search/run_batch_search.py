@@ -155,7 +155,7 @@ def parse_args() -> argparse.Namespace:
   )
   orch_group.add_argument(
     "--strategies",
-    nargs="+",
+    nargs="*",
     type=str,
     default=None,
     help="List of strategy strings to explore",

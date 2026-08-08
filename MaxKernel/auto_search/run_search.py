@@ -47,7 +47,7 @@ def get_orchestrator(
     )
   elif algorithm == "beam":
     strategies_kwargs = {}
-    if kwargs.get("strategies"):
+    if kwargs.get("strategies") is not None:
       strategies_kwargs["strategies"] = kwargs.get("strategies")
 
     return BeamSearchOrchestrator(
@@ -246,7 +246,7 @@ def parse_args() -> argparse.Namespace:
   )
   orch_group.add_argument(
     "--strategies",
-    nargs="+",
+    nargs="*",
     type=str,
     default=None,
     help="List of strategy strings to explore",

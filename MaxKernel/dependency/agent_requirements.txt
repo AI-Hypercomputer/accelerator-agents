@@ -1,4 +1,4 @@
-google-adk
+google-adk~=1.0
 pygithub
 langchain-community
 google-cloud-aiplatform[adk,agent_engines]

@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from pathlib import Path
 from typing import Optional
 
 import uvicorn
@@ -81,6 +82,27 @@ def _extract_code(code: str) -> str:
   return code_content
 
 
+def _save_dependencies(dependencies: Optional[dict], temp_dir: str):
+  """Safely writes dependencies to temp_dir, preventing path traversal attacks."""
+  if not dependencies:
+    return
+  base_dir = Path(temp_dir).resolve()
+  for filename, content in dependencies.items():
+    if not filename:
+      raise HTTPException(
+        status_code=400, detail="Invalid dependency filename: empty"
+      )
+    normalized_filename = filename.replace("\\", "/")
+    target_path = (base_dir / normalized_filename).resolve()
+    if not target_path.is_relative_to(base_dir) or target_path == base_dir:
+      raise HTTPException(
+        status_code=400,
+        detail=f"Path traversal detected in dependency filename: {filename}",
+      )
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_text(content)
+
+
 async def _execute_code(
   request: CodeRequest,
   semaphore: asyncio.Semaphore,
@@ -97,16 +119,7 @@ async def _execute_code(
       temp_dir = tempfile.mkdtemp()
       temp_file_path = os.path.join(temp_dir, "run_code.py")
 
-      if request.dependencies:
-        for filename, content in request.dependencies.items():
-          file_path = os.path.abspath(os.path.join(temp_dir, filename))
-          if not file_path.startswith(os.path.abspath(temp_dir) + os.path.sep):
-            raise HTTPException(
-              status_code=400, detail=f"Invalid filename: {filename}"
-            )
-          os.makedirs(os.path.dirname(file_path), exist_ok=True)
-          with open(file_path, "w") as f:
-            f.write(content)
+      _save_dependencies(request.dependencies, temp_dir)
 
       with open(temp_file_path, "w") as f:
         f.write(request.code)
@@ -295,12 +308,7 @@ async def autotune(request: AutotuneRequest):
     try:
       # Create unique temporary directory for this autotune request
       temp_dir = tempfile.mkdtemp()
-      if request.dependencies:
-        for filename, content in request.dependencies.items():
-          file_path = os.path.join(temp_dir, filename)
-          os.makedirs(os.path.dirname(file_path), exist_ok=True)
-          with open(file_path, "w") as f:
-            f.write(content)
+      _save_dependencies(request.dependencies, temp_dir)
 
       # Generate all combinations
       keys = list(request.search_space.keys())

@@ -19,7 +19,7 @@ wait_for_server_health() {
     local max_retries="${4:-15}"
     
     echo "Waiting for $name on port $port to become healthy..."
-    for i in $(seq 1 "$max_retries"); do
+    for ((i=1; i<=max_retries; i++)); do
         if curl -s --max-time 2 "http://localhost:${port}/health" >/dev/null 2>&1; then
             echo "$name started successfully and is healthy on port $port!"
             return 0

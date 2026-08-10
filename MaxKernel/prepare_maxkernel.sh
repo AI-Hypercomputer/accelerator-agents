@@ -29,8 +29,8 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Repository root path (assuming this script is in repository root)
-REPO_ROOT=$(pwd)
+# Repository root path (based on the script's location)
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Configuration env file path (save env config in the repository root directory)
 CONFIG_FILE="$REPO_ROOT/.env"
 
@@ -456,7 +456,7 @@ create_eval_config() {
     
     HOSTNAME_IP=$(get_hostname_ip)
     
-    if [ -z "$HOSTNAME_IP" ]; then
+    if [ -z "$HOSTNAME_IP" ] || [ "$HOSTNAME_IP" = "127.0.0.1" ]; then
         print_warning "Could not determine local IP, defaulting to 127.0.0.1"
         HOSTNAME_IP="127.0.0.1"
     fi

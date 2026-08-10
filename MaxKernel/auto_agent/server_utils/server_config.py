@@ -3,7 +3,6 @@
 import logging
 import os
 import socket
-import sys
 from typing import Any, Optional
 
 import yaml
@@ -18,11 +17,9 @@ from auto_agent.constants import (
 def get_local_ip() -> str:
   """Returns the local IP address of the machine."""
   try:
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("8.8.8.8", 80))
-    local_ip = s.getsockname()[0]
-    s.close()
-    return local_ip
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+      s.connect(("8.8.8.8", 80))
+      return s.getsockname()[0]
   except Exception:
     return "127.0.0.1"
 
@@ -51,14 +48,27 @@ def get_local_tpu_port(cfg_path: str = "eval_config.yaml") -> Optional[int]:
     logging.error(f"Config file {resolved_path} error: {e}")
     return None
 
+  if not isinstance(config, dict):
+    raise ValueError(
+      f"Invalid configuration format in {resolved_path}: "
+      "Expected a YAML dictionary at the root level."
+    )
+
   backends = config.get("backends", [])
+  if not isinstance(backends, list):
+    raise ValueError(
+      f"Invalid configuration format in {resolved_path}: "
+      "'backends' must be a list."
+    )
+
   local_ip = get_local_ip()
 
   # Find all backends that are local TPUs
   local_tpu_backends = [
     b
     for b in backends
-    if b.get("type") == "tpu"
+    if isinstance(b, dict)
+    and b.get("type") == "tpu"
     and b.get("ip") in ["127.0.0.1", "localhost", local_ip]
     and "tpu_vm" not in b
   ]
@@ -82,14 +92,27 @@ def get_local_cpu_port(cfg_path: str = "eval_config.yaml") -> Optional[int]:
     logging.error(f"Config file {resolved_path} error: {e}")
     return None
 
+  if not isinstance(config, dict):
+    raise ValueError(
+      f"Invalid configuration format in {resolved_path}: "
+      "Expected a YAML dictionary at the root level."
+    )
+
   backends = config.get("backends", [])
+  if not isinstance(backends, list):
+    raise ValueError(
+      f"Invalid configuration format in {resolved_path}: "
+      "'backends' must be a list."
+    )
+
   local_ip = get_local_ip()
 
   # Find all backends that are local CPUs
   local_cpu_backends = [
     b
     for b in backends
-    if b.get("type") == "cpu"
+    if isinstance(b, dict)
+    and b.get("type") == "cpu"
     and b.get("ip") in ["127.0.0.1", "localhost", local_ip]
   ]
 
@@ -110,14 +133,21 @@ def get_bastion_config(
   try:
     with open(resolved_path, "r") as file:
       cfg = yaml.safe_load(file) or {}
+
+    if not isinstance(cfg, dict):
+      raise ValueError(
+        f"Invalid configuration format in {resolved_path}: "
+        "Expected a YAML dictionary at the root level."
+      )
+
     b = cfg.get("bastion_vm", {})
-    if b:
+    if isinstance(b, dict) and b:
       return {
-        "name": b.get("name", ""),
-        "zone": b.get("zone", ""),
-        "project": b.get("project", ""),
-        "local_port": b.get("local_port", b.get("port", default_eval_port)),
-        "remote_port": b.get("remote_port", b.get("port", default_eval_port)),
+        "name": b.get("name") or "",
+        "zone": b.get("zone") or "",
+        "project": b.get("project") or "",
+        "local_port": b.get("local_port") or b.get("port") or default_eval_port,
+        "remote_port": b.get("remote_port") or b.get("port") or default_eval_port,
       }
   except Exception as e:
     logging.error(f"Config file {resolved_path} error: {e}")

@@ -379,7 +379,7 @@ def prune_intermediate_tool_history(
   trailing_idx = len(contents)
   while trailing_idx > 0:
     last_content = contents[trailing_idx - 1]
-    parts = getattr(last_content, "parts", [])
+    parts = getattr(last_content, "parts", None) or []
     if any(_is_tool_part(p) for p in parts):
       trailing_idx -= 1
     else:
@@ -390,12 +390,15 @@ def prune_intermediate_tool_history(
 
   filtered_history = []
   for c in history_contents:
-    parts = getattr(c, "parts", [])
+    parts = getattr(c, "parts", None) or []
     # Remove tool call/response parts (both raw attributes and serialized logs)
     new_parts = [p for p in parts if not _is_tool_part(p)]
     # Keep the turn if there is at least one meaningful part remaining
     # (not just an orphaned 'For context:' header left after removing tool logs)
-    if any(getattr(p, "text", "").strip() != "For context:" for p in new_parts):
+    if any(
+      (getattr(p, "text", None) or "").strip() != "For context:"
+      for p in new_parts
+    ):
       filtered_history.append(types.Content(role=c.role, parts=new_parts))
 
   pruned_count = len(contents) - (

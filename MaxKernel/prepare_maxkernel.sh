@@ -235,6 +235,19 @@ install_dependencies() {
     fi
 
     print_success "Dependencies check completed successfully"
+
+    # Apply ADK CLI patch to fix MCP session cleanup issue
+    print_info "Applying ADK CLI patch for session persistence fix..."
+    if [ -f "$DEPENDENCY_ROOT/adk_cli_patch.py" ]; then
+        if python "$DEPENDENCY_ROOT/adk_cli_patch.py"; then
+            print_success "ADK patch applied successfully"
+        else
+            print_warning "ADK patch may already be applied or failed to apply"
+        fi
+    else
+        print_warning "adk_cli_patch.py not found, skipping patch"
+    fi
+    
     return 0  # Dependencies installed successfully
 }
 

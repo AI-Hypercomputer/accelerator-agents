@@ -6,59 +6,62 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 # Change to the script directory so Python files are always found
 cd "$SCRIPT_DIR" || exit 1
 
-# Helper to check if a bastion_vm is configured in gke_config.yaml
-get_bastion_config() {
-    if [ -f "gke_config.yaml" ]; then
-        python3 -c '
-import yaml
-try:
-    with open("gke_config.yaml") as f:
-        cfg = yaml.safe_load(f)
-    b = cfg.get("bastion_vm", {})
-    if b:
-        name = b.get("name", "")
-        zone = b.get("zone", "")
-        project = b.get("project", "")
-        local_port = b.get("local_port", b.get("port", 1245))
-        remote_port = b.get("remote_port", b.get("port", 1245))
-        print(f"{name}|{zone}|{project}|{local_port}|{remote_port}")
-except:
-    pass
-'
-    fi
+# Load all configurations and ports dynamically from server_config.py
+load_config() {
+    eval "$(python3 "$SCRIPT_DIR/server_config.py" 2>/dev/null)"
 }
 
-# Lazy loader for bastion configuration to avoid running python on every script call
-load_bastion_config() {
-    if [ -n "$BASTION_NAME" ]; then
-        return # Already loaded
-    fi
+# Health check helper function
+wait_for_server_health() {
+    local name="$1"
+    local port="$2"
+    local log_file="$3"
+    local max_retries="${4:-15}"
     
-    local config_info=$(get_bastion_config)
-    if [ -n "$config_info" ]; then
-        IFS='|' read -r BASTION_NAME BASTION_ZONE BASTION_PROJECT BASTION_LOCAL_PORT BASTION_REMOTE_PORT <<< "$config_info"
+    echo "Waiting for $name on port $port to become healthy..."
+    for ((i=1; i<=max_retries; i++)); do
+        if curl -s --max-time 2 "http://localhost:${port}/health" >/dev/null 2>&1; then
+            echo "$name started successfully and is healthy on port $port!"
+            return 0
+        fi
+        sleep 1
+    done
+    
+    echo "========================================================="
+    echo " ERROR: $name failed to become healthy on port $port."
+    if [ -n "$log_file" ] && [ -f "$log_file" ]; then
+        echo " Last 10 lines of $log_file:"
+        tail -n 10 "$log_file"
     fi
-    BASTION_LOCAL_PORT=${BASTION_LOCAL_PORT:-1245}
-    BASTION_REMOTE_PORT=${BASTION_REMOTE_PORT:-1245}
+    echo "========================================================="
+    return 1
 }
 
 if [ "$1" = "--start-tpu" ]; then
-    # Start TPU server on port 5463
+    load_config
+    if [ -z "$LOCAL_TPU_PORT" ]; then
+        echo "Note: No local TPU backend configured in eval_config.yaml (remote TPU VM or CPU only)."
+        exit 0
+    fi
     nohup python3 tpu_server.py > output_tpu_server.txt 2>&1 &
+    wait_for_server_health "TPU server" "$LOCAL_TPU_PORT" "output_tpu_server.txt" || exit 1
 
-    echo "TPU server started successfully on port 5463"
 elif [ "$1" = "--start-cpu" ]; then
-    # Start CPU server on port 5464
+    load_config
+    if [ -z "$LOCAL_CPU_PORT" ]; then
+        echo "Note: No local CPU backend configured in eval_config.yaml."
+        exit 0
+    fi
     nohup python3 cpu_server.py > output_cpu_server.txt 2>&1 &
+    wait_for_server_health "CPU server" "$LOCAL_CPU_PORT" "output_cpu_server.txt" || exit 1
 
-    echo "CPU server started successfully on port 5464"
 elif [ "$1" = "--start-eval" ]; then
-    # Start eval server on port 1245
+    load_config
     nohup python3 eval_server.py > output_eval_server.txt 2>&1 &
+    wait_for_server_health "Eval server" "$EVAL_PORT" "output_eval_server.txt" || exit 1
 
-    echo "Eval server started successfully on port 1245"
 elif [ "$1" = "--start-gke" ]; then
-    load_bastion_config
+    load_config
     
     if [ -n "$BASTION_NAME" ]; then
         # Check if tunnel/eval server is already running on the local port
@@ -83,42 +86,33 @@ elif [ "$1" = "--start-gke" ]; then
         
         # Start the tunnel in the background
         nohup "${CMD[@]}" > output_bastion_tunnel.txt 2>&1 &
-        
-        # Test the tunnel connection
-        echo "Waiting for SSH tunnel to establish..."
-        TUNNEL_SUCCESS=false
-        for i in {1..15}; do
-            if curl -s --max-time 2 http://localhost:${BASTION_LOCAL_PORT}/health >/dev/null 2>&1; then
-                TUNNEL_SUCCESS=true
-                break
-            fi
-            sleep 1
-        done
-        
-        if [ "$TUNNEL_SUCCESS" = true ]; then
-            echo "SSH tunnel established and remote Evaluation server is reachable!"
-        else
-            echo "========================================================="
-            echo " WARNING: SSH tunnel established but Evaluation server is not reachable on localhost:${BASTION_LOCAL_PORT}."
-            echo " Please verify that the eval_server.py is running on the Bastion VM."
-            echo "========================================================="
-            exit 1
-        fi
+        wait_for_server_health "GKE Evaluation tunnel" "$BASTION_LOCAL_PORT" "output_bastion_tunnel.txt" || exit 1
     else
         echo "Error: No bastion_vm configuration found in gke_config.yaml."
         echo "Please add a 'bastion_vm' section with 'name' to gke_config.yaml."
         exit 1
     fi
 elif [ "$1" = "--start-local" ] || [ "$1" = "--start-gce" ]; then
+    load_config
     # Start all local execution/evaluation servers (needed for local or GCE cases)
     echo "Starting local background servers (CPU, TPU, Eval)..."
-    nohup python3 tpu_server.py > output_tpu_server.txt 2>&1 &
-    nohup python3 cpu_server.py > output_cpu_server.txt 2>&1 &
+    if [ -n "$LOCAL_TPU_PORT" ]; then
+        nohup python3 tpu_server.py > output_tpu_server.txt 2>&1 &
+    fi
+    if [ -n "$LOCAL_CPU_PORT" ]; then
+        nohup python3 cpu_server.py > output_cpu_server.txt 2>&1 &
+    fi
     nohup python3 eval_server.py > output_eval_server.txt 2>&1 &
 
-    echo "Local background servers started successfully."
+    if [ -n "$LOCAL_TPU_PORT" ]; then
+        wait_for_server_health "TPU server" "$LOCAL_TPU_PORT" "output_tpu_server.txt" || exit 1
+    fi
+    if [ -n "$LOCAL_CPU_PORT" ]; then
+        wait_for_server_health "CPU server" "$LOCAL_CPU_PORT" "output_cpu_server.txt" || exit 1
+    fi
+    wait_for_server_health "Eval server" "$EVAL_PORT" "output_eval_server.txt" || exit 1
 elif [ "$1" = "--end-gke" ]; then
-    load_bastion_config
+    load_config
     echo "Stopping GKE SSH tunnel..."
     if [ -n "$BASTION_LOCAL_PORT" ] && [ -n "$BASTION_REMOTE_PORT" ]; then
         if pkill -f "${BASTION_LOCAL_PORT}:localhost:${BASTION_REMOTE_PORT}"; then
@@ -130,9 +124,9 @@ elif [ "$1" = "--end-gke" ]; then
 elif [ "$1" = "--end-local" ] || [ "$1" = "--end-gce" ]; then
     echo "Stopping local background servers..."
     servers_stopped=false
-    pkill -f "tpu_server.py" && servers_stopped=true
-    pkill -f "cpu_server.py" && servers_stopped=true
-    pkill -f "eval_server.py" && servers_stopped=true
+    pkill -f "tpu_server.py" && servers_stopped=true || true
+    pkill -f "cpu_server.py" && servers_stopped=true || true
+    pkill -f "eval_server.py" && servers_stopped=true || true
     
     if [ "$servers_stopped" = true ]; then
         echo "Local background servers stopped successfully."
@@ -140,18 +134,18 @@ elif [ "$1" = "--end-local" ] || [ "$1" = "--end-gce" ]; then
         echo "No active local background servers were running."
     fi
 elif [ "$1" = "--end" ]; then
-    load_bastion_config
+    load_config
     echo "Stopping all background servers and tunnels..."
     
     tunnel_stopped=false
     if [ -n "$BASTION_LOCAL_PORT" ] && [ -n "$BASTION_REMOTE_PORT" ]; then
-        pkill -f "${BASTION_LOCAL_PORT}:localhost:${BASTION_REMOTE_PORT}" && tunnel_stopped=true
+        pkill -f "${BASTION_LOCAL_PORT}:localhost:${BASTION_REMOTE_PORT}" && tunnel_stopped=true || true
     fi
     
     servers_stopped=false
-    pkill -f "tpu_server.py" && servers_stopped=true
-    pkill -f "cpu_server.py" && servers_stopped=true
-    pkill -f "eval_server.py" && servers_stopped=true
+    pkill -f "tpu_server.py" && servers_stopped=true || true
+    pkill -f "cpu_server.py" && servers_stopped=true || true
+    pkill -f "eval_server.py" && servers_stopped=true || true
 
     if [ "$tunnel_stopped" = true ] || [ "$servers_stopped" = true ]; then
         echo "Successfully stopped:"

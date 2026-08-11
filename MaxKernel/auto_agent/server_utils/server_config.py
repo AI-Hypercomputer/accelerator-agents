@@ -76,7 +76,8 @@ def get_local_tpu_port(cfg_path: str = "eval_config.yaml") -> Optional[int]:
   if not local_tpu_backends:
     return None
 
-  return local_tpu_backends[0].get("port")
+  port = local_tpu_backends[0].get("port")
+  return port if port is not None else TPU_SERVER_PORT
 
 
 def get_local_cpu_port(cfg_path: str = "eval_config.yaml") -> Optional[int]:
@@ -119,7 +120,8 @@ def get_local_cpu_port(cfg_path: str = "eval_config.yaml") -> Optional[int]:
   if not local_cpu_backends:
     return None
 
-  return local_cpu_backends[0].get("port")
+  port = local_cpu_backends[0].get("port")
+  return port if port is not None else CPU_SERVER_PORT
 
 
 def get_bastion_config(
@@ -147,7 +149,9 @@ def get_bastion_config(
         "zone": b.get("zone") or "",
         "project": b.get("project") or "",
         "local_port": b.get("local_port") or b.get("port") or default_eval_port,
-        "remote_port": b.get("remote_port") or b.get("port") or default_eval_port,
+        "remote_port": b.get("remote_port")
+        or b.get("port")
+        or default_eval_port,
       }
   except Exception as e:
     logging.error(f"Config file {resolved_path} error: {e}")
@@ -160,8 +164,6 @@ if __name__ == "__main__":
   b = get_bastion_config()
 
   print(f"EVAL_PORT={EVAL_SERVER_PORT}")
-  print(f"TPU_PORT={tpu_p if tpu_p is not None else TPU_SERVER_PORT}")
-  print(f"CPU_PORT={cpu_p if cpu_p is not None else CPU_SERVER_PORT}")
   print(f"LOCAL_TPU_PORT={tpu_p if tpu_p is not None else ''}")
   print(f"LOCAL_CPU_PORT={cpu_p if cpu_p is not None else ''}")
   print(f"BASTION_NAME='{b.get('name', '')}'")

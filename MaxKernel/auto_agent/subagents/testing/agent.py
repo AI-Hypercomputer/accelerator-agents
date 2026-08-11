@@ -712,6 +712,7 @@ def create_validation_summary_agent(
     generate_content_config=model_config,
     instruction=validation_summary.PROMPT,
     description="Summarizes validation results and provides next steps to the user.",
+    include_contents="none",
   )
 
 
@@ -739,6 +740,7 @@ def create_generate_test_file_agent(
       if vertex_ai_rag_tool
       else [search_api_tool, filesystem_tool_r, write_test_file_tool]
     ),
+    include_contents="none",
   )
 
 

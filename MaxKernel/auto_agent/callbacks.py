@@ -6,8 +6,9 @@ import os
 from typing import Any, Dict, Optional
 
 from google.adk.agents.callback_context import CallbackContext
-from google.adk.models import LlmResponse
+from google.adk.models import LlmRequest, LlmResponse
 from google.adk.tools import BaseTool, ToolContext
+from google.genai import types
 
 from auto_agent.config import TPU_VERSION, WORKDIR
 from auto_agent.knowledge_base import pallas_docs, pallas_profiling_docs
@@ -337,6 +338,81 @@ def add_pallas_docs(callback_context: CallbackContext):
   callback_context.state["pallas_profiling_docs"] = pallas_profiling_docs.PROMPT
 
 
+def _is_tool_part(p) -> bool:
+  """Checks if a Part represents a tool call or response.
+
+  Supports raw attributes (snake_case/camelCase) for self-history, and ADK
+  serialized text logs (`] called tool ``) for upstream subagent history.
+  """
+  if getattr(p, "function_call", None) or getattr(p, "functionCall", None):
+    return True
+  if getattr(p, "function_response", None) or getattr(
+    p, "functionResponse", None
+  ):
+    return True
+
+  text_attr = getattr(p, "text", None)
+  if text_attr:
+    txt = text_attr.strip()
+    if "] called tool `" in txt:
+      return True
+    if "] `" in txt and " tool returned result:" in txt:
+      return True
+
+  return False
+
+
+def prune_intermediate_tool_history(
+  callback_context: CallbackContext, llm_request: LlmRequest
+) -> Optional[LlmResponse]:
+  """Prunes historical tool turns from llm_request.contents.
+
+  Preserves active trailing tool turns and text summaries.
+  """
+  if not llm_request.contents or len(llm_request.contents) <= 2:
+    return None
+
+  contents = llm_request.contents
+
+  # Find where the trailing tool-calling sequence (if any) starts at the end
+  # of contents
+  trailing_idx = len(contents)
+  while trailing_idx > 0:
+    last_content = contents[trailing_idx - 1]
+    parts = getattr(last_content, "parts", None) or []
+    if any(_is_tool_part(p) for p in parts):
+      trailing_idx -= 1
+    else:
+      break
+
+  active_trailing_contents = contents[trailing_idx:]
+  history_contents = contents[:trailing_idx]
+
+  filtered_history = []
+  for c in history_contents:
+    parts = getattr(c, "parts", None) or []
+    # Remove tool call/response parts (both raw attributes and serialized logs)
+    new_parts = [p for p in parts if not _is_tool_part(p)]
+    # Keep the turn if there is at least one meaningful part remaining
+    # (not just an orphaned 'For context:' header left after removing tool logs)
+    if any(
+      (getattr(p, "text", None) or "").strip() != "For context:"
+      for p in new_parts
+    ):
+      filtered_history.append(types.Content(role=c.role, parts=new_parts))
+
+  pruned_count = len(contents) - (
+    len(filtered_history) + len(active_trailing_contents)
+  )
+  if pruned_count > 0:
+    logging.info(
+      f"prune_intermediate_tool_history: pruned {pruned_count} "
+      "historical tool turns."
+    )
+  llm_request.contents = filtered_history + active_trailing_contents
+  return None
+
+
 __all__ = [
   "create_path_saver",
   "save_optimized_kernel_and_plan_paths",
@@ -348,4 +424,5 @@ __all__ = [
   "add_workdir_callback",
   "extract_fix_summary",
   "add_pallas_docs",
+  "prune_intermediate_tool_history",
 ]

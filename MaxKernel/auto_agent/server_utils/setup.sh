@@ -44,7 +44,7 @@ if [ "$1" = "--start-tpu" ]; then
         exit 0
     fi
     nohup python3 tpu_server.py > output_tpu_server.txt 2>&1 &
-    wait_for_server_health "TPU server" "$TPU_PORT" "output_tpu_server.txt" || exit 1
+    wait_for_server_health "TPU server" "$LOCAL_TPU_PORT" "output_tpu_server.txt" || exit 1
 
 elif [ "$1" = "--start-cpu" ]; then
     load_config
@@ -53,7 +53,7 @@ elif [ "$1" = "--start-cpu" ]; then
         exit 0
     fi
     nohup python3 cpu_server.py > output_cpu_server.txt 2>&1 &
-    wait_for_server_health "CPU server" "$CPU_PORT" "output_cpu_server.txt" || exit 1
+    wait_for_server_health "CPU server" "$LOCAL_CPU_PORT" "output_cpu_server.txt" || exit 1
 
 elif [ "$1" = "--start-eval" ]; then
     load_config
@@ -105,10 +105,10 @@ elif [ "$1" = "--start-local" ] || [ "$1" = "--start-gce" ]; then
     nohup python3 eval_server.py > output_eval_server.txt 2>&1 &
 
     if [ -n "$LOCAL_TPU_PORT" ]; then
-        wait_for_server_health "TPU server" "$TPU_PORT" "output_tpu_server.txt" || exit 1
+        wait_for_server_health "TPU server" "$LOCAL_TPU_PORT" "output_tpu_server.txt" || exit 1
     fi
     if [ -n "$LOCAL_CPU_PORT" ]; then
-        wait_for_server_health "CPU server" "$CPU_PORT" "output_cpu_server.txt" || exit 1
+        wait_for_server_health "CPU server" "$LOCAL_CPU_PORT" "output_cpu_server.txt" || exit 1
     fi
     wait_for_server_health "Eval server" "$EVAL_PORT" "output_eval_server.txt" || exit 1
 elif [ "$1" = "--end-gke" ]; then

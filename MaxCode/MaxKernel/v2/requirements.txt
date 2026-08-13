@@ -1,0 +1,22 @@
+-f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+torch
+google-cloud-bigquery
+langchain-google-community
+tensorflow
+transformers
+jax[tpu]==0.11.0
+matplotlib>=3.11.1
+pandas
+tabulate
+protobuf
+google-adk~=1.0
+pygithub
+langchain-community
+google-cloud-aiplatform[adk,agent_engines]
+cloudpickle
+xprof
+tpu-info
+pytest-asyncio
+google-genai>=2.16.0
+PyYAML>=6.0.3
+docstring-parser

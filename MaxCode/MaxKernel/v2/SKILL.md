@@ -37,12 +37,14 @@ latency by reading `workspace/state.json` itself.
 
 ## Setup
 
-All paths below are relative to `experimental/MaxKernel/`.
+All paths below are relative to
+`third_party/py/accelerator_agents/MaxKernel/v2/`.
 
 1.  Determine the baseline code:
     -   If the user supplied code (inline or a file path) in their message, use
         it.
-    -   Otherwise default to `experimental/MaxKernel/workspace/base.py`.
+    -   Otherwise default to
+        `third_party/py/accelerator_agents/MaxKernel/v2/workspace/base.py`.
 2.  Determine `atol` and `rtol`:
     -   If the user supplied `atol` and/or `rtol` in their message, use those values.
     -   Otherwise, default `atol` to `1e-2` and `rtol` to `1e-2`.

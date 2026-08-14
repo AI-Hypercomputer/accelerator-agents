@@ -53,7 +53,7 @@ source ~/maxkernel_venv/bin/activate
 pip install --upgrade pip --index-url https://pypi.org/simple
 
 # Install dependencies from the combined requirements.txt
-pip install -r experimental/MaxKernel/requirements.txt --index-url https://pypi.org/simple
+pip install -r third_party/py/accelerator_agents/MaxKernel/v2/requirements.txt --index-url https://pypi.org/simple
 ```
 
 ### Step 4: Verification

@@ -1,0 +1,1247 @@
+#!/usr/bin/env python3
+"""Harness-agnostic framework for running agents.
+
+This tool compiles, validates, installs, and manages canonical agent packages
+across target agent harnesses (such as Claude Code and Codex) while providing
+runtime support for run namespace isolation and artifact provenance.
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import shutil
+import subprocess
+import sys
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Sequence
+
+# =====================================================================
+# Utilities, Versioning, Schema Validation, & Config Managers
+# =====================================================================
+
+from utils import (
+    FRAMEWORK_VERSION,
+    GENERATED_MARKER,
+    PORTABLE_TOOLS,
+    CoworkerError,
+    JsonConfigManager,
+    SemVer,
+    TomlConfigManager,
+    compute_digest,
+    format_json,
+    load_json,
+    parse_version_range,
+    rooted,
+    safe_relative,
+    validate_instance,
+    validate_package_name,
+    validate_run_id,
+    validate_schema_definition,
+    version_satisfies,
+    write_json,
+)
+
+
+# =====================================================================
+# Package Validation & Graph Checking
+# =====================================================================
+
+def render_agent_references(text: str, manifest: dict[str, Any], prefix: str = "") -> str:
+    """Replace {{agent:NAME}} template tokens with prefixed agent identifiers."""
+    known_agents = {agent["name"] for agent in manifest["agents"]}
+
+    def replace(match: re.Match[str]) -> str:
+        name = match.group(1)
+        if name not in known_agents:
+            raise CoworkerError(f"instructions reference unknown agent: {name}")
+        return prefix + name
+
+    rendered = re.sub(r"\{\{agent:([a-z0-9]+(?:-[a-z0-9]+)*)}}", replace, text)
+    if "{{agent:" in rendered:
+        raise CoworkerError("instructions contain a malformed agent reference")
+    return rendered
+
+
+def validate_delegation_graph(
+    entrypoint: dict[str, Any],
+    agents_by_name: dict[str, dict[str, Any]],
+    expected_agents: set[str],
+) -> None:
+    """Validate delegation graph for cycle detection, max depth <= 2, and reachability."""
+    visited: set[str] = set()
+
+    def visit(agent_name: str, depth: int, path: tuple[str, ...]) -> None:
+        if agent_name in path:
+            cycle = " -> ".join((*path, agent_name))
+            raise CoworkerError(f"delegation graph contains a cycle: {cycle}")
+        if depth > 2:
+            chain = " -> ".join((*path, agent_name))
+            raise CoworkerError(f"delegation exceeds two levels below entrypoint: {chain}")
+
+        visited.add(agent_name)
+        for delegated in agents_by_name[agent_name].get("delegates", []):
+            visit(delegated, depth + 1, (*path, agent_name))
+
+    for delegated in entrypoint["delegates"]:
+        visit(delegated, 1, (entrypoint["name"],))
+
+    unreachable = expected_agents - visited
+    if unreachable:
+        raise CoworkerError(f"agents are unreachable from entrypoint: {sorted(unreachable)}")
+
+
+def load_package(package_dir: Path) -> dict[str, Any]:
+    """Load, validate, and verify the structural integrity of a package manifest and its graph."""
+    manifest_path = package_dir / "package.json"
+    manifest = load_json(manifest_path)
+
+    # 1. Manifest level requirements
+    required_manifest_fields = {
+        "name", "version", "description", "entrypoint", "agents", "environment",
+        "compatibility_targets",
+    }
+    missing_manifest = required_manifest_fields - manifest.keys()
+    if missing_manifest:
+        raise CoworkerError(f"package.json missing: {', '.join(sorted(missing_manifest))}")
+    manifest_name = manifest["name"]
+
+    validate_package_name(manifest_name)
+
+    # 2. Agent presence & uniqueness
+    agent_names = [agent.get("name") for agent in manifest["agents"]]
+    if None in agent_names or len(agent_names) != len(set(agent_names)):
+        raise CoworkerError(f"Agent names are not unique in package or are missing: {manifest_name}")
+    name_set = set(agent_names)
+
+    # 3. Entrypoint validation
+    entrypoint = manifest["entrypoint"]
+    entry_point_is_missing = {"name", "instructions", "delegates"} - entrypoint.keys()
+    if entry_point_is_missing:
+        raise CoworkerError(
+            f"Entrypoint {manifest_name} missing fields: {sorted(entry_point_is_missing)}"
+        )
+    if entrypoint["name"] in name_set:
+        raise CoworkerError("Entrypoint and agent names must be distinct")
+
+    unknown_entry_delegates = set(entrypoint["delegates"]) - name_set
+    if unknown_entry_delegates:
+        raise CoworkerError(
+            f"entrypoint delegates to unknown agents: {sorted(unknown_entry_delegates)}"
+        )
+
+    # 4. Agent definitions & files
+    agents_by_name = {agent["name"]: agent for agent in manifest["agents"]}
+    for agent in manifest["agents"]:
+        required_agent_fields = {
+            "name", "description", "instructions", "accepts", "produces", "delegates", "tools",
+        }
+        missing_agent = required_agent_fields - agent.keys()
+        if missing_agent:
+            agent_label = agent.get("name", "<unnamed>")
+            raise CoworkerError(f"agent {agent_label} missing: {sorted(missing_agent)}")
+
+        unknown_tools = set(agent["tools"]) - PORTABLE_TOOLS
+        if unknown_tools:
+            raise CoworkerError(
+                f"agent {agent['name']} has unsupported portable tools: {sorted(unknown_tools)}"
+            )
+
+        unknown_delegates = set(agent.get("delegates", [])) - name_set
+        if unknown_delegates:
+            raise CoworkerError(f"agent {agent['name']} delegates to unknown agents: {unknown_delegates}")
+
+        source_inst = rooted(package_dir, agent["instructions"], "agent instructions")
+        if not source_inst.is_file():
+            raise CoworkerError(f"missing agent instructions: {source_inst}")
+        render_agent_references(source_inst.read_text(encoding="utf-8"), manifest, "")
+
+        for schema_key in ("accepts", "produces"):
+            schema_path = rooted(package_dir, agent[schema_key], f"agent {schema_key}")
+            if not schema_path.is_file():
+                raise CoworkerError(f"missing agent {schema_key} schema: {schema_path}")
+
+    # 5. Delegation graph traversal: cycle detection, max depth <= 2, reachability
+    validate_delegation_graph(entrypoint, agents_by_name, name_set)
+
+    # 6. Entrypoint and environment files verification
+    entry_inst = rooted(package_dir, entrypoint["instructions"], "entrypoint instructions")
+    if not entry_inst.is_file():
+        raise CoworkerError(f"missing entrypoint instructions: {entry_inst}")
+    render_agent_references(entry_inst.read_text(encoding="utf-8"), manifest, "")
+
+    questions = rooted(package_dir, manifest["environment"]["questions"], "environment questions")
+    env_schema = rooted(package_dir, manifest["environment"]["schema"], "environment schema")
+    if not questions.is_file() or not env_schema.is_file():
+        raise CoworkerError("environment questions or schema is missing")
+
+    return manifest
+
+
+def target_for(manifest: dict[str, Any], harness: str) -> dict[str, Any]:
+    """Retrieve and validate the compatibility target configuration for a given harness."""
+    target = next(
+        (t for t in manifest.get("compatibility_targets", []) if t.get("harness") == harness),
+        None,
+    )
+    if not target:
+        raise CoworkerError(f"no compatibility target for harness {harness}")
+
+    # Validate version constraint syntax
+    parse_version_range(target["versions"])
+
+    # Verify target satisfies all required capabilities
+    required = set(manifest.get("required_capabilities", []))
+    available = {k for k, v in target.get("capabilities", {}).items() if v}
+    missing = required - available
+    if missing:
+        raise CoworkerError(
+            f"target {target['name']} cannot preserve required capabilities: {', '.join(sorted(missing))}"
+        )
+
+    return target
+
+
+def verify_package(package_dir: Path) -> None:
+    """Verify package manifest, schema definitions, and target compatibility."""
+    manifest = load_package(package_dir)
+    for schema_rel in manifest.get("schemas", []):
+        schema_path = rooted(package_dir, schema_rel, "schema path")
+        schema = load_json(schema_path)
+        errors = validate_schema_definition(schema)
+        if errors:
+            raise CoworkerError(f"invalid schema {schema_rel}:\n" + "\n".join(errors))
+
+    harnesses = {target["harness"] for target in manifest["compatibility_targets"]}
+    for harness in harnesses:
+        target_for(manifest, harness)
+
+
+# =====================================================================
+# Document & Prompt Generators
+# =====================================================================
+
+def generated_header(manifest: dict[str, Any], target: dict[str, Any]) -> str:
+    """Generate the standard comment header for translated assets."""
+    return (
+        f"<!-- {GENERATED_MARKER} Source {manifest['name']}@{manifest['version']}; "
+        f"compatibility-target {target['name']}. -->\n\n"
+    )
+
+
+def skill_frontmatter(name: str, description: str) -> str:
+    """Generate YAML frontmatter for an entrypoint skill."""
+    escaped = description.replace('"', "'")
+    return f'---\nname: {name}\ndescription: "{escaped}"\n---\n\n'
+
+
+def skill_package_contract(package_name: str, delegates: list[str]) -> str:
+    """Build the runtime execution contract section for an installed skill package."""
+    targets = ", ".join(delegates) or "none"
+    runtime = f"python3 .coworker/{package_name}/runtime/coworker.py"
+    return f"""
+
+## Installed package contract
+
+- Read `.coworker/{package_name}/environment.json` before delegating.
+- Before the first delegation, run `{runtime} start-run --workspace . --package {package_name}` exactly once.
+- Retain the returned `run_id`, include it in every delegation request, and use only that run's artifact references.
+- Direct delegation targets: {targets}. Do not invoke any other package agent directly.
+- Run one branch at a time. A subagent may wait for its one nested helper; do not run sibling branches in parallel.
+- Validate messages with `{runtime} validate`.
+- Store durable outputs below `.coworker/{package_name}/runs/<run_id>/artifacts/`; never overwrite an existing artifact.
+- Create descriptors with `{runtime} describe-artifact --workspace . --package {package_name} --run-id <run_id> --file <path-relative-to-artifacts> --schema <path-relative-to-package> --media-type <type>` and pass descriptors, not payload copies.
+"""
+
+
+def skill_document(
+    package_dir: Path,
+    manifest: dict[str, Any],
+    target: dict[str, Any],
+    agent_prefix: str = "",
+) -> str:
+    """Generate SKILL.md markdown document for entrypoint workflow."""
+    entry = manifest["entrypoint"]
+    frontmatter = skill_frontmatter(entry["name"], manifest["description"])
+    header = generated_header(manifest, target)
+
+    source_path = rooted(package_dir, entry["instructions"], "entrypoint instructions")
+    rendered_body = render_agent_references(source_path.read_text(encoding="utf-8"), manifest, agent_prefix).rstrip()
+
+    delegates = [agent_prefix + name for name in entry["delegates"]]
+    contract = skill_package_contract(manifest["name"], delegates)
+
+    return f"{frontmatter}{header}{rendered_body}{contract}"
+
+
+def agent_execution_contract(package_name: str, agent: dict[str, Any], delegates: list[str]) -> str:
+    """Build the runtime execution contract section for an agent prompt."""
+    targets = ", ".join(delegates) or "none"
+    runtime = f"python3 .coworker/{package_name}/runtime/coworker.py"
+    return f"""
+
+## Generated execution contract
+
+- Validate the request against `.coworker/{package_name}/{agent['accepts']}` before work.
+- Require the request's `run_id` and keep every output under `.coworker/{package_name}/runs/<run_id>/artifacts/`.
+- Validate the result against `.coworker/{package_name}/{agent['produces']}` before returning.
+- Use `{runtime} validate --schema SCHEMA INSTANCE`.
+- Return the common result envelope with `completed`, `invalid_input`, `needs_input`, or `failed`.
+- Never overwrite an existing artifact; create its descriptor with `{runtime} describe-artifact --workspace . --package {package_name} --run-id <run_id> --file <path-relative-to-artifacts> --schema <path-relative-to-package> --media-type <type>`.
+- Reject artifact references whose URI does not contain the request's exact package and `run_id`.
+- Materialize durable outputs and return artifact descriptors; do not copy payloads into messages.
+- Allowed delegation targets: {targets}.
+- Run sequentially. Never weaken inherited permissions or approvals.
+"""
+
+
+def agent_prompt(
+    package_dir: Path,
+    manifest: dict[str, Any],
+    target: dict[str, Any],
+    agent: dict[str, Any],
+    agent_prefix: str = "",
+) -> str:
+    """Generate agent instruction prompt document with generated execution contract."""
+    source_path = rooted(package_dir, agent["instructions"], "agent instructions")
+    rendered_body = render_agent_references(source_path.read_text(encoding="utf-8"), manifest, agent_prefix).rstrip()
+
+    delegates = [agent_prefix + name for name in agent.get("delegates", [])]
+    contract = agent_execution_contract(manifest["name"], agent, delegates)
+
+    return f"{generated_header(manifest, target)}{rendered_body}{contract}"
+
+
+def claude_frontmatter(agent: dict[str, Any]) -> str:
+    """Generate Claude agent YAML frontmatter with mapped native tools."""
+    tool_map = {
+        "read": "Read",
+        "search": "Grep, Glob",
+        "shell": "Bash",
+        "write": "Write",
+        "edit": "Edit",
+    }
+    tools: list[str] = []
+    for portable in agent["tools"]:
+        for native in tool_map[portable].split(", "):
+            if native not in tools:
+                tools.append(native)
+    if agent.get("delegates"):
+        tools.append("Agent")
+
+    return (
+        "---\n"
+        f"name: {agent['name']}\n"
+        f"description: {agent['description']}\n"
+        f"tools: {', '.join(tools)}\n"
+        "background: false\n"
+        "---\n\n"
+    )
+
+
+# =====================================================================
+# Harness Translation
+# =====================================================================
+
+def copy_asset(source: Path, destination: Path) -> None:
+    """Copy a file or directory tree to destination, creating parent directories as needed."""
+    if source.is_dir():
+        shutil.copytree(source, destination, dirs_exist_ok=True)
+    elif source.is_file():
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+    else:
+        raise CoworkerError(f"copy path does not exist: {source}")
+
+
+def bundle_runtime_scripts(runtime_dir: Path) -> None:
+    """Bundle framework runtime worker scripts into the distribution runtime directory."""
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    framework_dir = Path(__file__).resolve().parent
+
+    for script_name in ("coworker.py", "utils.py"):
+        script_path = framework_dir / script_name
+        if script_path.is_file():
+            shutil.copy2(script_path, runtime_dir / script_name)
+
+
+def copy_runtime_assets(package_dir: Path, output: Path, manifest: dict[str, Any]) -> None:
+    """Copy configured package assets and bundle framework runtime worker scripts."""
+    for item in manifest.get("copy", []):
+        rel = safe_relative(item, "copy path")
+        source = rooted(package_dir, str(rel), "copy path")
+        copy_asset(source, output / rel)
+
+    bundle_runtime_scripts(output / "runtime")
+
+
+def runtime_copy_mappings(package_name: str, copy_items: Sequence[str]) -> list[dict[str, str]]:
+    """Build list of runtime and schema copy mappings for an installed package."""
+    mappings = [
+        {"source": "runtime", "destination": f".coworker/{package_name}/runtime"},
+        {"source": "schemas", "destination": f".coworker/{package_name}/schemas"},
+    ]
+    if any(Path(item).parts[:1] == ("scripts",) for item in copy_items):
+        mappings.append({"source": "scripts", "destination": f".coworker/{package_name}/scripts"})
+    mappings.append({"source": "coworker-build.json", "destination": f".coworker/{package_name}/coworker-build.json"})
+    return mappings
+
+
+def harness_install_specs(entry_name: str) -> dict[str, dict[str, Any]]:
+    """Return harness-specific copy rules, version command, and configuration settings."""
+    return {
+        "claude-code": {
+            "version_command": ["claude", "--version"],
+            "copies": [
+                {"source": f"project/skills/{entry_name}", "destination": f".claude/skills/{entry_name}"},
+                {"source": "project/agents", "destination": ".claude/agents"},
+            ],
+            "json_merges": [{
+                "path": ".claude/settings.local.json",
+                "value": {
+                    "env": {
+                        "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "2",
+                        "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "2",
+                    }
+                },
+            }],
+            "toml_sets": [],
+        },
+        "codex": {
+            "version_command": ["codex", "--version"],
+            "copies": [
+                {"source": f"skills/{entry_name}", "destination": f".agents/skills/{entry_name}"},
+                {"source": "agents", "destination": ".codex/agents"},
+            ],
+            "json_merges": [],
+            "toml_sets": [
+                {"path": ".codex/config.toml", "section": "agents", "key": "enabled", "value": True},
+                {"path": ".codex/config.toml", "section": "agents", "key": "max_concurrent_threads_per_session", "value": 2},
+            ],
+        },
+    }
+
+
+def build_install_plan(
+    manifest: dict[str, Any],
+    target: dict[str, Any],
+    harness: str,
+) -> dict[str, Any]:
+    """Generate coworker-install.json installation plan for target harness."""
+    name = manifest["name"]
+    entry = manifest["entrypoint"]["name"]
+    spec = harness_install_specs(entry)[harness]
+
+    return {
+        "harness": harness,
+        "version_range": target["versions"],
+        "environment_questions": "environment/questions.json",
+        "environment_schema": manifest["environment"]["schema"],
+        "environment_path": f".coworker/{name}/environment.json",
+        "ownership_path": f".coworker/{name}/ownership.json",
+        "version_command": spec["version_command"],
+        "copies": spec["copies"] + runtime_copy_mappings(name, manifest.get("copy", [])),
+        "json_merges": spec["json_merges"],
+        "toml_sets": spec["toml_sets"],
+    }
+
+
+def translate_claude(
+    package_dir: Path,
+    output: Path,
+    manifest: dict[str, Any],
+    target: dict[str, Any],
+) -> None:
+    """Translate package into Claude Code plugin and project layouts."""
+    plugin = output / ".claude-plugin"
+    write_json(plugin / "plugin.json", {
+        "name": manifest["name"],
+        "displayName": manifest.get("display_name", manifest["name"]),
+        "version": manifest["version"],
+        "description": manifest["description"],
+        "author": {"name": manifest.get("author", "Coworker Framework")},
+    })
+
+    entry_name = manifest["entrypoint"]["name"]
+    plugin_agent_prefix = f"{manifest['name']}:"
+
+    # Write plugin skill and standalone project skill
+    skill = output / "skills" / entry_name / "SKILL.md"
+    skill.parent.mkdir(parents=True, exist_ok=True)
+    skill.write_text(skill_document(package_dir, manifest, target, plugin_agent_prefix), encoding="utf-8")
+
+    project_skill = output / "project" / "skills" / entry_name / "SKILL.md"
+    project_skill.parent.mkdir(parents=True, exist_ok=True)
+    project_skill.write_text(skill_document(package_dir, manifest, target), encoding="utf-8")
+
+    # Write plugin agents and project agents
+    for agent in manifest["agents"]:
+        fm = claude_frontmatter(agent)
+        path = output / "agents" / f"{agent['name']}.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(fm + agent_prompt(package_dir, manifest, target, agent, plugin_agent_prefix), encoding="utf-8")
+
+        project_agent = output / "project" / "agents" / f"{agent['name']}.md"
+        project_agent.parent.mkdir(parents=True, exist_ok=True)
+        project_agent.write_text(fm + agent_prompt(package_dir, manifest, target, agent), encoding="utf-8")
+
+    write_json(output / "coworker-install.json", build_install_plan(manifest, target, "claude-code"))
+
+
+def translate_codex(
+    package_dir: Path,
+    output: Path,
+    manifest: dict[str, Any],
+    target: dict[str, Any],
+) -> None:
+    """Translate package into Codex plugin and agents layouts."""
+    plugin = output / ".codex-plugin"
+    write_json(plugin / "plugin.json", {
+        "name": manifest["name"],
+        "version": manifest["version"],
+        "description": manifest["description"],
+        "author": {"name": manifest.get("author", "Coworker Framework")},
+        "skills": "./skills/",
+        "interface": {
+            "displayName": manifest.get("display_name", manifest["name"]),
+            "shortDescription": manifest["description"][:80],
+            "longDescription": manifest["description"],
+            "developerName": manifest.get("author", "Coworker Framework"),
+            "category": "Productivity",
+            "capabilities": ["Interactive", "Write"],
+            "defaultPrompt": [manifest["entrypoint"].get("example_prompt", "Run this workflow.")[:128]],
+        },
+    })
+
+    entry_name = manifest["entrypoint"]["name"]
+    skill = output / "skills" / entry_name / "SKILL.md"
+    skill.parent.mkdir(parents=True, exist_ok=True)
+    skill.write_text(skill_document(package_dir, manifest, target), encoding="utf-8")
+
+    for agent in manifest["agents"]:
+        config = output / "agents" / f"{agent['name']}.toml"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        prompt = agent_prompt(package_dir, manifest, target, agent).replace('"""', "'''")
+        sandbox = "workspace-write" if any(tool in agent["tools"] for tool in ("write", "edit")) else "read-only"
+        config.write_text(
+            f'name = "{agent["name"]}"\n'
+            f'description = "{agent["description"]}"\n'
+            f'sandbox_mode = "{sandbox}"\n'
+            f'developer_instructions = """\n{prompt}\n"""\n',
+            encoding="utf-8",
+        )
+
+    write_json(output / "coworker-install.json", build_install_plan(manifest, target, "codex"))
+
+
+def translate(package_dir: Path, harness: str, output: Path) -> None:
+  """Translate a package into a target harness distribution."""
+  manifest = load_package(package_dir)
+  target = target_for(manifest, harness)
+
+  if output.exists():
+    marker = output / "coworker-build.json"
+    if not marker.is_file() or not load_json(marker).get("generated"):
+      raise CoworkerError(
+          f"refusing to replace non-generated output directory: {output}"
+      )
+    shutil.rmtree(output)
+
+  output.mkdir(parents=True)
+
+  translators: dict[
+      str, Callable[[Path, Path, dict[str, Any], dict[str, Any]], None]
+  ] = {
+      "claude-code": translate_claude,
+      "codex": translate_codex,
+  }
+  translators[harness](package_dir, output, manifest, target)
+
+  copy_runtime_assets(package_dir, output, manifest)
+
+  write_json(output / "coworker-build.json", {
+        "framework_version": FRAMEWORK_VERSION,
+        "source": manifest["name"],
+        "source_version": manifest["version"],
+        "compatibility_target": target["name"],
+        "harness": harness,
+        "version_range": target["versions"],
+        "generated": True,
+    })
+
+
+# =====================================================================
+# Environment Prompting & Question Coercion
+# =====================================================================
+
+def coerce_answer_value(question: dict[str, Any], raw: Any) -> Any:
+    """Coerce raw input into the declared question type and validate choices."""
+    key = question["name"]
+    if question.get("type") == "boolean" and isinstance(raw, str):
+        if raw.lower() not in {"yes", "no", "true", "false", "y", "n"}:
+            raise CoworkerError(f"{key} must be yes/no")
+        raw = raw.lower() in {"yes", "true", "y"}
+
+    if question.get("type") == "integer" and isinstance(raw, str):
+        try:
+            raw = int(raw)
+        except ValueError as exc:
+            raise CoworkerError(f"{key} must be an integer") from exc
+
+    if "choices" in question and raw not in question["choices"]:
+        raise CoworkerError(f"{key} must be one of {question['choices']}")
+
+    return raw
+
+
+def prompt_question_value(
+    question: dict[str, Any],
+    supplied: dict[str, Any],
+    current: dict[str, Any],
+    non_interactive: bool,
+    destination: Path,
+) -> Any:
+    """Resolve the value for an environment question interactively or from answers."""
+    key = question["name"]
+    if question.get("value_from") == "destination":
+        return str(destination.resolve())
+
+    if key in supplied:
+        return coerce_answer_value(question, supplied[key])
+
+    fallback = current.get(key, question.get("default"))
+
+    if non_interactive:
+        if fallback is None:
+            raise CoworkerError(f"missing required answer: {key}")
+        return coerce_answer_value(question, fallback)
+
+    choices = f" ({' | '.join(map(str, question['choices']))})" if "choices" in question else ""
+    suffix = f" [{fallback}]" if fallback is not None else ""
+    entered = input(f"{question['prompt']}{choices}{suffix}: ").strip()
+
+    if not entered and fallback is None:
+        raise CoworkerError(f"missing required answer: {key}")
+
+    return coerce_answer_value(question, entered if entered else fallback)
+
+
+# Backward-compatible function alias
+prompt_value = prompt_question_value
+
+
+def validate_question_constraints(questions: list[dict[str, Any]], answers: dict[str, Any]) -> None:
+    """Validate filesystem and relational constraints on environment answers."""
+    for question in questions:
+        value = answers[question["name"]]
+        if question.get("relative_path") and Path(str(value)).is_absolute():
+            raise CoworkerError(f"{question['name']} must be relative")
+
+        if "must_exist" in question:
+            candidate = Path(str(value))
+            if "relative_to" in question:
+                candidate = Path(str(answers[question["relative_to"]])) / candidate
+            expected = question["must_exist"]
+            if expected == "file" and not candidate.is_file():
+                raise CoworkerError(f"{question['name']} does not identify a file: {candidate}")
+            if expected == "directory" and not candidate.is_dir():
+                raise CoworkerError(f"{question['name']} does not identify a directory: {candidate}")
+
+
+# =====================================================================
+# Harness Detection & File Expansion
+# =====================================================================
+
+def check_harness(plan: dict[str, Any]) -> str:
+    """Execute harness version command and assert compatibility against plan version range."""
+    try:
+        result = subprocess.run(
+            plan["version_command"],
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise CoworkerError(f"cannot detect {plan['harness']}: {exc}") from exc
+
+    output = (result.stdout or result.stderr).strip()
+    if not version_satisfies(SemVer.parse(output), plan["version_range"]):
+        raise CoworkerError(
+            f"installed {plan['harness']} version {output!r} is outside {plan['version_range']}"
+        )
+    return output
+
+
+def expand_copies(
+    distribution: Path,
+    destination: Path,
+    plan: dict[str, Any],
+) -> list[tuple[Path, Path]]:
+    """Expand copy specifications into explicit (source_file, dest_file) pairs."""
+    expanded: list[tuple[Path, Path]] = []
+    seen: set[Path] = set()
+
+    for mapping in plan["copies"]:
+        source_rel = safe_relative(mapping["source"], "copy source")
+        destination_rel = safe_relative(mapping["destination"], "copy destination")
+
+        source = distribution if str(source_rel) == "." else rooted(distribution, str(source_rel), "copy source")
+        target = rooted(destination, str(destination_rel), "copy destination")
+
+        if source.is_file():
+            pairs = [(source, target)]
+        elif source.is_dir():
+            pairs = [(item, target / item.relative_to(source)) for item in source.rglob("*") if item.is_file()]
+        else:
+            raise CoworkerError(f"install source does not exist: {source}")
+
+        for _, installed in pairs:
+            if installed in seen:
+                raise CoworkerError(f"install plan writes the same file twice: {installed}")
+            seen.add(installed)
+
+        expanded.extend(pairs)
+
+    return expanded
+
+
+# =====================================================================
+# Ownership Management & Rollback
+# =====================================================================
+
+def clean_empty_directories(root: Path) -> None:
+    """Remove empty directories under root in bottom-up order."""
+    for directory in sorted((p for p in root.rglob("*") if p.is_dir()), reverse=True):
+        try:
+            directory.rmdir()
+        except OSError:
+            pass
+
+
+def check_action_modification(destination: Path, action: dict[str, Any]) -> str | None:
+    """Check if an ownership action target has been modified by the user."""
+    path = rooted(destination, action["path"], "owned path")
+    kind = action["kind"]
+
+    if kind == "file":
+        if path.is_file() and compute_digest(path) != action["sha256"]:
+            return action["path"]
+    elif kind == "json_value" and path.is_file():
+        exists, value = JsonConfigManager.get_at_path(load_json(path), action["keys"])
+        if exists and value != action["value"]:
+            return f"{action['path']}:{'/'.join(action['keys'])}"
+    elif kind == "json_container" and path.is_file():
+        exists, value = JsonConfigManager.get_at_path(load_json(path), action["keys"])
+        if exists and not isinstance(value, dict):
+            return f"{action['path']}:{'/'.join(action['keys'])}"
+    elif kind == "toml_value" and path.is_file():
+        lines = path.read_text(encoding="utf-8").splitlines()
+        _, value = TomlConfigManager.find_key(lines, action["section"], action["key"])
+        if value is not None and value != action["value"]:
+            return f"{action['path']}:[{action['section']}]/{action['key']}"
+
+    return None
+
+
+def detect_owned_modifications(destination: Path, ownership: dict[str, Any]) -> list[str]:
+    """Detect any files or configuration entries modified since installation."""
+    modified: list[str] = []
+    for action in ownership.get("actions", []):
+        mod = check_action_modification(destination, action)
+        if mod:
+            modified.append(mod)
+    return modified
+
+
+def rollback_json_action(path: Path, keys: Sequence[str], expected_val: Any, is_container: bool = False) -> None:
+    """Roll back an added JSON key or container from a config document."""
+    if not path.is_file():
+        return
+    document = load_json(path)
+    exists, value = JsonConfigManager.get_at_path(document, keys)
+    if not exists:
+        return
+    if (is_container and value == {}) or (not is_container and value == expected_val):
+        parent: Any = document
+        for key in keys[:-1]:
+            if isinstance(parent, dict) and key in parent:
+                parent = parent[key]
+            else:
+                parent = None
+                break
+        if isinstance(parent, dict) and keys[-1] in parent:
+            del parent[keys[-1]]
+            if document:
+                write_json(path, document)
+            else:
+                path.unlink(missing_ok=True)
+
+
+def rollback_toml_action(
+    path: Path, section: str, key: str, expected_val: Any, section_created: bool = False
+) -> None:
+    """Roll back an added TOML key and optional section from a config file."""
+    if not path.is_file():
+        return
+    lines = path.read_text(encoding="utf-8").splitlines()
+    index, value = TomlConfigManager.find_key(lines, section, key)
+    if index is not None and value == expected_val:
+        del lines[index]
+        if section_created:
+            section_index = next((i for i, line in enumerate(lines) if line.strip() == f"[{section}]"), None)
+            if section_index is not None:
+                next_section = next(
+                    (i for i in range(section_index + 1, len(lines)) if re.match(r"^\s*\[[^]]+]\s*$", lines[i])),
+                    len(lines),
+                )
+                if not any(line.strip() and not line.lstrip().startswith("#")
+                           for line in lines[section_index + 1:next_section]):
+                    del lines[section_index:next_section]
+
+        content = "\n".join(lines).strip()
+        if content:
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        else:
+            path.unlink(missing_ok=True)
+
+
+def rollback_action(destination: Path, action: dict[str, Any]) -> None:
+    """Revert a single recorded installation action if unchanged."""
+    path = rooted(destination, action["path"], "owned path")
+    kind = action["kind"]
+
+    if kind == "file":
+        if path.is_file() and compute_digest(path) == action["sha256"]:
+            path.unlink()
+    elif kind == "json_value":
+        rollback_json_action(path, action["keys"], action["value"], is_container=False)
+    elif kind == "json_container":
+        rollback_json_action(path, action["keys"], {}, is_container=True)
+    elif kind == "toml_value":
+        rollback_toml_action(
+            path, action["section"], action["key"], action["value"], action.get("section_created", False)
+        )
+
+
+def remove_owned(destination: Path, ownership: dict[str, Any]) -> list[str]:
+    """Remove files and rollback config settings tracked in ownership record."""
+    modified = detect_owned_modifications(destination, ownership)
+
+    for action in reversed(ownership.get("actions", [])):
+        rollback_action(destination, action)
+
+    clean_empty_directories(destination)
+    return modified
+
+
+# =====================================================================
+# Install & Uninstall Commands
+# =====================================================================
+
+def validate_install_preconditions(
+    destination: Path,
+    previous_ownership: dict[str, Any] | None,
+    upgrade: bool,
+) -> None:
+    """Validate destination state and upgrade requirements before installation."""
+    if destination == Path(destination.anchor):
+        raise CoworkerError("refusing to install into a filesystem root")
+
+    if previous_ownership and not upgrade:
+        raise CoworkerError(f"installation already exists in {destination}; use --upgrade")
+    if upgrade and not previous_ownership:
+        raise CoworkerError(f"cannot upgrade missing installation in {destination}")
+    if previous_ownership:
+        modified = detect_owned_modifications(destination, previous_ownership)
+        if modified:
+            raise CoworkerError("refusing upgrade because managed content changed:\n" + "\n".join(modified))
+
+
+def check_file_collisions(
+    copies: Sequence[tuple[Path, Path]],
+    destination: Path,
+    previous_ownership: dict[str, Any] | None,
+) -> None:
+    """Ensure newly copied files do not overwrite unmanaged user files."""
+    old_files = {
+        action["path"]
+        for action in (previous_ownership or {}).get("actions", [])
+        if action["kind"] == "file"
+    }
+    collisions = [
+        str(target) for _, target in copies
+        if target.exists() and str(target.relative_to(destination)) not in old_files
+    ]
+    if collisions:
+        raise CoworkerError("refusing to overwrite existing files:\n" + "\n".join(collisions))
+
+
+def prevalidate_configuration_mutations(destination: Path, plan: dict[str, Any]) -> None:
+    """Verify that JSON merges and TOML settings can be applied without conflict."""
+    for merge in plan.get("json_merges", []):
+        path = rooted(destination, merge["path"], "JSON config path")
+        document = load_json(path) if path.exists() else {}
+        JsonConfigManager.merge(document, merge["value"], [], [])
+
+    for setting in plan.get("toml_sets", []):
+        path = rooted(destination, setting["path"], "TOML config path")
+        lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+        _, existing = TomlConfigManager.find_key(lines, setting["section"], setting["key"])
+        if existing is not None and existing != TomlConfigManager.render_value(setting["value"]):
+            raise CoworkerError(
+                f"refusing to replace existing TOML setting: [{setting['section']}] {setting['key']}"
+            )
+
+
+def collect_environment_answers(
+    distribution: Path,
+    destination: Path,
+    plan: dict[str, Any],
+    answers_path: Path | None,
+    previous_environment: dict[str, Any],
+    non_interactive: bool,
+) -> dict[str, Any]:
+    """Prompt, validate, and return environment configuration answers."""
+    spec = load_json(rooted(distribution, plan["environment_questions"], "environment questions"))
+    supplied = load_json(answers_path) if answers_path else {}
+    unknown_answers = set(supplied) - {question["name"] for question in spec["questions"]}
+    if unknown_answers:
+        raise CoworkerError(f"unknown answer keys: {', '.join(sorted(unknown_answers))}")
+
+    current = {key: value for key, value in previous_environment.items() if key != "revision"}
+    answers = {
+        q["name"]: prompt_question_value(q, supplied, current, non_interactive, destination)
+        for q in spec["questions"]
+    }
+    validate_question_constraints(spec["questions"], answers)
+
+    env_schema = load_json(rooted(distribution, plan["environment_schema"], "environment schema"))
+    errors = validate_instance(answers, env_schema)
+    if errors:
+        raise CoworkerError("invalid environment:\n" + "\n".join(errors))
+
+    return answers
+
+
+def install(
+    distribution: Path,
+    destination: Path,
+    answers_path: Path | None,
+    non_interactive: bool,
+    upgrade: bool = False,
+    skip_harness_check: bool = False,
+) -> None:
+    """Install or upgrade a translated distribution package into a workspace."""
+    build = load_json(distribution / "coworker-build.json")
+    plan = load_json(distribution / "coworker-install.json")
+
+    if build["harness"] != plan["harness"] or build["version_range"] != plan["version_range"]:
+        raise CoworkerError("build metadata and install plan disagree")
+
+    if not skip_harness_check:
+        check_harness(plan)
+
+    destination = destination.resolve()
+    ownership_path = rooted(destination, plan["ownership_path"], "ownership path")
+    environment_path = rooted(destination, plan["environment_path"], "environment path")
+
+    previous_ownership = load_json(ownership_path) if ownership_path.exists() else None
+    previous_environment = load_json(environment_path) if environment_path.exists() else {}
+
+    validate_install_preconditions(destination, previous_ownership, upgrade)
+    answers = collect_environment_answers(
+        distribution, destination, plan, answers_path, previous_environment, non_interactive
+    )
+
+    copies = expand_copies(distribution, destination, plan)
+    check_file_collisions(copies, destination, previous_ownership)
+    prevalidate_configuration_mutations(destination, plan)
+
+    # Rollback prior installation if upgrading
+    if previous_ownership:
+        remove_owned(destination, previous_ownership)
+        if ownership_path.exists():
+            ownership_path.unlink()
+
+    # Perform installation
+    destination.mkdir(parents=True, exist_ok=True)
+    actions: list[dict[str, Any]] = []
+
+    # Copy files
+    for source, target in copies:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+        actions.append({
+            "kind": "file",
+            "path": str(target.relative_to(destination)),
+            "sha256": compute_digest(target),
+        })
+
+    # Apply JSON merges
+    for merge in plan.get("json_merges", []):
+        path = rooted(destination, merge["path"], "JSON config path")
+        document = load_json(path) if path.exists() else {}
+        records: list[dict[str, Any]] = []
+        JsonConfigManager.merge(document, merge["value"], [], records)
+        write_json(path, document)
+        actions.extend({**record, "path": merge["path"]} for record in records)
+
+    # Apply TOML sets
+    for setting in plan.get("toml_sets", []):
+        path = rooted(destination, setting["path"], "TOML config path")
+        record = TomlConfigManager.apply_set(path, setting["section"], setting["key"], setting["value"])
+        if record:
+            actions.append({**record, "path": setting["path"]})
+
+    # Update environment revision
+    current = {k: v for k, v in previous_environment.items() if k != "revision"}
+    previous_revision = previous_environment.get("revision", 0)
+    revision = previous_revision + 1 if current != answers else max(previous_revision, 1)
+    write_json(environment_path, {"revision": revision, **answers})
+    actions.append({
+        "kind": "file",
+        "path": str(environment_path.relative_to(destination)),
+        "sha256": compute_digest(environment_path),
+    })
+
+    # Record ownership
+    ownership_path.parent.mkdir(parents=True, exist_ok=True)
+    write_json(ownership_path, {
+        "framework_version": FRAMEWORK_VERSION,
+        "package": build["source"],
+        "version": build["source_version"],
+        "harness": build["harness"],
+        "compatibility_target": build["compatibility_target"],
+        "actions": actions,
+    })
+
+
+def uninstall(destination: Path, package: str) -> list[str]:
+    """Uninstall an installed package from destination directory, preserving user-modified files."""
+    destination = destination.resolve()
+    validate_package_name(package)
+
+    ownership_path = rooted(destination, f".coworker/{package}/ownership.json", "ownership path")
+    ownership = load_json(ownership_path)
+    modified = remove_owned(destination, ownership)
+    ownership_path.unlink()
+
+    clean_empty_directories(destination)
+    return modified
+
+
+# =====================================================================
+# Runtime Commands: Runs & Artifacts
+# =====================================================================
+
+def generate_run_id() -> str:
+    """Generate a collision-resistant timestamped run identifier."""
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return f"{timestamp}-{uuid.uuid4().hex[:12]}"
+
+
+def get_installed_package_root(workspace: Path, package: str) -> Path:
+    """Validate package and return its resolved installation root in the workspace."""
+    validate_package_name(package)
+    package_root = rooted(workspace.resolve(), f".coworker/{package}", "installed package path")
+    environment_path = rooted(package_root, "environment.json", "environment path")
+    if not environment_path.is_file():
+        raise CoworkerError(f"package {package} is not installed in {workspace.resolve()}")
+    return package_root
+
+
+def get_installed_run_context(
+    workspace: Path, package: str, run_id: str
+) -> tuple[Path, Path, dict[str, Any]]:
+    """Retrieve and validate the package root, run root directory, and run metadata document."""
+    validate_run_id(run_id)
+    package_root = get_installed_package_root(workspace, package)
+    run_root = rooted(package_root, f"runs/{run_id}", "run path")
+    run_document = load_json(run_root / "run.json")
+
+    if run_document.get("run_id") != run_id or run_document.get("package") != package:
+        raise CoworkerError("run metadata does not match the requested package and run ID")
+
+    return package_root, run_root, run_document
+
+
+def start_run(workspace: Path, package: str) -> dict[str, Any]:
+    """Create a collision-resistant run namespace inside an installed package."""
+    package_root = get_installed_package_root(workspace, package)
+    environment = load_json(package_root / "environment.json")
+    runs_root = rooted(package_root, "runs", "runs path")
+    runs_root.mkdir(parents=True, exist_ok=True)
+
+    for _ in range(10):
+        run_id = generate_run_id()
+        run_root = rooted(runs_root, run_id, "run path")
+        try:
+            run_root.mkdir()
+        except FileExistsError:
+            continue
+
+        (run_root / "artifacts").mkdir()
+        document = {
+            "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "environment_revision": environment.get("revision", 1),
+            "framework_version": FRAMEWORK_VERSION,
+            "package": package,
+            "run_id": run_id,
+        }
+        write_json(run_root / "run.json", document)
+        return document
+
+    raise CoworkerError("could not allocate a unique run ID")
+
+
+def describe_artifact(
+    workspace: Path,
+    package: str,
+    run_id: str,
+    file: str,
+    schema: str,
+    media_type: str,
+) -> dict[str, Any]:
+    """Describe an artifact belonging to an active or completed package run."""
+    if not media_type.strip():
+        raise CoworkerError("media type must not be empty")
+
+    package_root, run_root, run_document = get_installed_run_context(workspace, package, run_id)
+
+    artifact_root = rooted(run_root, "artifacts", "artifact root")
+    artifact_file = rooted(artifact_root, file, "artifact file")
+    if not artifact_file.is_file():
+        raise CoworkerError(f"artifact does not identify a file: {artifact_file}")
+
+    schema_path = rooted(package_root, schema, "artifact schema")
+    if not schema_path.is_file():
+        raise CoworkerError(f"artifact schema does not identify a file: {schema_path}")
+
+    relative = artifact_file.relative_to(artifact_root).as_posix()
+    return {
+        "environment_revision": run_document["environment_revision"],
+        "media_type": media_type,
+        "run_id": run_id,
+        "schema": schema,
+        "sha256": compute_digest(artifact_file),
+        "uri": f"workspace://{package}/runs/{run_id}/artifacts/{relative}",
+    }
+
+
+# =====================================================================
+# CLI Entrypoint
+# =====================================================================
+
+def build_parser() -> argparse.ArgumentParser:
+    """Construct command-line argument parser for the Coworker CLI."""
+    parser = argparse.ArgumentParser(
+        prog="coworker",
+        description="Domain-neutral canonical-package translator, installer, and validator.",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    # verify
+    p_verify = sub.add_parser("verify", help="Verify package structure and schemas")
+    p_verify.add_argument("package", type=Path, help="Path to package directory")
+
+    # translate
+    p_translate = sub.add_parser("translate", help="Translate package to target harness")
+    p_translate.add_argument("package", type=Path, help="Path to package directory")
+    p_translate.add_argument("--harness", choices=["claude-code", "codex"], required=True, help="Target harness")
+    p_translate.add_argument("--output", type=Path, required=True, help="Output directory")
+
+    # install
+    p_install = sub.add_parser("install", help="Install translated package into workspace")
+    p_install.add_argument("distribution", type=Path, help="Path to translated distribution directory")
+    p_install.add_argument("--destination", type=Path, required=True, help="Workspace destination path")
+    p_install.add_argument("--answers", type=Path, help="Path to JSON file with pre-supplied answers")
+    p_install.add_argument("--non-interactive", action="store_true", help="Do not prompt for missing answers")
+    p_install.add_argument("--upgrade", action="store_true", help="Upgrade existing installation")
+    p_install.add_argument("--skip-harness-check", action="store_true", help=argparse.SUPPRESS)
+
+    # uninstall
+    p_uninstall = sub.add_parser("uninstall", help="Uninstall package from workspace")
+    p_uninstall.add_argument("destination", type=Path, help="Workspace destination path")
+    p_uninstall.add_argument("--package", required=True, help="Package name to uninstall")
+
+    # validate
+    p_validate = sub.add_parser("validate", help="Validate a JSON instance against a schema")
+    p_validate.add_argument("--schema", type=Path, required=True, help="Path to schema JSON file")
+    p_validate.add_argument("instance", type=Path, help="Path to JSON instance file to validate")
+
+    # start-run
+    p_start = sub.add_parser("start-run", help="Initialize a new run namespace for a package")
+    p_start.add_argument("--workspace", type=Path, required=True, help="Workspace root directory")
+    p_start.add_argument("--package", required=True, help="Installed package name")
+
+    # describe-artifact
+    p_artifact = sub.add_parser("describe-artifact", help="Generate an artifact provenance descriptor")
+    p_artifact.add_argument("--workspace", type=Path, required=True, help="Workspace root directory")
+    p_artifact.add_argument("--package", required=True, help="Installed package name")
+    p_artifact.add_argument("--run-id", required=True, help="Run ID")
+    p_artifact.add_argument("--file", required=True, help="Artifact file path relative to run artifacts/")
+    p_artifact.add_argument("--schema", required=True, help="Schema path relative to package root")
+    p_artifact.add_argument("--media-type", required=True, help="Media type of the artifact")
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Main CLI execution dispatch function."""
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    try:
+        if args.command == "verify":
+            verify_package(args.package)
+
+        elif args.command == "translate":
+            translate(args.package, args.harness, args.output)
+
+        elif args.command == "install":
+            install(
+                distribution=args.distribution,
+                destination=args.destination,
+                answers_path=args.answers,
+                non_interactive=args.non_interactive,
+                upgrade=args.upgrade,
+                skip_harness_check=args.skip_harness_check,
+            )
+
+        elif args.command == "uninstall":
+            modified = uninstall(args.destination, args.package)
+            if modified:
+                print("Preserved modified managed content:\n" + "\n".join(modified), file=sys.stderr)
+
+        elif args.command == "validate":
+            errors = validate_instance(load_json(args.instance), load_json(args.schema))
+            if errors:
+                print("\n".join(errors), file=sys.stderr)
+                return 2
+
+        elif args.command == "start-run":
+            run_doc = start_run(args.workspace, args.package)
+            print(format_json(run_doc))
+
+        elif args.command == "describe-artifact":
+            descriptor = describe_artifact(
+                workspace=args.workspace,
+                package=args.package,
+                run_id=args.run_id,
+                file=args.file,
+                schema=args.schema,
+                media_type=args.media_type,
+            )
+            print(format_json(descriptor))
+
+        return 0
+
+    except CoworkerError as exc:
+        print(f"coworker: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -12,7 +12,7 @@ XProf to profile the execution of the Pallas kernel.
 TPU VM.
 
 -   Refer to
-    [tpu_vm.md](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/tpu_vm.md)
+    [tpu_vm.md](http://google3/third_party/py/accelerator_agents/MaxKernel/tpu_vm.md)
     to identify the available TPU VM and get the SSH command. You must check its
     status, register your usage by marking it "In Use" and leaving your ID, and
     release it when you are finished.

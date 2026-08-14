@@ -12,7 +12,7 @@ description: Run one full iteration (plan -> implement -> compile -> test -> aut
 You are the worker agent, running ONE iteration of the kernel
 optimization loop. You have no access to any prior conversation, and you were
 given no parameters — figure out everything you need by reading
-`workspace/state.json` yourself. Your current working directory is `third_party/py/accelerator_agents/MaxKernel/v2/`, and all paths below are relative to it. You must coordinate specialized subagents in structured feedback loops to complete the kernel optimization tasks.
+`workspace/state.json` yourself. Your current working directory is `third_party/py/accelerator_agents/MaxKernel/`, and all paths below are relative to it. You must coordinate specialized subagents in structured feedback loops to complete the kernel optimization tasks.
 
 --------------------------------------------------------------------------------
 
@@ -53,7 +53,7 @@ Do this, in order:
 ### Setup and Verification (Execute ONCE during iteration 1)
 
 1.  **Setup Environment**: Read and follow the instructions in
-    [setup.md](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/setup.md)
+    [setup.md](http://google3/third_party/py/accelerator_agents/MaxKernel/setup.md)
     to set up the necessary environment and install dependencies on both local
     and TPU VM if they are not already set up.
 2.  **Verify Environment**: Before starting any optimization or code generation,
@@ -111,14 +111,14 @@ collision. See `tools/assemble_test_harness.py`'s module docstring for why.
     (first-ever run), copy the user-supplied baseline code there.
 3.  **Generate `get_inputs()`** (the only LLM-authored part):
     -   Invoke
-        [`generate_test_file_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/subagents/generate_test_file_agent.md)
+        [`generate_test_file_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/subagents/generate_test_file_agent.md)
         subagent.
     -   Prompt: "Write `get_inputs()` for base kernel `{base_kernel_path}` and
         save it to `{get_inputs_path}`."
 4.  **Assemble the harness deterministically**:
     -   Run:
         ```bash
-        python3 third_party/py/accelerator_agents/MaxKernel/v2/tools/assemble_test_harness.py \
+        python3 third_party/py/accelerator_agents/MaxKernel/tools/assemble_test_harness.py \
           {base_kernel_path} {get_inputs_path} {test_file_path} \
           --atol <atol> --rtol <rtol>
         ```
@@ -150,33 +150,33 @@ collision. See `tools/assemble_test_harness.py`'s module docstring for why.
     -   **If syntax/import validation failed**: record that error output.
     -   **If validation failed and max retries reached**:
         -   Invoke
-            [`test_script_validation_summary_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/subagents/test_script_validation_summary_agent.md)
+            [`test_script_validation_summary_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/subagents/test_script_validation_summary_agent.md)
             subagent with `validation_loop_status: {all_checks_passed: False}`
             and the error history.
         -   **This is a run-blocking failure.** Do not proceed to Phase 1 or
             any later phase. Report the failure to the user and stop.
     -   **If retries remaining**:
         -   Invoke
-            [`fix_test_script_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/subagents/fix_test_script_agent.md)
+            [`fix_test_script_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/subagents/fix_test_script_agent.md)
             subagent with the current validation error and fix history. It
             only ever edits `{get_inputs_path}`.
         -   Re-run step 4 (re-assemble deterministically from the fixed
             `{get_inputs_path}`), append the error and fix details to
             validation history, and repeat from step 5.
 6.  On success, invoke
-    [`test_script_validation_summary_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/subagents/test_script_validation_summary_agent.md)
+    [`test_script_validation_summary_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/subagents/test_script_validation_summary_agent.md)
     with `all_checks_passed: True` and proceed to Phase 1.
 
 ### Phase 1: Planning & Implementation
 
 1.  **Plan the Optimization**:
     -   Invoke
-        [`plan_kernel_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/subagents/plan_kernel_agent.md)
+        [`plan_kernel_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/subagents/plan_kernel_agent.md)
         subagent. Pass `{base_kernel_path}`, `{test_file_path}`, `{previous_kernel_plan}`, `{previous_optimized_kernel}`, `{previous_compilation_status}`, `{previous_testing_status}`, `{previous_autotune_summary}`, and `{previous_profile_summary}` as inputs.
     -   Prompt: "Analyze the original base kernel `{base_kernel_path}`, the shared test harness `{test_file_path}` (for exact input shapes — do not overfit to it), previous kernel plan `{previous_kernel_plan}`, previous optimized kernel `{previous_optimized_kernel}`, compilation status `{previous_compilation_status}`, testing status `{previous_testing_status}`, autotune summary `{previous_autotune_summary}`, and profile summary `{previous_profile_summary}`. Decide whether to keep optimizing on top of `{previous_optimized_kernel}` or restart from scratch on original `{base_kernel_path}` if the previous kernel cannot be further improved. Design the optimization plan and save it to `{kernel_plan_path}`."
 2.  **Implement the Kernel**:
     -   Invoke
-        [`implement_kernel_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/subagents/implement_kernel_agent.md)
+        [`implement_kernel_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/subagents/implement_kernel_agent.md)
         subagent.
     -   Prompt: "Implement the optimized Pallas kernel following the plan in
         `{kernel_plan_path}`, matching the input shapes/static args defined by
@@ -194,7 +194,7 @@ Run an iterative compilation fix loop to ensure the code in `{optimized_kernel_p
     -   If compilation fails, record the error trace from stdout and stderr in `error_trace`.
     -   **If compilation succeeded**:
         -   Invoke
-            [`compilation_summary_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/subagents/compilation_summary_agent.md)
+            [`compilation_summary_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/subagents/compilation_summary_agent.md)
             subagent.
         -   Prompt: "Generate a successful compilation summary based on:
             `kernel_compilation_status: {success: True}`."
@@ -203,7 +203,7 @@ Run an iterative compilation fix loop to ensure the code in `{optimized_kernel_p
         -   Check if `num_attempts` >= 6. If so, max retries reached.
         -   **If max retries reached**:
         -   Invoke
-            [`compilation_summary_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/subagents/compilation_summary_agent.md)
+            [`compilation_summary_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/subagents/compilation_summary_agent.md)
             subagent.
         -   Prompt: "Generate a compilation failure summary based on status:
             `success: False`, final error trace: `{error_trace}`, and compile
@@ -211,7 +211,7 @@ Run an iterative compilation fix loop to ensure the code in `{optimized_kernel_p
         -   Terminate with compilation failure.
         -   **If retries remaining**:
         -   Invoke
-            [`fix_kernel_compilation_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/subagents/fix_kernel_compilation_agent.md)
+            [`fix_kernel_compilation_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/subagents/fix_kernel_compilation_agent.md)
             subagent, using `{optimized_kernel_path}` and `{kernel_plan_path}` as input.
         -   Prompt: "Fix compilation errors in `{optimized_kernel_path}`.
             Current compile error: `{error_trace}`. History of fixes:
@@ -232,7 +232,7 @@ assembles this iteration's runnable script and executes it.
 1.  **Assemble the runnable test script** at `workspace/iter<n>/test_run.py`,
     deterministically (do not hand-edit or hand-concatenate the two files):
     ```bash
-    python3 third_party/py/accelerator_agents/MaxKernel/v2/tools/assemble_test_run.py \
+    python3 third_party/py/accelerator_agents/MaxKernel/tools/assemble_test_run.py \
       {test_file_path} {optimized_kernel_path} workspace/iter<n>/test_run.py
     ```
     This binds `{optimized_kernel_path}`'s `computation` in as `opt_computation`
@@ -248,7 +248,7 @@ assembles this iteration's runnable script and executes it.
     `{test_results}`.
 3.  **Summarize Test Results**:
     -   Invoke the
-        [`summarize_test_results_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/subagents/summarize_test_results_agent.md)
+        [`summarize_test_results_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/subagents/summarize_test_results_agent.md)
         subagent.
     -   Prompt: "Analyze the test results: `{test_results}` and provide a
         detailed summary and recommendations."
@@ -263,7 +263,7 @@ config" agrees with what the real test run would measure.
 
 1.  **Plan Tuning Specs**:
     -   Invoke
-        [`autotune_planner_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/subagents/autotune_planner_agent.md)
+        [`autotune_planner_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/subagents/autotune_planner_agent.md)
         subagent.
     -   Prompt: "Identify tunable parameters and create a `code_template`
         containing ONLY the parameterized kernel implementation from
@@ -281,7 +281,7 @@ config" agrees with what the real test run would measure.
             Phase 3 uses, just pointed at the trial file instead of
             `{optimized_kernel_path}`:
             ```bash
-            python3 third_party/py/accelerator_agents/MaxKernel/v2/tools/assemble_test_run.py \
+            python3 third_party/py/accelerator_agents/MaxKernel/tools/assemble_test_run.py \
               {test_file_path} workspace/iter<n>/autotune_trial.py \
               workspace/iter<n>/autotune_trial_run.py
             ```
@@ -305,7 +305,7 @@ config" agrees with what the real test run would measure.
 3.  **Apply Best Configuration** (deterministic — no LLM):
     -   Run:
         ```bash
-        python3 third_party/py/accelerator_agents/MaxKernel/v2/tools/apply_best_config.py \
+        python3 third_party/py/accelerator_agents/MaxKernel/tools/apply_best_config.py \
           {autotune_spec_path} {autotune_results_path} {optimized_kernel_path}
         ```
     -   This substitutes `best_config` values into `code_template`'s
@@ -315,7 +315,7 @@ config" agrees with what the real test run would measure.
         tool/execution failure per the Strict Debuggability protocol below.
 4.  **Summarize Autotuning Results**:
     -   Invoke
-        [`autotune_summary_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/subagents/autotune_summary_agent.md)
+        [`autotune_summary_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/subagents/autotune_summary_agent.md)
         subagent.
     -   Prompt: "Summarize the autotuning sweep results: `{autotune_results}`, save the autotune summary report to `{autotune_summary_path}`, and verify if they were correctly applied to `{optimized_kernel_path}`."
 
@@ -325,7 +325,7 @@ Profile hardware utilization and inspect memory/compute bandwidth bottlenecks:
 
 1.  **Generate Profiling Script**:
     -   Invoke
-        [`generate_profile_script_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/subagents/generate_profile_script_agent.md)
+        [`generate_profile_script_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/subagents/generate_profile_script_agent.md)
         subagent.
     -   Prompt: "Generate a JAX XProf profiling wrapper script for
         `{optimized_kernel_path}` and save it to `{profile_script_path}`."
@@ -336,7 +336,7 @@ Profile hardware utilization and inspect memory/compute bandwidth bottlenecks:
         to copy it locally.
 3.  **Analyze and Summarize Trace**:
     -   Invoke
-        [`summarize_profile_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/subagents/summarize_profile_agent.md)
+        [`summarize_profile_agent`](http://google3/third_party/py/accelerator_agents/MaxKernel/subagents/summarize_profile_agent.md)
         subagent.
     -   Prompt: "Perform deep trace analysis on the XProf file
         `{xplane_pb_path}`. Query event tables, retrieve duty cycle metrics, save the complete profile summary to `{profile_summary_path}`, and

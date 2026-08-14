@@ -13,7 +13,7 @@ time.
 the TPU VM.
 
 -   Refer to
-    [tpu_vm.md](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/tpu_vm.md) for details.
+    [tpu_vm.md](http://google3/third_party/py/accelerator_agents/MaxKernel/tpu_vm.md) for details.
 -   You absolutely must activate the `maxkernel_venv` virtual environment on the
     TPU VM before execution: `source ~/maxkernel_venv/bin/activate`
 

@@ -26,7 +26,7 @@ so running the assembled harness on a CPU-only backend fails outright with
 harness was run on the wrong backend, not that your file is wrong.
 
 -   Refer to
-    [tpu_vm.md](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/tpu_vm.md) for details.
+    [tpu_vm.md](http://google3/third_party/py/accelerator_agents/MaxKernel/tpu_vm.md) for details.
     In this deployment, you are already running on the TPU VM -- there is no
     separate machine to SSH into, no VM pool to check status on, and no "In
     Use" registration/release needed.

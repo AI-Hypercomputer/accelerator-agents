@@ -12,7 +12,7 @@ description: Run one full iteration (plan -> implement -> compile -> test -> aut
 You are the worker agent, running ONE iteration of the kernel
 optimization loop. You have no access to any prior conversation, and you were
 given no parameters — figure out everything you need by reading
-`workspace/state.json` yourself. Your current working directory is `experimental/MaxKernel/`, and all paths below are relative to it. You must coordinate specialized subagents in structured feedback loops to complete the kernel optimization tasks.
+`workspace/state.json` yourself. Your current working directory is `third_party/py/accelerator_agents/MaxKernel/v2/`, and all paths below are relative to it. You must coordinate specialized subagents in structured feedback loops to complete the kernel optimization tasks.
 
 --------------------------------------------------------------------------------
 
@@ -118,7 +118,7 @@ collision. See `tools/assemble_test_harness.py`'s module docstring for why.
 4.  **Assemble the harness deterministically**:
     -   Run:
         ```bash
-        python3 experimental/MaxKernel/tools/assemble_test_harness.py \
+        python3 third_party/py/accelerator_agents/MaxKernel/v2/tools/assemble_test_harness.py \
           {base_kernel_path} {get_inputs_path} {test_file_path} \
           --atol <atol> --rtol <rtol>
         ```
@@ -232,7 +232,7 @@ assembles this iteration's runnable script and executes it.
 1.  **Assemble the runnable test script** at `workspace/iter<n>/test_run.py`,
     deterministically (do not hand-edit or hand-concatenate the two files):
     ```bash
-    python3 experimental/MaxKernel/tools/assemble_test_run.py \
+    python3 third_party/py/accelerator_agents/MaxKernel/v2/tools/assemble_test_run.py \
       {test_file_path} {optimized_kernel_path} workspace/iter<n>/test_run.py
     ```
     This binds `{optimized_kernel_path}`'s `computation` in as `opt_computation`
@@ -281,7 +281,7 @@ config" agrees with what the real test run would measure.
             Phase 3 uses, just pointed at the trial file instead of
             `{optimized_kernel_path}`:
             ```bash
-            python3 experimental/MaxKernel/tools/assemble_test_run.py \
+            python3 third_party/py/accelerator_agents/MaxKernel/v2/tools/assemble_test_run.py \
               {test_file_path} workspace/iter<n>/autotune_trial.py \
               workspace/iter<n>/autotune_trial_run.py
             ```
@@ -305,7 +305,7 @@ config" agrees with what the real test run would measure.
 3.  **Apply Best Configuration** (deterministic — no LLM):
     -   Run:
         ```bash
-        python3 experimental/MaxKernel/tools/apply_best_config.py \
+        python3 third_party/py/accelerator_agents/MaxKernel/v2/tools/apply_best_config.py \
           {autotune_spec_path} {autotune_results_path} {optimized_kernel_path}
         ```
     -   This substitutes `best_config` values into `code_template`'s

@@ -328,7 +328,7 @@ You have three tools to help you:
     *   Invoke via CLI:
 
         ```bash
-        python3 experimental/MaxKernel/tools/search_api.py -- "<api_name>"
+        python3 third_party/py/accelerator_agents/MaxKernel/v2/tools/search_api.py -- "<api_name>"
         ```
 
         where `<api_name>` is the API you want to search. Run this command

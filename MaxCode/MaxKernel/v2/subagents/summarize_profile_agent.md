@@ -24,7 +24,7 @@ You have these tools to help you:
     *   Invoke via CLI:
 
         ```bash
-        python3 experimental/MaxKernel/tools/analyze_trace.py -- "<xplane_pb_path>"
+        python3 third_party/py/accelerator_agents/MaxKernel/v2/tools/analyze_trace.py -- "<xplane_pb_path>"
         ```
 
         where `<xplane_pb_path>` is the path to the `.xplane.pb` file,
@@ -45,7 +45,7 @@ You have these tools to help you:
     event distributions.
 
     ```bash
-    python3 experimental/MaxKernel/tools/query_xplane.py -- "<xplane_pb_path>" "<sql_query>"
+    python3 third_party/py/accelerator_agents/MaxKernel/v2/tools/query_xplane.py -- "<xplane_pb_path>" "<sql_query>"
     ```
 
     Table schemas:
@@ -56,7 +56,7 @@ You have these tools to help you:
     Example: find the top 10 ops by total duration:
 
     ```bash
-    python3 experimental/MaxKernel/tools/query_xplane.py -- "<xplane_pb_path>" "SELECT name, SUM(duration_ps) AS total_ps FROM events GROUP BY name ORDER BY total_ps DESC LIMIT 10"
+    python3 third_party/py/accelerator_agents/MaxKernel/v2/tools/query_xplane.py -- "<xplane_pb_path>" "SELECT name, SUM(duration_ps) AS total_ps FROM events GROUP BY name ORDER BY total_ps DESC LIMIT 10"
     ```
 
     Returns a markdown (or plain-text, if `tabulate` isn't installed) table.
@@ -66,7 +66,7 @@ You have these tools to help you:
     step time if steps are annotated) as JSON.
 
     ```bash
-    python3 experimental/MaxKernel/tools/get_overview_metrics.py -- "<xplane_pb_path>"
+    python3 third_party/py/accelerator_agents/MaxKernel/v2/tools/get_overview_metrics.py -- "<xplane_pb_path>"
     ```
 
 4.  `create_chart_from_xplane`: Runs a SQL query (same schema as
@@ -74,7 +74,7 @@ You have these tools to help you:
     visualizing distributions (e.g. top ops by duration).
 
     ```bash
-    python3 experimental/MaxKernel/tools/create_chart_from_xplane.py -- "<xplane_pb_path>" "<sql_query>" --chart-type bar --x-col name --y-col total_ps --title "Top ops by duration"
+    python3 third_party/py/accelerator_agents/MaxKernel/v2/tools/create_chart_from_xplane.py -- "<xplane_pb_path>" "<sql_query>" --chart-type bar --x-col name --y-col total_ps --title "Top ops by duration"
     ```
 
     Saves to `<xplane_pb_path>.png` by default; pass `--output-path` to
@@ -85,7 +85,7 @@ You have these tools to help you:
     instructions.
 
     ```bash
-    python3 experimental/MaxKernel/tools/get_hlo_dump.py -- "<xplane_pb_path>"
+    python3 third_party/py/accelerator_agents/MaxKernel/v2/tools/get_hlo_dump.py -- "<xplane_pb_path>"
     ```
 
 ### Attributes of a good analysis

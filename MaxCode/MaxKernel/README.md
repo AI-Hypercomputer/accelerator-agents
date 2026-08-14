@@ -12,7 +12,7 @@ You can either register the overall skill directory containing all sub-skills:
 
 ```json
 "skill_directories": [
-  "//depot/google3/third_party/py/accelerator_agents/MaxKernel/v2/"
+  "//depot/google3/third_party/py/accelerator_agents/MaxKernel/"
 ]
 ```
 

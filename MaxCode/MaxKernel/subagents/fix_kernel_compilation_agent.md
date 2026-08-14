@@ -11,7 +11,7 @@ optimization strategies.
 the TPU VM.
 
 -   Refer to
-    [tpu_vm.md](http://google3/third_party/py/accelerator_agents/MaxKernel/v2/tpu_vm.md)
+    [tpu_vm.md](http://google3/third_party/py/accelerator_agents/MaxKernel/tpu_vm.md)
     to identify the available TPU VM and get the SSH command. You must check its
     status, register your usage by marking it "In Use" and leaving your ID, and
     release it when you are finished.
@@ -33,7 +33,7 @@ the TPU VM.
     *   Invoke via CLI:
 
     ```bash
-    python3 third_party/py/accelerator_agents/MaxKernel/v2/tools/retrieval.py -- "<query>"
+    python3 third_party/py/accelerator_agents/MaxKernel/tools/retrieval.py -- "<query>"
     ```
 
     where `<query>` is the query you want to search. Run this command every
@@ -45,7 +45,7 @@ the TPU VM.
     *   Invoke via CLI:
 
         ```bash
-        python3 third_party/py/accelerator_agents/MaxKernel/v2/tools/search_api.py -- "<api_name>"
+        python3 third_party/py/accelerator_agents/MaxKernel/tools/search_api.py -- "<api_name>"
         ```
 
         where `<api_name>` is the API you want to search. Run this command

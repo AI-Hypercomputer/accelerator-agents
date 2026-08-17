@@ -13,27 +13,94 @@ pytype_strict_library(
 )
 
 pytype_strict_library(
-    name = "coworker",
-    srcs = ["coworker.py"],
+    name = "runtime",
+    srcs = ["runtime.py"],
     deps = [
         ":utils",
     ],
 )
 
 pytype_strict_binary(
-    name = "coworker_bin",
-    srcs = ["coworker.py"],
-    main = "coworker.py",
+    name = "runtime_bin",
+    srcs = ["runtime.py"],
+    main = "runtime.py",
     deps = [
-        ":coworker",
+        ":runtime",
+    ],
+)
+
+pytype_strict_library(
+    name = "compiler",
+    srcs = ["compiler.py"],
+    deps = [
+        ":runtime",
+        ":utils",
+    ],
+)
+
+pytype_strict_binary(
+    name = "compiler_bin",
+    srcs = ["compiler.py"],
+    main = "compiler.py",
+    deps = [
+        ":compiler",
+    ],
+)
+
+pytype_strict_library(
+    name = "installer",
+    srcs = ["installer.py"],
+    deps = [
+        ":utils",
+    ],
+)
+
+pytype_strict_binary(
+    name = "installer_bin",
+    srcs = ["installer.py"],
+    main = "installer.py",
+    deps = [
+        ":installer",
     ],
 )
 
 pytype_strict_contrib_test(
-    name = "test_coworker",
-    srcs = ["tests/test_coworker.py"],
-    main = "tests/test_coworker.py",
+    name = "test_utils",
+    srcs = ["tests/test_utils.py"],
+    main = "tests/test_utils.py",
     deps = [
-        ":coworker",
+        ":utils",
+    ],
+)
+
+pytype_strict_contrib_test(
+    name = "test_runtime",
+    srcs = ["tests/test_runtime.py"],
+    main = "tests/test_runtime.py",
+    deps = [
+        ":runtime",
+        ":utils",
+    ],
+)
+
+pytype_strict_contrib_test(
+    name = "test_compiler",
+    srcs = ["tests/test_compiler.py"],
+    main = "tests/test_compiler.py",
+    deps = [
+        ":compiler",
+        ":runtime",
+        ":utils",
+    ],
+)
+
+pytype_strict_contrib_test(
+    name = "test_installer",
+    srcs = ["tests/test_installer.py"],
+    main = "tests/test_installer.py",
+    deps = [
+        ":compiler",
+        ":installer",
+        ":utils",
     ],
 )

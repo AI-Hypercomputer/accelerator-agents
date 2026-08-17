@@ -399,7 +399,8 @@ def prune_intermediate_tool_history(
       (getattr(p, "text", None) or "").strip() != "For context:"
       for p in new_parts
     ):
-      filtered_history.append(types.Content(role=c.role, parts=new_parts))
+      c.parts = new_parts
+      filtered_history.append(c)
 
   pruned_count = len(contents) - (
     len(filtered_history) + len(active_trailing_contents)

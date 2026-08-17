@@ -44,15 +44,14 @@ def get_local_tpu_port(cfg_path: str = "eval_config.yaml") -> Optional[int]:
   try:
     with open(resolved_path, "r") as file:
       config = yaml.safe_load(file) or {}
+    if not isinstance(config, dict):
+      raise ValueError(
+        f"Invalid configuration format in {resolved_path}: "
+        "Expected a YAML dictionary at the root level."
+      )
   except Exception as e:
     logging.error(f"Config file {resolved_path} error: {e}")
     return None
-
-  if not isinstance(config, dict):
-    raise ValueError(
-      f"Invalid configuration format in {resolved_path}: "
-      "Expected a YAML dictionary at the root level."
-    )
 
   backends = config.get("backends", [])
   if not isinstance(backends, list):
@@ -89,15 +88,14 @@ def get_local_cpu_port(cfg_path: str = "eval_config.yaml") -> Optional[int]:
   try:
     with open(resolved_path, "r") as file:
       config = yaml.safe_load(file) or {}
+    if not isinstance(config, dict):
+      raise ValueError(
+        f"Invalid configuration format in {resolved_path}: "
+        "Expected a YAML dictionary at the root level."
+      )
   except Exception as e:
     logging.error(f"Config file {resolved_path} error: {e}")
     return None
-
-  if not isinstance(config, dict):
-    raise ValueError(
-      f"Invalid configuration format in {resolved_path}: "
-      "Expected a YAML dictionary at the root level."
-    )
 
   backends = config.get("backends", [])
   if not isinstance(backends, list):
@@ -159,15 +157,25 @@ def get_bastion_config(
 
 
 if __name__ == "__main__":
+  import shlex
+
   tpu_p = get_local_tpu_port()
   cpu_p = get_local_cpu_port()
   b = get_bastion_config()
 
-  print(f"EVAL_PORT={EVAL_SERVER_PORT}")
-  print(f"LOCAL_TPU_PORT={tpu_p if tpu_p is not None else ''}")
-  print(f"LOCAL_CPU_PORT={cpu_p if cpu_p is not None else ''}")
-  print(f"BASTION_NAME='{b.get('name', '')}'")
-  print(f"BASTION_ZONE='{b.get('zone', '')}'")
-  print(f"BASTION_PROJECT='{b.get('project', '')}'")
-  print(f"BASTION_LOCAL_PORT={b.get('local_port', EVAL_SERVER_PORT)}")
-  print(f"BASTION_REMOTE_PORT={b.get('remote_port', EVAL_SERVER_PORT)}")
+  print(f"EVAL_PORT={shlex.quote(str(EVAL_SERVER_PORT))}")
+  print(
+    f"LOCAL_TPU_PORT={shlex.quote(str(tpu_p)) if tpu_p is not None else ''}"
+  )
+  print(
+    f"LOCAL_CPU_PORT={shlex.quote(str(cpu_p)) if cpu_p is not None else ''}"
+  )
+  print(f"BASTION_NAME={shlex.quote(str(b.get('name', '')))}")
+  print(f"BASTION_ZONE={shlex.quote(str(b.get('zone', '')))}")
+  print(f"BASTION_PROJECT={shlex.quote(str(b.get('project', '')))}")
+  print(
+    f"BASTION_LOCAL_PORT={shlex.quote(str(b.get('local_port', EVAL_SERVER_PORT)))}"
+  )
+  print(
+    f"BASTION_REMOTE_PORT={shlex.quote(str(b.get('remote_port', EVAL_SERVER_PORT)))}"
+  )

@@ -8,7 +8,7 @@ cd "$SCRIPT_DIR" || exit 1
 
 # Load all configurations and ports dynamically from server_config.py
 load_config() {
-    eval "$(python3 "$SCRIPT_DIR/server_config.py" 2>/dev/null)"
+    eval "$(python3 "$SCRIPT_DIR/server_config.py")"
 }
 
 # Health check helper function

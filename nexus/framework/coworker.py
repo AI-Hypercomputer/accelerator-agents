@@ -101,6 +101,16 @@ def validate_delegation_graph(
     )
 
 
+def assert_no_yaml_frontmatter(path: Path, label: str) -> None:
+  """Assert that an instruction document does not contain YAML frontmatter."""
+  content = path.read_text(encoding="utf-8").lstrip()
+  if content.startswith("---"):
+    raise CoworkerError(
+        f"{label} file '{path.name}' must not contain YAML frontmatter"
+        " (name and description belong in package.json)"
+    )
+
+
 def load_package(package_dir: Path) -> dict[str, Any]:
   """Load, validate, and verify the structural integrity of a package manifest and its graph."""
   manifest_path = package_dir / "package.json"
@@ -193,6 +203,7 @@ def load_package(package_dir: Path) -> dict[str, Any]:
     )
     if not source_inst.is_file():
       raise CoworkerError(f"missing agent instructions: {source_inst}")
+    assert_no_yaml_frontmatter(source_inst, "agent instructions")
     render_agent_references(
         source_inst.read_text(encoding="utf-8"), manifest, ""
     )
@@ -213,6 +224,7 @@ def load_package(package_dir: Path) -> dict[str, Any]:
   )
   if not entry_inst.is_file():
     raise CoworkerError(f"missing entrypoint instructions: {entry_inst}")
+  assert_no_yaml_frontmatter(entry_inst, "entrypoint instructions")
   render_agent_references(entry_inst.read_text(encoding="utf-8"), manifest, "")
 
   questions = rooted(
@@ -669,6 +681,7 @@ def translate_codex(
 
 def translate(package_dir: Path, harness: str, output: Path) -> None:
   """Translate a package into a target harness distribution."""
+  verify_package(package_dir)
   manifest = load_package(package_dir)
   target = target_for(manifest, harness)
 

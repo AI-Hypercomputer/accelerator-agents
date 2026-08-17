@@ -18,7 +18,7 @@ import sys
 from typing import Any, Callable, Sequence
 import uuid
 
-import utils
+from nexus.framework import utils
 
 Path = pathlib.Path
 
@@ -74,13 +74,13 @@ def validate_delegation_graph(
     agents_by_name: dict[str, dict[str, Any]],
     expected_agents: set[str],
 ) -> None:
-  """Validate delegation graph for cycle detection, max depth <= 2, and reachability."""
+  """Traverse delegation graph asserting max depth <= 2 below entrypoint, no cycles, and reachability."""
   visited: set[str] = set()
 
   def visit(agent_name: str, depth: int, path: tuple[str, ...]) -> None:
     if agent_name in path:
       cycle = " -> ".join((*path, agent_name))
-      raise CoworkerError(f"delegation graph contains a cycle: {cycle}")
+      raise CoworkerError(f"delegation cycle detected: {cycle}")
     if depth > 2:
       chain = " -> ".join((*path, agent_name))
       raise CoworkerError(
@@ -101,10 +101,19 @@ def validate_delegation_graph(
     )
 
 
+def assert_no_yaml_frontmatter(content: str, filename: str, label: str) -> None:
+  """Assert that an instruction document content does not contain YAML frontmatter."""
+  if content.lstrip().startswith("---"):
+    raise CoworkerError(
+        f"{label} file '{filename}' must not contain YAML frontmatter"
+        " (name and description belong in package.json)"
+    )
+
+
 def load_package(package_dir: Path) -> dict[str, Any]:
   """Load, validate, and verify the structural integrity of a package manifest and its graph."""
   manifest_path = package_dir / "package.json"
-  manifest = load_json(manifest_path)
+  manifest = utils.load_json(manifest_path)
 
   # 1. Manifest level requirements
   required_manifest_fields = {
@@ -174,7 +183,7 @@ def load_package(package_dir: Path) -> dict[str, Any]:
           f"agent {agent_label} missing: {sorted(missing_agent)}"
       )
 
-    unknown_tools = set(agent["tools"]) - PORTABLE_TOOLS
+    unknown_tools = set(agent["tools"]) - utils.PORTABLE_TOOLS
     if unknown_tools:
       raise CoworkerError(
           f"agent {agent['name']} has unsupported portable tools:"
@@ -188,17 +197,17 @@ def load_package(package_dir: Path) -> dict[str, Any]:
           f" {unknown_delegates}"
       )
 
-    source_inst = rooted(
+    source_inst = utils.rooted(
         package_dir, agent["instructions"], "agent instructions"
     )
     if not source_inst.is_file():
       raise CoworkerError(f"missing agent instructions: {source_inst}")
-    render_agent_references(
-        source_inst.read_text(encoding="utf-8"), manifest, ""
-    )
+    inst_content = source_inst.read_text(encoding="utf-8")
+    assert_no_yaml_frontmatter(inst_content, source_inst.name, "agent instructions")
+    render_agent_references(inst_content, manifest, "")
 
     for schema_key in ("accepts", "produces"):
-      schema_path = rooted(
+      schema_path = utils.rooted(
           package_dir, agent[schema_key], f"agent {schema_key}"
       )
       if not schema_path.is_file():
@@ -208,17 +217,19 @@ def load_package(package_dir: Path) -> dict[str, Any]:
   validate_delegation_graph(entrypoint, agents_by_name, name_set)
 
   # 6. Entrypoint and environment files verification
-  entry_inst = rooted(
+  entry_inst = utils.rooted(
       package_dir, entrypoint["instructions"], "entrypoint instructions"
   )
   if not entry_inst.is_file():
     raise CoworkerError(f"missing entrypoint instructions: {entry_inst}")
-  render_agent_references(entry_inst.read_text(encoding="utf-8"), manifest, "")
+  entry_content = entry_inst.read_text(encoding="utf-8")
+  assert_no_yaml_frontmatter(entry_content, entry_inst.name, "entrypoint instructions")
+  render_agent_references(entry_content, manifest, "")
 
-  questions = rooted(
+  questions = utils.rooted(
       package_dir, manifest["environment"]["questions"], "environment questions"
   )
-  env_schema = rooted(
+  env_schema = utils.rooted(
       package_dir, manifest["environment"]["schema"], "environment schema"
   )
   if not questions.is_file() or not env_schema.is_file():
@@ -241,7 +252,7 @@ def target_for(manifest: dict[str, Any], harness: str) -> dict[str, Any]:
     raise CoworkerError(f"no compatibility target for harness {harness}")
 
   # Validate version constraint syntax
-  parse_version_range(target["versions"])
+  utils.parse_version_range(target["versions"])
 
   # Verify target satisfies all required capabilities
   required = set(manifest.get("required_capabilities", []))
@@ -256,12 +267,12 @@ def target_for(manifest: dict[str, Any], harness: str) -> dict[str, Any]:
   return target
 
 
-def verify_package(package_dir: Path) -> None:
+def verify_package(package_dir: Path) -> dict[str, Any]:
   """Verify package manifest, schema definitions, and target compatibility."""
   manifest = load_package(package_dir)
   for schema_rel in manifest.get("schemas", []):
-    schema_path = rooted(package_dir, schema_rel, "schema path")
-    schema = load_json(schema_path)
+    schema_path = utils.rooted(package_dir, schema_rel, "schema path")
+    schema = utils.load_json(schema_path)
     errors = validate_schema_definition(schema)
     if errors:
       raise CoworkerError(f"invalid schema {schema_rel}:\n" + "\n".join(errors))
@@ -271,6 +282,8 @@ def verify_package(package_dir: Path) -> None:
   }
   for harness in harnesses:
     target_for(manifest, harness)
+
+  return manifest
 
 
 # =====================================================================
@@ -669,7 +682,7 @@ def translate_codex(
 
 def translate(package_dir: Path, harness: str, output: Path) -> None:
   """Translate a package into a target harness distribution."""
-  manifest = load_package(package_dir)
+  manifest = verify_package(package_dir)
   target = target_for(manifest, harness)
 
   if output.exists():

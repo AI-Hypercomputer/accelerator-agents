@@ -6,7 +6,8 @@ import shutil
 import tempfile
 import unittest
 
-from accelerator_agents.tpu_nexus.framework import coworker as cw
+from nexus.framework import coworker as cw
+
 
 Path = pathlib.Path
 
@@ -446,6 +447,70 @@ class TestCoworker(unittest.TestCase):
       cw.load_package(pkg_dir)
     self.assertIn("two levels", str(ctx.exception).lower())
 
+  def test_instruction_frontmatter_rejection(self):
+    """Test that instruction markdown files with YAML frontmatter are rejected."""
+    pkg_dir = self.temp_dir / "frontmatter_pkg"
+    pkg_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "name": "frontmatter-pkg",
+        "version": "1.0.0",
+        "description": "Test frontmatter rejection",
+        "entrypoint": {
+            "name": "frontmatter-pkg",
+            "instructions": "entry.md",
+            "delegates": [],
+        },
+        "agents": [],
+        "environment": {"questions": "q.json", "schema": "s.json"},
+        "compatibility_targets": [
+            {"name": "c", "harness": "claude-code", "versions": ">=1.0.0"}
+        ],
+    }
+    (pkg_dir / "package.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (pkg_dir / "q.json").write_text("{}", encoding="utf-8")
+    (pkg_dir / "s.json").write_text("{}", encoding="utf-8")
+    (pkg_dir / "entry.md").write_text(
+        "---\nname: entry\ndescription: invalid\n---\nPrompt body",
+        encoding="utf-8",
+    )
+
+    with self.assertRaises(cw.CoworkerError) as ctx:
+      cw.load_package(pkg_dir)
+    self.assertIn("must not contain yaml frontmatter", str(ctx.exception).lower())
+
+  def test_translate_runs_validation(self):
+    """Test that cw.translate runs package verification first and fails on invalid packages."""
+    pkg_dir = self.temp_dir / "invalid_translate_pkg"
+    pkg_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "name": "invalid-translate-pkg",
+        "version": "1.0.0",
+        "description": "Test translate validation",
+        "entrypoint": {
+            "name": "invalid-translate-pkg",
+            "instructions": "entry.md",
+            "delegates": [],
+        },
+        "agents": [],
+        "environment": {"questions": "q.json", "schema": "s.json"},
+        "compatibility_targets": [
+            {"name": "c", "harness": "claude-code", "versions": ">=1.0.0"}
+        ],
+        "schemas": ["invalid_schema.json"],
+    }
+    (pkg_dir / "package.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (pkg_dir / "q.json").write_text("{}", encoding="utf-8")
+    (pkg_dir / "s.json").write_text("{}", encoding="utf-8")
+    (pkg_dir / "entry.md").write_text("Valid prompt body", encoding="utf-8")
+    (pkg_dir / "invalid_schema.json").write_text(
+        '{"type": "invalid_type"}', encoding="utf-8"
+    )
+
+    output_dir = self.temp_dir / "out"
+    with self.assertRaises(cw.CoworkerError) as ctx:
+      cw.translate(pkg_dir, "claude-code", output_dir)
+    self.assertIn("invalid schema", str(ctx.exception).lower())
+
   def test_cli_main(self):
     """Test CLI validate subcommand with valid and invalid JSON inputs."""
     schema_path = self.temp_dir / "schema.json"
@@ -468,3 +533,4 @@ class TestCoworker(unittest.TestCase):
 
 if __name__ == "__main__":
   unittest.main()
+

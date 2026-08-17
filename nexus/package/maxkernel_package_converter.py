@@ -725,7 +725,7 @@ def main() -> None:
   )
 
   print("\nConversion complete! You can verify the package with:")
-  print(f"  python3 framework/coworker.py verify {target_dir}")
+  print(f"  python3 framework/compiler.py verify {target_dir}")
 
 
 if __name__ == "__main__":

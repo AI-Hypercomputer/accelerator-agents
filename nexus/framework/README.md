@@ -12,6 +12,17 @@ embedding domain-specific prompts or agent logic.
 
 ---
 
+## Modular Architecture
+
+The framework is organized into three distinct, specialized tools:
+
+1. **`compiler.py`** *(Nexus/CI)*: Package verification, graph checks, and harness translation.
+2. **`installer.py`** *(User Host)*: Distribution installation, environment setup, and uninstallation rollback.
+3. **`runtime.py`** *(Target Workspace)*: Lightweight embedded runner for run namespaces, artifact descriptors, and message validation.
+4. **`utils.py`** *(Shared)*: Common semver, JSON schema validation, safe path resolution, and configuration merging.
+
+---
+
 ## Package Lifecycle Workflow
 
 The canonical workflow comprises four core stages: **Verification**,
@@ -31,7 +42,7 @@ compatibility targets, and delegation topologies (detecting circular
 delegations, depth exceeding two levels, and unreachable subagents):
 
 ```bash
-python3 framework/coworker.py verify path/to/package
+python3 framework/compiler.py verify path/to/package
 ```
 
 ### 2. Harness Translation
@@ -42,12 +53,12 @@ snapshot:
 
 ```bash
 # Compile for Claude Code
-python3 framework/coworker.py translate path/to/package \
+python3 framework/compiler.py translate path/to/package \
     --harness claude-code \
     --output dist/claude-code/<package-name>
 
 # Compile for Codex
-python3 framework/coworker.py translate path/to/package \
+python3 framework/compiler.py translate path/to/package \
     --harness codex \
     --output dist/codex/<package-name>
 ```
@@ -60,17 +71,17 @@ ledger (`ownership.json`):
 
 ```bash
 # Interactive installation
-python3 framework/coworker.py install dist/codex/<package-name> \
+python3 framework/installer.py install dist/codex/<package-name> \
     --destination /path/to/project
 
 # Non-interactive / Automated installation
-python3 framework/coworker.py install dist/claude-code/<package-name> \
+python3 framework/installer.py install dist/claude-code/<package-name> \
     --destination /path/to/project \
     --answers path/to/answers.json \
     --non-interactive
 
 # Upgrade an existing installation
-python3 framework/coworker.py install dist/claude-code/<package-name> \
+python3 framework/installer.py install dist/claude-code/<package-name> \
     --destination /path/to/project \
     --upgrade
 ```
@@ -81,7 +92,7 @@ configuration entries while preserving user-created artifacts and unmodified
 settings:
 
 ```bash
-python3 framework/coworker.py uninstall /path/to/project \
+python3 framework/installer.py uninstall /path/to/project \
     --package <package-name>
 ```
 
@@ -90,7 +101,7 @@ python3 framework/coworker.py uninstall /path/to/project \
 ## Embedded Runtime Architecture
 
 Every generated distribution bundles a self-contained runtime snapshot under
-`runtime/` (`coworker.py` and `utils.py`). Installed agent entrypoints invoke
+`runtime/` (`runtime.py` and `utils.py`). Installed agent entrypoints invoke
 this local runtime to manage execution sessions and artifact lifecycles without
 relying on external framework installations.
 
@@ -100,7 +111,7 @@ collision-resistant, timestamped run directory under
 `.coworker/<package-name>/runs/<run-id>/`:
 
 ```bash
-python3 .coworker/<package-name>/runtime/coworker.py start-run \
+python3 .coworker/<package-name>/runtime/runtime.py start-run \
     --workspace . \
     --package <package-name>
 ```
@@ -123,7 +134,7 @@ descriptors containing canonical URIs, content hashes, and schema metadata
 rather than embedding raw payloads across message boundaries:
 
 ```bash
-python3 .coworker/<package-name>/runtime/coworker.py describe-artifact \
+python3 .coworker/<package-name>/runtime/runtime.py describe-artifact \
     --workspace . \
     --package <package-name> \
     --run-id <run-id> \
@@ -149,7 +160,7 @@ Validates input and output instances against package schemas using the
 deterministic JSON Schema validator:
 
 ```bash
-python3 .coworker/<package-name>/runtime/coworker.py validate \
+python3 .coworker/<package-name>/runtime/runtime.py validate \
     --schema schemas/analysis-request.json \
     instance.json
 ```
@@ -166,4 +177,4 @@ python3 .coworker/<package-name>/runtime/coworker.py validate \
 3. **Deterministic Verification**: Strict validation of delegation trees (no
    cycles, max depth <= 2, complete reachability) and semantic version ranges.
 4. **Hermetic Runtime Snapshot**: Installed projects execute independently from
-   source trees via embedded `runtime/` bundles.
+   source trees via embedded `runtime/` bundles (`runtime.py`, `utils.py`).

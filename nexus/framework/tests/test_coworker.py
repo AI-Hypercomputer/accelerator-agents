@@ -6,10 +6,7 @@ import shutil
 import tempfile
 import unittest
 
-try:
-  from accelerator_agents.tpu_nexus.framework import coworker as cw
-except ImportError:
-  from nexus.framework import coworker as cw
+from nexus.framework import coworker as cw
 
 
 Path = pathlib.Path

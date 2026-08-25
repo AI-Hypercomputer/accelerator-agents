@@ -3,11 +3,12 @@
 import os
 
 from google.adk.apps.app import EventsCompactionConfig
+from google.adk.apps.llm_event_summarizer import LlmEventSummarizer
 from google.adk.planners import BuiltInPlanner
 from google.genai import types
-from auto_agent.custom_types import TimeoutGemini
+
 from auto_agent.constants import MODEL_NAME, TEMPERATURE, TOP_K, TOP_P
-from google.adk.apps.llm_event_summarizer import LlmEventSummarizer
+from auto_agent.custom_types import TimeoutGemini
 
 # Environment variables
 WORKDIR = os.environ.get("WORKDIR", os.path.dirname(os.path.abspath(__file__)))
@@ -19,6 +20,7 @@ MAX_COMPILATION_RETRIES = int(os.environ.get("MAX_COMPILATION_RETRIES", "6"))
 
 compaction_model = TimeoutGemini(model=MODEL_NAME)
 
+
 # Set events compaction policy to avoid memory overflow
 def get_compaction_config():
   return EventsCompactionConfig(
@@ -26,7 +28,7 @@ def get_compaction_config():
     event_retention_size=5,
     compaction_interval=0,
     overlap_size=0,
-    summarizer=LlmEventSummarizer(llm=compaction_model)
+    summarizer=LlmEventSummarizer(llm=compaction_model),
   )
 
 

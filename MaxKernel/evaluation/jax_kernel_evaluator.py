@@ -428,12 +428,14 @@ class JAXKernelEvaluator:
         rtol: Evaluator level fallback for rtol.
     """
     effective_atol = (
-      atol if atol is not None else
-      (task.atol if task.atol is not None else DEFAULT_ATOL)
+      atol
+      if atol is not None
+      else (task.atol if task.atol is not None else DEFAULT_ATOL)
     )
     effective_rtol = (
-      rtol if rtol is not None else
-      (task.rtol if task.rtol is not None else DEFAULT_RTOL)
+      rtol
+      if rtol is not None
+      else (task.rtol if task.rtol is not None else DEFAULT_RTOL)
     )
 
     task_info = {

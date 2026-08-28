@@ -1,3 +1,50 @@
+from auto_agent.timing_callbacks import (
+    before_agent_callback,
+    after_agent_callback,
+    before_model_callback,
+    after_model_callback,
+    before_tool_callback,
+    after_tool_callback,
+)
+
+# Register globally
+try:
+    from google.adk.agents.callbacks import global_before_agent_callbacks, global_after_agent_callbacks
+    from google.adk.agents.callbacks import global_before_model_callbacks, global_after_model_callbacks
+    global_before_agent_callbacks.append(before_agent_callback)
+    global_after_agent_callbacks.append(after_agent_callback)
+    global_before_model_callbacks.append(before_model_callback)
+    global_after_model_callbacks.append(after_model_callback)
+except Exception:
+    pass
+
+try:
+    from google.adk.tools.callbacks import global_before_tool_callbacks, global_after_tool_callbacks
+    global_before_tool_callbacks.append(before_tool_callback)
+    global_after_tool_callbacks.append(after_tool_callback)
+except Exception:
+    pass
+
+try:
+    from google.adk.plugins import plugin_registry, base_plugin
+    class TimingPlugin(base_plugin.BasePlugin):
+        async def before_agent_callback(self, ctx, **kwargs):
+            await before_agent_callback(ctx)
+        async def after_agent_callback(self, ctx, **kwargs):
+            await after_agent_callback(ctx)
+        async def before_model_callback(self, ctx, req, **kwargs):
+            return await before_model_callback(ctx, req)
+        async def after_model_callback(self, ctx, res, **kwargs):
+            return await after_model_callback(ctx, res)
+        async def before_tool_callback(self, tool, args, ctx, **kwargs):
+            return await before_tool_callback(tool, args, ctx)
+        async def after_tool_callback(self, tool, args, ctx, res, **kwargs):
+            return await after_tool_callback(tool, args, ctx, res)
+    plugin_registry.register(TimingPlugin())
+except Exception:
+    pass
+
+
 """Callback utilities for HITL kernel generation agents."""
 
 import json

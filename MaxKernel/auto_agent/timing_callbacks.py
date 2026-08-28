@@ -47,7 +47,8 @@ async def after_agent_callback(callback_context: CallbackContext):
 async def before_model_callback(callback_context: CallbackContext, llm_request: LlmRequest) -> Optional[LlmRequest]:
     state = callback_context.state
     state['_current_llm_start'] = time.time()
-    return None
+    return llm_request
+    
 
 async def after_model_callback(callback_context: CallbackContext, llm_response: LlmResponse) -> Optional[LlmResponse]:
     state = callback_context.state
@@ -61,7 +62,8 @@ async def after_model_callback(callback_context: CallbackContext, llm_response: 
             "agent": agent_name,
             "duration": duration
         })
-    return None
+    return llm_response
+    
 
 async def before_tool_callback(tool: BaseTool, args: Dict[str, Any], tool_context: ToolContext) -> None:
     tool_context.state[f'_tool_start_{tool.name}'] = time.time()
@@ -82,4 +84,5 @@ async def after_tool_callback(tool: BaseTool, args: Dict[str, Any], tool_context
             "duration": duration,
             "status": status
         })
-    return None
+    return tool_response
+    

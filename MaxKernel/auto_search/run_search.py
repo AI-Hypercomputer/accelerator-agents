@@ -163,10 +163,21 @@ async def run_search(
 
     if run_subdir:
       import shutil
+      from auto_search.analyze_timing import analyze_path
 
       dest_dir = os.path.join(problem_dir, os.path.basename(run_subdir))
       shutil.copytree(run_subdir, dest_dir, dirs_exist_ok=True)
       logger.info(f"Copied artifacts to {dest_dir}")
+
+      try:
+          logger.info("Generating timing summary...")
+          summary_text = analyze_path(dest_dir)
+          out_file = os.path.join(dest_dir, "timing_summary.md")
+          with open(out_file, "w") as f:
+              f.write("```text\n" + summary_text + "\n```\n")
+          logger.info(f"Saved metric summary to: {out_file}")
+      except Exception as analyze_err:
+          logger.error(f"Failed to generate timing summary: {analyze_err}")
 
     if best_result:
       best_id, speedup = best_result

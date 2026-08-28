@@ -1,0 +1,678 @@
+"""Autonomous pipeline agent for chaining kernel generation steps."""
+
+import json
+import logging
+import time
+import json
+import os
+import os
+import re
+import shutil
+from typing import AsyncGenerator, Optional
+
+from google.adk.agents import BaseAgent
+from google.adk.agents.invocation_context import InvocationContext
+from google.adk.events import Event, EventActions
+from google.adk.models import LlmRequest
+from google.genai import types
+
+from auto_agent.config import TPU_VERSION, WORKDIR
+from auto_agent.knowledge_base import pallas_docs, pallas_profiling_docs
+
+
+class AutonomousPipelineAgent(BaseAgent):
+  """Chains kernel generation sub-agents automatically with an improvement loop."""
+
+  prepare_base_kernel_agent: BaseAgent
+  plan_agent: BaseAgent
+  implement_agent: BaseAgent
+  validate_agent: BaseAgent
+  test_gen_agent: BaseAgent
+  test_run_agent: BaseAgent
+  autotune_agent: BaseAgent
+  profile_agent: BaseAgent
+  max_iterations: int = 2
+  session_dir: Optional[str] = None
+  end_agent: Optional[str] = None
+  atol: Optional[float] = None
+  rtol: Optional[float] = None
+
+  def __init__(
+    self,
+    name: str,
+    prepare_base_kernel_agent: BaseAgent,
+    plan_agent: BaseAgent,
+    implement_agent: BaseAgent,
+    validate_agent: BaseAgent,
+    test_gen_agent: BaseAgent,
+    test_run_agent: BaseAgent,
+    autotune_agent: BaseAgent,
+    profile_agent: BaseAgent,
+    max_iterations: int = 2,
+    session_dir: Optional[str] = None,
+    end_agent: Optional[str] = None,
+    atol: Optional[float] = None,
+    rtol: Optional[float] = None,
+  ):
+    super().__init__(
+      name=name,
+      plan_agent=plan_agent,
+      implement_agent=implement_agent,
+      validate_agent=validate_agent,
+      prepare_base_kernel_agent=prepare_base_kernel_agent,
+      test_gen_agent=test_gen_agent,
+      test_run_agent=test_run_agent,
+      autotune_agent=autotune_agent,
+      profile_agent=profile_agent,
+      max_iterations=max_iterations,
+      session_dir=session_dir,
+      end_agent=end_agent,
+      atol=atol,
+      rtol=rtol,
+    )
+
+  async def _run_async_impl(
+    self, ctx: InvocationContext
+  ) -> AsyncGenerator[Event, None]:
+    iteration = 0
+
+    yield self._initialize_state(ctx)
+
+    logging.info(f"[{self.name}] Running PrepareBaseKernelAgent (once)...")
+    async for event in self.prepare_base_kernel_agent.run_async(ctx):
+      yield event
+
+    logging.info(
+      f"[{self.name}] Running ValidatedTestGenerationAgent (once)..."
+    )
+    async for event in self.test_gen_agent.run_async(ctx):
+      yield event
+
+    validation_status = ctx.session.state.get("validation_loop_status", {})
+    if not validation_status.get("success", False):
+      logging.error(
+        f"[{self.name}] Initial test generation/validation failed. "
+        "Pipeline may not function correctly."
+      )
+      raise ValueError(
+        f"[{self.name}] Initial test generation/validation failed. "
+        "Pipeline may not function correctly."
+      )
+
+    try:
+      while iteration < self.max_iterations:
+        ctx.session.state['iteration'] = iteration
+        metrics = ctx.session.state['timing_metrics']
+        iteration_str = str(iteration)
+        if iteration_str not in metrics['iterations']:
+          metrics['iterations'][iteration_str] = {'iteration_total_time': 0, 'agents': {}, 'llm_calls': [], 'tools': [], 'framework_overhead': 0}
+        ctx.session.state['iter_start_time'] = time.time()
+        logging.info(
+          f"[{self.name}] Starting pipeline iteration {iteration + 1}/{self.max_iterations}"
+        )
+
+        # Step 1: Plan
+        logging.info(f"[{self.name}] Running PlanKernelAgent...")
+        async for event in self.plan_agent.run_async(ctx):
+          yield event
+
+        self._clear_iteration_metrics(ctx)
+
+        if self._should_end_at_step(ctx, iteration, "plan"):
+          yield self._create_history_event(ctx)
+          self._update_timing_metrics(ctx, iteration)
+          iteration += 1
+          continue
+
+        # Step 2: Implement
+        logging.info(f"[{self.name}] Running ImplementKernelAgent...")
+        async for event in self.implement_agent.run_async(ctx):
+          yield event
+        if self._should_end_at_step(ctx, iteration, "implement"):
+          yield self._create_history_event(ctx)
+          self._update_timing_metrics(ctx, iteration)
+          iteration += 1
+          continue
+
+        # Step 3: Validate
+        logging.info(f"[{self.name}] Running ValidateKernelCompilationAgent...")
+        async for event in self.validate_agent.run_async(ctx):
+          yield event
+
+        # Check if compilation succeeded
+        compilation_status = ctx.session.state.get(
+          "kernel_compilation_status", {}
+        )
+        if not compilation_status.get("success", False):
+          logging.error(
+            f"[{self.name}] Compilation failed. Looping back to planning."
+          )
+          self._save_iteration_files_and_snapshot(
+            ctx, iteration, step_name="validate"
+          )
+          yield self._create_history_event(ctx)
+          self._update_timing_metrics(ctx, iteration)
+          iteration += 1
+          continue
+
+        if self._should_end_at_step(ctx, iteration, "validate"):
+          yield self._create_history_event(ctx)
+          self._update_timing_metrics(ctx, iteration)
+          iteration += 1
+          continue
+
+        # Step 4: Test Run
+        logging.info(f"[{self.name}] Running UnifiedTestAgent...")
+        async for event in self.test_run_agent.run_async(ctx):
+          yield event
+
+        # Check if tests passed
+        test_results = ctx.session.state.get("test_results", {})
+        if not test_results.get("success", False):
+          logging.error(f"[{self.name}] Tests failed. Looping back to planning.")
+          self._save_iteration_files_and_snapshot(
+            ctx, iteration, step_name="test_run"
+          )
+          yield self._create_history_event(ctx)
+          self._update_timing_metrics(ctx, iteration)
+          iteration += 1
+          continue
+
+        if self._should_end_at_step(ctx, iteration, "test_run"):
+          yield self._create_history_event(ctx)
+          self._update_timing_metrics(ctx, iteration)
+          iteration += 1
+          continue
+
+        # Step 5: Autotune
+        logging.info(f"[{self.name}] Running AutotuneAgent...")
+        async for event in self.autotune_agent.run_async(ctx):
+          yield event
+        if self._should_end_at_step(ctx, iteration, "autotune"):
+          yield self._create_history_event(ctx)
+          self._update_timing_metrics(ctx, iteration)
+          iteration += 1
+          continue
+
+        # Step 6: Profile
+        logging.info(f"[{self.name}] Running ProfileAgentOrchestrator...")
+        async for event in self.profile_agent.run_async(ctx):
+          yield event
+        if self._should_end_at_step(ctx, iteration, "profile"):
+          yield self._create_history_event(ctx)
+          self._update_timing_metrics(ctx, iteration)
+          iteration += 1
+          continue
+
+        self._save_iteration_files_and_snapshot(ctx, iteration)
+
+        yield self._create_history_event(ctx)
+
+        # Step 7: Check if improvement is needed
+        # needs_improvement = ctx.session.state.get("needs_improvement", False)
+        needs_improvement = True
+        if not needs_improvement:
+          logging.info(
+            f"[{self.name}] No further improvement needed or agent decided to stop. Stopping pipeline."
+          )
+          self._update_timing_metrics(ctx, iteration)
+          break
+
+        logging.info(
+          f"[{self.name}] Improvement needed. Looping back to planning..."
+        )
+        self._update_timing_metrics(ctx, iteration)
+        iteration += 1
+
+    finally:
+      end_time = time.time()
+      if 'timing_metrics' in ctx.session.state:
+        m = ctx.session.state['timing_metrics']
+        m['overall_pipeline_time'] = end_time - ctx.session.state.get('pipeline_start_time', end_time)
+        try:
+          with open(os.path.join(ctx.session.state.get('workdir', ''), 'timing_metrics.json'), 'w') as f:
+            json.dump(m, f, indent=2)
+        except Exception:
+          pass
+    if iteration >= self.max_iterations:
+      logging.warning(
+        f"[{self.name}] Maximum iterations reached ({self.max_iterations}). Stopping pipeline."
+      )
+
+    best_solution = await self._apply_best_solution(ctx)
+
+    yield Event(
+      author=self.name,
+      actions=EventActions(
+        state_delta={
+          "pipeline_status": "Completed",
+          "pipeline_iteration": iteration,
+          "best_iteration": best_solution["iteration"] if best_solution else -1,
+        }
+      ),
+    )
+
+  def _create_history_event(self, ctx: InvocationContext) -> Event:
+    return Event(
+      author=self.name,
+      actions=EventActions(
+        state_delta={"history": ctx.session.state.get("history", [])}
+      ),
+    )
+
+  def _should_end_at_step(
+    self, ctx: InvocationContext, iteration: int, step_name: str
+  ) -> bool:
+    """Checks if the pipeline should terminate at the current step."""
+    if self.end_agent == step_name:
+      logging.info(
+        f"[{self.name}] Ending iteration {iteration} early at step '{step_name}'."
+      )
+      self._save_iteration_files_and_snapshot(
+        ctx, iteration, step_name=step_name
+      )
+      return True
+    return False
+
+  def _record_history_snapshot(self, ctx: InvocationContext, iteration: int):
+    """Records the iteration snapshot into the session history."""
+    current_history = ctx.session.state.get("history", [])
+    if any(s.get("iteration") == iteration for s in current_history):
+      return
+
+    kernel_path = ctx.session.state.get("optimized_kernel_path")
+    kernel_code = ""
+    if kernel_path and os.path.exists(kernel_path):
+      try:
+        with open(kernel_path, "r") as f:
+          kernel_code = f.read()
+      except Exception as e:
+        logging.error(
+          f"[{self.name}] Failed to read kernel file for snapshot: {e}"
+        )
+
+    speedup = self._extract_speedup(ctx)
+
+    snapshot = {
+      "iteration": iteration,
+      "kernel_code": kernel_code,
+      "compilation_status": ctx.session.state.get(
+        "kernel_compilation_status", {}
+      ),
+      "test_status": ctx.session.state.get("test_results", {}),
+      "speedup": speedup,
+      "autotuning_summary": ctx.session.state.get("autotuning_summary", ""),
+      "profiling_summary": ctx.session.state.get("profiling_summary", ""),
+    }
+
+    updated_history = current_history + [snapshot]
+    ctx.session.state["history"] = updated_history
+    logging.info(f"[{self.name}] Saved snapshot for iteration {iteration}")
+
+  def _save_iteration_files_and_snapshot(
+    self,
+    ctx: InvocationContext,
+    iteration: int,
+    step_name: Optional[str] = None,
+  ):
+    """Saves artifacts with an iteration suffix."""
+    all_keys = [
+      "kernel_plan_path",
+      "optimized_kernel_path",
+      "autotune_specs_path",
+      "autotune_results_path",
+    ]
+    if step_name is not None:
+      step_to_last_key = {
+        "plan": "kernel_plan_path",
+        "implement": "optimized_kernel_path",
+        "validate": "optimized_kernel_path",
+        "test_run": "optimized_kernel_path",
+        "autotune": "autotune_results_path",
+        "profile": "autotune_results_path",
+      }
+      last_key = step_to_last_key.get(step_name, "autotune_results_path")
+      keys_to_save = all_keys[: all_keys.index(last_key) + 1]
+    else:
+      keys_to_save = all_keys
+
+    for path_key in keys_to_save:
+      path = ctx.session.state.get(path_key)
+      if path and os.path.exists(path):
+        directory, filename = os.path.split(path)
+        name, ext = os.path.splitext(filename)
+        new_filename = f"{name}_{iteration}{ext}"
+        new_path = os.path.join(directory, new_filename)
+        try:
+          shutil.copy2(path, new_path)
+          logging.info(f"[{self.name}] Copied {path_key} to {new_path}")
+        except Exception as e:
+          logging.error(
+            f"[{self.name}] Failed to copy {path_key} to {new_path}: {e}"
+          )
+
+    self._record_history_snapshot(ctx, iteration)
+
+  def _clear_iteration_metrics(self, ctx: InvocationContext):
+    """Clears iteration-specific metrics to avoid carrying over stale data."""
+    for key in [
+      "kernel_compilation_status",
+      "validation_loop_status",
+      "test_results",
+      "autotune_results",
+      "profiling_summary",
+    ]:
+      ctx.session.state.pop(key, None)
+
+  def _update_timing_metrics(self, ctx: InvocationContext, iteration: int):
+    if 'iter_start_time' in ctx.session.state:
+      iter_end_time = time.time()
+      iteration_str = str(iteration)
+      if iteration_str in ctx.session.state.get('timing_metrics', {}).get('iterations', {}):
+        it_m = ctx.session.state['timing_metrics']['iterations'][iteration_str]
+        it_m['iteration_total_time'] = iter_end_time - ctx.session.state['iter_start_time']
+        ag_time = sum(it_m['agents'].values())
+        llm_time = sum(c['duration'] for c in it_m['llm_calls'])
+        tl_time = sum(t['duration'] for t in it_m['tools'])
+        it_m['framework_overhead'] = max(0.0, ag_time - (llm_time + tl_time))
+
+  def _initialize_state(self, ctx: InvocationContext) -> Event:
+    if 'timing_metrics' not in ctx.session.state:
+      ctx.session.state['timing_metrics'] = {'overall_pipeline_time': 0, 'iterations': {}}
+    ctx.session.state['pipeline_start_time'] = time.time()
+    """Initializes session state with standard paths and returns the event."""
+    # Initialize history
+    if "history" not in ctx.session.state:
+      ctx.session.state["history"] = []
+
+    # Initialize TPU version and Pallas docs in state
+    tpu_version = TPU_VERSION
+    ctx.session.state["tpu_version"] = tpu_version
+    logging.info(f"[{self.name}] Detected TPU version: {tpu_version}")
+
+    try:
+      with open("auto_agent/tpu_specs.json", "r") as f:
+        tpu_specs = json.load(f)
+
+      if tpu_version in tpu_specs:
+        ctx.session.state["tpu_specs"] = tpu_specs[tpu_version]
+      else:
+        ctx.session.state["tpu_specs"] = (
+          "TPU specs not found for detected version."
+        )
+      logging.info(f"[{self.name}] Loaded TPU specs for {tpu_version}")
+    except Exception as e:
+      logging.error(f"[{self.name}] Failed to load TPU specs: {e}")
+      ctx.session.state["tpu_specs"] = None
+
+    ctx.session.state["pallas_docs"] = pallas_docs.PROMPT
+    ctx.session.state["pallas_profiling_docs"] = pallas_profiling_docs.PROMPT
+
+    # Path related states
+    session_dir = self.session_dir or os.path.join(WORKDIR, ctx.session.id)
+
+    # Ensure session_dir is under WORKDIR
+    abs_session_dir = os.path.abspath(session_dir)
+    abs_workdir = os.path.abspath(WORKDIR)
+    if os.path.commonpath([abs_workdir, abs_session_dir]) != abs_workdir:
+      raise ValueError(
+        f"session_dir ({session_dir}) must be a subdirectory of WORKDIR ({WORKDIR})"
+      )
+
+    os.makedirs(session_dir, exist_ok=True)
+
+    if "workdir" not in ctx.session.state:
+      ctx.session.state["workdir"] = session_dir
+      logging.info(f"[{self.name}] Set workdir: {session_dir}")
+
+    if "base_kernel_path" not in ctx.session.state:
+      ctx.session.state["base_kernel_path"] = os.path.join(
+        session_dir, "base_kernel.py"
+      )
+      logging.info(
+        f"[{self.name}] Set base_kernel_path: {ctx.session.state['base_kernel_path']}"
+      )
+
+    if "optimized_kernel_path" not in ctx.session.state:
+      ctx.session.state["optimized_kernel_path"] = os.path.join(
+        session_dir, "optimized_kernel.py"
+      )
+      logging.info(
+        f"[{self.name}] Set optimized_kernel_path: {ctx.session.state['optimized_kernel_path']}"
+      )
+
+    if "kernel_plan_path" not in ctx.session.state:
+      ctx.session.state["kernel_plan_path"] = os.path.join(
+        session_dir, "base_kernel_plan.md"
+      )
+      logging.info(
+        f"[{self.name}] Set kernel_plan_path: {ctx.session.state['kernel_plan_path']}"
+      )
+
+    if "test_file_path" not in ctx.session.state:
+      ctx.session.state["test_file_path"] = os.path.join(
+        session_dir, "test_optimized_kernel.py"
+      )
+      logging.info(
+        f"[{self.name}] Set test_file_path: {ctx.session.state['test_file_path']}"
+      )
+
+    if "profiling_script_path" not in ctx.session.state:
+      ctx.session.state["profiling_script_path"] = os.path.join(
+        session_dir, "profile_optimized_kernel.py"
+      )
+      logging.info(
+        f"[{self.name}] Set profiling_script_path: {ctx.session.state['profiling_script_path']}"
+      )
+
+    if "xplane_pb_path" not in ctx.session.state:
+      ctx.session.state["xplane_pb_path"] = os.path.join(
+        session_dir, "profile.xplane.pb"
+      )
+      logging.info(
+        f"[{self.name}] Set xplane_pb_path: {ctx.session.state['xplane_pb_path']}"
+      )
+
+    if "autotune_specs_path" not in ctx.session.state:
+      ctx.session.state["autotune_specs_path"] = os.path.join(
+        session_dir, "autotune_specs.json"
+      )
+      logging.info(
+        f"[{self.name}] Set autotune_specs_path: {ctx.session.state['autotune_specs_path']}"
+      )
+
+    if "autotune_results_path" not in ctx.session.state:
+      ctx.session.state["autotune_results_path"] = os.path.join(
+        session_dir, "autotune_results.json"
+      )
+      logging.info(
+        f"[{self.name}] Set autotune_results_path: {ctx.session.state['autotune_results_path']}"
+      )
+
+    # Use atol/rtol from pipeline agent initialization if provided
+    if self.atol is not None and "atol" not in ctx.session.state:
+      ctx.session.state["atol"] = self.atol
+      logging.info(f"[{self.name}] Set atol: {ctx.session.state['atol']}")
+
+    if self.rtol is not None and "rtol" not in ctx.session.state:
+      ctx.session.state["rtol"] = self.rtol
+      logging.info(f"[{self.name}] Set rtol: {ctx.session.state['rtol']}")
+
+    logging.info(f"[{self.name}] Published explicit path state update Event.")
+    return Event(
+      author=self.name,
+      actions=EventActions(
+        state_delta={
+          "workdir": ctx.session.state["workdir"],
+          "base_kernel_path": ctx.session.state["base_kernel_path"],
+          "optimized_kernel_path": ctx.session.state["optimized_kernel_path"],
+          "kernel_plan_path": ctx.session.state["kernel_plan_path"],
+          "test_file_path": ctx.session.state["test_file_path"],
+          "profiling_script_path": ctx.session.state["profiling_script_path"],
+          "atol": ctx.session.state.get("atol"),
+          "rtol": ctx.session.state.get("rtol"),
+          "autotune_specs_path": ctx.session.state["autotune_specs_path"],
+          "autotune_results_path": ctx.session.state["autotune_results_path"],
+          "xplane_pb_path": ctx.session.state["xplane_pb_path"],
+          "tpu_version": ctx.session.state.get("tpu_version"),
+          "tpu_specs": ctx.session.state.get("tpu_specs"),
+          "pallas_docs": ctx.session.state.get("pallas_docs"),
+          "pallas_profiling_docs": ctx.session.state.get(
+            "pallas_profiling_docs"
+          ),
+        }
+      ),
+    )
+
+  def _extract_speedup(self, ctx: InvocationContext):
+    """Extracts speedup from autotune results or test results output."""
+    autotune_results = ctx.session.state.get("autotune_results", {})
+    if autotune_results.get("status") == "success":
+      speedup = autotune_results.get("best_speedup")
+      if speedup is not None:
+        logging.info(
+          f"[{self.name}] Extracted speedup from autotune results: {speedup}"
+        )
+        return speedup
+
+    test_output = ctx.session.state.get("test_results", {}).get("output", "")
+    if not test_output:
+      return None
+    try:
+      match = re.search(r"PERF_METRICS:\s*([\d.]+)", test_output)
+      if match:
+        speedup = float(match.group(1))
+        logging.info(
+          f"[{self.name}] Extracted speedup from test results: {speedup} (fallback)"
+        )
+        return speedup
+    except Exception as e:
+      logging.error(
+        f"[{self.name}] Failed to parse speedup from test output: {e}"
+      )
+    return None
+
+  async def _apply_best_solution(self, ctx: InvocationContext):
+    """Finds the best solution from history and rolls back the file if needed."""
+    history = ctx.session.state.get("history", [])
+    valid_solutions = [
+      s
+      for s in history
+      if s.get("compilation_status", {}).get("success")
+      and s.get("test_status", {}).get("success")
+    ]
+
+    best_solution = None
+    if valid_solutions:
+      # Try to sort by speedup (higher is better)
+      solutions_with_speedup = [
+        s for s in valid_solutions if s.get("speedup") is not None
+      ]
+      if solutions_with_speedup:
+        try:
+          best_solution = max(
+            solutions_with_speedup, key=lambda x: x["speedup"]
+          )
+          if len(solutions_with_speedup) < len(valid_solutions):
+            logging.warning(
+              f"[{self.name}] {len(valid_solutions) - len(solutions_with_speedup)} "
+              f"valid solution(s) were missing speedup metrics and ignored."
+            )
+        except Exception as e:
+          logging.error(
+            f"[{self.name}] Error selecting best solution by speedup: {e}"
+          )
+          best_solution = await self._select_best_with_llm(valid_solutions)
+      else:
+        logging.warning(
+          f"[{self.name}] No speedup metrics found. Falling back to LLM selection."
+        )
+        best_solution = await self._select_best_with_llm(valid_solutions)
+
+    if best_solution:
+      logging.info(
+        f"[{self.name}] Best solution found from iteration {best_solution['iteration']}"
+      )
+
+      # Rollback all relevant files to the best iteration's state
+      best_iter = best_solution["iteration"]
+      keys_to_rollback = [
+        "optimized_kernel_path",
+        "kernel_plan_path",
+        "test_file_path",
+        "autotune_specs_path",
+        "autotune_results_path",
+      ]
+
+      logging.info(
+        f"[{self.name}] Restoring files to match best solution from iteration {best_iter}"
+      )
+
+      for path_key in keys_to_rollback:
+        base_path = ctx.session.state.get(path_key)
+        if base_path:
+          directory, filename = os.path.split(base_path)
+          name, ext = os.path.splitext(filename)
+          suffixed_path = os.path.join(directory, f"{name}_{best_iter}{ext}")
+
+          if os.path.exists(suffixed_path):
+            try:
+              shutil.copy2(suffixed_path, base_path)
+            except Exception as e:
+              logging.error(f"[{self.name}] Failed to rollback {path_key}: {e}")
+
+    return best_solution
+
+  async def _select_best_with_llm(self, valid_solutions):
+    """Fallback method to let LLM select the best solution based on summaries."""
+    if not valid_solutions:
+      return None
+    if len(valid_solutions) == 1:
+      return valid_solutions[0]
+
+    logging.info(
+      f"[{self.name}] Invoking LLM to select best solution from {len(valid_solutions)} candidates."
+    )
+
+    prompt = "You are an expert in performance optimization. Compare the following profiling summaries for different iterations of a kernel and decide which one is the best solution (maximizes performance/efficiency). Answer with ONLY the iteration number of the best solution.\n\n"
+
+    for s in valid_solutions:
+      prompt += f"Iteration {s['iteration']}:\n{s['profiling_summary']}\n\n"
+
+    request = LlmRequest(
+      contents=[
+        types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
+      ]
+    )
+
+    try:
+      model = None
+      if hasattr(self.plan_agent, "model"):
+        model = self.plan_agent.model
+      elif hasattr(self.implement_agent, "model"):
+        model = self.implement_agent.model
+
+      if model:
+        text = ""
+        async for chunk in model.generate_content_async(request):
+          if chunk.content and chunk.content.parts:
+            for part in chunk.content.parts:
+              if part.text:
+                text += part.text
+        text = text.strip()
+        import re
+
+        match = re.search(r"\d+", text)
+        if match:
+          iter_num = int(match.group())
+          for s in valid_solutions:
+            if s["iteration"] == iter_num:
+              return s
+
+      logging.warning(
+        f"[{self.name}] LLM selection failed or no model found. Defaulting to last valid solution."
+      )
+      return valid_solutions[-1]
+    except Exception as e:
+      logging.error(f"[{self.name}] Error in LLM selection: {e}")
+      return valid_solutions[-1]

@@ -163,7 +163,7 @@ async def run_search(
 
     if run_subdir:
       import shutil
-      from auto_search.analyze_timing import analyze_path
+      from auto_search.utils.analyze_timing import analyze_path
 
       dest_dir = os.path.join(problem_dir, os.path.basename(run_subdir))
       shutil.copytree(run_subdir, dest_dir, dirs_exist_ok=True)

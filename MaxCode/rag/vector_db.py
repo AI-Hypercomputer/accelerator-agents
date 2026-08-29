@@ -3,9 +3,23 @@
 import os
 import pickle
 import sqlite3
+from typing import Optional
 import numpy as np
 
 RAG_DB_FILE = os.path.join(os.environ["HOME"], "rag_store.db")
+
+
+def _ensure_corpus_column(cur: sqlite3.Cursor) -> None:
+  """Adds the `corpus` column to existing databases that pre-date it.
+
+  Existing rows are tagged 'jax' (the original behaviour).
+  """
+  cur.execute("PRAGMA table_info(documents)")
+  columns = {row[1] for row in cur.fetchall()}
+  if "corpus" not in columns:
+    cur.execute(
+        "ALTER TABLE documents ADD COLUMN corpus TEXT NOT NULL DEFAULT 'jax'"
+    )
 
 
 def create_db(db_path: str = RAG_DB_FILE):
@@ -23,9 +37,11 @@ def create_db(db_path: str = RAG_DB_FILE):
         text TEXT NOT NULL,
         desc TEXT NOT NULL,
         file TEXT NOT NULL,
-        embedding BLOB NOT NULL
+        embedding BLOB NOT NULL,
+        corpus TEXT NOT NULL DEFAULT 'jax'
     )
     """)
+  _ensure_corpus_column(cur)
   conn.commit()
   conn.close()
 
@@ -37,6 +53,7 @@ def save_document(
     file: str,
     embedding: np.ndarray,
     db_path: str = RAG_DB_FILE,
+    corpus: str = "jax",
 ):
   """Insert a document and its embedding into the database.
 
@@ -48,14 +65,16 @@ def save_document(
       embedding: Dense vector representation of the document with shape (dim,)
         and dtype convertible to float32.
       db_path: Path to the SQLite database file.
+      corpus: Logical corpus tag for filtering (e.g. "jax" or "maxtext").
   """
   conn = sqlite3.connect(db_path)
   cur = conn.cursor()
+  _ensure_corpus_column(cur)
   emb_binary = pickle.dumps(embedding.astype(np.float32))
   cur.execute(
-      "INSERT INTO documents (name,text,desc,file, embedding) VALUES (?,"
-      " ?,?,?,?)",
-      (name, text, desc, file, emb_binary),
+      "INSERT INTO documents (name,text,desc,file, embedding, corpus) VALUES"
+      " (?, ?,?,?,?,?)",
+      (name, text, desc, file, emb_binary, corpus),
   )
   conn.commit()
   conn.close()
@@ -63,11 +82,13 @@ def save_document(
 
 def load_all_documents(
     db_path: str = RAG_DB_FILE,
+    corpus: Optional[str] = None,
 ) -> tuple[list[int], list[str], list[str], list[str], np.ndarray]:
   """Load all documents and embeddings from the database.
 
   Args:
     db_path: Path to the SQLite database file.
+    corpus: Optional corpus tag to filter on. If None, all rows are returned.
 
   Returns:
       tuple[list[int], list[str], list[str], list[str], numpy.ndarray]:
@@ -79,7 +100,14 @@ def load_all_documents(
   """
   conn = sqlite3.connect(db_path)
   cur = conn.cursor()
-  cur.execute("SELECT id,name, text,file, embedding FROM documents")
+  _ensure_corpus_column(cur)
+  if corpus is None:
+    cur.execute("SELECT id,name, text,file, embedding FROM documents")
+  else:
+    cur.execute(
+        "SELECT id,name, text,file, embedding FROM documents WHERE corpus = ?",
+        (corpus,),
+    )
   rows = cur.fetchall()
   conn.close()
 
@@ -134,16 +162,18 @@ def search_embedding(
 
 def make_embedding_index(
     db_path: str = RAG_DB_FILE,
+    corpus: Optional[str] = None,
 ) -> tuple[list[int], list[str], list[str], list[str], np.ndarray | None]:
   """Load all documents and return embeddings as index.
 
   Args:
     db_path: Path to the SQLite database file.
+    corpus: Optional corpus tag to filter on. If None, all rows are loaded.
 
   Returns:
       tuple[list[int], list[str], list[str], list[str], np.ndarray | None]:
           (ids, names, texts, files, index)
   """
-  ids, names, texts, files, embeddings = load_all_documents(db_path)
+  ids, names, texts, files, embeddings = load_all_documents(db_path, corpus=corpus)
   index = build_numpy_index(embeddings)
   return ids, names, texts, files, index

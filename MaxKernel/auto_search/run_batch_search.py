@@ -5,6 +5,8 @@ import logging
 import os
 from typing import Any, Tuple
 
+import yaml
+
 from auto_search.run_search import run_search, setup_logging
 
 logger = logging.getLogger(__name__)
@@ -29,6 +31,34 @@ async def process_problem(
         logger.error(error_msg)
         return problem_id, f"Failed: {error_msg}"
 
+      atol = None
+      rtol = None
+      kernel_task_file = os.path.join(problem_dir, "kernel_task.yaml")
+      if os.path.exists(kernel_task_file):
+        with open(kernel_task_file, "r") as f:
+          try:
+            task_data = yaml.safe_load(f)
+            if isinstance(task_data, dict):
+              if "atol" in task_data:
+                val = task_data["atol"]
+                atol = float(val[0] if isinstance(val, list) else val)
+              if "rtol" in task_data:
+                val = task_data["rtol"]
+                rtol = float(val[0] if isinstance(val, list) else val)
+          except Exception as e:
+            logger.warning(
+              f"Failed to parse kernel_task.yaml for {problem_id}: {e}"
+            )
+
+      problem_kwargs = dict(kwargs)
+      if atol is not None or rtol is not None:
+        agent_config = dict(problem_kwargs.get("agent_config") or {})
+        if atol is not None:
+          agent_config["atol"] = atol
+        if rtol is not None:
+          agent_config["rtol"] = rtol
+        problem_kwargs["agent_config"] = agent_config
+
       optimized_file_path = os.path.join(
         problem_dir, f"optimized_{algorithm}.py"
       )
@@ -37,7 +67,7 @@ async def process_problem(
         optimized_file_path=optimized_file_path,
         algorithm=algorithm,
         problem_id=problem_id,
-        **kwargs,
+        **problem_kwargs,
       )
     except Exception as e:
       logger.error(

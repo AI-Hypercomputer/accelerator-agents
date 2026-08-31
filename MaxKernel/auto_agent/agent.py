@@ -50,47 +50,56 @@ def create_root_agent(
   )
 
   from auto_agent.timing_callbacks import (
-      before_agent_callback, after_agent_callback,
-      before_model_callback, after_model_callback,
-      before_tool_callback, after_tool_callback
+    after_agent_callback,
+    after_model_callback,
+    after_tool_callback,
+    before_agent_callback,
+    before_model_callback,
+    before_tool_callback,
   )
+
   def _hook(a, name, cb):
-      try:
-          existing = getattr(a, name, None)
-          if existing:
-              if isinstance(existing, list):
-                  existing.append(cb)
-              else:
-                  setattr(a, name, [existing, cb])
-          else:
-              setattr(a, name, [cb])
-      except ValueError:
-          pass
+    try:
+      existing = getattr(a, name, None)
+      if existing:
+        if isinstance(existing, list):
+          existing.append(cb)
+        else:
+          setattr(a, name, [existing, cb])
+      else:
+        setattr(a, name, [cb])
+    except ValueError:
+      pass
 
   visited = set()
+
   def _inject(a):
-      if id(a) in visited: return
-      visited.add(id(a))
-      _hook(a, "before_agent_callback", before_agent_callback)
-      _hook(a, "after_agent_callback", after_agent_callback)
-      _hook(a, "before_model_callback", before_model_callback)
-      _hook(a, "after_model_callback", after_model_callback)
-      _hook(a, "before_tool_callback", before_tool_callback)
-      _hook(a, "after_tool_callback", after_tool_callback)
-      
-      from google.adk.agents.base_agent import BaseAgent
-      for attr_name in dir(a):
-          if attr_name.startswith('_') or attr_name == 'parent_agent': continue
-          try:
-              attr_val = getattr(a, attr_name, None)
-              if isinstance(attr_val, BaseAgent):
-                  _inject(attr_val)
-              elif isinstance(attr_val, list):
-                  for item in attr_val:
-                      if isinstance(item, BaseAgent):
-                          _inject(item)
-          except Exception:
-              pass
+    if id(a) in visited:
+      return
+    visited.add(id(a))
+    _hook(a, "before_agent_callback", before_agent_callback)
+    _hook(a, "after_agent_callback", after_agent_callback)
+    _hook(a, "before_model_callback", before_model_callback)
+    _hook(a, "after_model_callback", after_model_callback)
+    _hook(a, "before_tool_callback", before_tool_callback)
+    _hook(a, "after_tool_callback", after_tool_callback)
+
+    from google.adk.agents.base_agent import BaseAgent
+
+    for attr_name in dir(a):
+      if attr_name.startswith("_") or attr_name == "parent_agent":
+        continue
+      try:
+        attr_val = getattr(a, attr_name, None)
+        if isinstance(attr_val, BaseAgent):
+          _inject(attr_val)
+        elif isinstance(attr_val, list):
+          for item in attr_val:
+            if isinstance(item, BaseAgent):
+              _inject(item)
+      except Exception:
+        pass
+
   _inject(agent)
   return agent
 

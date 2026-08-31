@@ -2,11 +2,10 @@
 
 import json
 import logging
-import time
-import json
 import os
 import re
 import shutil
+import time
 from typing import AsyncGenerator, Optional
 
 from google.adk.agents import BaseAgent
@@ -77,35 +76,41 @@ class AutonomousPipelineAgent(BaseAgent):
 
     yield self._initialize_state(ctx)
 
-    logging.info(f"[{self.name}] Running PrepareBaseKernelAgent (once)...")
-    async for event in self.prepare_base_kernel_agent.run_async(ctx):
-      yield event
-
-    logging.info(
-      f"[{self.name}] Running ValidatedTestGenerationAgent (once)..."
-    )
-    async for event in self.test_gen_agent.run_async(ctx):
-      yield event
-
-    validation_status = ctx.session.state.get("validation_loop_status", {})
-    if not validation_status.get("success", False):
-      logging.error(
-        f"[{self.name}] Initial test generation/validation failed. "
-        "Pipeline may not function correctly."
-      )
-      raise ValueError(
-        f"[{self.name}] Initial test generation/validation failed. "
-        "Pipeline may not function correctly."
-      )
-
     try:
+      logging.info(f"[{self.name}] Running PrepareBaseKernelAgent (once)...")
+      async for event in self.prepare_base_kernel_agent.run_async(ctx):
+        yield event
+
+      logging.info(
+        f"[{self.name}] Running ValidatedTestGenerationAgent (once)..."
+      )
+      async for event in self.test_gen_agent.run_async(ctx):
+        yield event
+
+      validation_status = ctx.session.state.get("validation_loop_status", {})
+      if not validation_status.get("success", False):
+        logging.error(
+          f"[{self.name}] Initial test generation/validation failed. "
+          "Pipeline may not function correctly."
+        )
+        raise ValueError(
+          f"[{self.name}] Initial test generation/validation failed. "
+          "Pipeline may not function correctly."
+        )
+
       while iteration < self.max_iterations:
-        ctx.session.state['iteration'] = iteration
-        metrics = ctx.session.state['timing_metrics']
+        ctx.session.state["iteration"] = iteration
+        metrics = ctx.session.state["timing_metrics"]
         iteration_str = str(iteration)
-        if iteration_str not in metrics['iterations']:
-          metrics['iterations'][iteration_str] = {'iteration_total_time': 0, 'agents': {}, 'llm_calls': [], 'tools': [], 'framework_overhead': 0}
-        ctx.session.state['iter_start_time'] = time.time()
+        if iteration_str not in metrics["iterations"]:
+          metrics["iterations"][iteration_str] = {
+            "iteration_total_time": 0,
+            "agents": {},
+            "llm_calls": [],
+            "tools": [],
+            "framework_overhead": 0,
+          }
+        ctx.session.state["iter_start_time"] = time.time()
         logging.info(
           f"[{self.name}] Starting pipeline iteration {iteration + 1}/{self.max_iterations}"
         )
@@ -168,7 +173,9 @@ class AutonomousPipelineAgent(BaseAgent):
         # Check if tests passed
         test_results = ctx.session.state.get("test_results", {})
         if not test_results.get("success", False):
-          logging.error(f"[{self.name}] Tests failed. Looping back to planning.")
+          logging.error(
+            f"[{self.name}] Tests failed. Looping back to planning."
+          )
           self._save_iteration_files_and_snapshot(
             ctx, iteration, step_name="test_run"
           )
@@ -225,11 +232,18 @@ class AutonomousPipelineAgent(BaseAgent):
 
     finally:
       end_time = time.time()
-      if 'timing_metrics' in ctx.session.state:
-        m = ctx.session.state['timing_metrics']
-        m['overall_pipeline_time'] = end_time - ctx.session.state.get('pipeline_start_time', end_time)
+      if "timing_metrics" in ctx.session.state:
+        m = ctx.session.state["timing_metrics"]
+        m["overall_pipeline_time"] = end_time - ctx.session.state.get(
+          "pipeline_start_time", end_time
+        )
         try:
-          with open(os.path.join(ctx.session.state.get('workdir', ''), 'timing_metrics.json'), 'w') as f:
+          with open(
+            os.path.join(
+              ctx.session.state.get("workdir", ""), "timing_metrics.json"
+            ),
+            "w",
+          ) as f:
             json.dump(m, f, indent=2)
         except Exception:
           pass
@@ -364,21 +378,28 @@ class AutonomousPipelineAgent(BaseAgent):
       ctx.session.state.pop(key, None)
 
   def _update_timing_metrics(self, ctx: InvocationContext, iteration: int):
-    if 'iter_start_time' in ctx.session.state:
+    if "iter_start_time" in ctx.session.state:
       iter_end_time = time.time()
       iteration_str = str(iteration)
-      if iteration_str in ctx.session.state.get('timing_metrics', {}).get('iterations', {}):
-        it_m = ctx.session.state['timing_metrics']['iterations'][iteration_str]
-        it_m['iteration_total_time'] = iter_end_time - ctx.session.state['iter_start_time']
-        ag_time = sum(it_m['agents'].values())
-        llm_time = sum(c['duration'] for c in it_m['llm_calls'])
-        tl_time = sum(t['duration'] for t in it_m['tools'])
-        it_m['framework_overhead'] = ag_time - (llm_time + tl_time)
+      if iteration_str in ctx.session.state.get("timing_metrics", {}).get(
+        "iterations", {}
+      ):
+        it_m = ctx.session.state["timing_metrics"]["iterations"][iteration_str]
+        it_m["iteration_total_time"] = (
+          iter_end_time - ctx.session.state["iter_start_time"]
+        )
+        ag_time = sum(it_m["agents"].values())
+        llm_time = sum(c["duration"] for c in it_m["llm_calls"])
+        tl_time = sum(t["duration"] for t in it_m["tools"])
+        it_m["framework_overhead"] = max(0.0, ag_time - (llm_time + tl_time))
 
   def _initialize_state(self, ctx: InvocationContext) -> Event:
-    if 'timing_metrics' not in ctx.session.state:
-      ctx.session.state['timing_metrics'] = {'overall_pipeline_time': 0, 'iterations': {}}
-    ctx.session.state['pipeline_start_time'] = time.time()
+    if "timing_metrics" not in ctx.session.state:
+      ctx.session.state["timing_metrics"] = {
+        "overall_pipeline_time": 0,
+        "iterations": {},
+      }
+    ctx.session.state["pipeline_start_time"] = time.time()
     """Initializes session state with standard paths and returns the event."""
     # Initialize history
     if "history" not in ctx.session.state:

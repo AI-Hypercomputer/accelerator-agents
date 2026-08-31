@@ -29,27 +29,27 @@ from evaluation.jax_kernel_evaluator import JAXKernelEvaluator
 
 # Initialize the evaluator for remote execution
 evaluator = JAXKernelEvaluator(
-    local=False,
-    tpu_name="your-tpu-name",
-    project="your-gcp-project",
-    zone="your-tpu-zone",
-    venv_path="/path/to/venv/on/tpu",
+  local=False,
+  tpu_name="your-tpu-name",
+  project="your-gcp-project",
+  zone="your-tpu-zone",
+  venv_path="/path/to/venv/on/tpu",
 )
 
 # Run evaluation
 result = evaluator.evaluate(
-    reference_code_path="path/to/reference.py",
-    optimized_code_path="path/to/optimized.py",
-    task_yaml_path="path/to/kernel_task.yaml",
-    atol=1e-3,
-    rtol=1e-3,
+  reference_code_path="path/to/reference.py",
+  optimized_code_path="path/to/optimized.py",
+  task_yaml_path="path/to/kernel_task.yaml",
+  atol=1e-3,
+  rtol=1e-3,
 )
 
 print(f"Task ID: {result.task_id}")
 print(f"Correctness: {result.correctness}")
 print(f"Speedup: {result.speedup}x")
 if result.error_trace:
-    print(f"Error: {result.error_trace}")
+  print(f"Error: {result.error_trace}")
 ```
 
 ### Initialization Arguments

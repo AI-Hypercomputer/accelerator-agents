@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import shutil
+import time
 from typing import AsyncGenerator, Optional
 
 from google.adk.agents import BaseAgent
@@ -75,135 +76,177 @@ class AutonomousPipelineAgent(BaseAgent):
 
     yield self._initialize_state(ctx)
 
-    logging.info(f"[{self.name}] Running PrepareBaseKernelAgent (once)...")
-    async for event in self.prepare_base_kernel_agent.run_async(ctx):
-      yield event
+    try:
+      logging.info(f"[{self.name}] Running PrepareBaseKernelAgent (once)...")
+      async for event in self.prepare_base_kernel_agent.run_async(ctx):
+        yield event
 
-    logging.info(
-      f"[{self.name}] Running ValidatedTestGenerationAgent (once)..."
-    )
-    async for event in self.test_gen_agent.run_async(ctx):
-      yield event
-
-    validation_status = ctx.session.state.get("validation_loop_status", {})
-    if not validation_status.get("success", False):
-      logging.error(
-        f"[{self.name}] Initial test generation/validation failed. "
-        "Pipeline may not function correctly."
-      )
-      raise ValueError(
-        f"[{self.name}] Initial test generation/validation failed. "
-        "Pipeline may not function correctly."
-      )
-
-    while iteration < self.max_iterations:
       logging.info(
-        f"[{self.name}] Starting pipeline iteration {iteration + 1}/{self.max_iterations}"
+        f"[{self.name}] Running ValidatedTestGenerationAgent (once)..."
       )
-
-      # Step 1: Plan
-      logging.info(f"[{self.name}] Running PlanKernelAgent...")
-      async for event in self.plan_agent.run_async(ctx):
+      async for event in self.test_gen_agent.run_async(ctx):
         yield event
 
-      self._clear_iteration_metrics(ctx)
-
-      if self._should_end_at_step(ctx, iteration, "plan"):
-        yield self._create_history_event(ctx)
-        iteration += 1
-        continue
-
-      # Step 2: Implement
-      logging.info(f"[{self.name}] Running ImplementKernelAgent...")
-      async for event in self.implement_agent.run_async(ctx):
-        yield event
-      if self._should_end_at_step(ctx, iteration, "implement"):
-        yield self._create_history_event(ctx)
-        iteration += 1
-        continue
-
-      # Step 3: Validate
-      logging.info(f"[{self.name}] Running ValidateKernelCompilationAgent...")
-      async for event in self.validate_agent.run_async(ctx):
-        yield event
-
-      # Check if compilation succeeded
-      compilation_status = ctx.session.state.get(
-        "kernel_compilation_status", {}
-      )
-      if not compilation_status.get("success", False):
+      validation_status = ctx.session.state.get("validation_loop_status", {})
+      if not validation_status.get("success", False):
         logging.error(
-          f"[{self.name}] Compilation failed. Looping back to planning."
+          f"[{self.name}] Initial test generation/validation failed. "
+          "Pipeline may not function correctly."
         )
-        self._save_iteration_files_and_snapshot(
-          ctx, iteration, step_name="validate"
+        raise ValueError(
+          f"[{self.name}] Initial test generation/validation failed. "
+          "Pipeline may not function correctly."
         )
-        yield self._create_history_event(ctx)
-        iteration += 1
-        continue
 
-      if self._should_end_at_step(ctx, iteration, "validate"):
-        yield self._create_history_event(ctx)
-        iteration += 1
-        continue
-
-      # Step 4: Test Run
-      logging.info(f"[{self.name}] Running UnifiedTestAgent...")
-      async for event in self.test_run_agent.run_async(ctx):
-        yield event
-
-      # Check if tests passed
-      test_results = ctx.session.state.get("test_results", {})
-      if not test_results.get("success", False):
-        logging.error(f"[{self.name}] Tests failed. Looping back to planning.")
-        self._save_iteration_files_and_snapshot(
-          ctx, iteration, step_name="test_run"
-        )
-        yield self._create_history_event(ctx)
-        iteration += 1
-        continue
-
-      if self._should_end_at_step(ctx, iteration, "test_run"):
-        yield self._create_history_event(ctx)
-        iteration += 1
-        continue
-
-      # Step 5: Autotune
-      logging.info(f"[{self.name}] Running AutotuneAgent...")
-      async for event in self.autotune_agent.run_async(ctx):
-        yield event
-      if self._should_end_at_step(ctx, iteration, "autotune"):
-        yield self._create_history_event(ctx)
-        iteration += 1
-        continue
-
-      # Step 6: Profile
-      logging.info(f"[{self.name}] Running ProfileAgentOrchestrator...")
-      async for event in self.profile_agent.run_async(ctx):
-        yield event
-      if self._should_end_at_step(ctx, iteration, "profile"):
-        yield self._create_history_event(ctx)
-        iteration += 1
-        continue
-
-      self._save_iteration_files_and_snapshot(ctx, iteration)
-
-      yield self._create_history_event(ctx)
-
-      # Step 7: Check if improvement is needed
-      # needs_improvement = ctx.session.state.get("needs_improvement", False)
-      needs_improvement = True
-      if not needs_improvement:
+      while iteration < self.max_iterations:
+        ctx.session.state["iteration"] = iteration
+        metrics = ctx.session.state["timing_metrics"]
+        iteration_str = str(iteration)
+        if iteration_str not in metrics["iterations"]:
+          metrics["iterations"][iteration_str] = {
+            "iteration_total_time": 0,
+            "agents": {},
+            "llm_calls": [],
+            "tools": [],
+            "framework_overhead": 0,
+          }
+        ctx.session.state["iter_start_time"] = time.time()
         logging.info(
-          f"[{self.name}] No further improvement needed or agent decided to stop. Stopping pipeline."
+          f"[{self.name}] Starting pipeline iteration {iteration + 1}/{self.max_iterations}"
         )
-        break
 
-      logging.info(
-        f"[{self.name}] Improvement needed. Looping back to planning..."
-      )
-      iteration += 1
+        # Step 1: Plan
+        logging.info(f"[{self.name}] Running PlanKernelAgent...")
+        async for event in self.plan_agent.run_async(ctx):
+          yield event
 
+        self._clear_iteration_metrics(ctx)
+
+        if self._should_end_at_step(ctx, iteration, "plan"):
+          yield self._create_history_event(ctx)
+          self._update_timing_metrics(ctx, iteration)
+          iteration += 1
+          continue
+
+        # Step 2: Implement
+        logging.info(f"[{self.name}] Running ImplementKernelAgent...")
+        async for event in self.implement_agent.run_async(ctx):
+          yield event
+        if self._should_end_at_step(ctx, iteration, "implement"):
+          yield self._create_history_event(ctx)
+          self._update_timing_metrics(ctx, iteration)
+          iteration += 1
+          continue
+
+        # Step 3: Validate
+        logging.info(f"[{self.name}] Running ValidateKernelCompilationAgent...")
+        async for event in self.validate_agent.run_async(ctx):
+          yield event
+
+        # Check if compilation succeeded
+        compilation_status = ctx.session.state.get(
+          "kernel_compilation_status", {}
+        )
+        if not compilation_status.get("success", False):
+          logging.error(
+            f"[{self.name}] Compilation failed. Looping back to planning."
+          )
+          self._save_iteration_files_and_snapshot(
+            ctx, iteration, step_name="validate"
+          )
+          yield self._create_history_event(ctx)
+          self._update_timing_metrics(ctx, iteration)
+          iteration += 1
+          continue
+
+        if self._should_end_at_step(ctx, iteration, "validate"):
+          yield self._create_history_event(ctx)
+          self._update_timing_metrics(ctx, iteration)
+          iteration += 1
+          continue
+
+        # Step 4: Test Run
+        logging.info(f"[{self.name}] Running UnifiedTestAgent...")
+        async for event in self.test_run_agent.run_async(ctx):
+          yield event
+
+        # Check if tests passed
+        test_results = ctx.session.state.get("test_results", {})
+        if not test_results.get("success", False):
+          logging.error(
+            f"[{self.name}] Tests failed. Looping back to planning."
+          )
+          self._save_iteration_files_and_snapshot(
+            ctx, iteration, step_name="test_run"
+          )
+          yield self._create_history_event(ctx)
+          self._update_timing_metrics(ctx, iteration)
+          iteration += 1
+          continue
+
+        if self._should_end_at_step(ctx, iteration, "test_run"):
+          yield self._create_history_event(ctx)
+          self._update_timing_metrics(ctx, iteration)
+          iteration += 1
+          continue
+
+        # Step 5: Autotune
+        logging.info(f"[{self.name}] Running AutotuneAgent...")
+        async for event in self.autotune_agent.run_async(ctx):
+          yield event
+        if self._should_end_at_step(ctx, iteration, "autotune"):
+          yield self._create_history_event(ctx)
+          self._update_timing_metrics(ctx, iteration)
+          iteration += 1
+          continue
+
+        # Step 6: Profile
+        logging.info(f"[{self.name}] Running ProfileAgentOrchestrator...")
+        async for event in self.profile_agent.run_async(ctx):
+          yield event
+        if self._should_end_at_step(ctx, iteration, "profile"):
+          yield self._create_history_event(ctx)
+          self._update_timing_metrics(ctx, iteration)
+          iteration += 1
+          continue
+
+        self._save_iteration_files_and_snapshot(ctx, iteration)
+
+        yield self._create_history_event(ctx)
+
+        # Step 7: Check if improvement is needed
+        # needs_improvement = ctx.session.state.get("needs_improvement", False)
+        needs_improvement = True
+        if not needs_improvement:
+          logging.info(
+            f"[{self.name}] No further improvement needed or agent decided to stop. Stopping pipeline."
+          )
+          self._update_timing_metrics(ctx, iteration)
+          break
+
+        logging.info(
+          f"[{self.name}] Improvement needed. Looping back to planning..."
+        )
+        self._update_timing_metrics(ctx, iteration)
+        iteration += 1
+
+    finally:
+      end_time = time.time()
+      if "timing_metrics" in ctx.session.state:
+        m = ctx.session.state["timing_metrics"]
+        m["overall_pipeline_time"] = end_time - ctx.session.state.get(
+          "pipeline_start_time", end_time
+        )
+        try:
+          with open(
+            os.path.join(
+              ctx.session.state.get("workdir", ""), "timing_metrics.json"
+            ),
+            "w",
+          ) as f:
+            json.dump(m, f, indent=2)
+        except Exception:
+          pass
     if iteration >= self.max_iterations:
       logging.warning(
         f"[{self.name}] Maximum iterations reached ({self.max_iterations}). Stopping pipeline."
@@ -334,7 +377,29 @@ class AutonomousPipelineAgent(BaseAgent):
     ]:
       ctx.session.state.pop(key, None)
 
+  def _update_timing_metrics(self, ctx: InvocationContext, iteration: int):
+    if "iter_start_time" in ctx.session.state:
+      iter_end_time = time.time()
+      iteration_str = str(iteration)
+      if iteration_str in ctx.session.state.get("timing_metrics", {}).get(
+        "iterations", {}
+      ):
+        it_m = ctx.session.state["timing_metrics"]["iterations"][iteration_str]
+        it_m["iteration_total_time"] = (
+          iter_end_time - ctx.session.state["iter_start_time"]
+        )
+        ag_time = sum(it_m["agents"].values())
+        llm_time = sum(c["duration"] for c in it_m["llm_calls"])
+        tl_time = sum(t["duration"] for t in it_m["tools"])
+        it_m["framework_overhead"] = max(0.0, ag_time - (llm_time + tl_time))
+
   def _initialize_state(self, ctx: InvocationContext) -> Event:
+    if "timing_metrics" not in ctx.session.state:
+      ctx.session.state["timing_metrics"] = {
+        "overall_pipeline_time": 0,
+        "iterations": {},
+      }
+    ctx.session.state["pipeline_start_time"] = time.time()
     """Initializes session state with standard paths and returns the event."""
     # Initialize history
     if "history" not in ctx.session.state:

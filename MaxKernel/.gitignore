@@ -6,3 +6,5 @@ session_info/
 .adk
 eval_config.yaml
 gke_config.yaml
+
+.venv/

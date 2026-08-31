@@ -29,8 +29,12 @@ jobs:
           ruff check --fix .
           ruff format .
 
-      - name: Auto-commit formatting fixes
-        uses: stefanzweifel/git-auto-commit-action@b863ae1933cb653a53c021fe36dbb774e1fb9403
-        with:
-          commit_message: "style: auto-apply ruff formatting fixes"
-          branch: ${{ github.head_ref }}
+      - name: Commit and push changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          # Only commit and push if there are actual formatting changes
+          git diff --quiet && git diff --staged --quiet || (git commit -m "style: auto-apply ruff formatting fixes" && git push)

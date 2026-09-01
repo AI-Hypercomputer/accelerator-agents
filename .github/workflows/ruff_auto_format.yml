@@ -7,6 +7,8 @@ on:
 jobs:
   format:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -24,7 +26,6 @@ jobs:
       - name: Verify Formatting (Fails if format is required)
         run: |
           cd MaxKernel
-          # --check will fail the script if any files would be modified by the formatter
           ruff format --check . 
           
       - name: Verify Linting (Fails if lint issues exist)

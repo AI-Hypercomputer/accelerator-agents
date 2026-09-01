@@ -85,24 +85,21 @@ def _extract_tokens(llm_response):
   prompt_tokens = 0
   completion_tokens = 0
   try:
-    raw = getattr(llm_response, "raw_response", llm_response)
-    if hasattr(raw, "usage_metadata"):
-      usage = raw.usage_metadata
-      prompt_tokens = getattr(usage, "prompt_token_count", 0)
-      completion_tokens = getattr(usage, "candidates_token_count", 0)
-    elif hasattr(llm_response, "usage"):
-      usage = llm_response.usage
-      prompt_tokens = getattr(
-        usage, "prompt_tokens", getattr(usage, "prompt_token_count", 0)
-      )
-      completion_tokens = getattr(
-        usage, "completion_tokens", getattr(usage, "candidates_token_count", 0)
-      )
-    elif isinstance(raw, dict) and "usage" in raw:
-      prompt_tokens = raw["usage"].get("prompt_tokens", 0)
-      completion_tokens = raw["usage"].get("completion_tokens", 0)
+      raw = getattr(llm_response, "raw_response", llm_response)
+      usage_metadata = getattr(raw, "usage_metadata", None)
+      usage = getattr(llm_response, "usage", None)
+
+      if usage_metadata is not None:
+          prompt_tokens = getattr(usage_metadata, "prompt_token_count", 0)
+          completion_tokens = getattr(usage_metadata, "candidates_token_count", 0)
+      elif usage is not None:
+          prompt_tokens = getattr(usage, "prompt_tokens", getattr(usage, "prompt_token_count", 0))
+          completion_tokens = getattr(usage, "completion_tokens", getattr(usage, "candidates_token_count", 0))
+      elif isinstance(raw, dict) and isinstance(raw.get("usage"), dict):
+          prompt_tokens = raw["usage"].get("prompt_tokens", 0)
+          completion_tokens = raw["usage"].get("completion_tokens", 0)
   except Exception as e:
-    print(f"FAILED TOKEN EXTRACTION: {e}", flush=True)
+      print(f"FAILED TOKEN EXTRACTION: {e}", flush=True)
   return prompt_tokens, completion_tokens
 
 

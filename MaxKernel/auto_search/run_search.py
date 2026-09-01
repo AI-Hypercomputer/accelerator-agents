@@ -187,7 +187,7 @@ async def run_search(
           token_summary_text = analyze_token_path(dest_dir)
           if token_summary_text:
             token_out_file = os.path.join(dest_dir, "token.md")
-            with open(token_out_file, "w") as f:
+            with open(token_out_file, "w", encoding="utf-8") as f:
               f.write(token_summary_text)
             print(
               f"\n\n====== TOKEN METRICS ======\n{token_summary_text}\n===========================\n"

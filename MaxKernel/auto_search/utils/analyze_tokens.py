@@ -158,7 +158,8 @@ def generate_node_markdown(
   node_total_calls = 0
 
   for iter_key, iter_data in sorted(
-    iterations.items(), key=lambda x: (0, int(x[0])) if str(x[0]).isdigit() else (1, str(x[0]))
+    iterations.items(),
+    key=lambda x: (0, int(x[0])) if str(x[0]).isdigit() else (1, str(x[0])),
   ):
     md.append(f"## Iteration {iter_key}")
 

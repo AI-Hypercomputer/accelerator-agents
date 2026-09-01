@@ -1,9 +1,7 @@
 name: Auto-formatting
-
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-
 jobs:
   format:
     runs-on: ubuntu-latest
@@ -14,21 +12,17 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.head_ref }}
-
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.11"
-
       - name: Install Ruff
         run: pip install ruff
-
-      - name: Run Ruff Format and Lint
+      - name: Best-effort Format and Fix
         run: |
           cd MaxKernel
-          ruff check --fix .
-          ruff format .
-
+          ruff check --fix . || true
+          ruff format . || true
       - name: Commit and push changes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -36,5 +30,8 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          # Only commit and push if there are actual formatting changes
           git diff --quiet && git diff --staged --quiet || (git commit -m "style: auto-apply ruff formatting fixes" && git push)
+      - name: Strict Lint Check (Fails PR if unfixable errors remain)
+        run: |
+          cd MaxKernel
+          ruff check .

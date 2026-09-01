@@ -81,6 +81,31 @@ async def after_agent_callback(callback_context: CallbackContext) -> None:
     )
 
 
+def _extract_tokens(llm_response):
+  prompt_tokens = 0
+  completion_tokens = 0
+  try:
+    raw = getattr(llm_response, "raw_response", llm_response)
+    if hasattr(raw, "usage_metadata"):
+      usage = raw.usage_metadata
+      prompt_tokens = getattr(usage, "prompt_token_count", 0)
+      completion_tokens = getattr(usage, "candidates_token_count", 0)
+    elif hasattr(llm_response, "usage"):
+      usage = llm_response.usage
+      prompt_tokens = getattr(
+        usage, "prompt_tokens", getattr(usage, "prompt_token_count", 0)
+      )
+      completion_tokens = getattr(
+        usage, "completion_tokens", getattr(usage, "candidates_token_count", 0)
+      )
+    elif isinstance(raw, dict) and "usage" in raw:
+      prompt_tokens = raw["usage"].get("prompt_tokens", 0)
+      completion_tokens = raw["usage"].get("completion_tokens", 0)
+  except Exception as e:
+    print(f"FAILED TOKEN EXTRACTION: {e}", flush=True)
+  return prompt_tokens, completion_tokens
+
+
 async def before_model_callback(
   callback_context: CallbackContext, llm_request: LlmRequest
 ) -> None:
@@ -101,6 +126,46 @@ async def after_model_callback(
     duration = end_time - start_time
     agent_name = _get_agent_name(callback_context)
     metrics, iter_metrics = _ensure_iteration_metrics(state)
+
+    # --- INJECTED TOKEN TRACKING ---
+    try:
+      if "token_metrics" not in state:
+        state["token_metrics"] = {"iterations": {}}
+      t_metrics = state["token_metrics"]
+      it_str = str(state.get("iteration", 0))
+      if it_str not in t_metrics["iterations"]:
+        t_metrics["iterations"][it_str] = {"agents": {}, "llm_calls": []}
+      t_iter = t_metrics["iterations"][it_str]
+
+      pt, ct = _extract_tokens(llm_response)
+      tt = pt + ct
+
+      if agent_name not in t_iter["agents"]:
+        t_iter["agents"][agent_name] = {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "calls": 0,
+        }
+
+      t_iter["agents"][agent_name]["prompt_tokens"] += pt
+      t_iter["agents"][agent_name]["completion_tokens"] += ct
+      t_iter["agents"][agent_name]["total_tokens"] += tt
+      t_iter["agents"][agent_name]["calls"] += 1
+
+      t_iter["llm_calls"].append(
+        {
+          "agent": agent_name,
+          "prompt_tokens": pt,
+          "completion_tokens": ct,
+          "total_tokens": tt,
+          "timestamp": time.time(),
+        }
+      )
+    except Exception as e:
+      print(f"FAILED TOKEN TRACKING LOGIC: {e}", flush=True)
+    # -------------------------------
+
     iter_metrics["llm_calls"].append(
       {
         "agent": agent_name,

@@ -1,1 +1,3 @@
-def   terrible_formatting(  ):  x=1; return    x
+def terrible_formatting():
+  x = 1
+  return x

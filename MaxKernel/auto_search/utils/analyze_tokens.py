@@ -8,20 +8,16 @@ logger = logging.getLogger(__name__)
 
 
 def generate_padded_table(headers, rows):
-  # Calculate max widths
   widths = [len(h) for h in headers]
   for row in rows:
     for i, col in enumerate(row):
       widths[i] = max(widths[i], len(str(col)))
 
-  # Format header
   header_str = (
     "| " + " | ".join(f"{h:<{w}}" for h, w in zip(headers, widths)) + " |"
   )
-  # Format separator
   sep_str = "|" + "|".join("-" * (w + 2) for w in widths) + "|"
 
-  # Format rows
   row_strs = []
   for row in rows:
     row_str = (
@@ -52,7 +48,6 @@ def analyze_path(target_path: str) -> str:
 
   all_markdown = []
 
-  # Global Aggregators
   global_agents = {}
   global_total_calls = 0
   total_nodes = 0
@@ -66,7 +61,6 @@ def analyze_path(target_path: str) -> str:
         )
         all_markdown.append(node_md)
 
-        # Accumulate macros
         total_nodes += 1
         global_total_calls += node_calls
         for ag_name, ag_data in node_agents.items():
@@ -75,6 +69,7 @@ def analyze_path(target_path: str) -> str:
               "calls": 0,
               "prompt_tokens": 0,
               "completion_tokens": 0,
+              "thought_tokens": 0,
               "total_tokens": 0,
             }
           global_agents[ag_name]["calls"] += ag_data.get("calls", 0)
@@ -84,6 +79,9 @@ def analyze_path(target_path: str) -> str:
           global_agents[ag_name]["completion_tokens"] += ag_data.get(
             "completion_tokens", 0
           )
+          global_agents[ag_name]["thought_tokens"] += ag_data.get(
+            "thought_tokens", 0
+          )
           global_agents[ag_name]["total_tokens"] += ag_data.get(
             "total_tokens", 0
           )
@@ -91,7 +89,6 @@ def analyze_path(target_path: str) -> str:
       except Exception as e:
         logger.error(f"Failed to process {file_path}: {e}")
 
-  # Build Macro Summary
   if total_nodes > 0:
     macro_md = [
       "============================================================",
@@ -106,6 +103,7 @@ def analyze_path(target_path: str) -> str:
       "LLM Calls",
       "Prompt Tokens",
       "Completion Tokens",
+      "Thought Tokens",
       "Total Tokens",
     ]
     rows = []
@@ -117,23 +115,28 @@ def analyze_path(target_path: str) -> str:
 
     grand_prompt = 0
     grand_comp = 0
+    grand_thought = 0
     grand_total = 0
 
     for agent_name, agent_data in sorted_global:
       p = agent_data["prompt_tokens"]
       c = agent_data["completion_tokens"]
+      tht = agent_data["thought_tokens"]
       t = agent_data["total_tokens"]
       calls = agent_data["calls"]
       grand_prompt += p
       grand_comp += c
+      grand_thought += tht
       grand_total += t
-      rows.append([agent_name, str(calls), f"{p:,}", f"{c:,}", f"{t:,}"])
+      rows.append(
+        [agent_name, str(calls), f"{p:,}", f"{c:,}", f"{tht:,}", f"{t:,}"]
+      )
 
     macro_md.append("### Global Agent Aggregate Tokens")
     macro_md.extend(generate_padded_table(headers, rows))
     macro_md.append("")
     macro_md.append(
-      f"*(Grand Total: {global_total_calls} LLM calls | {grand_prompt:,} prompt | {grand_comp:,} completion | {grand_total:,} total)*"
+      f"*(Grand Total: {global_total_calls} LLM calls | {grand_prompt:,} prompt | {grand_comp:,} completion | {grand_thought:,} thought | {grand_total:,} total)*"
     )
     macro_md.append(
       "============================================================"
@@ -171,17 +174,18 @@ def generate_node_markdown(
         "LLM Calls",
         "Prompt Tokens",
         "Completion Tokens",
+        "Thought Tokens",
         "Total Tokens",
       ]
       rows = []
 
-      # Sort agents by total tokens descending
       sorted_agents = sorted(
         agents.items(), key=lambda x: x[1].get("total_tokens", 0), reverse=True
       )
       for agent_name, agent_data in sorted_agents:
         prompt = agent_data.get("prompt_tokens", 0)
         completion = agent_data.get("completion_tokens", 0)
+        thought = agent_data.get("thought_tokens", 0)
         total = agent_data.get("total_tokens", 0)
         calls = agent_data.get("calls", 0)
         rows.append(
@@ -190,21 +194,23 @@ def generate_node_markdown(
             str(calls),
             f"{prompt:,}",
             f"{completion:,}",
+            f"{thought:,}",
             f"{total:,}",
           ]
         )
 
-        # Accumulate for node return
         if agent_name not in node_agents:
           node_agents[agent_name] = {
             "calls": 0,
             "prompt_tokens": 0,
             "completion_tokens": 0,
+            "thought_tokens": 0,
             "total_tokens": 0,
           }
         node_agents[agent_name]["calls"] += calls
         node_agents[agent_name]["prompt_tokens"] += prompt
         node_agents[agent_name]["completion_tokens"] += completion
+        node_agents[agent_name]["thought_tokens"] += thought
         node_agents[agent_name]["total_tokens"] += total
 
       md.extend(generate_padded_table(headers, rows))
@@ -224,8 +230,7 @@ def generate_node_markdown(
 def main():
   parser = argparse.ArgumentParser(description="Analyze ADK token metrics")
   parser.add_argument(
-    "target",
-    help="Path to token_metrics.json OR a root directory",
+    "target", help="Path to token_metrics.json OR a root directory"
   )
   parser.add_argument(
     "--write",
@@ -238,6 +243,9 @@ def main():
 
   if args.write:
     target_path = Path(args.target)
+    if not target_path.exists():
+      print(f"Error: Target path {args.target} does not exist.")
+      return
     out_dir = target_path.parent if target_path.is_file() else target_path
     out_file = out_dir / "token.md"
     with open(out_file, "w", encoding="utf-8") as f:

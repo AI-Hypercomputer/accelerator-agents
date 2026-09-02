@@ -20,8 +20,8 @@ def _ensure_iteration_metrics(state: dict):
   if iteration_str not in metrics["iterations"]:
     metrics["iterations"][iteration_str] = {
       "iteration_total_time": 0,
-      "agents": {},  # Restored to native dict for pipeline loop
-      "agent_events": [],  # Explicit array for chronological tracking
+      "agents": {},
+      "agent_events": [],
       "llm_calls": [],
       "tools": [],
       "framework_overhead": 0,
@@ -35,7 +35,6 @@ def _get_agent_name(ctx: Any) -> str:
     name = getattr(ctx.agent, "name", None)
 
   if not name:
-    # Fallback to console debug if perfectly opaque
     print(f"DEBUG_CTX_DIR: {dir(ctx)}", flush=True)
     try:
       print(f"DEBUG_CTX_VARS: {vars(ctx)}", flush=True)
@@ -61,13 +60,11 @@ async def after_agent_callback(callback_context: CallbackContext) -> None:
     duration = end_time - start_time
     metrics, iter_metrics = _ensure_iteration_metrics(state)
 
-    # 1. Maintain aggregated duration dictionary for compatibility with pipeline_agent.py
     if not isinstance(iter_metrics.get("agents"), dict):
       iter_metrics["agents"] = {}
     current_dur = iter_metrics["agents"].get(agent_name, 0.0)
     iter_metrics["agents"][agent_name] = current_dur + duration
 
-    # 2. Append granular events array for frontend visualization tooling
     if "agent_events" not in iter_metrics:
       iter_metrics["agent_events"] = []
 
@@ -84,6 +81,7 @@ async def after_agent_callback(callback_context: CallbackContext) -> None:
 def _extract_tokens(llm_response):
   prompt_tokens = 0
   completion_tokens = 0
+  thought_tokens = 0
   try:
     raw = getattr(llm_response, "raw_response", llm_response)
     usage_metadata = getattr(raw, "usage_metadata", None)
@@ -92,6 +90,11 @@ def _extract_tokens(llm_response):
     if usage_metadata is not None:
       prompt_tokens = getattr(usage_metadata, "prompt_token_count", 0)
       completion_tokens = getattr(usage_metadata, "candidates_token_count", 0)
+      thought_tokens = getattr(
+        usage_metadata,
+        "reasoning_token_count",
+        getattr(usage_metadata, "thought_token_count", 0),
+      )
     elif usage is not None:
       prompt_tokens = getattr(
         usage, "prompt_tokens", getattr(usage, "prompt_token_count", 0)
@@ -99,12 +102,28 @@ def _extract_tokens(llm_response):
       completion_tokens = getattr(
         usage, "completion_tokens", getattr(usage, "candidates_token_count", 0)
       )
+      thought_tokens = getattr(
+        usage, "reasoning_tokens", getattr(usage, "thought_tokens", 0)
+      )
+
+      details = getattr(usage, "completion_tokens_details", None)
+      if details is not None:
+        thought_tokens = max(
+          thought_tokens, getattr(details, "reasoning_tokens", 0)
+        )
     elif isinstance(raw, dict) and isinstance(raw.get("usage"), dict):
-      prompt_tokens = raw["usage"].get("prompt_tokens", 0)
-      completion_tokens = raw["usage"].get("completion_tokens", 0)
+      ud = raw["usage"]
+      prompt_tokens = ud.get("prompt_tokens", 0)
+      completion_tokens = ud.get("completion_tokens", 0)
+      thought_tokens = ud.get("reasoning_tokens", ud.get("thought_tokens", 0))
+
+      details = ud.get("completion_tokens_details", {})
+      if isinstance(details, dict):
+        thought_tokens = max(thought_tokens, details.get("reasoning_tokens", 0))
+
   except Exception as e:
     print(f"FAILED TOKEN EXTRACTION: {e}", flush=True)
-  return prompt_tokens, completion_tokens
+  return prompt_tokens, completion_tokens, thought_tokens
 
 
 async def before_model_callback(
@@ -138,19 +157,21 @@ async def after_model_callback(
         t_metrics["iterations"][it_str] = {"agents": {}, "llm_calls": []}
       t_iter = t_metrics["iterations"][it_str]
 
-      pt, ct = _extract_tokens(llm_response)
+      pt, ct, tht = _extract_tokens(llm_response)
       tt = pt + ct
 
       if agent_name not in t_iter["agents"]:
         t_iter["agents"][agent_name] = {
           "prompt_tokens": 0,
           "completion_tokens": 0,
+          "thought_tokens": 0,
           "total_tokens": 0,
           "calls": 0,
         }
 
       t_iter["agents"][agent_name]["prompt_tokens"] += pt
       t_iter["agents"][agent_name]["completion_tokens"] += ct
+      t_iter["agents"][agent_name]["thought_tokens"] += tht
       t_iter["agents"][agent_name]["total_tokens"] += tt
       t_iter["agents"][agent_name]["calls"] += 1
 
@@ -159,6 +180,7 @@ async def after_model_callback(
           "agent": agent_name,
           "prompt_tokens": pt,
           "completion_tokens": ct,
+          "thought_tokens": tht,
           "total_tokens": tt,
           "timestamp": time.time(),
         }

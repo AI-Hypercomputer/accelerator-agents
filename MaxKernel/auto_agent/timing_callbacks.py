@@ -92,8 +92,8 @@ def _extract_tokens(llm_response):
       completion_tokens = getattr(usage_metadata, "candidates_token_count", 0)
       thought_tokens = getattr(
         usage_metadata,
-        "reasoning_token_count",
-        getattr(usage_metadata, "thought_token_count", 0),
+        "thoughts_token_count",
+        getattr(usage_metadata, "thoughtsTokenCount", 0),
       )
     elif usage is not None:
       prompt_tokens = getattr(
@@ -103,9 +103,8 @@ def _extract_tokens(llm_response):
         usage, "completion_tokens", getattr(usage, "candidates_token_count", 0)
       )
       thought_tokens = getattr(
-        usage, "reasoning_tokens", getattr(usage, "thought_tokens", 0)
+        usage, "thoughts_token_count", getattr(usage, "thoughtsTokenCount", 0)
       )
-
       details = getattr(usage, "completion_tokens_details", None)
       if details is not None:
         thought_tokens = max(
@@ -115,11 +114,21 @@ def _extract_tokens(llm_response):
       ud = raw["usage"]
       prompt_tokens = ud.get("prompt_tokens", 0)
       completion_tokens = ud.get("completion_tokens", 0)
-      thought_tokens = ud.get("reasoning_tokens", ud.get("thought_tokens", 0))
-
+      thought_tokens = ud.get(
+        "thoughts_token_count", ud.get("thoughtsTokenCount", 0)
+      )
       details = ud.get("completion_tokens_details", {})
       if isinstance(details, dict):
         thought_tokens = max(thought_tokens, details.get("reasoning_tokens", 0))
+
+    if thought_tokens == 0:
+      import re
+
+      match = re.search(
+        r'("?thoughts?_?token_?count"?\s*[:=]\s*(\d+))', str(raw), re.IGNORECASE
+      )
+      if match:
+        thought_tokens = int(match.group(2))
 
   except Exception as e:
     print(f"FAILED TOKEN EXTRACTION: {e}", flush=True)

@@ -138,10 +138,8 @@ def update_kv_cache(
             row = (token_idx_in_seq % page_size) // kv_packing
             col = (token_idx_in_seq % page_size) % kv_packing
 
-            cache_kv_ = cache_kv_.at[page_idx, row, col,
-                                     ..., :lkv_dim].set(new_kv_c[q_start + j])
-            cache_kv_ = cache_kv_.at[page_idx, row, col, ...,
-                                     lkv_dim:].set(new_k_pe[q_start + j])
+            cache_kv_ = cache_kv_.at[page_idx, row, col, :lkv_dim].set(new_kv_c[q_start + j])
+            cache_kv_ = cache_kv_.at[page_idx, row, col, lkv_dim:].set(new_k_pe[q_start + j])
             return cache_kv_
 
         return jax.lax.fori_loop(0, q_len, token_loop_body, cache_kv)

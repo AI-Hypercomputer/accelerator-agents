@@ -105,7 +105,7 @@ def update_kv_cache(
     page_indices: jax.Array,
     cu_q_lens: jax.Array,
     distribution: jax.Array,
-) -> tuple[jax.Array, jax.Array]:
+) -> jax.Array:
     actual_r_dim = new_k_pe.shape[-1]
     r_dim = align_to(actual_r_dim, 128)
     if actual_r_dim != r_dim:

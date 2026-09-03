@@ -92,7 +92,7 @@ def update_kv_cache(
         page_indices: jax.Array,  # i32[max_num_seqs * pages_per_seq]
         cu_q_lens: jax.Array,  # i32[max_num_seqs + 1]
         distribution: jax.Array,  # i32[3]
-) -> tuple[jax.Array, jax.Array]:
+) -> jax.Array:
     """Update KV cache with new tokens."""
     actual_r_dim = new_k_pe.shape[-1]
     r_dim = align_to(actual_r_dim, 128)

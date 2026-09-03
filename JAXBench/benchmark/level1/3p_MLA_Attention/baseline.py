@@ -316,8 +316,6 @@ def workload(
 
 def benchmark(num_warmup=5, num_iters=100):
     """Benchmark and return results dict."""
-    import time
-    import numpy as np
     inputs = create_inputs()
     fn = jax.jit(workload)
     for _ in range(num_warmup):

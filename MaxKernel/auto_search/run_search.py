@@ -177,6 +177,24 @@ async def run_search(
         with open(out_file, "w") as f:
           f.write("```text\n" + summary_text + "\n```\n")
         logger.info(f"Saved metric summary to: {out_file}")
+
+        logger.info("Generating token summary...")
+        try:
+          from auto_search.utils.analyze_tokens import (
+            analyze_path as analyze_token_path,
+          )
+
+          token_summary_text = analyze_token_path(dest_dir)
+          if token_summary_text:
+            token_out_file = os.path.join(dest_dir, "token.md")
+            with open(token_out_file, "w", encoding="utf-8") as f:
+              f.write(token_summary_text)
+            print(
+              f"\n\n====== TOKEN METRICS ======\n{token_summary_text}\n===========================\n"
+            )
+        except Exception as e:
+          logger.error(f"Failed to generate token summary: {e}")
+
       except Exception as analyze_err:
         logger.error(f"Failed to generate timing summary: {analyze_err}")
 

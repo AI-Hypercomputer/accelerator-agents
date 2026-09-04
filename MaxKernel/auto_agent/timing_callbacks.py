@@ -20,8 +20,8 @@ def _ensure_iteration_metrics(state: dict):
   if iteration_str not in metrics["iterations"]:
     metrics["iterations"][iteration_str] = {
       "iteration_total_time": 0,
-      "agents": {},  # Restored to native dict for pipeline loop
-      "agent_events": [],  # Explicit array for chronological tracking
+      "agents": {},
+      "agent_events": [],
       "llm_calls": [],
       "tools": [],
       "framework_overhead": 0,
@@ -35,7 +35,6 @@ def _get_agent_name(ctx: Any) -> str:
     name = getattr(ctx.agent, "name", None)
 
   if not name:
-    # Fallback to console debug if perfectly opaque
     print(f"DEBUG_CTX_DIR: {dir(ctx)}", flush=True)
     try:
       print(f"DEBUG_CTX_VARS: {vars(ctx)}", flush=True)
@@ -61,13 +60,11 @@ async def after_agent_callback(callback_context: CallbackContext) -> None:
     duration = end_time - start_time
     metrics, iter_metrics = _ensure_iteration_metrics(state)
 
-    # 1. Maintain aggregated duration dictionary for compatibility with pipeline_agent.py
     if not isinstance(iter_metrics.get("agents"), dict):
       iter_metrics["agents"] = {}
     current_dur = iter_metrics["agents"].get(agent_name, 0.0)
     iter_metrics["agents"][agent_name] = current_dur + duration
 
-    # 2. Append granular events array for frontend visualization tooling
     if "agent_events" not in iter_metrics:
       iter_metrics["agent_events"] = []
 
@@ -79,6 +76,48 @@ async def after_agent_callback(callback_context: CallbackContext) -> None:
         "duration": duration,
       }
     )
+
+
+def _extract_tokens(llm_response):
+  prompt_tokens, completion_tokens, thought_tokens = 0, 0, 0
+  try:
+    raw = getattr(llm_response, "raw_response", llm_response)
+
+    # 1. Isolate the usage block dynamically (Google = usage_metadata, OpenAI = usage)
+    usage = getattr(raw, "usage_metadata", None) or getattr(raw, "usage", None)
+    if not usage and isinstance(raw, dict):
+      usage = raw.get("usage")
+
+    if usage:
+      # Helper to extract the first matching key whether it's a Dict or an Object
+      def safe_get(obj, *keys):
+        for k in keys:
+          val = obj.get(k) if isinstance(obj, dict) else getattr(obj, k, None)
+          if val is not None:
+            return val
+        return 0
+
+      # 2. Extract using known schemas
+      prompt_tokens = safe_get(usage, "prompt_token_count", "prompt_tokens")
+      completion_tokens = safe_get(
+        usage, "candidates_token_count", "completion_tokens"
+      )
+      thought_tokens = safe_get(
+        usage, "thoughts_token_count", "thoughtsTokenCount", "reasoning_tokens"
+      )
+
+      # 3. Handle OpenAI-specific nested reasoning budgets
+      details = safe_get(usage, "completion_tokens_details")
+      if details:
+        thought_tokens = max(
+          thought_tokens, safe_get(details, "reasoning_tokens") or 0
+        )
+
+  except Exception as e:
+    print(f"FAILED TOKEN EXTRACTION: {e}", flush=True)
+
+  # Final sanitization enforcing 0 over None
+  return prompt_tokens or 0, completion_tokens or 0, thought_tokens or 0
 
 
 async def before_model_callback(
@@ -101,6 +140,49 @@ async def after_model_callback(
     duration = end_time - start_time
     agent_name = _get_agent_name(callback_context)
     metrics, iter_metrics = _ensure_iteration_metrics(state)
+
+    # --- INJECTED TOKEN TRACKING ---
+    try:
+      if "token_metrics" not in state:
+        state["token_metrics"] = {"iterations": {}}
+      t_metrics = state["token_metrics"]
+      it_str = str(state.get("iteration", 0))
+      if it_str not in t_metrics["iterations"]:
+        t_metrics["iterations"][it_str] = {"agents": {}, "llm_calls": []}
+      t_iter = t_metrics["iterations"][it_str]
+
+      pt, ct, tht = _extract_tokens(llm_response)
+      tt = pt + ct
+
+      if agent_name not in t_iter["agents"]:
+        t_iter["agents"][agent_name] = {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "thought_tokens": 0,
+          "total_tokens": 0,
+          "calls": 0,
+        }
+
+      t_iter["agents"][agent_name]["prompt_tokens"] += pt
+      t_iter["agents"][agent_name]["completion_tokens"] += ct
+      t_iter["agents"][agent_name]["thought_tokens"] += tht
+      t_iter["agents"][agent_name]["total_tokens"] += tt
+      t_iter["agents"][agent_name]["calls"] += 1
+
+      t_iter["llm_calls"].append(
+        {
+          "agent": agent_name,
+          "prompt_tokens": pt,
+          "completion_tokens": ct,
+          "thought_tokens": tht,
+          "total_tokens": tt,
+          "timestamp": time.time(),
+        }
+      )
+    except Exception as e:
+      print(f"FAILED TOKEN TRACKING LOGIC: {e}", flush=True)
+    # -------------------------------
+
     iter_metrics["llm_calls"].append(
       {
         "agent": agent_name,

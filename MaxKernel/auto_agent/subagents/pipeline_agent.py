@@ -232,6 +232,18 @@ class AutonomousPipelineAgent(BaseAgent):
 
     finally:
       end_time = time.time()
+      if "token_metrics" in ctx.session.state:
+        tm = ctx.session.state["token_metrics"]
+        try:
+          with open(
+            os.path.join(
+              ctx.session.state.get("workdir", ""), "token_metrics.json"
+            ),
+            "w",
+          ) as f:
+            json.dump(tm, f, indent=2)
+        except Exception:
+          pass
       if "timing_metrics" in ctx.session.state:
         m = ctx.session.state["timing_metrics"]
         m["overall_pipeline_time"] = end_time - ctx.session.state.get(

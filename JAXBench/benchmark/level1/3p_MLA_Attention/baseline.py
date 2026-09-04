@@ -287,8 +287,7 @@ def ref_mla_ragged_paged_attention(
     # Vmap over the sequence index to perfectly preserve original loop semantics
     out_batched = jax.vmap(process_seq)(jnp.arange(B))
 
-    return out_batched.reshape(B * Q_max, out_batched.shape[2], out_batched.shape[3])
-
+    return out_batched.reshape(B * Q_max, out_batched.shape[2], out_batched.shape[3]), updated_cache_kv
 
 
 def workload(
@@ -320,17 +319,17 @@ def benchmark(num_warmup=5, num_iters=100):
     fn = jax.jit(workload)
     for _ in range(num_warmup):
         out = fn(*inputs)
-        out.block_until_ready()
+        jax.block_until_ready(out)
     times = []
     for _ in range(num_iters):
         t0 = time.perf_counter()
         out = fn(*inputs)
-        out.block_until_ready()
+        jax.block_until_ready(out)
         times.append(time.perf_counter() - t0)
     return {
         'times': [round(float(t * 1000), 4) for t in times],
         'time_ms': round(float(np.mean(times) * 1000), 4),
         'std_ms': round(float(np.std(times) * 1000), 4),
-        'output_shape': list(out.shape),
+        'output_shape': [list(out[0].shape), list(out[1].shape)],
         'status': 'success',
     }

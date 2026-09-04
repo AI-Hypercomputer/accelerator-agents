@@ -15,6 +15,8 @@
 
 import functools
 
+import time
+import numpy as np
 import jax
 import jax.numpy as jnp
 from jax import lax
@@ -1216,6 +1218,72 @@ def prepare_outputs(
         head_dim,
     )[:, :actual_num_q_heads, :actual_head_dim]
 
+CONFIG = {
+    'name': 'MLA',
+    'batch_size': 128,
+    'q_len': 1,
+    'kv_len_val': 9216,
+    'page_size': 256,
+    'symbol': 'd',
+}
+
+def create_inputs():
+    key = jax.random.PRNGKey(0)
+
+    num_heads = 128
+    lkv_dim = 512
+    r_dim = 64
+    q_dtype = jnp.bfloat16
+    kv_dtype = jnp.bfloat16
+
+    padded_r_dim = align_to(r_dim, 128)
+    padded_lkv_dim = align_to(lkv_dim, 128)
+    padded_kv_dim = padded_lkv_dim + padded_r_dim
+    packing = get_dtype_packing(kv_dtype)
+
+    def gen_random(k, shape, dtype):
+        return jax.random.uniform(k, shape, dtype=jnp.float32).astype(dtype)
+
+    total_kv_tokens = CONFIG['batch_size'] * CONFIG['kv_len_val']
+    num_pages = cdiv(total_kv_tokens, CONFIG['page_size']) + CONFIG['batch_size']
+
+    total_q_len = CONFIG['batch_size'] * CONFIG['q_len']
+    cu_q_lens_list = [i * CONFIG['q_len'] for i in range(CONFIG['batch_size'] + 1)]
+
+    pages_per_seq = cdiv(CONFIG['kv_len_val'], CONFIG['page_size'])
+    page_indices_list = []
+    page_count = 0
+    for _ in range(CONFIG['batch_size']):
+        num_seq_pages = cdiv(CONFIG['kv_len_val'], CONFIG['page_size'])
+        indices = list(range(page_count, page_count + num_seq_pages))
+        page_indices_list.extend(indices + [-1] * (pages_per_seq - num_seq_pages))
+        page_count += num_seq_pages
+
+    total_num_pages = max(num_pages, page_count)
+
+    key, k1, k2, k3, k4, k5 = jax.random.split(key, 6)
+    ql_nope = gen_random(k1, (total_q_len, num_heads, lkv_dim), q_dtype)
+    q_pe = gen_random(k2, (total_q_len, num_heads, r_dim), q_dtype)
+    new_kv_c = gen_random(k3, (total_q_len, lkv_dim), kv_dtype)
+    new_k_pe = gen_random(k4, (total_q_len, r_dim), kv_dtype)
+
+    cache_kv = gen_random(
+        k5,
+        (total_num_pages, CONFIG['page_size'] // packing, packing, padded_kv_dim),
+        kv_dtype,
+    )
+
+    kv_lens = jnp.array([CONFIG['kv_len_val']] * CONFIG['batch_size'], dtype=jnp.int32)
+    page_indices = jnp.array(page_indices_list, dtype=jnp.int32)
+    cu_q_lens = jnp.array(cu_q_lens_list, dtype=jnp.int32)
+
+    num_decode_seqs = CONFIG['batch_size'] if CONFIG['q_len'] == 1 else 0
+    distribution = jnp.array([num_decode_seqs, num_decode_seqs, CONFIG['batch_size']], dtype=jnp.int32)
+
+    return (
+        ql_nope, q_pe, new_kv_c, new_k_pe, cache_kv, kv_lens,
+        page_indices, cu_q_lens, distribution
+    )
 
 @functools.partial(
     jax.jit,
@@ -1496,7 +1564,8 @@ def mla_ragged_paged_attention(
         output, actual_num_q_heads,
         actual_lkv_dim)  # [max_num_tokens, actual_num_q_heads, actual_lkv_dim]
 
-    return output
+    return output, updated_kv
+
 
 def workload(
     ql_nope: jax.Array,
@@ -1523,3 +1592,25 @@ def workload(
         num_queries_per_block=4,
         vmem_limit_bytes=DEFAULT_VMEM_LIMIT_BYTES
     )
+
+
+def benchmark(num_warmup=5, num_iters=100):
+    """Benchmark and return results dict."""
+    inputs = create_inputs()
+    fn = jax.jit(workload)
+    for _ in range(num_warmup):
+        out = fn(*inputs)
+        jax.block_until_ready(out)
+    times = []
+    for _ in range(num_iters):
+        t0 = time.perf_counter()
+        out = fn(*inputs)
+        jax.block_until_ready(out)
+        times.append(time.perf_counter() - t0)
+    return {
+        'times': [round(float(t * 1000), 4) for t in times],
+        'time_ms': round(float(np.mean(times) * 1000), 4),
+        'std_ms': round(float(np.std(times) * 1000), 4),
+        'output_shape': [list(out[0].shape), list(out[1].shape)],
+        'status': 'success',
+    }

@@ -79,60 +79,45 @@ async def after_agent_callback(callback_context: CallbackContext) -> None:
 
 
 def _extract_tokens(llm_response):
-  prompt_tokens = 0
-  completion_tokens = 0
-  thought_tokens = 0
+  prompt_tokens, completion_tokens, thought_tokens = 0, 0, 0
   try:
     raw = getattr(llm_response, "raw_response", llm_response)
-    usage_metadata = getattr(raw, "usage_metadata", None)
-    usage = getattr(llm_response, "usage", None)
 
-    if usage_metadata is not None:
-      prompt_tokens = getattr(usage_metadata, "prompt_token_count", 0)
-      completion_tokens = getattr(usage_metadata, "candidates_token_count", 0)
-      thought_tokens = getattr(
-        usage_metadata,
-        "thoughts_token_count",
-        getattr(usage_metadata, "thoughtsTokenCount", 0),
+    # 1. Isolate the usage block dynamically (Google = usage_metadata, OpenAI = usage)
+    usage = getattr(raw, "usage_metadata", None) or getattr(raw, "usage", None)
+    if not usage and isinstance(raw, dict):
+      usage = raw.get("usage")
+
+    if usage:
+      # Helper to extract the first matching key whether it's a Dict or an Object
+      def safe_get(obj, *keys):
+        for k in keys:
+          val = obj.get(k) if isinstance(obj, dict) else getattr(obj, k, None)
+          if val is not None:
+            return val
+        return 0
+
+      # 2. Extract using known schemas
+      prompt_tokens = safe_get(usage, "prompt_token_count", "prompt_tokens")
+      completion_tokens = safe_get(
+        usage, "candidates_token_count", "completion_tokens"
       )
-    elif usage is not None:
-      prompt_tokens = getattr(
-        usage, "prompt_tokens", getattr(usage, "prompt_token_count", 0)
+      thought_tokens = safe_get(
+        usage, "thoughts_token_count", "thoughtsTokenCount", "reasoning_tokens"
       )
-      completion_tokens = getattr(
-        usage, "completion_tokens", getattr(usage, "candidates_token_count", 0)
-      )
-      thought_tokens = getattr(
-        usage, "thoughts_token_count", getattr(usage, "thoughtsTokenCount", 0)
-      )
-      details = getattr(usage, "completion_tokens_details", None)
-      if details is not None:
+
+      # 3. Handle OpenAI-specific nested reasoning budgets
+      details = safe_get(usage, "completion_tokens_details")
+      if details:
         thought_tokens = max(
-          thought_tokens, getattr(details, "reasoning_tokens", 0)
+          thought_tokens, safe_get(details, "reasoning_tokens") or 0
         )
-    elif isinstance(raw, dict) and isinstance(raw.get("usage"), dict):
-      ud = raw["usage"]
-      prompt_tokens = ud.get("prompt_tokens", 0)
-      completion_tokens = ud.get("completion_tokens", 0)
-      thought_tokens = ud.get(
-        "thoughts_token_count", ud.get("thoughtsTokenCount", 0)
-      )
-      details = ud.get("completion_tokens_details", {})
-      if isinstance(details, dict):
-        thought_tokens = max(thought_tokens, details.get("reasoning_tokens", 0))
-
-    if thought_tokens == 0:
-      import re
-
-      match = re.search(
-        r'("?thoughts?_?token_?count"?\s*[:=]\s*(\d+))', str(raw), re.IGNORECASE
-      )
-      if match:
-        thought_tokens = int(match.group(2))
 
   except Exception as e:
     print(f"FAILED TOKEN EXTRACTION: {e}", flush=True)
-  return prompt_tokens, completion_tokens, thought_tokens
+
+  # Final sanitization enforcing 0 over None
+  return prompt_tokens or 0, completion_tokens or 0, thought_tokens or 0
 
 
 async def before_model_callback(

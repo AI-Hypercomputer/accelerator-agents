@@ -1,0 +1,277 @@
+task_id: gmmv2_Grouped_Matmul
+description: >-
+  Tokamax gmm_v2: a grouped matrix multiply (the expert FFN projection of an
+  MoE layer) built on pl.kernel + emit_pipeline, covering the quantized,
+  biased and activation-fused variants. The eighteen configurations are the
+  gmm_v2 config table, grouped into five families:
+
+    0-4   headline shapes: per-tensor fp8, small-batch fp8, fp4 with bias,
+          a 256-expert DeepSeek-class shape, and a wide-intermediate shape.
+    5-9   an m-sweep at a fixed unquantized bf16 shape -- 1 token
+          (worst-case decode), 64 (the decode/prefill transition), 256 (the
+          sublane-tiling boundary), 4096 (a large prefill chunk) and 8192
+          (the max token batch) -- which is where the tile/metadata overhead
+          of the kernel shows up rather than its MXU throughput.
+    10-13 a quantization sweep at 16384 tokens: rhs quant block 128, 256,
+          512 (the last calibrating the lhs scale dynamically in VMEM rather
+          than taking a supplied per-tensor scale), plus the bf16
+          unquantized reference for the same shape.
+    14    16384 tokens with the SwiGLU activation fused inline and a bias,
+          so size_n carries gate and up interleaved and the output is half
+          as wide.
+    15-16 routing stress: a Qwen3.5-class shape at top_k=4, and top_k=16 on
+          128 experts. For these two the config's token count is the number
+          of routed tokens, so size_m = tokens * top_k.
+    17    a 128-token small-scale case that exercises the inner loop when
+          only a few tiles are live.
+
+  computation() receives the gmm_v2 positional arguments in order --
+  lhs [size_m, size_k], rhs [size_group, size_k, size_n], group_sizes
+  i32[size_group], rhs_scale [size_group, num_blocks, 1, size_n] or None,
+  rhs_bias [size_group, 1, size_n] or None, group_offset i32[1], lhs_scale
+  [1, 1] or None -- followed by the static fuse_act string (None for every
+  case but 14). It returns [size_m, size_n], or [size_m, size_n // 2] when
+  fuse_act is set.
+
+  Where the config table is silent the following defaults are used, and they
+  are the numbers to change if the intended shapes differ: 64 experts, size_k
+  (hidden) 4096, size_n (expert intermediate) 1024, lhs and output bfloat16,
+  and fp8 = float8_e4m3fn / fp4 = float4_e2m1fn. The m-sweep family (5-9) is
+  narrowed to 32 experts x 512 intermediate because its five cases otherwise
+  hold five copies of the same weight tensor, and case 3's intermediate is
+  512 rather than DeepSeek's 2048: the harness materialises all eighteen
+  cases before running any of them, so the suite is kept to roughly 7 GB of
+  weights.
+input_gen_code: |-
+  def get_inputs():
+      import jax
+      import jax.numpy as jnp
+      import numpy as np
+
+      FP8 = jnp.float8_e4m3fn
+      FP4 = jnp.float4_e2m1fn
+      BF16 = jnp.bfloat16
+
+      # Defaults for anything the config table leaves unspecified.
+      E_DEFAULT = 64
+      K_DEFAULT = 4096
+      N_DEFAULT = 1024
+
+      def routing(size_m, num_experts, seed):
+          """Token counts per expert, summing exactly to size_m.
+
+          Drawn from a mildly skewed distribution rather than a uniform one:
+          real routers concentrate, and the kernel's per-group tile
+          bookkeeping is sensitive to empty and to oversized groups.
+          """
+          rng = np.random.default_rng(seed)
+          weights = rng.dirichlet(np.full(num_experts, 0.7))
+          counts = rng.multinomial(size_m, weights).astype(np.int32)
+          assert counts.sum() == size_m
+          return jnp.asarray(counts, jnp.int32)
+
+      def build_case(
+          size_m,
+          size_k=K_DEFAULT,
+          size_n=N_DEFAULT,
+          num_experts=E_DEFAULT,
+          rhs_dtype=FP8,
+          quant_block_size=None,
+          has_bias=False,
+          fuse_act=None,
+          dynamic_lhs_scale=True,
+          seed=0,
+      ):
+          """One gmm_v2 invocation.
+
+          quant_block_size None means an unquantized rhs (no rhs_scale, no
+          lhs quantization). Otherwise size_k is split into
+          size_k // quant_block_size scale blocks; pass size_k itself for a
+          per-tensor scale. dynamic_lhs_scale=False supplies a per-tensor
+          lhs_scale instead of letting the kernel calibrate one in VMEM.
+          """
+          keys = jax.random.split(jax.random.key(seed), 4)
+
+          lhs = jax.random.normal(
+              keys[0], (size_m, size_k), jnp.float32
+          ).astype(BF16)
+
+          rhs_f32 = jax.random.normal(
+              keys[1], (num_experts, size_k, size_n), jnp.float32
+          ) / np.sqrt(size_k)
+
+          if quant_block_size is None:
+              rhs = rhs_f32.astype(rhs_dtype)
+              rhs_scale = None
+              lhs_scale = None
+          else:
+              assert size_k % quant_block_size == 0
+              num_blocks = size_k // quant_block_size
+              # rhs arrives already quantized; the scale dequantizes it
+              # after the matmul. Scale the payload up into the dtype's
+              # range first so the quantization is not throwing away bits.
+              finfo = jnp.finfo(rhs_dtype)
+              amax = float(finfo.max) / 4.0
+              rhs = (rhs_f32 * amax).astype(rhs_dtype)
+              rhs_scale = jnp.full(
+                  (num_experts, num_blocks, 1, size_n),
+                  1.0 / amax,
+                  jnp.float32,
+              )
+              # Per-tensor lhs scale, or None to use the kernel's dynamic
+              # per-block absmax calibration.
+              lhs_scale = (
+                  None
+                  if dynamic_lhs_scale
+                  else jnp.full((1, 1), 0.125, jnp.float32)
+              )
+
+          if has_bias:
+              rhs_bias = 0.1 * jax.random.normal(
+                  keys[2], (num_experts, 1, size_n), jnp.float32
+              )
+          else:
+              rhs_bias = None
+
+          group_sizes = routing(size_m, num_experts, seed)
+          group_offset = jnp.zeros((1,), jnp.int32)
+
+          dynamic_args = [
+              lhs,
+              rhs,
+              group_sizes,
+              rhs_scale,
+              rhs_bias,
+              group_offset,
+              lhs_scale,
+          ]
+          static_args = [fuse_act]
+          return dynamic_args, static_args
+
+      return [
+          # --- 0-4: headline shapes ------------------------------------
+          # 0. 16384 tokens, hidden 2816, fp8, per-tensor rhs scale.
+          build_case(
+              16384, size_k=2816, quant_block_size=2816,
+              dynamic_lhs_scale=False, seed=0,
+          ),
+          # 1. 64 tokens, hidden 4096, fp8, rhs quant block 128.
+          build_case(64, quant_block_size=128, seed=1),
+          # 2. 64 tokens, hidden 3072, fp4, block 512, with bias.
+          build_case(
+              64, size_k=3072, rhs_dtype=FP4, quant_block_size=512,
+              has_bias=True, seed=2,
+          ),
+          # 3. 4096 tokens, hidden 7168, 256 experts, fp8, block 128.
+          #    DeepSeek-class expert count; intermediate trimmed to 512 to
+          #    keep the whole suite resident (see description).
+          build_case(
+              4096, size_k=7168, size_n=512, num_experts=256,
+              quant_block_size=128, seed=3,
+          ),
+          # 4. 1024 tokens, hidden 4096, intermediate 14336, fp8, block 256.
+          #    The wide-N shape, so few enough experts to fit it.
+          build_case(
+              1024, size_n=14336, num_experts=8, quant_block_size=256,
+              seed=4,
+          ),
+
+          # --- 5-9: m-sweep at a fixed unquantized bf16 shape -----------
+          # 5. 1 token: the worst-case decode regime, one live group.
+          build_case(1, size_n=512, num_experts=32, rhs_dtype=BF16, seed=5),
+          # 6. 64 tokens: the small-decode transition.
+          build_case(64, size_n=512, num_experts=32, rhs_dtype=BF16, seed=6),
+          # 7. 256 tokens: on the sublane-tiling boundary.
+          build_case(256, size_n=512, num_experts=32, rhs_dtype=BF16, seed=7),
+          # 8. 4096 tokens: a large prefill chunk.
+          build_case(4096, size_n=512, num_experts=32, rhs_dtype=BF16, seed=8),
+          # 9. 8192 tokens: the max token batch.
+          build_case(8192, size_n=512, num_experts=32, rhs_dtype=BF16, seed=9),
+
+          # --- 10-13: quantization sweep at 16384 tokens ----------------
+          # 10. fp8, rhs quant block 128, supplied per-tensor lhs scale.
+          build_case(
+              16384, quant_block_size=128, dynamic_lhs_scale=False, seed=10,
+          ),
+          # 11. fp8, rhs quant block 256, supplied per-tensor lhs scale.
+          build_case(
+              16384, quant_block_size=256, dynamic_lhs_scale=False, seed=11,
+          ),
+          # 12. hidden 3072, fp8, rhs quant block 512, and no lhs_scale:
+          #     the kernel calibrates the lhs scale in VMEM per block.
+          build_case(
+              16384, size_k=3072, quant_block_size=512,
+              dynamic_lhs_scale=True, seed=12,
+          ),
+          # 13. the same shape unquantized in bf16: the accuracy and
+          #     throughput reference for 10-12.
+          build_case(16384, rhs_dtype=BF16, seed=13),
+
+          # --- 14: inline activation fusion -----------------------------
+          # 14. 16384 tokens with SwiGLU fused in. size_n holds gate and up
+          #     interleaved, so it is 2x the 1024 intermediate and the
+          #     output comes back at 1024 wide.
+          build_case(
+              16384, size_n=2048, quant_block_size=128, has_bias=True,
+              fuse_act="silu", dynamic_lhs_scale=False, seed=14,
+          ),
+
+          # --- 15-16: routing stress ------------------------------------
+          # 15. Qwen3.5-class shape, top_k=4 over 1024 tokens, with bias.
+          build_case(
+              1024 * 4, size_n=1536, num_experts=128, quant_block_size=128,
+              has_bias=True, seed=15,
+          ),
+          # 16. top_k=16 over 2048 tokens on 128 experts: 32768 routed rows,
+          #     the routing/metadata stress point.
+          build_case(
+              2048 * 16, size_n=768, num_experts=128, quant_block_size=128,
+              seed=16,
+          ),
+
+          # --- 17: small-scale functional edge case ---------------------
+          # 17. 128 tokens: only a handful of tiles are ever live.
+          build_case(128, quant_block_size=128, seed=17),
+      ]
+
+# The bf16 cases (5-9, 13) accumulate in f32 and stay tight. The fp8 cases
+# run a bf16 accumulator on top of quantized operands, and case 2 quantizes
+# the rhs to fp4, which is coarse enough to need a wide absolute band.
+rtol:
+  - 0.02
+  - 0.02
+  - 0.10
+  - 0.02
+  - 0.02
+  - 0.01
+  - 0.01
+  - 0.01
+  - 0.01
+  - 0.01
+  - 0.02
+  - 0.02
+  - 0.02
+  - 0.01
+  - 0.02
+  - 0.02
+  - 0.02
+  - 0.02
+atol:
+  - 0.02
+  - 0.02
+  - 0.10
+  - 0.02
+  - 0.02
+  - 0.01
+  - 0.01
+  - 0.01
+  - 0.01
+  - 0.01
+  - 0.02
+  - 0.02
+  - 0.02
+  - 0.01
+  - 0.02
+  - 0.02
+  - 0.02
+  - 0.02

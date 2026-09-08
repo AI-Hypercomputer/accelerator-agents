@@ -277,4 +277,4 @@ def computation(
 
     out_batched = jax.vmap(process_seq)(jnp.arange(B))
 
-    return out_batched.reshape(B * Q_max, out_batched.shape[2], out_batched.shape[3])
+    return out_batched.reshape(B * Q_max, out_batched.shape[2], out_batched.shape[3]), updated_cache_kv

@@ -1,44 +1,89 @@
 task_id: 3p_MLA_Attention
-description: Kernel task for 3p_MLA_Attention
+description: 3p_MLA_Attention
 input_gen_code: |-
-  def get_inputs(dtype=jnp.bfloat16):
+  def get_inputs():
       import jax
       import jax.numpy as jnp
       from functools import partial
 
+      def cdiv(a, b):
+          assert b != 0
+          return (a + b - 1) // b
+
+      def align_to(x, a):
+          return cdiv(x, a) * a
+
+      def get_dtype_packing(dtype):
+          bits = jax.dtypes.itemsize_bits(dtype)
+          return 32 // bits
+
       CONFIG = {
-          'name': 'deepseek_v3_mla',
-          'model': 'DeepSeek-V3-671B',
-          'operator': 'mla_attention',
-          'batch': 4,
-          'seq_len': 2048,
-          'emb_dim': 7168,
-          'num_heads': 128,
-          'q_lora_rank': 1536,
-          'kv_lora_rank': 512,
-          'qk_nope_head_dim': 128,
-          'qk_rope_head_dim': 64,
-          'v_head_dim': 128,
-          'rope_theta': 10000,
+          'name': 'MLA',
+          'batch_size': 128,
+          'q_len': 1,
+          'kv_len_val': 9216,
+          'page_size': 256,
+          'symbol': 'd',
       }
-      key = jax.random.key(42)
-      keys = jax.random.split(key, 8)
-      C = CONFIG
-      B, S, E = C['batch'], C['seq_len'], C['emb_dim']
-      H = C['num_heads']
-      ql, kvl = C['q_lora_rank'], C['kv_lora_rank']
-      nope, rope, vd = C['qk_nope_head_dim'], C['qk_rope_head_dim'], C['v_head_dim']
-      x = jax.random.normal(keys[0], (B, S, E), dtype=dtype)
-      q_down = jax.random.normal(keys[1], (E, ql), dtype=dtype) * 0.02
-      q_up = jax.random.normal(keys[2], (ql, H * (nope + rope)), dtype=dtype) * 0.02
-      kv_down = jax.random.normal(keys[3], (E, kvl + rope), dtype=dtype) * 0.02
-      k_up = jax.random.normal(keys[4], (kvl, H * nope), dtype=dtype) * 0.02
-      v_up = jax.random.normal(keys[5], (kvl, H * vd), dtype=dtype) * 0.02
-      o_proj = jax.random.normal(keys[6], (H * vd, E), dtype=dtype) * 0.02
 
-      dynamic_args = [x, q_down, q_up, kv_down, k_up, v_up, o_proj]
-      static_args = [H, nope, rope, vd, kvl, C['rope_theta']]
+      key = jax.random.PRNGKey(0)
+
+      num_heads = 128
+      lkv_dim = 512
+      r_dim = 64
+      q_dtype = jnp.bfloat16
+      kv_dtype = jnp.bfloat16
+
+      padded_r_dim = align_to(r_dim, 128)
+      padded_lkv_dim = align_to(lkv_dim, 128)
+      padded_kv_dim = padded_lkv_dim + padded_r_dim
+      packing = get_dtype_packing(kv_dtype)
+
+      def gen_random(k, shape, dtype):
+          return jax.random.uniform(k, shape, dtype=jnp.float32).astype(dtype)
+
+      total_kv_tokens = CONFIG['batch_size'] * CONFIG['kv_len_val']
+      num_pages = cdiv(total_kv_tokens, CONFIG['page_size']) + CONFIG['batch_size']
+
+      total_q_len = CONFIG['batch_size'] * CONFIG['q_len']
+      cu_q_lens_list = [i * CONFIG['q_len'] for i in range(CONFIG['batch_size'] + 1)]
+
+      pages_per_seq = cdiv(CONFIG['kv_len_val'], CONFIG['page_size'])
+      page_indices_list = []
+      page_count = 0
+      for _ in range(CONFIG['batch_size']):
+          num_seq_pages = cdiv(CONFIG['kv_len_val'], CONFIG['page_size'])
+          indices = list(range(page_count, page_count + num_seq_pages))
+          page_indices_list.extend(indices + [-1] * (pages_per_seq - num_seq_pages))
+          page_count += num_seq_pages
+
+      total_num_pages = max(num_pages, page_count)
+
+      key, k1, k2, k3, k4, k5 = jax.random.split(key, 6)
+      ql_nope = gen_random(k1, (total_q_len, num_heads, lkv_dim), q_dtype)
+      q_pe = gen_random(k2, (total_q_len, num_heads, r_dim), q_dtype)
+      new_kv_c = gen_random(k3, (total_q_len, lkv_dim), kv_dtype)
+      new_k_pe = gen_random(k4, (total_q_len, r_dim), kv_dtype)
+
+      cache_kv = gen_random(
+          k5,
+          (total_num_pages, CONFIG['page_size'] // packing, packing, padded_kv_dim),
+          kv_dtype,
+      )
+
+      kv_lens = jnp.array([CONFIG['kv_len_val']] * CONFIG['batch_size'], dtype=jnp.int32)
+      page_indices = jnp.array(page_indices_list, dtype=jnp.int32)
+      cu_q_lens = jnp.array(cu_q_lens_list, dtype=jnp.int32)
+
+      num_decode_seqs = CONFIG['batch_size'] if CONFIG['q_len'] == 1 else 0
+      distribution = jnp.array([num_decode_seqs, num_decode_seqs, CONFIG['batch_size']], dtype=jnp.int32)
+
+      dynamic_args = [
+          ql_nope, q_pe, new_kv_c, new_k_pe, cache_kv, kv_lens,
+          page_indices, cu_q_lens, distribution
+      ]
+      static_args = []
+
       return dynamic_args, static_args
-
+atol: 0.01
 rtol: 0.01
-atol: 0.05

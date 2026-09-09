@@ -15,6 +15,19 @@ def load_module(name, path):
     spec.loader.exec_module(module)
     return module
 
+def baseline_is_single(inputs):
+    # Single config: a flat sequence of arrays. Multi: a list of arg lists.
+    return not all(isinstance(a, (list, tuple)) for a in inputs)
+
+def reference_is_single(ret):
+    # Single config: (dynamic_args, static_args). Multi: a list of those pairs.
+    first = ret[0]
+    return not (
+        isinstance(first, (list, tuple))
+        and len(first) == 2
+        and isinstance(first[0], (list, tuple))
+    )
+
 def check_match(baseline_out, reference_out, problem_name):
     if isinstance(baseline_out, (list, tuple)):
         if (not isinstance(reference_out, (list, tuple))
@@ -113,55 +126,65 @@ def main():
                 continue
             reference_mod = load_module(f"{problem}_reference", reference_path)
             
-            # 1. Run JaxBench version
+            # Collect JaxBench inputs (one entry per configuration)
             if hasattr(baseline_mod, "create_inputs"):
                 baseline_inputs = baseline_mod.create_inputs()
-            elif hasattr(baseline_mod, "create_input"):
-                baseline_inputs = baseline_mod.create_input()
             else:
                 print(
-                    f"  [ERROR] No create_inputs/create_input found in "
+                    f"  [ERROR] No create_inputs found in "
                     f"baseline for {problem}"
                 )
                 continue
-                
+
             if not isinstance(baseline_inputs, (list, tuple)):
                 baseline_inputs = (baseline_inputs,)
-                
-            baseline_out = baseline_mod.workload(*baseline_inputs)
-            if hasattr(baseline_out, "block_until_ready"):
-                baseline_out.block_until_ready()
-            elif isinstance(baseline_out, (list, tuple)):
-                for o in baseline_out:
-                    if hasattr(o, "block_until_ready"):
-                        o.block_until_ready()
-            
-            # 2. Run Adapted version
+            if baseline_is_single(baseline_inputs):
+                baseline_inputs = [baseline_inputs]
+
+            # 2. Collect adapted inputs (one entry per configuration)
             get_inputs_ret = reference_mod.get_inputs()
-            if len(get_inputs_ret) == 2:
-                dynamic_args, static_args = get_inputs_ret
-            else:
+            if reference_is_single(get_inputs_ret):
+                get_inputs_ret = [get_inputs_ret]
+
+            if len(baseline_inputs) != len(get_inputs_ret):
                 print(
-                    f"  [ERROR] get_inputs() returned {len(get_inputs_ret)} "
-                    f"elements instead of 2 for {problem}"
+                    f"  [ERROR] {len(baseline_inputs)} baseline "
+                    f"configuration(s) but {len(get_inputs_ret)} in the "
+                    f"adapted dataset for {problem}"
                 )
                 continue
-                
-            args = list(dynamic_args)
-            if static_args:
-                args += list(static_args)
-                
-            reference_out = reference_mod.computation(*args)
-            if hasattr(reference_out, "block_until_ready"):
-                reference_out.block_until_ready()
-            elif isinstance(reference_out, (list, tuple)):
-                for o in reference_out:
-                    if hasattr(o, "block_until_ready"):
-                        o.block_until_ready()
-                
-            # 3. Compare outputs
-            check_match(baseline_out, reference_out, problem)
-            
+
+            multi_config = len(get_inputs_ret) > 1
+            for cfg_idx, (cfg_inputs, cfg_ret) in enumerate(
+                zip(baseline_inputs, get_inputs_ret)
+            ):
+                label = f"{problem}[{cfg_idx}]" if multi_config else problem
+                try:
+                    if len(cfg_ret) != 2:
+                        print(
+                            f"  [ERROR] get_inputs() returned {len(cfg_ret)} "
+                            f"elements instead of 2 for {label}"
+                        )
+                        continue
+                    dynamic_args, static_args = cfg_ret
+
+                    # Run JaxBench version
+                    baseline_out = baseline_mod.workload(*cfg_inputs)
+                    jax.block_until_ready(baseline_out)
+
+                    # Run adapted version
+                    args = list(dynamic_args)
+                    if static_args:
+                        args += list(static_args)
+                    reference_out = reference_mod.computation(*args)
+                    jax.block_until_ready(reference_out)
+
+                    # Compare outputs
+                    check_match(baseline_out, reference_out, label)
+                    del baseline_out, reference_out
+                except Exception as e:
+                    print(f"  [ERROR] {label}: {e}")
+
         except Exception as e:
             print(f"  [ERROR] {problem}: {e}")
 

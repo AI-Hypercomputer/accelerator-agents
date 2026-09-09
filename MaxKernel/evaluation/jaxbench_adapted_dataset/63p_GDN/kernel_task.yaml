@@ -1,0 +1,57 @@
+task_id: 53p_GDN
+description: Kernel task for 53p_GDN
+input_gen_code: |-
+  def get_inputs():
+      from typing import Optional, Tuple
+      import jax
+      import jax.numpy as jnp
+
+      CONFIGS = {'gdn_small': {'name': 'gdn_small', 'model': 'GDN', 'operator': 'gated_delta_net', 'num_tokens': 256, 'n_kq': 2, 'n_v': 8, 'd_k': 128, 'd_v': 128, 'num_prefill_reqs': 2, 'prefill_length': 128, 'max_reqs': 32}, 'gdn_prefill_medium': {'name': 'gdn_prefill_medium', 'model': 'GDN', 'operator': 'gated_delta_net', 'num_tokens': 2048, 'n_kq': 2, 'n_v': 8, 'd_k': 128, 'd_v': 128, 'num_prefill_reqs': 4, 'prefill_length': 512, 'max_reqs': 64}, 'gdn_prefill_large': {'name': 'gdn_prefill_large', 'model': 'GDN', 'operator': 'gated_delta_net', 'num_tokens': 8192, 'n_kq': 2, 'n_v': 8, 'd_k': 128, 'd_v': 128, 'num_prefill_reqs': 8, 'prefill_length': 1024, 'max_reqs': 64}, 'gdn_decode_b64': {'name': 'gdn_decode_b64', 'model': 'GDN', 'operator': 'gated_delta_net', 'num_tokens': 64, 'n_kq': 2, 'n_v': 8, 'd_k': 128, 'd_v': 128, 'num_prefill_reqs': 0, 'prefill_length': 0, 'num_decode_reqs': 64, 'max_reqs': 64}, 'gdn_mixed_decode_prefill': {'name': 'gdn_mixed_decode_prefill', 'model': 'GDN', 'operator': 'gated_delta_net', 'num_tokens': 1056, 'n_kq': 2, 'n_v': 8, 'd_k': 128, 'd_v': 128, 'num_prefill_reqs': 2, 'prefill_length': 512, 'num_decode_reqs': 32, 'max_reqs': 64}}
+      CONFIG = CONFIGS['gdn_small']
+
+      def create_inputs(dtype=jnp.bfloat16, config=None):
+          """Returns (mixed_qkv, b, a, recurrent_state, A_log, dt_bias, query_start_loc, state_indices, distribution, has_initial_state)."""
+          cfg = CONFIG if config is None else CONFIGS[config] if isinstance(config, str) else config
+          key = jax.random.key(42)
+          k1, k2, k3, k4, k5, k6, k7 = jax.random.split(key, 7)
+          num_tokens = cfg['num_tokens']
+          n_kq = cfg['n_kq']
+          n_v = cfg['n_v']
+          d_k = cfg['d_k']
+          d_v = cfg['d_v']
+          num_prefill_reqs = cfg.get('num_prefill_reqs', 0)
+          prefill_length = cfg.get('prefill_length', 0)
+          num_decode_reqs = cfg.get('num_decode_reqs', 0)
+          max_reqs = cfg['max_reqs']
+          key_dim = n_kq * d_k
+          val_dim = n_v * d_v
+          mixed_dim = 2 * key_dim + val_dim
+          mixed_qkv = jax.random.normal(k1, (num_tokens, mixed_dim), dtype=dtype)
+          b = jax.random.normal(k2, (num_tokens, n_v), dtype=dtype)
+          a = jax.random.normal(k3, (num_tokens, n_v), dtype=dtype)
+          state_size = max_reqs + 1
+          recurrent_state = jax.random.normal(k7, (state_size, n_v, d_k, d_v), dtype=jnp.float32)
+          recurrent_state = recurrent_state.at[0].set(0.0)
+          A_log = jax.random.normal(k4, (n_v,), dtype=jnp.float32)
+          dt_bias = jax.random.normal(k5, (n_v,), dtype=jnp.float32)
+          lengths = [1] * num_decode_reqs + [prefill_length] * num_prefill_reqs
+          num_seqs = len(lengths)
+          query_start_loc = jnp.cumsum(jnp.array([0] + lengths, dtype=jnp.int32))
+          last_val = query_start_loc[-1]
+          query_start_loc = jnp.pad(query_start_loc, (0, max_reqs + 1 - len(query_start_loc)), constant_values=last_val)
+          available_indices = jax.random.permutation(k6, jnp.arange(1, max_reqs + 1, dtype=jnp.int32))
+          valid_state_indices = available_indices[:num_seqs]
+          state_indices = jnp.pad(valid_state_indices, (0, max_reqs - num_seqs))
+          distribution = jnp.array([num_decode_reqs, num_seqs, num_seqs], dtype=jnp.int32)
+          has_initial_state = jnp.pad(jnp.array([True] * num_decode_reqs + [False] * num_prefill_reqs, dtype=jnp.bool_), (0, max_reqs - num_seqs))
+          return (mixed_qkv, b, a, recurrent_state, A_log, dt_bias, query_start_loc, state_indices, distribution, has_initial_state)
+
+      outputs = []
+      for cfg in CONFIGS.values():
+          dynamic_args = list(create_inputs(dtype=jnp.bfloat16, config=cfg))
+          static_args = []
+          outputs.append((dynamic_args, static_args))
+      return outputs
+
+rtol: 0.01
+atol: 0.01

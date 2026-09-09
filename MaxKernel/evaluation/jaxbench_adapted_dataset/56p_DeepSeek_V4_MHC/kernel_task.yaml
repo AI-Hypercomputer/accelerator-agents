@@ -1,0 +1,37 @@
+task_id: 57p_DeepSeek_V4_MHC
+description: Kernel task for 57p_DeepSeek_V4_MHC
+input_gen_code: |-
+  def get_inputs():
+      import jax
+      import jax.numpy as jnp
+
+      CONFIGS = {'dsv4_pro_decode': {'name': 'dsv4_pro_decode', 'model': 'DeepSeek-V4-Pro', 'operator': 'multi_head_concatenation', 'num_tokens': 256, 'hidden_size': 7168, 'hc_mult': 4, 'token_block_size': 32}, 'dsv4_pro_prefill': {'name': 'dsv4_pro_prefill', 'model': 'DeepSeek-V4-Pro', 'operator': 'multi_head_concatenation', 'num_tokens': 2048, 'hidden_size': 7168, 'hc_mult': 4, 'token_block_size': 32}, 'dsv4_flash_decode': {'name': 'dsv4_flash_decode', 'model': 'DeepSeek-V4-Flash', 'operator': 'multi_head_concatenation', 'num_tokens': 256, 'hidden_size': 4096, 'hc_mult': 4, 'token_block_size': 64}, 'dsv4_flash_prefill': {'name': 'dsv4_flash_prefill', 'model': 'DeepSeek-V4-Flash', 'operator': 'multi_head_concatenation', 'num_tokens': 2048, 'hidden_size': 4096, 'hc_mult': 4, 'token_block_size': 64}, 'mhc_small': {'name': 'mhc_small', 'model': 'DeepSeek-V4', 'operator': 'multi_head_concatenation', 'num_tokens': 128, 'hidden_size': 2048, 'hc_mult': 4, 'token_block_size': 32}}
+      CONFIG = CONFIGS['dsv4_pro_decode']
+
+      def create_inputs(dtype=jnp.bfloat16, config=None):
+          """Returns (x, residual, post_layer_mix, comb_res_mix, fn, hc_scale, hc_base)."""
+          cfg = config or CONFIG
+          key = jax.random.key(42)
+          k1, k2, k3, k4, k5, k6, k7 = jax.random.split(key, 7)
+          num_tokens = cfg['num_tokens']
+          hidden_size = cfg['hidden_size']
+          hc_mult = cfg['hc_mult']
+          hc_mult3 = hc_mult * (hc_mult + 2)
+          x = jax.random.normal(k1, (num_tokens, hidden_size), dtype=dtype)
+          residual = jax.random.normal(k2, (num_tokens, hc_mult, hidden_size), dtype=dtype)
+          post_layer_mix = jax.random.uniform(k3, (num_tokens, hc_mult, 1), dtype=jnp.float32)
+          comb_res_mix = jax.random.uniform(k4, (num_tokens, hc_mult, hc_mult), dtype=jnp.float32)
+          fn = jax.random.normal(k5, (hc_mult3, hc_mult * hidden_size), dtype=jnp.float32) * 0.02
+          hc_scale = jax.random.uniform(k6, (3,), dtype=jnp.float32)
+          hc_base = jax.random.uniform(k7, (hc_mult3,), dtype=jnp.float32)
+          return (x, residual, post_layer_mix, comb_res_mix, fn, hc_scale, hc_base)
+
+      outputs = []
+      for cfg in CONFIGS.values():
+          dynamic_args = list(create_inputs(dtype=jnp.bfloat16, config=cfg))
+          static_args = []
+          outputs.append((dynamic_args, static_args))
+      return outputs
+
+rtol: 0.01
+atol: 0.01

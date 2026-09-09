@@ -1,0 +1,92 @@
+task_id: 64p_Batched_RPA
+description: Kernel task for 64p_Batched_RPA
+input_gen_code: |-
+  def get_inputs():
+      import math
+      import jax
+      import jax.numpy as jnp
+
+      def cdiv(a, b):
+          assert b != 0
+          return (a + b - 1) // b
+
+      def align_to(x, a):
+          return cdiv(x, a) * a
+
+      def get_dtype_bitwidth(dtype):
+          return jax.numpy.dtype(dtype).itemsize * 8
+
+      def get_dtype_packing(dtype):
+          bits = get_dtype_bitwidth(dtype)
+          return 32 // bits
+
+      def merge_kv(k, v):
+          max_num_tokens, actual_num_kv_heads, actual_head_dim = k.shape
+          kv_packing = get_dtype_packing(k.dtype)
+          actual_num_kv_heads_x2 = actual_num_kv_heads * 2
+          num_kv_heads_x2 = align_to(actual_num_kv_heads_x2, kv_packing)
+          head_dim = align_to(actual_head_dim, 128)
+          kv = jnp.pad(
+              jnp.concat([k, v], axis=-1).reshape(max_num_tokens, actual_num_kv_heads_x2, actual_head_dim),
+              ((0, 0), (0, num_kv_heads_x2 - actual_num_kv_heads_x2), (0, head_dim - actual_head_dim)),
+              constant_values=0,
+          ).reshape(max_num_tokens, num_kv_heads_x2 // kv_packing, kv_packing, head_dim)
+          return kv
+
+      def merge_kv_hd64(k, v):
+          max_num_tokens, actual_num_kv_heads, actual_head_dim = k.shape
+          kv_packing = get_dtype_packing(k.dtype)
+          num_kv_heads = align_to(actual_num_kv_heads, kv_packing)
+          kv = jnp.pad(
+              jnp.concat([k, v], axis=-1),
+              ((0, 0), (0, num_kv_heads - actual_num_kv_heads), (0, 0)),
+              constant_values=0,
+          ).reshape(max_num_tokens, num_kv_heads // kv_packing, kv_packing, actual_head_dim * 2)
+          return kv
+
+
+      CONFIGS = {'llama3_8b_decode': {'name': 'batched_rpa_llama3_8b_decode', 'model': 'Llama-3.1-8B', 'operator': 'batched_ragged_paged_attention', 'max_num_batched_tokens': 64, 'max_num_seqs': 64, 'num_q_heads': 32, 'num_kv_heads': 8, 'head_dim': 128, 'page_size': 16, 'pages_per_seq': 256, 'active_q_lens': (1,) * 64, 'active_kv_lens': tuple((128 + i * 37 % 120 * 16 for i in range(64))), 'distribution': (64, 64, 64)}, 'llama3_70b_decode': {'name': 'batched_rpa_llama3_70b_decode', 'model': 'Llama-3.1-70B', 'operator': 'batched_ragged_paged_attention', 'max_num_batched_tokens': 64, 'max_num_seqs': 64, 'num_q_heads': 64, 'num_kv_heads': 8, 'head_dim': 128, 'page_size': 16, 'pages_per_seq': 256, 'active_q_lens': (1,) * 64, 'active_kv_lens': tuple((256 + i * 47 % 200 * 16 for i in range(64))), 'distribution': (64, 64, 64)}, 'qwen3_32b_decode': {'name': 'batched_rpa_qwen3_32b_decode', 'model': 'Qwen3-32B', 'operator': 'batched_ragged_paged_attention', 'max_num_batched_tokens': 64, 'max_num_seqs': 64, 'num_q_heads': 40, 'num_kv_heads': 8, 'head_dim': 128, 'page_size': 16, 'pages_per_seq': 256, 'active_q_lens': (1,) * 64, 'active_kv_lens': tuple((128 + i * 53 % 150 * 16 for i in range(64))), 'distribution': (64, 64, 64)}}
+      CONFIG = CONFIGS['llama3_70b_decode']
+      ACTIVE_Q_LENS = CONFIG['active_q_lens']
+      ACTIVE_KV_LENS = CONFIG['active_kv_lens']
+
+      def create_inputs(dtype=jnp.bfloat16, config=None):
+          """Create inputs matching the TPU kernel specifications for Batched RPA."""
+          cfg = CONFIG if config is None else CONFIGS[config] if isinstance(config, str) else config
+          key = jax.random.key(42)
+          k1, k2, k3, k4, k5 = jax.random.split(key, 5)
+          max_tokens = cfg['max_num_batched_tokens']
+          max_seqs = cfg['max_num_seqs']
+          H_q = cfg['num_q_heads']
+          H_kv = cfg['num_kv_heads']
+          D = cfg['head_dim']
+          page_size = cfg['page_size']
+          pages_per_seq = cfg['pages_per_seq']
+          total_pages = max_seqs * pages_per_seq
+          kv_packing = get_dtype_packing(dtype)
+          queries = jax.random.normal(k1, (max_tokens, H_q, D), dtype=dtype)
+          keys = jax.random.normal(k2, (max_tokens, H_kv, D), dtype=dtype)
+          values = jax.random.normal(k3, (max_tokens, H_kv, D), dtype=dtype)
+          num_kv_heads_x2 = align_to(H_kv * 2, kv_packing)
+          cache_shape = (total_pages, page_size, num_kv_heads_x2 // kv_packing, kv_packing, align_to(D, 128))
+          kv_cache = jax.random.normal(k5, cache_shape, dtype=dtype)
+          active_q = cfg['active_q_lens']
+          active_kv = cfg['active_kv_lens']
+          num_active = len(active_q)
+          kv_lens = jnp.pad(jnp.array(active_kv, dtype=jnp.int32), (0, max_seqs - num_active))
+          q_lens = jnp.array(active_q, dtype=jnp.int32)
+          active_cu_q = jnp.concatenate([jnp.zeros((1,), dtype=jnp.int32), jnp.cumsum(q_lens)])
+          cu_q_lens = jnp.pad(active_cu_q, (0, max_seqs + 1 - len(active_cu_q)), constant_values=active_cu_q[-1])
+          page_indices = jax.random.permutation(k4, total_pages, independent=True).astype(jnp.int32)
+          distribution = jnp.array(cfg['distribution'], dtype=jnp.int32)
+          return (queries, keys, values, kv_cache, kv_lens, page_indices, cu_q_lens, distribution)
+
+      outputs = []
+      for cfg in CONFIGS.values():
+          dynamic_args = list(create_inputs(dtype=jnp.bfloat16, config=cfg))
+          static_args = []
+          outputs.append((dynamic_args, static_args))
+      return outputs
+
+rtol: 0.01
+atol: 0.01

@@ -1,0 +1,46 @@
+task_id: 65p_Quantized_Splash_Attention
+description: Kernel task for 65p_Quantized_Splash_Attention
+input_gen_code: |-
+  def get_inputs():
+      import math
+      import jax
+      import jax.numpy as jnp
+
+      CONFIGS = {'llama3_70b_quantized_splash_attention': {'name': 'llama3_70b_quantized_splash_attention', 'model': 'Llama-3.1-70B-FP8', 'operator': 'quantized_splash_attention', 'batch': 4, 'seq_len': 4096, 'num_query_heads': 64, 'num_kv_heads': 8, 'head_dim': 128, 'block_q': 128, 'block_kv': 128, 'atol': 0.01, 'rtol': 0.01}, 'llama3_8b_quantized_splash_attention': {'name': 'llama3_8b_quantized_splash_attention', 'model': 'Llama-3.1-8B-FP8', 'operator': 'quantized_splash_attention', 'batch': 4, 'seq_len': 4096, 'num_query_heads': 32, 'num_kv_heads': 8, 'head_dim': 128, 'block_q': 128, 'block_kv': 128, 'atol': 0.01, 'rtol': 0.01}}
+      CONFIG = CONFIGS['llama3_70b_quantized_splash_attention']
+
+      def create_inputs(dtype=jnp.float8_e4m3fn, config=None):
+          """Returns (q, k, v, q_scale, k_scale, v_scale)."""
+          if config is None:
+              cfg = CONFIG
+          elif isinstance(config, str):
+              cfg = CONFIGS[config]
+          else:
+              cfg = config
+          key = jax.random.key(42)
+          k1, k2, k3 = jax.random.split(key, 3)
+          B = cfg['batch']
+          S = cfg['seq_len']
+          H_q = cfg['num_query_heads']
+          H_kv = cfg['num_kv_heads']
+          D = cfg['head_dim']
+          q_f32 = jax.random.normal(k1, (B, H_q, S, D), dtype=jnp.float32)
+          k_f32 = jax.random.normal(k2, (B, H_kv, S, D), dtype=jnp.float32)
+          v_f32 = jax.random.normal(k3, (B, H_kv, S, D), dtype=jnp.float32)
+          q_scale = (jnp.max(jnp.abs(q_f32), axis=-1, keepdims=True) / 448.0).astype(jnp.float32)
+          k_scale = (jnp.max(jnp.abs(k_f32), axis=-1, keepdims=True) / 448.0).astype(jnp.float32)
+          v_scale = (jnp.max(jnp.abs(v_f32), axis=-1, keepdims=True) / 448.0).astype(jnp.float32)
+          q = (q_f32 / jnp.maximum(q_scale, 1e-06)).astype(dtype)
+          k = (k_f32 / jnp.maximum(k_scale, 1e-06)).astype(dtype)
+          v = (v_f32 / jnp.maximum(v_scale, 1e-06)).astype(dtype)
+          return (q, k, v, q_scale, k_scale, v_scale)
+
+      outputs = []
+      for cfg in CONFIGS.values():
+          dynamic_args = list(create_inputs(dtype=jnp.float8_e4m3fn, config=cfg))
+          static_args = []
+          outputs.append((dynamic_args, static_args))
+      return outputs
+
+rtol: 0.01
+atol: 0.01

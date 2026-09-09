@@ -1,0 +1,32 @@
+task_id: 61p_Linear_Softmax_Cross_Entropy
+description: Kernel task for 61p_Linear_Softmax_Cross_Entropy
+input_gen_code: |-
+  def get_inputs():
+      import jax
+      import jax.numpy as jnp
+
+      CONFIGS = {'ce_small': {'name': 'ce_small', 'model': 'Generic-Small', 'operator': 'linear_softmax_cross_entropy_loss', 'batch_tokens': 1024, 'hidden_dim': 1024, 'vocab_size': 32768}, 'llama3_8b': {'name': 'llama3_8b', 'model': 'Llama-3.1-8B', 'operator': 'linear_softmax_cross_entropy_loss', 'batch_tokens': 4096, 'hidden_dim': 4096, 'vocab_size': 128256}, 'llama3_8b_large': {'name': 'llama3_8b_large', 'model': 'Llama-3.1-8B', 'operator': 'linear_softmax_cross_entropy_loss', 'batch_tokens': 8192, 'hidden_dim': 4096, 'vocab_size': 128256}, 'gemma2_9b': {'name': 'gemma2_9b', 'model': 'Gemma-2-9B', 'operator': 'linear_softmax_cross_entropy_loss', 'batch_tokens': 4096, 'hidden_dim': 3584, 'vocab_size': 256000}, 'qwen2_5_7b': {'name': 'qwen2_5_7b', 'model': 'Qwen-2.5-7B', 'operator': 'linear_softmax_cross_entropy_loss', 'batch_tokens': 4096, 'hidden_dim': 3584, 'vocab_size': 152064}, 'deepseek_v3': {'name': 'deepseek_v3', 'model': 'DeepSeek-V3', 'operator': 'linear_softmax_cross_entropy_loss', 'batch_tokens': 4096, 'hidden_dim': 7168, 'vocab_size': 129280}}
+      CONFIG = CONFIGS['ce_small']
+
+      def create_inputs(dtype=jnp.bfloat16, config=None):
+          """Returns (x, labels, w)."""
+          cfg = CONFIG if config is None else CONFIGS[config] if isinstance(config, str) else config
+          key = jax.random.key(42)
+          k1, k2, k3 = jax.random.split(key, 3)
+          B = cfg['batch_tokens']
+          H = cfg['hidden_dim']
+          V = cfg['vocab_size']
+          x = jax.random.normal(k1, (B, H), dtype=dtype)
+          w = jax.random.normal(k2, (H, V), dtype=dtype) * 0.02
+          labels = jax.random.randint(k3, (B,), 0, V)
+          return (x, labels, w)
+
+      outputs = []
+      for cfg in CONFIGS.values():
+          dynamic_args = list(create_inputs(dtype=jnp.bfloat16, config=cfg))
+          static_args = []
+          outputs.append((dynamic_args, static_args))
+      return outputs
+
+rtol: 0.01
+atol: 0.01

@@ -1,0 +1,33 @@
+task_id: 58p_SparseCore_Ragged_Gather
+description: Kernel task for 58p_SparseCore_Ragged_Gather
+input_gen_code: |-
+  def get_inputs():
+      import jax
+      import jax.numpy as jnp
+
+      CONFIGS = {'dsv4_pro_b8192_h7168': {'name': 'dsv4_pro_b8192_h7168', 'model': 'DeepSeek-V4-Pro', 'operator': 'ragged_gather', 'batch': 8192, 'hidden_size': 7168, 'num_indices': 8192}, 'dsv4_flash_b8192_h4096': {'name': 'dsv4_flash_b8192_h4096', 'model': 'DeepSeek-V4-Flash', 'operator': 'ragged_gather', 'batch': 8192, 'hidden_size': 4096, 'num_indices': 8192}, 'gather_b2048_h4096': {'name': 'gather_b2048_h4096', 'model': 'VLLM-SparseCore', 'operator': 'ragged_gather', 'batch': 2048, 'hidden_size': 4096, 'num_indices': 2048}, 'gather_b16k_h7168': {'name': 'gather_b16k_h7168', 'model': 'DeepSeek-V4', 'operator': 'ragged_gather', 'batch': 16384, 'hidden_size': 7168, 'num_indices': 16384}, 'gather_small': {'name': 'gather_small', 'model': 'VLLM-SparseCore', 'operator': 'ragged_gather', 'batch': 1024, 'hidden_size': 2048, 'num_indices': 1024}}
+      CONFIG = CONFIGS['dsv4_pro_b8192_h7168']
+
+      def create_inputs(dtype=jnp.bfloat16, config=None):
+          """Returns (x, indices, start, end)."""
+          cfg = config or CONFIG
+          key = jax.random.key(42)
+          k1, k2 = jax.random.split(key, 2)
+          batch = cfg['batch']
+          hidden_size = cfg['hidden_size']
+          num_indices = cfg['num_indices']
+          x = jax.random.uniform(k1, (batch, hidden_size), dtype=dtype)
+          indices = jax.random.randint(k2, (num_indices,), 0, batch, dtype=jnp.int32)
+          start = jnp.array([0], dtype=jnp.int32)
+          end = jnp.array([num_indices], dtype=jnp.int32)
+          return (x, indices, start, end)
+
+      outputs = []
+      for cfg in CONFIGS.values():
+          dynamic_args = list(create_inputs(dtype=jnp.bfloat16, config=cfg))
+          static_args = []
+          outputs.append((dynamic_args, static_args))
+      return outputs
+
+rtol: 0.01
+atol: 0.01

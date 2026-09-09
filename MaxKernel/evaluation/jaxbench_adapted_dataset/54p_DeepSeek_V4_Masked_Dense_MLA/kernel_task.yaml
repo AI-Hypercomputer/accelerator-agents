@@ -1,0 +1,52 @@
+task_id: 55p_DeepSeek_V4_Masked_Dense_MLA
+description: Kernel task for 55p_DeepSeek_V4_Masked_Dense_MLA
+input_gen_code: |-
+  def get_inputs():
+      import jax
+      import jax.numpy as jnp
+
+      CONFIGS = {'decode_small': {'name': 'decode_small', 'model': 'DeepSeek-V4', 'operator': 'masked_dense_mla', 'batch_size': 16, 'q_len': 1, 'kv_len': 1024, 'num_q_heads': 128, 'head_dim': 512, 'page_size': 256, 'csa_topk': 256, 'sm_scale': 1.0, 'num_kv_pages_per_block': 1, 'num_queries_per_block': 1}, 'decode_b256_kv9k': {'name': 'decode_b256_kv9k', 'model': 'DeepSeek-V4', 'operator': 'masked_dense_mla', 'batch_size': 256, 'q_len': 1, 'kv_len': 9216, 'num_q_heads': 128, 'head_dim': 512, 'page_size': 1024, 'csa_topk': 1024, 'sm_scale': 1.0, 'num_kv_pages_per_block': 1, 'num_queries_per_block': 1}, 'prefill_chunk_first': {'name': 'prefill_chunk_first', 'model': 'DeepSeek-V4', 'operator': 'masked_dense_mla', 'batch_size': 1, 'q_len': 1024, 'kv_len': 1024, 'num_q_heads': 128, 'head_dim': 512, 'page_size': 1024, 'csa_topk': 1024, 'sm_scale': 1.0, 'num_kv_pages_per_block': 1, 'num_queries_per_block': 32}, 'prefill_chunk_last': {'name': 'prefill_chunk_last', 'model': 'DeepSeek-V4', 'operator': 'masked_dense_mla', 'batch_size': 1, 'q_len': 1024, 'kv_len': 8192, 'num_q_heads': 128, 'head_dim': 512, 'page_size': 1024, 'csa_topk': 1024, 'sm_scale': 1.0, 'num_kv_pages_per_block': 2, 'num_queries_per_block': 32}}
+      CONFIG = CONFIGS['decode_small']
+
+      def create_inputs(dtype=jnp.bfloat16, config=None):
+          """Returns inputs for Masked-Dense MLA."""
+          cfg = CONFIG if config is None else CONFIGS[config] if isinstance(config, str) else config
+          key = jax.random.key(42)
+          k1, k2, k3, k4, k5, k6, k7, k8, k9, k10 = jax.random.split(key, 10)
+          B = cfg['batch_size']
+          q_len = cfg['q_len']
+          num_tokens = B * q_len
+          kv_len = cfg['kv_len']
+          num_heads = cfg['num_q_heads']
+          head_dim = cfg['head_dim']
+          page_size = cfg['page_size']
+          topk = cfg['csa_topk']
+          pages_per_seq = (kv_len + page_size - 1) // page_size + 2
+          total_pages = B * pages_per_seq
+          q = jax.random.normal(k1, (num_tokens, num_heads, head_dim), dtype=dtype)
+          cache_kv_nope = jax.random.randint(k8, (total_pages, page_size, 4, 128), 1, 126, dtype=jnp.uint8)
+          rope_bf16 = jax.random.normal(k9, (total_pages, page_size, 64), dtype=jnp.bfloat16)
+          rope_u16 = jax.lax.bitcast_convert_type(rope_bf16, jnp.uint16)
+          hi = (rope_u16 >> 8).astype(jnp.uint8)
+          lo = (rope_u16 & 0xFF).astype(jnp.uint8)
+          cache_kv_rope = jnp.concatenate([hi, lo], axis=-1).reshape(total_pages, page_size // 4, 4, 128)
+          kv_lens = jnp.full((B,), kv_len, dtype=jnp.int32)
+          topk_indices = jax.random.randint(k4, (num_tokens, topk), 0, kv_len, dtype=jnp.int32)
+          page_indices = jnp.arange(total_pages, dtype=jnp.int32)
+          cu_q_lens = jnp.arange(0, num_tokens + 1, q_len, dtype=jnp.int32)
+          distribution = jnp.array([B, B, B], dtype=jnp.int32)
+          attention_sinks = jax.random.uniform(k5, (num_heads,), dtype=jnp.float32)
+          swa_accumulation = jax.random.normal(k6, (num_tokens, num_heads, head_dim), dtype=dtype)
+          swa_l = jax.random.uniform(k7, (num_tokens, num_heads), dtype=jnp.float32)
+          swa_m = jax.random.uniform(k10, (num_tokens, num_heads), dtype=jnp.float32)
+          return (q, cache_kv_nope, cache_kv_rope, kv_lens, topk_indices, page_indices, cu_q_lens, distribution, attention_sinks, swa_accumulation, swa_l, swa_m)
+
+      outputs = []
+      for cfg in CONFIGS.values():
+          dynamic_args = list(create_inputs(dtype=jnp.bfloat16, config=cfg))
+          static_args = []
+          outputs.append((dynamic_args, static_args))
+      return outputs
+
+rtol: 0.01
+atol: 0.01

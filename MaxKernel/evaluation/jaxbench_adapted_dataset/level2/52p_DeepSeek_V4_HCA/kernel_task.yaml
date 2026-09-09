@@ -1,0 +1,108 @@
+task_id: dsv4_hca_ragged_paged_attention
+description: DeepSeek-V4 hybrid context attention (HCA)
+input_gen_code: |-
+  def get_inputs():
+      import jax
+      import jax.numpy as jnp
+
+      HEAD_DIM = 512
+      NUM_Q_HEADS = 8
+      Q_DTYPE = jnp.bfloat16
+      SM_SCALE = float(HEAD_DIM ** -0.5)
+      VMEM_LIMIT_BYTES = 100 * 1024 * 1024
+
+      CONFIGS = [
+          (256, 1, 9216, 1024, 16, 1),
+          (1, 1024, 1024, 1024, 16, 32),
+          (1, 1024, 8192, 1024, 16, 32),
+          (128, 1, 9216, 1024, 16, 1),
+          (1, 256, 1024, 1024, 16, 32),
+          (1, 512, 4096, 1024, 16, 32),
+          (128, 1, 9216, 256, 16, 1),
+          (1, 256, 1024, 256, 16, 32),
+          (256, 1, 9216, 2048, 16, 1),
+          (1, 1024, 8192, 2048, 4, 32),
+      ]
+
+      CACHE_TILE = 8192
+      k_kv, k_cfg = jax.random.split(jax.random.key(0), 2)
+
+      kv_tile = jax.random.normal(
+          k_kv, (CACHE_TILE, 4, 128), jnp.float32
+      ).astype(Q_DTYPE)
+      bits = jax.lax.bitcast_convert_type(kv_tile, jnp.uint16)
+      kv_tile_bytes = jnp.stack(
+          [(bits & 0xFF).astype(jnp.uint8), (bits >> 8).astype(jnp.uint8)],
+          axis=2,
+      ).reshape(CACHE_TILE, 8, 128)
+
+      outputs = []
+      
+      keys = jax.random.split(k_cfg, len(CONFIGS))
+      for cfg, key in zip(CONFIGS, keys):
+          batch_size, q_len, kv_len, page_size, bkv_pages, bq = cfg
+          k_page, k_q, k_sink, k_acc, k_l, k_m = jax.random.split(key, 6)
+
+          num_tokens = batch_size * q_len
+          pages_per_seq = -(-kv_len // page_size)
+          total_num_pages = batch_size * pages_per_seq
+          num_slots = total_num_pages * page_size
+
+          q = jax.random.normal(
+              k_q, (num_tokens, NUM_Q_HEADS, HEAD_DIM), jnp.float32
+          ).astype(Q_DTYPE)
+
+          reps = -(-num_slots // CACHE_TILE)
+          cache_kv = jnp.tile(kv_tile_bytes, (reps, 1, 1))[:num_slots].reshape(
+              total_num_pages, page_size * 2, 4, 128
+          )
+
+          page_indices = jax.random.permutation(
+              k_page, total_num_pages
+          ).astype(jnp.int32)
+
+          kv_lens = jnp.full((batch_size,), kv_len, jnp.int32)
+          pos_in_seq = jnp.arange(num_tokens, dtype=jnp.int32) % q_len
+          kv_lens_to_attend = kv_len - q_len + pos_in_seq + 1
+          cu_q_lens = jnp.arange(batch_size + 1, dtype=jnp.int32) * q_len
+
+          if q_len == 1:
+              distribution = jnp.array(
+                  [batch_size, batch_size, batch_size], jnp.int32
+              )
+              chunk_prefill_size = None
+          else:
+              distribution = jnp.array([0, batch_size, batch_size], jnp.int32)
+              chunk_prefill_size = q_len
+
+          attention_sinks = jax.random.normal(
+              k_sink, (NUM_Q_HEADS,), jnp.float32
+          )
+          swa_accumution = jax.random.normal(
+              k_acc, (num_tokens, NUM_Q_HEADS, HEAD_DIM), jnp.float32
+          ).astype(Q_DTYPE)
+          swa_l = jax.random.uniform(
+              k_l, (num_tokens, NUM_Q_HEADS), jnp.float32, 1.0, 64.0
+          )
+          swa_m = jax.random.normal(k_m, (num_tokens, NUM_Q_HEADS), jnp.float32)
+
+          dynamic_args = [
+              q,
+              cache_kv,
+              kv_lens,
+              kv_lens_to_attend,
+              page_indices,
+              cu_q_lens,
+              distribution,
+              attention_sinks,
+              swa_accumution,
+              swa_l,
+              swa_m,
+          ]
+          outputs.append((dynamic_args, []))
+
+      return outputs
+
+
+rtol: 0.01
+atol: 0.01

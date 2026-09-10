@@ -20,6 +20,8 @@ JAXBench workload with CONFIG / create_inputs / workload.
 Metadata/utilities imported from the installed JAX package (not optimizable).
 """
 
+import numpy as np
+import time
 from collections.abc import Callable
 import functools
 from typing import Any, Optional
@@ -849,7 +851,6 @@ def workload(lhs, rhs, group_sizes):
 
 def benchmark(num_warmup=5, num_iters=100):
     """Benchmark and return results dict."""
-    import time
     inputs = create_inputs()
     fn = jax.jit(workload)
     for _ in range(num_warmup):
@@ -861,7 +862,6 @@ def benchmark(num_warmup=5, num_iters=100):
         out = fn(*inputs)
         out.block_until_ready()
         times.append(time.perf_counter() - t0)
-    import numpy as np
     times = np.array(times) * 1000
     avg = float(np.mean(times))
     return {

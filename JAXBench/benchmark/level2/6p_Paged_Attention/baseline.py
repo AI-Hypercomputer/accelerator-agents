@@ -20,6 +20,7 @@ as a JAXBench workload with CONFIG / create_inputs / workload.
 quantization_utils imported from the installed JAX package (not optimizable).
 """
 
+import time
 from collections.abc import Sequence
 import functools
 from typing import Literal
@@ -735,7 +736,6 @@ def workload(q, k_pages, v_pages, lengths, page_indices):
 
 def benchmark(num_warmup=5, num_iters=100):
     """Benchmark and return results dict."""
-    import time
     inputs = create_inputs()
     fn = jax.jit(workload)
     for _ in range(num_warmup):
@@ -747,7 +747,6 @@ def benchmark(num_warmup=5, num_iters=100):
         out = fn(*inputs)
         out.block_until_ready()
         times.append(time.perf_counter() - t0)
-    import numpy as np
     times = np.array(times) * 1000
     avg = float(np.mean(times))
     return {

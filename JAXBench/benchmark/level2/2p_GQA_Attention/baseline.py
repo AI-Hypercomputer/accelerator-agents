@@ -14,6 +14,7 @@
 
 """Implementation of Sparse Flash Attention, a.k.a. "Splash" attention."""
 
+import time
 from collections.abc import Callable, Mapping
 import dataclasses
 import enum
@@ -2617,7 +2618,6 @@ def workload(query, key, value):
 
 def benchmark(num_warmup=5, num_iters=100):
     """Benchmark and return results dict."""
-    import time
     inputs = create_inputs()
     fn = jax.jit(workload)
     for _ in range(num_warmup):
@@ -2629,7 +2629,6 @@ def benchmark(num_warmup=5, num_iters=100):
         out = fn(*inputs)
         out.block_until_ready()
         times.append(time.perf_counter() - t0)
-    import numpy as np
     times = np.array(times) * 1000
     avg = float(np.mean(times))
     return {

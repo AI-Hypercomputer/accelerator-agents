@@ -144,5 +144,6 @@ input_gen_code: |-
           outputs.append((dynamic_args, []))
 
       return outputs
+
 rtol: 0.02
 atol: 0.02

@@ -1,4 +1,4 @@
-task_id: dsv4_csa_sparse_ragged_paged_attention
+task_id: 51p_DeepSeek_V4_CSA
 description: |-
   DeepSeek-V4 compressed sparse attention (CSA)
 input_gen_code: |-

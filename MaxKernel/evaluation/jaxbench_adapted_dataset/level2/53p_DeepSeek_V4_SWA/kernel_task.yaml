@@ -1,4 +1,4 @@
-task_id: deepseek_swa
+task_id: 53p_DeepSeek_V4_SWA
 description: DeepSeek Sliding Window Attention (SWA)
 input_gen_code: |-
   def get_inputs():

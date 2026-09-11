@@ -1,4 +1,4 @@
-task_id: dsv4_hca_ragged_paged_attention
+task_id: 52p_DeepSeek_V4_HCA
 description: DeepSeek-V4 hybrid context attention (HCA)
 input_gen_code: |-
   def get_inputs():

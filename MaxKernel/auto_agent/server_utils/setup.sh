@@ -93,19 +93,55 @@ elif [ "$1" = "--start-gke" ]; then
         exit 1
     fi
 elif [ "$1" = "--start-local" ] || [ "$1" = "--start-gce" ]; then
+    CHIPS=1
+    while [[ "$#" -gt 0 ]]; do
+        case "$1" in
+            --chips) CHIPS="$2"; shift ;;
+        esac
+        shift
+    done
+
+    # Generate eval_config.yaml dynamically if CHIPS is specified
+    if [ "$CHIPS" -gt 1 ]; then
+        echo "Dynamically generating eval_config.yaml for $CHIPS TPU chips..."
+        HOSTNAME_IP="127.0.0.1"
+        target="$SCRIPT_DIR/eval_config.yaml"
+        echo "backends:" > "$target"
+        local tpu_port=5463
+        for (( i=0; i<CHIPS; i++ )); do
+            echo "  - name: tpu-$i" >> "$target"
+            echo "    ip: $HOSTNAME_IP" >> "$target"
+            echo "    port: $tpu_port" >> "$target"
+            echo "    type: tpu" >> "$target"
+            ((tpu_port++))
+        done
+        local cpu_port=5464
+        if [ $CHIPS -gt 1 ]; then
+            cpu_port=$tpu_port
+        fi
+        echo "  - name: cpu-0" >> "$target"
+        echo "    ip: $HOSTNAME_IP" >> "$target"
+        echo "    port: $cpu_port" >> "$target"
+        echo "    type: cpu" >> "$target"
+    fi
+
     load_config
     # Start all local execution/evaluation servers (needed for local or GCE cases)
     echo "Starting local background servers (CPU, TPU, Eval)..."
-    if [ -n "$LOCAL_TPU_PORT" ]; then
-        nohup python3 tpu_server.py > output_tpu_server.txt 2>&1 &
+    if [ -n "$LOCAL_TPU_PORTS" ]; then
+        for port in $LOCAL_TPU_PORTS; do
+            PORT=$port nohup python3 tpu_server.py > output_tpu_server_${port}.txt 2>&1 &
+        done
     fi
     if [ -n "$LOCAL_CPU_PORT" ]; then
         nohup python3 cpu_server.py > output_cpu_server.txt 2>&1 &
     fi
     nohup python3 eval_server.py > output_eval_server.txt 2>&1 &
 
-    if [ -n "$LOCAL_TPU_PORT" ]; then
-        wait_for_server_health "TPU server" "$LOCAL_TPU_PORT" "output_tpu_server.txt" || exit 1
+    if [ -n "$LOCAL_TPU_PORTS" ]; then
+        for port in $LOCAL_TPU_PORTS; do
+            wait_for_server_health "TPU server" "$port" "output_tpu_server_${port}.txt" || exit 1
+        done
     fi
     if [ -n "$LOCAL_CPU_PORT" ]; then
         wait_for_server_health "CPU server" "$LOCAL_CPU_PORT" "output_cpu_server.txt" || exit 1

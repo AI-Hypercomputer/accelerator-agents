@@ -35,35 +35,29 @@ def _resolve_config_path(cfg_path: str) -> Optional[str]:
   return None
 
 
-def get_local_tpu_port(cfg_path: str = "eval_config.yaml") -> Optional[int]:
-  """Checks eval_config.yaml and returns the port if a local TPU server is needed."""
+
+def get_local_tpu_ports(cfg_path: str = "eval_config.yaml") -> list[int]:
+  """Checks eval_config.yaml and returns the ports if local TPU servers are needed."""
   resolved_path = _resolve_config_path(cfg_path)
   if not resolved_path:
-    return None
+    return []
 
   try:
     with open(resolved_path, "r") as file:
       config = yaml.safe_load(file) or {}
   except Exception as e:
     logging.error(f"Config file {resolved_path} error: {e}")
-    return None
+    return []
 
   if not isinstance(config, dict):
-    raise ValueError(
-      f"Invalid configuration format in {resolved_path}: "
-      "Expected a YAML dictionary at the root level."
-    )
+    return []
 
   backends = config.get("backends", [])
   if not isinstance(backends, list):
-    raise ValueError(
-      f"Invalid configuration format in {resolved_path}: "
-      "'backends' must be a list."
-    )
+    return []
 
   local_ip = get_local_ip()
 
-  # Find all backends that are local TPUs
   local_tpu_backends = [
     b
     for b in backends
@@ -73,11 +67,12 @@ def get_local_tpu_port(cfg_path: str = "eval_config.yaml") -> Optional[int]:
     and "tpu_vm" not in b
   ]
 
-  if not local_tpu_backends:
-    return None
+  return [b.get("port", TPU_SERVER_PORT) for b in local_tpu_backends]
 
-  port = local_tpu_backends[0].get("port")
-  return port if port is not None else TPU_SERVER_PORT
+def get_local_tpu_port(cfg_path: str = "eval_config.yaml"):
+  ports = get_local_tpu_ports(cfg_path)
+  return ports[0] if ports else None
+
 
 
 def get_local_cpu_port(cfg_path: str = "eval_config.yaml") -> Optional[int]:
@@ -159,7 +154,9 @@ def get_bastion_config(
 
 
 if __name__ == "__main__":
-  tpu_p = get_local_tpu_port()
+  tpu_ports = get_local_tpu_ports()
+  tpu_p = tpu_ports[0] if tpu_ports else None
+  print(f"LOCAL_TPU_PORTS={' '.join(map(str, tpu_ports))}")
   cpu_p = get_local_cpu_port()
   b = get_bastion_config()
 

@@ -515,7 +515,11 @@ def get_tpu_version() -> dict:
 
 
 if __name__ == "__main__":
-  tpu_port = get_local_tpu_port()
+  port_env = os.environ.get("PORT")
+  if port_env:
+    tpu_port = int(port_env)
+  else:
+    tpu_port = get_local_tpu_port()
 
   if tpu_port is None:
     logging.info(

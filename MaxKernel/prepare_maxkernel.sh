@@ -12,6 +12,17 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+
+CHIPS=1
+# Parse command line arguments
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        --chips) CHIPS="$2"; shift ;;
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+    esac
+    shift
+done
+
 # Function to print colored output
 print_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -463,6 +474,7 @@ EOF
 }
 
 
+
 # Function to create eval_config.yaml for both auto_agent and hitl_agent
 create_eval_config() {
     print_info "Creating eval_config.yaml for evaluation servers..."
@@ -484,22 +496,29 @@ create_eval_config() {
         local target_dir
         target_dir="$(dirname "$target")"
         if [ -d "$target_dir" ]; then
-            cat > "$target" << EOF
-backends:
-  - name: tpu-0
-    ip: $HOSTNAME_IP
-    port: 5463
-    type: tpu
-  - name: cpu-0
-    ip: $HOSTNAME_IP
-    port: 5464
-    type: cpu
-EOF
+            echo "backends:" > "$target"
+            local tpu_port=5463
+            for (( i=0; i<CHIPS; i++ )); do
+                echo "  - name: tpu-$i" >> "$target"
+                echo "    ip: $HOSTNAME_IP" >> "$target"
+                echo "    port: $tpu_port" >> "$target"
+                echo "    type: tpu" >> "$target"
+                ((tpu_port++))
+            done
+            local cpu_port=5464
+            if [ $CHIPS -gt 1 ]; then
+                cpu_port=$tpu_port
+            fi
+            echo "  - name: cpu-0" >> "$target"
+            echo "    ip: $HOSTNAME_IP" >> "$target"
+            echo "    port: $cpu_port" >> "$target"
+            echo "    type: cpu" >> "$target"
         fi
     done
 
-    print_success "Created eval_config.yaml for both auto_agent and hitl_agent (TPU:5463, CPU:5464, IP: $HOSTNAME_IP)"
+    print_success "Created eval_config.yaml with $CHIPS TPU chips."
 }
+
 
 
 # Main execution

@@ -224,6 +224,12 @@ install_dependencies() {
         pip install -e "$REPO_ROOT"
     fi
 
+    # Install ruff formatter/linter
+    if ! command -v ruff &> /dev/null; then
+        print_info "Installing ruff..."
+        pip install ruff
+    fi
+
     # Check if npx is installed
     if ! command -v npx &> /dev/null; then
         print_info "npx not found. Installing nodejs and npm via nvm..."
@@ -608,6 +614,7 @@ STEP 2: Install Dependencies
 pip install -r dependency/main_requirements.txt
 pip install -r dependency/agent_requirements.txt
 pip install -e .
+pip install ruff
 
 STEP 3: Set Environment Variables
 ----------------------------------

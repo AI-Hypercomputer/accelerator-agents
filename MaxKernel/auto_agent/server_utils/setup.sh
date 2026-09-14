@@ -129,8 +129,10 @@ elif [ "$1" = "--start-local" ] || [ "$1" = "--start-gce" ]; then
     # Start all local execution/evaluation servers (needed for local or GCE cases)
     echo "Starting local background servers (CPU, TPU, Eval)..."
     if [ -n "$LOCAL_TPU_PORTS" ]; then
+        tpu_index=0
         for port in $LOCAL_TPU_PORTS; do
-            PORT=$port nohup python3 tpu_server.py > output_tpu_server_${port}.txt 2>&1 &
+            TPU_VISIBLE_DEVICES=$tpu_index TPU_CHIPS_PER_HOST_BOUNDS=1,1,1 TPU_HOST_BOUNDS=1,1,1 PORT=$port nohup python3 tpu_server.py > output_tpu_server_${port}.txt 2>&1 &
+            ((tpu_index++))
         done
     fi
     if [ -n "$LOCAL_CPU_PORT" ]; then

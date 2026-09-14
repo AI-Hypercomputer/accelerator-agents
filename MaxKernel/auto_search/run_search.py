@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 import sys
 import time
 from typing import Any, Optional, Tuple
@@ -172,7 +173,8 @@ async def run_search(
 
       try:
         logger.info("Generating timing summary...")
-        summary_text = analyze_path(dest_dir)
+        run_duration = time.time() - global_start_time
+        summary_text = analyze_path(dest_dir, real_wall_time=run_duration)
         out_file = os.path.join(dest_dir, "timing_summary.md")
         with open(out_file, "w") as f:
           f.write("```text\n" + summary_text + "\n```\n")

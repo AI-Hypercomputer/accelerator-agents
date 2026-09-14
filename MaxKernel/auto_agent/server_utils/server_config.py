@@ -156,7 +156,7 @@ def get_bastion_config(
 if __name__ == "__main__":
   tpu_ports = get_local_tpu_ports()
   tpu_p = tpu_ports[0] if tpu_ports else None
-  print(f"LOCAL_TPU_PORTS={' '.join(map(str, tpu_ports))}")
+  print(f"LOCAL_TPU_PORTS='{ ' '.join(map(str, tpu_ports)) }'")
   cpu_p = get_local_cpu_port()
   b = get_bastion_config()
 

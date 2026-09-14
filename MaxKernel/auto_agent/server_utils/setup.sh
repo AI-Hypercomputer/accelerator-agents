@@ -107,7 +107,7 @@ elif [ "$1" = "--start-local" ] || [ "$1" = "--start-gce" ]; then
         HOSTNAME_IP="127.0.0.1"
         target="$SCRIPT_DIR/eval_config.yaml"
         echo "backends:" > "$target"
-        local tpu_port=5463
+        tpu_port=5463
         for (( i=0; i<CHIPS; i++ )); do
             echo "  - name: tpu-$i" >> "$target"
             echo "    ip: $HOSTNAME_IP" >> "$target"
@@ -115,7 +115,7 @@ elif [ "$1" = "--start-local" ] || [ "$1" = "--start-gce" ]; then
             echo "    type: tpu" >> "$target"
             ((tpu_port++))
         done
-        local cpu_port=5464
+        cpu_port=5464
         if [ $CHIPS -gt 1 ]; then
             cpu_port=$tpu_port
         fi

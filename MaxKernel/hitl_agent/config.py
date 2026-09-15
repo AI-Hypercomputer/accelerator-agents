@@ -63,7 +63,13 @@ try:
 
     @get_retry_decorator()
     async def wrapped_async(self, *args, **kwargs):
-      return await orig_async(self, *args, **kwargs)
+      import asyncio
+      # Gemini API occasionally hangs indefinitely on concurrent quotas.
+      # Force a 90 second hard timeout so it triggers a tenacity retry
+      # instead of infinitely blocking the orchestrator.
+      return await asyncio.wait_for(
+        orig_async(self, *args, **kwargs), timeout=90
+      )
 
     genai.models.AsyncModels.generate_content = wrapped_async
 except ImportError:

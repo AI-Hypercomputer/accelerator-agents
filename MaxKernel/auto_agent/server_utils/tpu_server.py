@@ -520,7 +520,9 @@ if __name__ == "__main__":
     try:
       tpu_port = int(port_env)
     except ValueError:
-      logging.error(f"Invalid PORT environment variable: {port_env}. Must be an integer.")
+      logging.error(
+        f"Invalid PORT environment variable: {port_env}. Must be an integer."
+      )
       sys.exit(1)
   else:
     tpu_port = get_local_tpu_port()

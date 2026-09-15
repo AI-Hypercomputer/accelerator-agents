@@ -23,6 +23,11 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
+if ! [[ "$CHIPS" =~ ^[0-9]+$ ]] || [ "$CHIPS" -lt 1 ]; then
+    echo "Error: --chips must be a positive integer."
+    exit 1
+fi
+
 # Function to print colored output
 print_info() {
     echo -e "${BLUE}[INFO]${NC} $1"

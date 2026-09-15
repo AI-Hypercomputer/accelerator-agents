@@ -1,0 +1,9 @@
+{
+  "experiment_id": "20260527-ghostfish-training",
+  "hypothesis": "Verify Ghostfish TPU allocation and utilization via XManager.",
+  "class": "infrastructure",
+  "branch": "qwen3coder-maxperf-20260527-ghostfish-training",
+  "origination": "user_request",
+  "agent": "gemini-cli",
+  "created": "2026-05-27"
+}

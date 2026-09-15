@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "target": {
+    "model_name": "Qwen/Qwen2.5-Coder-32B-Instruct",
+    "architecture": "Dense",
+    "framework": "vLLM-TPU-V1",
+    "model_evidence_url": "https://huggingface.co/Qwen/Qwen2.5-Coder-32B-Instruct/raw/main/config.json"
+  },
+  "hardware": {
+    "accelerator": "TPU v6e",
+    "chip_count": 8,
+    "mesh_shape": [2, 4],
+    "tpu_vm_hostname": "maxperf-v6e-dev1"
+  },
+  "execution": {
+    "backend": "cdk",
+    "cluster_or_zone": "us-central2-b",
+    "namespace": "maxperf-jobs"
+  },
+  "workload": {
+    "regime": "serving_inference",
+    "prompt_length_tokens": 4096,
+    "output_length_tokens": 1024,
+    "batch_size": 64,
+    "target_precision": {
+      "weights": "fp8",
+      "activations": "bf16",
+      "kv_cache": "fp8"
+    }
+  },
+  "objective": {
+    "primary_metric": "tokens_per_sec_per_chip",
+    "optimization_goal": "maximize",
+    "target_improvement_pct": 15.0,
+    "constraints": {
+      "max_p99_tpot_ms": 15.0,
+      "max_p99_ttft_ms": 1200.0,
+      "correctness_gate": {
+        "numeric_tolerance": "bf16",
+        "eval_benchmark": "HumanEval",
+        "max_accuracy_drop_pp": 1.0
+      }
+    }
+  }
+}

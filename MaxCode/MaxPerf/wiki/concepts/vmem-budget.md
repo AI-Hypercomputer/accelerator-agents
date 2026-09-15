@@ -1,0 +1,68 @@
+---
+title: "VMEM budget (per TPU generation)"
+type: concept
+tags: [vmem, tpu, hardware, tpu-v4, tpu-v5e, tpu-v5p, tpu-v6e, tpu-v7, autotuning]
+created: 2026-04-23
+updated: 2026-04-23
+---
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
+
+Per-generation TPU VMEM (on-chip vector scratchpad) capacity, baked into several production kernels as hard constants. Respect these budgets when choosing Pallas block sizes — exceeding them triggers `resource_exhausted` at lowering.
+
+## Definition
+
+**VMEM** is the TPU on-chip vector scratchpad used by Pallas/Mosaic kernels for tile residency. Each TPU generation has a fixed per-chip VMEM size. Kernels that declare VMEM usage via `pl.BlockSpec` must fit within the budget.
+
+## Per-generation budgets
+
+Values used by the ecosystem's most-tuned kernels (tpu-inference `quantized_matmul/blockwise_kernel.py`, plus scaling-book / pallas-forge TPU_SPECS). Units MiB per chip.
+
+| Generation | VMEM (MiB) | Source |
+|---|---:|---|
+| v4 | 32 | [pallas-forge `TPU_SPECS["v4"]`](../codebases/pallas-forge.md) |
+| v5e | 32 | [pallas-forge `TPU_SPECS["v5e"]`](../codebases/pallas-forge.md) |
+| v5p | 95 | [pallas-forge `TPU_SPECS["v5p"]`](../codebases/pallas-forge.md) |
+| **v6e (Trillium)** | **96** | [tpu-inference `quantized_matmul/blockwise_kernel.py`](../codebases/tpu-inference.md) |
+| **v7 (Ironwood)** | **48** | [tpu-inference `quantized_matmul/blockwise_kernel.py`](../codebases/tpu-inference.md) |
+
+**Note the v6→v7 shrink**: Ironwood has half the VMEM budget Trillium has per the tpu-inference constants. Kernels that squeak under 96 MiB on v6e will need re-tuning on v7 — autotune tables in tpu-inference hard-code the different budgets.
+
+## Why it matters for TPU perf
+
+VMEM is the primary tile-residency budget for Pallas kernels. A block size chosen without VMEM awareness either:
+- **Fits** → good; enables single-pass tile compute.
+- **Exceeds VMEM** → `resource_exhausted` at lowering (see [vmem-oom-fallthrough](vmem-oom-fallthrough.md)) or spills that blow up HBM traffic.
+
+Autotune candidates should be pre-filtered to VMEM budget, or the autotuner should handle OOM-fallthrough gracefully.
+
+## Baked-in budgets by kernel
+
+Other tpu-inference constants worth knowing:
+- `quantized_matmul` v6 = 96 MiB, v7 = 48 MiB.
+- `ragged_paged_attention` default = 100 MB (slightly exceeds v7 → suggests v7 uses a different path or a tighter variant).
+- `update_kv_cache` = 64 MB.
+
+## Known results
+
+See individual kernel pages for exact block-size choices at these budgets.
+
+## Connections
+
+- [vmem](vmem.md) — the concept page for VMEM as a memory tier.
+- [vmem-oom-fallthrough](vmem-oom-fallthrough.md) — how to handle overflow at autotune time.
+- [autotuning](autotuning.md)
+- [memory-hierarchy](memory-hierarchy.md)
+
+## Sources
+
+- [tpu-inference codebase](../codebases/tpu-inference.md) "Performance-relevant surfaces §2".
+- [pallas-forge codebase](../codebases/pallas-forge.md) `TPU_SPECS` table.
+- [Pallas kernel directory §3.1](../analyses/pallas-kernel-directory/03-inference-engines.md#31-vllm-projecttpu-inference).

@@ -1,0 +1,46 @@
+# Gemma 4 torchax trainer — pip deps.
+#
+# torchax pin matches the wiki submodule
+# (`raw/code/torchax`, commit 8f957d1 per `wiki/codebases/torchax.md`).
+# The published wheel at this commit is `torchax==0.0.12`; install from
+# that commit rather than PyPI to guarantee the op-lowering tables match.
+#
+# NOTE: `--extra-index-url` and the TPU wheel pin for JAX are libtpu-
+# dependent; on a fresh v6e host the canonical recipe is
+#   pip install -U "jax[tpu]"
+# with Google's libtpu index. We pin a reasonable floor here but let the
+# TPU installer pick the libtpu build.
+
+# Torch (CPU wheel). torchax only uses torch for its mode/dispatch
+# machinery and pytree; we do NOT want the CUDA build.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.5,<3.0
+
+# JAX. torchax's interop.py uses `jax.shard_map` at the top level, which
+# exists from jax 0.8.0. Gemma 4 E4B was released 2026-04; use a recent jax.
+jax[tpu]>=0.8.0
+
+# torchax — use the wiki's submodule checkout (commit 8f957d1) directly.
+# Installed out-of-band via `pip install -e ../../../../raw/code/torchax`
+# since pip doesn't resolve relative paths inside requirements.txt.
+# (Previously tried git+https URL; the repo is google/torchax, not
+# pytorch/xla — the submodule is the source of truth here.)
+# torchax
+
+# Transformers must ship Gemma 4. The config.json we inspected carries
+# `transformers_version: 5.5.0.dev0` — Gemma 4 support is on main, not on
+# a stable tag yet (as of 2026-04-22). Install from main.
+transformers @ git+https://github.com/huggingface/transformers.git
+
+# Dataset loader.
+datasets>=3.0
+
+# Optimizer.
+optax>=0.2.0
+
+# YAML config support (optional; only needed if you pass --config).
+pyyaml>=6.0
+
+# HF auth helpers (model card says Apache-2.0 / not gated but you still
+# need to be logged in to hit HF rate-limits cleanly).
+huggingface_hub>=0.24

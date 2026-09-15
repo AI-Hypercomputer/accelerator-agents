@@ -1,0 +1,16 @@
+{
+  "session_id": "session-qwen3.5-397b-rl",
+  "model_name": "Qwen/Qwen3.5-397B-RL",
+  "tpu_vm": "localhost",
+  "execution_backend": "xpk",
+  "chip_count": 1024,
+  "mesh_shape": [
+    8,
+    8,
+    16
+  ],
+  "kv_cache_dtype": "fp8",
+  "primary_metric": "tokens_per_sec_per_chip",
+  "baseline_throughput": null,
+  "status": "active"
+}

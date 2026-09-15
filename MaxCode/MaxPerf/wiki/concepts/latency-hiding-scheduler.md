@@ -1,0 +1,33 @@
+---
+title: "Latency-Hiding Scheduler"
+type: concept
+tags: [stub, compiler, optimization]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 1
+---
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
+
+XLA scheduling pass enabled via `--xla_tpu_enable_latency_hiding_scheduler`; overlaps collectives with compute.
+
+*Stub — expand when a hypothesis or experiment needs this concept in depth.*
+
+## See also
+
+- [Async Collectives](async-collectives.md)
+- [XLA Flags](xla-flags.md)
+- [Collective Communication](collective-communication.md)
+- [Send/Recv-Done Quartet](send-recv-done.md)
+- [FSDP (Fully Sharded Data Parallelism)](fsdp.md)
+
+## Sources
+
+- [xprof-mcp TPU optimization guide](../sources/2026-xprof-mcp-tpu-optimization.md) — `raw/code/xprof-mcp/docs/TPU_OPTIMIZATION.md`

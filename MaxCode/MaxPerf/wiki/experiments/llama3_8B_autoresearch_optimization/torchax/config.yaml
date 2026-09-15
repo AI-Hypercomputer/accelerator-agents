@@ -1,0 +1,17 @@
+# Default config for Llama 3 8B torchax baseline.
+# Loaded by `train.py --config config.yaml`. CLI flags override these.
+
+model_id: meta-llama/Meta-Llama-3-8B
+dataset: wikitext-2-raw-v1
+seq_len: 2048
+batch_size: 1
+steps: 20
+learning_rate: 1.0e-5
+warmup_steps: 2
+dp: 1
+tp: 4
+strategy: fsdp
+dtype: bf16
+log_every: 1
+grad_accum: 1
+seed: 42

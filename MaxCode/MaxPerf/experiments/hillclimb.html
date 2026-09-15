@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MaxPerf / MaxShard Hill-Climb Trajectory</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 40px; background: #0f172a; color: #f8fafc; }
+    .container { max-width: 1000px; margin: 0 auto; background: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    h1 { color: #38bdf8; margin-top: 0; }
+    .chart-box { position: relative; height: 450px; width: 100%; margin-top: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #334155; }
+    th { background: #0f172a; color: #94a3b8; font-weight: 600; }
+    .accepted { color: #4ade80; font-weight: bold; }
+    .rejected { color: #f87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🚀 MaxPerf Optimization Trajectory (Hill-Climb)</h1>
+    <p>Performance progression over optimization iterations.</p>
+
+    <div class="chart-box">
+      <canvas id="hillclimbChart"></canvas>
+    </div>
+
+    <h2>Experiment History</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Slug</th>
+          <th>Class</th>
+          <th>Agent</th>
+          <th>Verdict</th>
+          <th>TPS/Chip</th>
+          <th>p50 TPOT (ms)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>20260603-eliminate-ep-all2all</code></td>
+          <td>graph-rewrite</td>
+          <td>MaxShard</td>
+          <td class="rejected">rejected</td>
+          <td><b>18.53</b></td>
+          <td>12.81</td>
+        </tr>
+        <tr>
+          <td><code>20260603-fuse-ep-backward</code></td>
+          <td>graph-rewrite</td>
+          <td>MaxShard</td>
+          <td class="rejected">rejected</td>
+          <td><b>18.53</b></td>
+          <td>12.81</td>
+        </tr>
+        <tr>
+          <td><code>20260603-attention-greedy-binpacking</code></td>
+          <td>graph-rewrite</td>
+          <td>MaxShard</td>
+          <td class="rejected">rejected</td>
+          <td><b>18.53</b></td>
+          <td>12.81</td>
+        </tr>
+        <tr>
+          <td><code>20260603-gmm-latch-bound</code></td>
+          <td>kernel-autotune</td>
+          <td>MaxTile</td>
+          <td class="rejected">rejected</td>
+          <td><b>18.53</b></td>
+          <td>12.81</td>
+        </tr>
+        <tr>
+          <td><code>20260603-attention-latency-balancing</code></td>
+          <td>kernel-autotune</td>
+          <td>MaxTile</td>
+          <td class="rejected">rejected</td>
+          <td><b>18.53</b></td>
+          <td>12.81</td>
+        </tr>
+        <tr>
+          <td><code>20260603-dataclass-moe-config</code></td>
+          <td>code-refactor</td>
+          <td>AutoRefactor</td>
+          <td class="rejected">rejected</td>
+          <td><b>18.53</b></td>
+          <td>12.81</td>
+        </tr>
+        <tr>
+          <td><code>20260603-replace-python-if-routing</code></td>
+          <td>code-refactor</td>
+          <td>AutoRefactor</td>
+          <td class="rejected">rejected</td>
+          <td><b>18.53</b></td>
+          <td>12.81</td>
+        </tr>
+        <tr>
+          <td><code>align-mlp-padding-1024</code></td>
+          <td>kernel-autotune</td>
+          <td>TPUDiagnose</td>
+          <td class="accepted">accepted</td>
+          <td><b>1608.43</b></td>
+          <td>9.32</td>
+        </tr>
+        <tr>
+          <td><code>20260630-optimized_run</code></td>
+          <td>kernel-autotune</td>
+          <td>TPUDiagnose</td>
+          <td class="accepted">accepted</td>
+          <td><b>1571.19</b></td>
+          <td>9.41</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    const ctx = document.getElementById('hillclimbChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: ["20260603-eliminate-ep-all2all", "20260603-fuse-ep-backward", "20260603-attention-greedy-binpacking", "20260603-gmm-latch-bound", "20260603-attention-latency-balancing", "20260603-dataclass-moe-config", "20260603-replace-python-if-routing", "align-mlp-padding-1024", "20260630-optimized_run"],
+        datasets: [{
+          label: 'Throughput (TPS/Chip)',
+          data: [18.53, 18.53, 18.53, 18.53, 18.53, 18.53, 18.53, 1608.43, 1571.19],
+          borderColor: '#38bdf8',
+          backgroundColor: 'rgba(56, 189, 248, 0.1)',
+          borderWidth: 3,
+          fill: true,
+          tension: 0.2,
+          pointRadius: 6,
+          pointBackgroundColor: ["#f87171", "#f87171", "#f87171", "#f87171", "#f87171", "#f87171", "#f87171", "#4ade80", "#4ade80"]
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            grid: { color: '#334155' },
+            ticks: { color: '#94a3b8' }
+          },
+          x: {
+            grid: { color: '#334155' },
+            ticks: { color: '#94a3b8' }
+          }
+        },
+        plugins: {
+          legend: { labels: { color: '#f8fafc' } }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

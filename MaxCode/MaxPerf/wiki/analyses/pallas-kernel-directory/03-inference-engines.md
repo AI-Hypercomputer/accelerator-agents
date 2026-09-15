@@ -1,0 +1,140 @@
+---
+title: "Pallas kernel directory — §3 Production LLM inference engines"
+type: analysis
+tags: [directory, pallas, kernels, vllm, sglang, aphrodite, inference]
+created: 2026-04-23
+updated: 2026-04-23
+---
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
+
+Catalog of Pallas kernels in three open-source LLM serving engines targeting TPU: vLLM's TPU backend, SGLang's JAX port, and Aphrodite (a vLLM fork). All three serve production traffic; kernels here sit on the critical token-generation path. **Dependency topology is sharp: [vllm-project/tpu-inference](https://github.com/vllm-project/tpu-inference) is the authoritative kernel author; [sgl-project/sglang-jax](https://github.com/sgl-project/sglang-jax) vendors most of its kernels with SGLang-specific extensions; [aphrodite-engine/aphrodite-engine](https://github.com/aphrodite-engine/aphrodite-engine) is effectively a consumer, not an author (one small KV-cache-update kernel).** Part of [2026-04-23 Pallas kernel directory](../2026-04-23-pallas-kernel-directory.md).
+
+## 3.1 vllm-project/tpu-inference
+
+The most comprehensive Pallas kernel collection among the three. All `mosaic_tpu`, Apache-2.0. Ships extensive `tuned_block_sizes.py` dictionaries per kernel and a per-hardware support matrix (`support_matrices/{release,nightly}/{v6e,v7x}/{default,flax_nnx,vllm}/kernel_support_matrix.csv`). README recommends v7x (Ironwood), v5e, v6e; v3/v4/v5p experimental.
+
+| Kernel | Source path | Backend | Stability | Performance claims | Use case | Used by / callers | Notes |
+|---|---|---|---|---|---|---|---|
+| `ragged_paged_attention` v3 | [ragged_paged_attention/v3/kernel.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/ragged_paged_attention/v3/kernel.py) | `mosaic_tpu` | stable | **Tuned block-size table** for TPU v6e + v7, page_size ∈ {128, 256}, keyed by `q_head × kv_head × head_dim × max_model_len × sliding_window`. Hundreds of entries. | Ragged paged attention supporting mixed prefill+decode; default attention path | `tpu_inference/layers/**` via `torch.ops.xla.ragged_paged_attention`; also called from aphrodite | **Novel.** Three pallas_calls split (DECODE/PREFILL/MIXED); per-bq l/m/acc reinit; precise sliding-window skipping |
+| `ragged_paged_attention` v3 hd64 | [v3/kernel_hd64.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/ragged_paged_attention/v3/kernel_hd64.py) + [tuned_block_sizes_hd64.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/ragged_paged_attention/v3/tuned_block_sizes_hd64.py) | `mosaic_tpu` | stable (microbench'd separately in `.buildkite/kernel_microbenchmarks/ragged_paged_attention_v3_head_dim_64`) | Separate tuned table for head_dim=64 | RPA specialized for small head dims (Gemma-class) | Attention dispatcher when `head_dim == 64` | **Novel** specialization |
+| `ragged_paged_attention` v2 | [v2/kernel.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/ragged_paged_attention/v2/kernel.py) + [v2/tuned_block_sizes.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/ragged_paged_attention/v2/tuned_block_sizes.py) | `mosaic_tpu` | stable | ~**1,200 tuned entries** across TPU v5 + v6, keyed by `(q_dtype, kv_dtype, q_head, kv_head, head_dim, page_size, max_context, max_seq)` → `(kv_pages_per_block, queries_per_block)` | Prior-generation RPA; still used on v5e | Attention backends on older TPU generations | **Novel** |
+| `ragged_kv_cache_update` | [v2/ragged_kv_cache_update.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/ragged_paged_attention/v2/ragged_kv_cache_update.py) | `mosaic_tpu` | stable | — | Paired with RPA v2; packs ragged new-KV into paged cache via async DMAs | RPA v2 attention path | **Novel** |
+| `mla_ragged_paged_attention` v1 | [mla/v1/kernel.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/mla/v1/kernel.py) | `mosaic_tpu` | stable (microbench `kernel_microbenchmarks/mla`) | TODO note about future autotuning table; currently heuristic | Multi-Head Latent Attention for DeepSeek-V2/V3-class models | DeepSeek-family attention path | **Novel.** Supports mixed prefill/decode |
+| `mla_ragged_paged_attention` v2 | [mla/v2/kernel.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/mla/v2/kernel.py) | `mosaic_tpu` | stable | Improved pipelining + double-buffering | MLA v2 — successor with better VMEM management | Same dispatch as v1 via version flag | **Novel** |
+| `flash_attention` | [flash_attention/kernel.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/flash_attention/kernel.py) | `mosaic_tpu` | stable | SegmentIds-based causal masking; no explicit perf table | Dense flash attention for non-paged paths (training-style / prefill) | Fallback and by experimental `batched_rpa` | **Vendored** (closely derived from [jax-ml/jax flash_attention](https://github.com/jax-ml/jax/blob/main/jax/experimental/pallas/ops/tpu/flash_attention.py); no attribution header but API identical). Dao et al. 2022 algorithm |
+| `megablox_gmm` | [megablox/gmm.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/megablox/gmm.py) | `mosaic_tpu` | stable | **47-entry tuned table** keyed by `(m, k, n, num_groups, shard_groups, lhs_dtype, rhs_dtype, quant_block)` → `(tm, tk, tn)`; all bf16×fp8_e4m3fn | Grouped matmul for MoE experts | `fused_moe` v1 + MoE layer dispatch | **Vendored from jax-ml/jax megablox** (no attribution header but name + signature match) |
+| `megablox_gmm_v2` | [megablox/gmm_v2.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/megablox/gmm_v2.py) + [megablox/tuned_block_sizes.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/megablox/tuned_block_sizes.py) | `mosaic_tpu` | stable | Same tuning dict as gmm | MoE grouped matmul v2 (quantized-friendly) | MoE expert compute | Vendored / adapted |
+| `fused_moe` v1 | [fused_moe/v1/kernel.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/fused_moe/v1/kernel.py) + [v1/tuned_block_sizes.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/fused_moe/v1/tuned_block_sizes.py) | `mosaic_tpu` | stable (tuned-table comment: "formulas only applied to tpu-v7; need more for other generations") | **28 tuned entries**, v7-tuned. 8-tuple keys `(hidden, intermediate, n_experts, topk, ep_ratio, tp_ratio, tokens, sharding)` | Fused expert routing + two GMMs for MoE | Qwen3-MoE, Mixtral, Llama4-MoE; v7-primary | **Novel** |
+| `quantized_matmul` (blockwise) | [quantized_matmul/kernel.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/quantized_matmul/kernel.py) + [blockwise_kernel.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/quantized_matmul/blockwise_kernel.py) + [tuned_block_sizes.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/quantized_matmul/tuned_block_sizes.py) | `mosaic_tpu` | stable | **600+ tuned entries** keyed by `(tpu_ver, m, n, k, lhs_dtype, rhs_dtype)`; **v6 uses 96 MiB VMEM budget, v7 uses 48 MiB**; covers int8×int8, fp8_e4m3fn×fp8_e4m3fn | Weight-quantized linear layers (W8A8, W4A16, W8A16, FP8) | All linear layers with quantized weights; w16a16 baseline also dispatched here | **Novel.** Zero-point / subchannel quant explicitly `NotImplementedError` |
+| `all_gather_matmul` | [collectives/all_gather_matmul.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/collectives/all_gather_matmul.py) + [all_gather_matmul_tuned_block_sizes.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/collectives/all_gather_matmul_tuned_block_sizes.py) | `mosaic_tpu` | stable | Microbench'd across weight dtypes (w16a16…w4a4). Pipelines remote-copy, HBM→VMEM DMA, MXU compute with semaphores | Fuses TP all-gather with the matmul it feeds, hiding collective latency | Tensor-parallel FFN / QKV projections across TP dim | **Novel.** Constraints: k,n divisible by 128; m divisible by `tp_size*2*8` |
+| `fused_gdn_decode` + `fused_gdn_recurrent` + `triangle_solver` | [gdn/fused_gdn_decode_kernel.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/gdn/fused_gdn_decode_kernel.py), [fused_gdn_recurrent_kernel.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/gdn/fused_gdn_recurrent_kernel.py), [triangle_solver.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/gdn/triangle_solver.py) | `mosaic_tpu` | stable (dedicated test `tests/kernels/fused_gdn_kernel_test.py`) | `emit_pipeline`-based q/k/v/g/b tiling; bulk manual DMA for state load/store | Gated Delta Net attention (Qwen-Next / hybrid SSM-attention models) | GDN attention path | **Novel.** References Qwen-family GDN |
+| `sparse_core` gather/scatter | [sparse_core/ragged_gather.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/sparse_core/ragged_gather.py), [ragged_scatter.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/sparse_core/ragged_scatter.py), [gather_reduce.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/sparse_core/gather_reduce.py) | `mosaic_tpu` (plsc / `VectorSubcoreMesh`) | experimental — explicit fallback: "Sparse core is not available. Fallback to regular gather" | — | Offload gather/scatter/embedding-lookup to TPU SparseCore (v5p/v7x feature) | Embedding lookup, MoE token routing where SC available | **Novel** and hardware-gated. SC present on v5p + v7x; absent on v5e/v6e |
+| `structured_sparse_matmul` v1 | [structured_sparse_matmul/v1/spmm.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/structured_sparse_matmul/v1/spmm.py) | `mosaic_tpu` | experimental (TODOs: int4, subelement masking, pack/unpack) | "performance benefits limited to memory-bound workloads" (software-emulated N:M sparsity) | N:M structured-sparse matmul (M ≤ 16), f32/bf16/int8, LHS- or RHS-sparse | Not yet wired to a default model path — proof-of-concept | **Novel** |
+| `batched_rpa` | [experimental/batched_rpa/kernel.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/experimental/batched_rpa/kernel.py) (+ schedule.py, wrapper.py, flash_attention.py) | `mosaic_tpu` | **experimental** — `__init__.py`: "all of the code in this directory is experimental and not fully tested"; gated on `USE_BATCHED_RPA_KERNEL=1` | "Please tune `fuse_accum` for your use case"; scheduling-barrier caveat around accumulation in prefill | Batched ragged paged attention using a scheduler to amortize dispatch across the batch | Off by default | **Novel.** Includes a repo-local `flash_attention.py` variant |
+
+**Block-size tables summary** (all under `tpu_inference/kernels/`):
+
+| Kernel | File | TPU versions | Entries |
+|---|---|---|---|
+| RPA v2 | [`ragged_paged_attention/v2/tuned_block_sizes.py`](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/ragged_paged_attention/v2/tuned_block_sizes.py) | v5, v6 | ~1,200 |
+| RPA v3 | [`ragged_paged_attention/v3/tuned_block_sizes.py`](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/ragged_paged_attention/v3/tuned_block_sizes.py) | v6e, v7 | hundreds |
+| RPA v3 hd64 | [`ragged_paged_attention/v3/tuned_block_sizes_hd64.py`](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/ragged_paged_attention/v3/tuned_block_sizes_hd64.py) | v6e, v7 | tens |
+| quantized_matmul | [`quantized_matmul/tuned_block_sizes.py`](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/quantized_matmul/tuned_block_sizes.py) | v6, v7 | 600+ |
+| megablox gmm/v2 | [`megablox/tuned_block_sizes.py`](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/megablox/tuned_block_sizes.py) | dtype-keyed | 47 |
+| fused_moe v1 | [`fused_moe/v1/tuned_block_sizes.py`](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/fused_moe/v1/tuned_block_sizes.py) | **v7 only** | 28 |
+| all_gather_matmul | [`collectives/all_gather_matmul_tuned_block_sizes.py`](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/kernels/collectives/all_gather_matmul_tuned_block_sizes.py) | v5e/v6e/v7x | microbench-driven |
+
+Per-hardware support CSVs live in `support_matrices/{release,nightly}/{v6e,v7x}/{default,flax_nnx,vllm}/kernel_support_matrix.csv`.
+
+## 3.2 sgl-project/sglang-jax
+
+For attention/MoE/quant kernels, **a vendored subset of vllm-project/tpu-inference with SGLang-specific extensions** (speculative-decoding trees, custom masks, multimodal flash attention, GLA). Every major kernel file carries either an "Adapted from https://github.com/vllm-project/tpu-inference" header or equivalent note. Apache-2.0.
+
+| Kernel | Source path | Backend | Stability | Perf claims | Use case | Callers | Notes |
+|---|---|---|---|---|---|---|---|
+| `ragged_paged_attention` v2 | [kernels/ragged_paged_attention/ragged_paged_attention.py](https://github.com/sgl-project/sglang-jax/blob/main/python/sgl_jax/srt/kernels/ragged_paged_attention/ragged_paged_attention.py) | `mosaic_tpu` | stable | Header: "Adapted from…tpu-inference/releases/tag/v0.11.1" | Mixed prefill/decode attention | Default attention backend | **Vendored** from vllm tpu-inference |
+| `ragged_paged_attention` v3 | [kernels/ragged_paged_attention/ragged_paged_attention_v3.py](https://github.com/sgl-project/sglang-jax/blob/main/python/sgl_jax/srt/kernels/ragged_paged_attention/ragged_paged_attention_v3.py) | `mosaic_tpu` | stable | Docstring lists v3 optimizations + SGLang-specific extras: **custom_mask** (spec decoding), **attention_sink** (streaming), **xai_temperature** (Grok), **cu_kv_lens**-based page_indices | Primary attention path on v6e/v7 | SGLang attention backend; spec-decode path uses custom_mask | Vendored from tpu-inference v0.11.1 **+ genuine SGLang-specific modifications** — one of few places sglang-jax diverges non-trivially |
+| RPA tuned block sizes | [kernels/ragged_paged_attention/tuned_block_sizes.py](https://github.com/sgl-project/sglang-jax/blob/main/python/sgl_jax/srt/kernels/ragged_paged_attention/tuned_block_sizes.py) | data | — | **~2,000+ entries** across TPU v5, v6e, v7. "TPU version must be 4 or higher"; special v4 small-memory case | Driver table for both RPA variants | Both RPA kernels | Vendored / extended — **largest tuning table found in any ingested repo** |
+| `paged_attention` | [kernels/paged_attention/paged_attention.py](https://github.com/sgl-project/sglang-jax/blob/main/python/sgl_jax/srt/kernels/paged_attention/paged_attention.py) | `mosaic_tpu` | stable | Header: "Copyright 2023 The JAX Authors" + "Modifications by Yanko (@Yanko-7)": SPMD via `shard_map`, `xai_temperature_len`, `sm_scale` | Non-ragged paged attention (uniform lengths) | Fallback / research runs | **Vendored** from JAX with SPMD extensions |
+| `megablox_gmm` | [kernels/gmm/megablox_gmm_kernel/gmm.py](https://github.com/sgl-project/sglang-jax/blob/main/python/sgl_jax/srt/kernels/gmm/megablox_gmm_kernel/gmm.py) | `mosaic_tpu` | stable | Header: "Adapted from…tpu-inference…megablox/gmm.py" | Grouped matmul for MoE | sgl-jax MoE dispatch (`megablox_gmm_backend.py`) | Vendored |
+| `megablox_gmm_v2` | [kernels/gmm/megablox_gmm_kernel/gmm_v2.py](https://github.com/sgl-project/sglang-jax/blob/main/python/sgl_jax/srt/kernels/gmm/megablox_gmm_kernel/gmm_v2.py) + [tuned_block_sizes.py](https://github.com/sgl-project/sglang-jax/blob/main/python/sgl_jax/srt/kernels/gmm/megablox_gmm_kernel/tuned_block_sizes.py) | `mosaic_tpu` | stable | Same tuning dict shape as upstream | MoE grouped matmul | MoE layer | Vendored |
+| `fused_moe` v1 | [kernels/fused_moe/v1/kernel.py](https://github.com/sgl-project/sglang-jax/blob/main/python/sgl_jax/srt/kernels/fused_moe/v1/kernel.py) + [v1/tuned_block_configs.py](https://github.com/sgl-project/sglang-jax/blob/main/python/sgl_jax/srt/kernels/fused_moe/v1/tuned_block_configs.py) | `mosaic_tpu` | stable | Header: "Adapted from…tpu-inference…fused_moe/v1/kernel.py" | Full MoE fused kernel | Qwen3-MoE, Mixtral, Bailling-MoE | Vendored |
+| `quantized_matmul` blockwise | [kernels/quantized_matmul/quantized_matmul_kernels/blockwise_kernel.py](https://github.com/sgl-project/sglang-jax/blob/main/python/sgl_jax/srt/kernels/quantized_matmul/quantized_matmul_kernels/blockwise_kernel.py) + `tuned_block_sizes.py`, `kernel.py` | `mosaic_tpu` | stable | Header: "Adapted from…tpu-inference…quantized_matmul/blockwise_kernel.py" | Weight-quantized matmul (subchannel blockwise) | Quantized linear layers | Vendored |
+| `update_kv_cache` | [kernels/update_kv_cache/update_kv_cache.py](https://github.com/sgl-project/sglang-jax/blob/main/python/sgl_jax/srt/kernels/update_kv_cache/update_kv_cache.py) + `tuned_block_sizes.py` | `mosaic_tpu` | stable | VMEM budget 64 MB; async-DMA prefetch. Adapted from tpu-inference | Pack new-KV into paged cache | Attention prefill/decode | Vendored |
+| `simple_gla` (fused_recurrent + chunked) | [kernels/simple_gla/simple_gla.py](https://github.com/sgl-project/sglang-jax/blob/main/python/sgl_jax/srt/kernels/simple_gla/simple_gla.py) | `mosaic_tpu` | stable-vendored | Header: "Adapted from https://github.com/primatrix/pallas-kernel (rev 41431b1, release/v0.4) — Vendored to remove external dependency after the upstream repository went private." Merges tops/utils, fused_recurrent, chunk_h, chunk_o into one file | Gated Linear Attention (GLA) for SSM-style models | GLA model paths | **Vendored from a now-private `primatrix/pallas-kernel` repo** — noteworthy provenance risk: upstream is inaccessible |
+| `tree_speculative_sampling_target_only` | [kernels/speculative/tree_speculative_sampling_target_only_kernel.py](https://github.com/sgl-project/sglang-jax/blob/main/python/sgl_jax/srt/kernels/speculative/tree_speculative_sampling_target_only_kernel.py) | `mosaic_tpu` | experimental (no docstring / license header) | — | EAGLE-style tree speculative sampling acceptance | Spec-decode runtime | **Novel to sgl-jax** |
+| `build_eagle_tree_structure` | [kernels/speculative/build_eagle_tree_structure_kernel.py](https://github.com/sgl-project/sglang-jax/blob/main/python/sgl_jax/srt/kernels/speculative/build_eagle_tree_structure_kernel.py) | `mosaic_tpu` | experimental | — | Build EAGLE draft-tree structure on-device | EAGLE draft model | **Novel** |
+| `verify_tree_greedy` | [kernels/speculative/verify_tree_greedy_kernel.py](https://github.com/sgl-project/sglang-jax/blob/main/python/sgl_jax/srt/kernels/speculative/verify_tree_greedy_kernel.py) | `mosaic_tpu` | experimental | — | Greedy tree verification for drafts | EAGLE verification | **Novel** |
+| Multimodal `flash_attention` | [multimodal/kernels/flash_attention.py](https://github.com/sgl-project/sglang-jax/blob/main/python/sgl_jax/srt/multimodal/kernels/flash_attention.py) + [tuned_block_sizes.py](https://github.com/sgl-project/sglang-jax/blob/main/python/sgl_jax/srt/multimodal/kernels/tuned_block_sizes.py) + `get_block_spec_config.py` | `mosaic_tpu` | stable | Header: "adapted from https://github.com/jax-ml/jax/blob/main/jax/experimental/pallas/ops/tpu/flash_attention.py". Ships own block-spec config file | Flash attention for vision/multimodal encoders (non-paged, dense) | Vision tower of VL models (Qwen-VL etc.) | **Vendored directly from jax-ml/jax** (not via vllm) |
+
+**Performance claims:** README qualitative ("exceptional throughput", "low latency"); no numeric benchmarks. Notes among supported models, only **Qwen 3 / Qwen 3 MoE** have "achieved our best performance"; Qwen 2, Llama, Bailling-MoE, MiMo-7B still need optimization. `benchmark/kernels/` microbenches exist.
+
+## 3.3 aphrodite-engine/aphrodite-engine
+
+Primarily a **vLLM fork focused on GPU serving**, minimal TPU surface. **License: AGPL-3.0** — carries network-copyleft obligations if kernels re-vendored downstream.
+
+| Kernel | Source path | Backend | Stability | Perf claims | Use case | Callers | Notes |
+|---|---|---|---|---|---|---|---|
+| `kv_cache_update` | [aphrodite/attention/ops/pallas_kv_cache_update.py](https://github.com/aphrodite-engine/aphrodite-engine/blob/main/aphrodite/attention/ops/pallas_kv_cache_update.py) | `mosaic_tpu` | stable (thin — one kernel, one wrapper) | No docstrings, no license header in-file. Uses semaphore-synchronized async DMAs; head_dim must be divisible by 128. Two-stage HBM→scratch→HBM | Pack ragged new-KV into paged KV cache | [`aphrodite/v1/attention/backends/pallas.py`](https://github.com/aphrodite-engine/aphrodite-engine/blob/main/aphrodite/v1/attention/backends/pallas.py) registers it as `kv_cache_update_op` XLA custom op | **Tiny kernel** (novel or vendored from vLLM mainline). Only in-tree Pallas kernel |
+
+Non-Pallas TPU integrations:
+
+- [`aphrodite/v1/attention/backends/pallas.py`](https://github.com/aphrodite-engine/aphrodite-engine/blob/main/aphrodite/v1/attention/backends/pallas.py) — despite filename, is an **XLA custom-kernel wrapper**. Calls `torch.ops.xla.ragged_paged_attention`, which is registered by `torch_xla.experimental.custom_kernel` (ultimately the vllm-project/tpu-inference RPA kernel).
+- [`aphrodite/modeling/layers/fused_moe/moe_pallas.py`](https://github.com/aphrodite-engine/aphrodite-engine/blob/main/aphrodite/modeling/layers/fused_moe/moe_pallas.py) — dispatches to `torch.ops.xla.gmm` (backed by megablox via torch_xla). Constraint: `num_tokens * topk` must be a multiple of 16.
+- [`aphrodite/quantization/tpu_int8.py`](https://github.com/aphrodite-engine/aphrodite-engine/blob/main/aphrodite/quantization/tpu_int8.py), [`aphrodite/v1/sample/tpu/sampler.py`](https://github.com/aphrodite-engine/aphrodite-engine/blob/main/aphrodite/v1/sample/tpu/sampler.py), [`aphrodite/v1/worker/tpu_model_runner.py`](https://github.com/aphrodite-engine/aphrodite-engine/blob/main/aphrodite/v1/worker/tpu_model_runner.py) — framework plumbing, not Pallas kernels.
+
+## Cross-repo observations
+
+**Vendoring graph.**
+
+- **jax-ml/jax** (`experimental/pallas/ops/tpu/flash_attention.py`, megablox family) → upstream for `flash_attention` and `megablox_gmm`/`gmm_v2`.
+- **vllm-project/tpu-inference** → authoritative reimplementation/extension: RPA v2+v3, MLA v1+v2, fused_moe v1, quantized_matmul blockwise, all_gather_matmul, GDN, SparseCore, structured-sparse, batched_rpa. Re-hosts megablox and flash_attention without explicit attribution headers.
+- **sgl-project/sglang-jax** → vendors from vllm tpu-inference for nearly every kernel (RPA v2/v3, fused_moe v1, megablox gmm/v2, quantized_matmul blockwise, update_kv_cache). Vendors `flash_attention` directly from jax-ml/jax (separate path for multimodal). Genuinely novel contributions: **speculative-decoding tree kernels** (`tree_speculative_sampling_target_only`, `build_eagle_tree_structure`, `verify_tree_greedy`) and the sgl-jax-specific RPA v3 knobs (custom_mask, attention_sink, xai_temperature). `simple_gla` vendored from **now-private `primatrix/pallas-kernel` repo** — provenance concern.
+- **aphrodite-engine/aphrodite-engine** → one in-tree Pallas kernel; everything else delegates through torch_xla custom ops. Effectively a consumer.
+
+**Novel-vs-vendored for deep follow-up:**
+
+- In vllm-project/tpu-inference: RPA v3 (+ hd64), MLA v1/v2, fused_moe v1, quantized_matmul blockwise, all_gather_matmul, fused_gdn, sparse_core, structured_sparse_matmul v1, batched_rpa.
+- In sglang-jax: speculative-decoding tree kernels + RPA v3 customizations.
+- In aphrodite: pallas_kv_cache_update — stripped version of what tpu-inference does more thoroughly; low deep-follow-up value.
+
+**Tuned block-size tables — crown jewels.** Ranked by entries:
+
+1. sglang-jax RPA tuned_block_sizes — ~2,000+ entries across v5, v6e, v7.
+2. tpu-inference RPA v2 tuned_block_sizes — ~1,200 entries (v5, v6).
+3. tpu-inference quantized_matmul tuned_block_sizes — 600+ entries (v6 96 MiB VMEM, v7 48 MiB VMEM).
+4. tpu-inference RPA v3 tuned_block_sizes + hd64 — hundreds (v6e, v7).
+5. tpu-inference megablox tuned_block_sizes — 47 entries (bf16×fp8_e4m3fn).
+6. tpu-inference fused_moe v1 tuned_block_sizes — 28 entries, **v7-only** with a comment flagging that v5/v6 formulas are still needed.
+7. sglang-jax multimodal tuned_block_sizes — separate multimodal table.
+8. tpu-inference all_gather_matmul tuned_block_sizes — microbench-driven across weight dtypes.
+
+These are the closest things to "autotune-result files" in the ecosystem and are directly usable priors. VMEM budgets baked in (96 MiB on v6, 48 MiB on v7 for quantized_matmul; 100 MB default in RPA; 64 MB in update_kv_cache) are worth recording as concept-level facts.
+
+**Hardware support matrix.** tpu-inference CSVs under `support_matrices/` cover **v6e** and **v7x** in three build flavors (default / flax_nnx / vllm), plus microbench CSV. README recommends v7x (Ironwood), v5e, v6e; v3/v4/v5p experimental. sglang-jax supports v4+ per its RPA tuning file (v4 special-cased for small memory). SparseCore-based kernels are v5p/v7x-only (v6e/v5e lack SC).
+
+**License caveat.** aphrodite-engine is **AGPL-3.0** — vendoring into a non-AGPL codebase or serving as a network service without source disclosure is a compliance problem. Others are Apache-2.0, freely mixable.
+
+**Stability signals.** Explicit experimental markers: tpu-inference `experimental/batched_rpa/__init__.py` ("all of the code in this directory is experimental and not fully tested"); `structured_sparse_matmul` (open TODOs); `sparse_core` (fallback-to-regular-gather when SC absent). sglang-jax speculative kernels lack docstrings / license headers. All three RPAs, fused_moe v1, quantized_matmul blockwise, megablox gmm/v2, and all_gather_matmul are production-stable in tpu-inference — microbenched in `.buildkite/kernel_microbenchmarks/`.
+
+**Relevant absent files.** Neither tpu-inference nor sglang-jax README publishes numeric tok/s or MFU targets; performance priors must come from `.buildkite/kernel_microbenchmarks/*.yml` CI artifacts rather than in-repo prose.
+
+## Sources
+
+- Web-research agent, 2026-04-23.
+- Repos main branches at catalog time.
+
+## See also
+
+- [Directory main page](../2026-04-23-pallas-kernel-directory.md)
+- §1 [Upstream JAX + tokamax](01-upstream-jax-tokamax.md)
+- §2 [AI-Hypercomputer stacks](02-ai-hypercomputer.md)
+- §5 [Frameworks & quantization](05-frameworks-quant.md) (pytorch/xla consumes these via torch_xla custom ops)

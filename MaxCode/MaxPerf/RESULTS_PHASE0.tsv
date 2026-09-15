@@ -1,0 +1,5 @@
+Exp ID	Block Size	KV Dtype	TP Size	Max Seqs	TPS/Chip	p50 TTFT	p50 TPOT	Status
+000	256	fp8	8	128	1087.50	54.20	11.20	Initial Baseline
+001	256	fp8	8	128	1608.43	45.49	9.32	H-001 Promoted (MLP Aligned)
+002	256	fp8	8	128	1608.43	45.49	9.32	H-002 Retained Default (16, 128)
+003	256	fp8	8	128	1304.69	6952.58	12.03	Refuted (H-003 Offline Replication)

@@ -1,0 +1,10 @@
+# Native-JAX Gemma 4 trainer — requirements.
+# (The TPU jax wheels are installed via the conda env `gemma4_py313`.)
+jax>=0.6
+flax>=0.12
+optax>=0.2
+transformers>=5.0
+safetensors>=0.4
+datasets>=2.20
+huggingface_hub>=0.25
+pyyaml

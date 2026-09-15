@@ -1,0 +1,100 @@
+{"prompt_id": 0, "text": "Write a Python function that returns the n-th Fibonacci number using memoization.", "max_tokens": 256}
+{"prompt_id": 1, "text": "Implement a binary search function in Rust that returns the index or None if not found.", "max_tokens": 256}
+{"prompt_id": 2, "text": "Convert this JSON: {\"name\":\"Alice\",\"age\":30} to a Python dataclass.", "max_tokens": 256}
+{"prompt_id": 3, "text": "Write a SQL query to find the second-highest salary in an employees table.", "max_tokens": 256}
+{"prompt_id": 4, "text": "Explain what a hash collision is in two sentences.", "max_tokens": 256}
+{"prompt_id": 5, "text": "Implement an LRU cache in Python with O(1) get and put operations.", "max_tokens": 256}
+{"prompt_id": 6, "text": "Write a Bash one-liner to find all .log files modified in the last 7 days.", "max_tokens": 256}
+{"prompt_id": 7, "text": "Translate this Go function to TypeScript: func add(a, b int) int { return a + b }", "max_tokens": 256}
+{"prompt_id": 8, "text": "What is the time complexity of merging two sorted linked lists of size n and m?", "max_tokens": 256}
+{"prompt_id": 9, "text": "Write a regex that matches IPv4 addresses but rejects leading zeros in octets.", "max_tokens": 256}
+{"prompt_id": 10, "text": "Implement Dijkstra's algorithm for a weighted graph using a heap.", "max_tokens": 256}
+{"prompt_id": 11, "text": "Refactor this nested loop into a single list comprehension: [x*y for x in range(10) for y in range(10) if x != y]", "max_tokens": 256}
+{"prompt_id": 12, "text": "Explain what a memory barrier does in concurrent programming.", "max_tokens": 256}
+{"prompt_id": 13, "text": "Write a Python decorator that retries a function up to 3 times on exception.", "max_tokens": 256}
+{"prompt_id": 14, "text": "Implement quicksort with a three-way partition for handling duplicates.", "max_tokens": 256}
+{"prompt_id": 15, "text": "What is the difference between TCP and UDP in three bullet points?", "max_tokens": 256}
+{"prompt_id": 16, "text": "Write a Rust function that computes the dot product of two Vec<f32> using iterators.", "max_tokens": 256}
+{"prompt_id": 17, "text": "Convert this regex from PCRE to RE2 compatible syntax: (?<=foo)bar(?=baz)", "max_tokens": 256}
+{"prompt_id": 18, "text": "Implement a thread-safe singleton in Java using double-checked locking.", "max_tokens": 256}
+{"prompt_id": 19, "text": "Write a Python generator that yields prime numbers up to n using the sieve of Eratosthenes.", "max_tokens": 256}
+{"prompt_id": 20, "text": "Explain what makes a function pure in functional programming.", "max_tokens": 256}
+{"prompt_id": 21, "text": "Implement matrix multiplication in NumPy without using np.dot or np.matmul.", "max_tokens": 256}
+{"prompt_id": 22, "text": "Write a SQL query that returns the running total of a sales column ordered by date.", "max_tokens": 256}
+{"prompt_id": 23, "text": "What does the Python @property decorator do?", "max_tokens": 256}
+{"prompt_id": 24, "text": "Implement a basic HTTP server in Go that responds with \"Hello, World!\" on port 8080.", "max_tokens": 256}
+{"prompt_id": 25, "text": "Write a function that detects if a string contains balanced parentheses, brackets, and braces.", "max_tokens": 256}
+{"prompt_id": 26, "text": "Explain the difference between cooperative and preemptive multitasking.", "max_tokens": 256}
+{"prompt_id": 27, "text": "Implement insertion sort and analyze its best, average, and worst case time complexity.", "max_tokens": 256}
+{"prompt_id": 28, "text": "Write a Python script that counts word frequency in a file and prints the top 10.", "max_tokens": 256}
+{"prompt_id": 29, "text": "Convert this REST endpoint to GraphQL: GET /users/:id/posts?limit=10", "max_tokens": 256}
+{"prompt_id": 30, "text": "Implement a simple state machine for a traffic light in Python using enums.", "max_tokens": 256}
+{"prompt_id": 31, "text": "Write a recursive function to compute the depth of a binary tree.", "max_tokens": 256}
+{"prompt_id": 32, "text": "What is tail call optimization and which languages guarantee it?", "max_tokens": 256}
+{"prompt_id": 33, "text": "Implement a producer-consumer queue using Python's threading and queue modules.", "max_tokens": 256}
+{"prompt_id": 34, "text": "Write a SQL query to find users who have not placed an order in the last 30 days.", "max_tokens": 256}
+{"prompt_id": 35, "text": "Explain what a B+ tree is and why databases use it for indexing.", "max_tokens": 256}
+{"prompt_id": 36, "text": "Implement a Bloom filter in Python with configurable size and hash functions.", "max_tokens": 256}
+{"prompt_id": 37, "text": "Write a Rust trait for a generic graph with methods for adding nodes and edges.", "max_tokens": 256}
+{"prompt_id": 38, "text": "What is the difference between a process and a thread?", "max_tokens": 256}
+{"prompt_id": 39, "text": "Implement Kruskal's algorithm for finding a minimum spanning tree.", "max_tokens": 256}
+{"prompt_id": 40, "text": "Write a Python function that flattens a nested dictionary using dot-notation keys.", "max_tokens": 256}
+{"prompt_id": 41, "text": "Explain what CAP theorem says about distributed systems.", "max_tokens": 256}
+{"prompt_id": 42, "text": "Implement a simple linear regression from scratch in NumPy.", "max_tokens": 256}
+{"prompt_id": 43, "text": "Write a shell script that backs up a directory and rotates the last 5 backups.", "max_tokens": 256}
+{"prompt_id": 44, "text": "Convert this synchronous Python function to async using asyncio: def fetch(url): return requests.get(url).text", "max_tokens": 256}
+{"prompt_id": 45, "text": "Implement Conway's Game of Life on a 10x10 grid.", "max_tokens": 256}
+{"prompt_id": 46, "text": "What is the difference between map and flatMap in functional programming?", "max_tokens": 256}
+{"prompt_id": 47, "text": "Write a SQL query to pivot a table from long to wide format.", "max_tokens": 256}
+{"prompt_id": 48, "text": "Implement a circular buffer with fixed capacity in C.", "max_tokens": 256}
+{"prompt_id": 49, "text": "Explain what eventual consistency means in a distributed database.", "max_tokens": 256}
+{"prompt_id": 50, "text": "Write a Python function that converts CamelCase to snake_case correctly handling acronyms (e.g., HTMLParser -> html_parser).", "max_tokens": 256}
+{"prompt_id": 51, "text": "Implement Floyd's cycle detection algorithm for a linked list.", "max_tokens": 256}
+{"prompt_id": 52, "text": "What is the time complexity of inserting into a balanced binary search tree?", "max_tokens": 256}
+{"prompt_id": 53, "text": "Write a Rust program that reads stdin line-by-line and prints uppercase versions.", "max_tokens": 256}
+{"prompt_id": 54, "text": "Implement Levenshtein edit distance with O(min(m,n)) space.", "max_tokens": 256}
+{"prompt_id": 55, "text": "Explain what a futex is and why it's faster than a mutex for uncontended cases.", "max_tokens": 256}
+{"prompt_id": 56, "text": "Write a Python context manager that times the enclosed block and prints the duration.", "max_tokens": 256}
+{"prompt_id": 57, "text": "Implement a basic regex engine that supports literal characters, ., and *.", "max_tokens": 256}
+{"prompt_id": 58, "text": "What is the difference between strong and weak consistency?", "max_tokens": 256}
+{"prompt_id": 59, "text": "Write a SQL query to compute a 7-day moving average of daily sales.", "max_tokens": 256}
+{"prompt_id": 60, "text": "Implement a trie data structure in Python with insert, search, and starts_with methods.", "max_tokens": 256}
+{"prompt_id": 61, "text": "Explain what reference counting is and what its main weakness is.", "max_tokens": 256}
+{"prompt_id": 62, "text": "Write a function that returns all permutations of a string without using itertools.", "max_tokens": 256}
+{"prompt_id": 63, "text": "Implement a basic raycaster in Python that renders a 2D top-down view.", "max_tokens": 256}
+{"prompt_id": 64, "text": "What is the difference between optimistic and pessimistic locking?", "max_tokens": 256}
+{"prompt_id": 65, "text": "Write a Python function that checks if two strings are anagrams in O(n) time.", "max_tokens": 256}
+{"prompt_id": 66, "text": "Implement merge sort iteratively using a bottom-up approach.", "max_tokens": 256}
+{"prompt_id": 67, "text": "Explain what backpressure is in a streaming system.", "max_tokens": 256}
+{"prompt_id": 68, "text": "Write a Rust async function that fetches multiple URLs concurrently using tokio.", "max_tokens": 256}
+{"prompt_id": 69, "text": "Implement Knuth-Morris-Pratt string matching with the prefix function.", "max_tokens": 256}
+{"prompt_id": 70, "text": "What is the difference between a deadlock and a livelock?", "max_tokens": 256}
+{"prompt_id": 71, "text": "Write a SQL query to find the top 3 products in each category by sales.", "max_tokens": 256}
+{"prompt_id": 72, "text": "Implement a basic interpreter for arithmetic expressions with +, -, *, /, and parentheses.", "max_tokens": 256}
+{"prompt_id": 73, "text": "Explain what a vector clock is in distributed systems.", "max_tokens": 256}
+{"prompt_id": 74, "text": "Write a Python function that detects palindromes ignoring case and punctuation.", "max_tokens": 256}
+{"prompt_id": 75, "text": "Implement a heap-based priority queue with insert, extract-min, and decrease-key.", "max_tokens": 256}
+{"prompt_id": 76, "text": "What is the difference between horizontal and vertical scaling?", "max_tokens": 256}
+{"prompt_id": 77, "text": "Write a Bash script that uses find and xargs to delete files older than 30 days safely.", "max_tokens": 256}
+{"prompt_id": 78, "text": "Implement a basic bloom-tree (cascading bloom filters) for set membership at multiple thresholds.", "max_tokens": 256}
+{"prompt_id": 79, "text": "Explain what a SAT solver does at a high level.", "max_tokens": 256}
+{"prompt_id": 80, "text": "Write a Python function that computes the longest common subsequence of two strings.", "max_tokens": 256}
+{"prompt_id": 81, "text": "Implement a simple HTTP request router in Go using a map of method+path to handler.", "max_tokens": 256}
+{"prompt_id": 82, "text": "What is the difference between row-based and columnar storage?", "max_tokens": 256}
+{"prompt_id": 83, "text": "Write a SQL query that finds duplicate rows in a table based on multiple columns.", "max_tokens": 256}
+{"prompt_id": 84, "text": "Implement Tarjan's algorithm for finding strongly connected components.", "max_tokens": 256}
+{"prompt_id": 85, "text": "Explain what a lock-free queue is and one technique used to implement one.", "max_tokens": 256}
+{"prompt_id": 86, "text": "Write a Python function that converts a binary tree to its mirror image in place.", "max_tokens": 256}
+{"prompt_id": 87, "text": "Implement reservoir sampling to select k items uniformly from a stream of unknown size.", "max_tokens": 256}
+{"prompt_id": 88, "text": "What is the difference between an L1 and L2 cache?", "max_tokens": 256}
+{"prompt_id": 89, "text": "Write a Rust function that decodes a base64 string into bytes.", "max_tokens": 256}
+{"prompt_id": 90, "text": "Implement Reservoir sampling in distributed setting where each node sees a stream chunk.", "max_tokens": 256}
+{"prompt_id": 91, "text": "Explain what a write-ahead log (WAL) is and why databases use it.", "max_tokens": 256}
+{"prompt_id": 92, "text": "Write a Python function that compresses a string using run-length encoding.", "max_tokens": 256}
+{"prompt_id": 93, "text": "Implement Fenwick tree (binary indexed tree) for range sum queries.", "max_tokens": 256}
+{"prompt_id": 94, "text": "What is the difference between mutual exclusion and critical section?", "max_tokens": 256}
+{"prompt_id": 95, "text": "Write a SQL query to find users who have ordered every product in a given category.", "max_tokens": 256}
+{"prompt_id": 96, "text": "Implement Boyer-Moore majority vote algorithm for finding the majority element.", "max_tokens": 256}
+{"prompt_id": 97, "text": "Explain what tail latency is and why it matters in service-level agreements.", "max_tokens": 256}
+{"prompt_id": 98, "text": "Write a Python function that finds the k-th smallest element using quickselect.", "max_tokens": 256}
+{"prompt_id": 99, "text": "Implement a basic linter that flags lines longer than 100 characters in a Python file.", "max_tokens": 256}

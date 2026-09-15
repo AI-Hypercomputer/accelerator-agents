@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MaxPerf / MaxShard Lineage Tree</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({startOnLoad: true, theme: 'dark'});</script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 40px; background: #0f172a; color: #f8fafc; }
+    .container { max-width: 1000px; margin: 0 auto; background: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    h1 { color: #38bdf8; margin-top: 0; }
+    .mermaid { margin-top: 30px; text-align: center; }
+    .node.accepted rect { fill: #065f46 !important; stroke: #34d399 !important; stroke-width: 2px; }
+    .node.rejected rect { fill: #881337 !important; stroke: #f43f5e !important; stroke-width: 1.5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🌳 MaxPerf Optimization Lineage Tree</h1>
+    <p>Visual branching and evolution of candidate hypotheses.</p>
+
+    <div class="mermaid">
+graph TD
+  Base["Baseline Phase 0"]
+  N0["20260603-eliminate-ep-all2all<br/>MaxShard | 18.53 TPS"]:::rejected
+  Base -.-> N0
+  N1["20260603-fuse-ep-backward<br/>MaxShard | 18.53 TPS"]:::rejected
+  Base -.-> N1
+  N2["20260603-attention-greedy-binpacking<br/>MaxShard | 18.53 TPS"]:::rejected
+  Base -.-> N2
+  N3["20260603-gmm-latch-bound<br/>MaxTile | 18.53 TPS"]:::rejected
+  Base -.-> N3
+  N4["20260603-attention-latency-balancing<br/>MaxTile | 18.53 TPS"]:::rejected
+  Base -.-> N4
+  N5["20260603-dataclass-moe-config<br/>AutoRefactor | 18.53 TPS"]:::rejected
+  Base -.-> N5
+  N6["20260603-replace-python-if-routing<br/>AutoRefactor | 18.53 TPS"]:::rejected
+  Base -.-> N6
+  N7["align-mlp-padding-1024<br/>TPUDiagnose | 1608.43 TPS"]:::accepted
+  Base --> N7
+  N8["20260630-optimized_run<br/>TPUDiagnose | 1571.19 TPS"]:::accepted
+  N7 --> N8
+    </div>
+  </div>
+</body>
+</html>

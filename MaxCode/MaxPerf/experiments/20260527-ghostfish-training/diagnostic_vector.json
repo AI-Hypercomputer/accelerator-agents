@@ -1,0 +1,103 @@
+{
+  "experiment_id": "20260527-ghostfish-training",
+  "prefill_heavy": {
+    "roofline": {
+      "bound_type": "compute",
+      "device_duty_cycle": "8.1%",
+      "device_idle_time": "91.9%",
+      "mxu_utilization": "0.2%",
+      "hbm_utilization": "0.0%",
+      "memory_bw_utilization": "0.0%",
+      "binding_resource": "host-bound (low duty cycle)"
+    },
+    "headroom_report": [
+      {
+        "name": "jit(step_fun)/RowParallelLinear/mn,pn->mp/dot_general",
+        "time_percent": "31.87%",
+        "category": "dot_general",
+        "fused": "no"
+      },
+      {
+        "name": "jit(step_fun)/jit(_jax_attn_func)/broadcast_in_dim",
+        "time_percent": "25.32%",
+        "category": "broadcast_in_dim",
+        "fused": "no"
+      },
+      {
+        "name": "jit(step_fun)/aten::cat/concatenate:",
+        "time_percent": "15.97%",
+        "category": "Unknown",
+        "fused": "no"
+      },
+      {
+        "name": "jit(step_fun)/aten::split.Tensor/slice:",
+        "time_percent": "8.42%",
+        "category": "Unknown",
+        "fused": "no"
+      },
+      {
+        "name": "jit(step_fun)/jit(_jax_attn_func)/shard_map/jit(ragged_paged_attention)/pallas_call",
+        "time_percent": "7.93%",
+        "category": "pallas_call",
+        "fused": "yes"
+      }
+    ],
+    "dma_idle_percent": "91.9%",
+    "hbm_bandwidth_utilization": "0.0%",
+    "vreg_spill_count": 0,
+    "collectives": {
+      "all_reduce_time_ms": 0.0279,
+      "all_reduce_percent": "0.77%"
+    }
+  },
+  "decode_heavy": {
+    "roofline": {
+      "bound_type": "memory",
+      "device_duty_cycle": "27.0%",
+      "device_idle_time": "73.0%",
+      "mxu_utilization": "0.0%",
+      "hbm_utilization": "0.0%",
+      "memory_bw_utilization": "0.0%",
+      "binding_resource": "host-bound (low duty cycle) / memory-bound"
+    },
+    "headroom_report": [
+      {
+        "name": "jit(step_fun)/jit(_jax_attn_func)/broadcast_in_dim",
+        "time_percent": "31.70%",
+        "category": "broadcast_in_dim",
+        "fused": "no"
+      },
+      {
+        "name": "jit(step_fun)/RowParallelLinear/mn,pn->mp/dot_general",
+        "time_percent": "22.84%",
+        "category": "dot_general",
+        "fused": "no"
+      },
+      {
+        "name": "jit(step_fun)/aten::cat/concatenate:",
+        "time_percent": "20.20%",
+        "category": "Unknown",
+        "fused": "no"
+      },
+      {
+        "name": "jit(step_fun)/aten::split.Tensor/slice:",
+        "time_percent": "10.59%",
+        "category": "Unknown",
+        "fused": "no"
+      },
+      {
+        "name": "jit(step_fun)/jit(_jax_attn_func)/shard_map/jit(ragged_paged_attention)/pallas_call",
+        "time_percent": "6.05%",
+        "category": "pallas_call",
+        "fused": "yes"
+      }
+    ],
+    "dma_idle_percent": "73.0%",
+    "hbm_bandwidth_utilization": "0.0%",
+    "vreg_spill_count": 0,
+    "collectives": {
+      "all_reduce_time_ms": 0.0237,
+      "all_reduce_percent": "1.04%"
+    }
+  }
+}

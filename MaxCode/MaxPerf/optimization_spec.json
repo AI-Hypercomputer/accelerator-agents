@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "target": {
+    "model_name": "Qwen/Qwen3.5-397B-RL",
+    "architecture": "MoE",
+    "framework": "Tunix+MaxText (Fallback) / Trellis (Target)",
+    "training_framework": "JAX/MaxText",
+    "inference_framework": "vLLM-TPU-JAX (tpu-inference)",
+    "model_evidence_url": "https://github.com/AI-Hypercomputer/maxtext/blob/1a47a6a023b6bfe0246f40cbaae5e160d040c6f8/src/maxtext/models/qwen3.py",
+    "inference_evidence_url": "https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/models/jax/qwen3.py",
+    "benchmark_evidence_url": "https://docs.google.com/spreadsheets/d/10NYl7nW1Qk-9aklVI2JopwxFxfKMSQBvk-cMJjZ_ZMc/edit?gid=0#gid=0",
+    "submission_plan_url": "https://docs.google.com/document/d/1i8Tt65NuWIcDVVqupQC2WsgoMEXDTIU-wqWeKniPT-g/edit?tab=t.0",
+    "reference_implementation": {
+      "target_benchmark": "MLPerf 6.1 RL (October 16, 2026)",
+      "task_type": "non-math agentic coding task",
+      "gpu_ref_status": "Completed and successfully converged",
+      "tpu_status": "Far from goal, no end-to-end convergence test yet"
+    },
+    "contacts": {
+      "training_lead": "",
+      "inference_lead": ""
+    }
+  },
+  "hardware": {
+    "accelerator": "TPU v7x",
+    "chip_count": 1024,
+    "mesh_shape": [8, 8, 16],
+    "cluster_name": "bodaborg-tpu7x-nap",
+    "gcp_project": "cloud-tpu-shared-capacity",
+    "zone": "us-central1-c",
+    "sub_slices_for_testing": [64, 256, 512, 1024],
+    "current_test_slice": 64
+  },
+  "execution": {
+    "backend": "xpk",
+    "cluster_or_zone": "us-central1-c/bodaborg-tpu7x-nap",
+    "project": "cloud-tpu-shared-capacity",
+    "namespace": "default",
+    "performance_check_steps": 10,
+    "performance_check_duration_minutes": "5-10",
+    "cluster_monitor_url": "https://gke-capacity-monitor-web-735972712744.us-west1.run.app/index.html",
+    "shared_capacity_guide_url": "https://docs.google.com/document/d/1qgrT8aW0MlPCcCqtQNlr7HqOn3wpv9BaFGFr0H7ynbU/edit?resourcekey=0-QERjcCZO4RUkDf0PvvMmXA&tab=t.0#heading=h.9nupihmoks0w"
+  },
+  "workload": {
+    "regime": "training",
+    "rl_components": {
+      "rollout_inference": "vLLM-JAX (tpu-inference)",
+      "policy_training": "MaxText",
+      "weight_sync": "Raiden asynchronous weight transfer"
+    },
+    "context_length": 65536,
+    "prompt_length_tokens": 61440,
+    "output_length_tokens": 4096,
+    "batch_size": 1,
+    "per_device_batch_size": 1,
+    "target_precision": {
+      "weights": "fp8",
+      "activations": "bf16",
+      "kv_cache": "fp8",
+      "moe_routing": "fp8"
+    },
+    "features_in_flight": [
+      "agentic_sandbox_environment",
+      "pause_resume_functionality",
+      "multi_host_kv_cache_offloading",
+      "context_parallelism",
+      "fp8_optimization"
+    ]
+  },
+  "objective": {
+    "primary_metric": "tokens_per_sec_per_chip",
+    "optimization_goal": "maximize",
+    "baseline_step_time_seconds": 3600.0,
+    "target_step_time_seconds": 600.0,
+    "baseline_tps_per_chip": 250.0,
+    "target_tps_per_chip": 1500.0,
+    "target_improvement_pct": 500.0,
+    "deadline": "2026-10-16",
+    "primary_focus_areas": [
+      "Inference throughput and rollout scaling in vLLM JAX",
+      "Training step time reduction in MaxText",
+      "Asynchronous weight synchronization latency reduction between training and inference",
+      "Multi-host KV cache offloading and Context Parallelism for 64k context window",
+      "FP8 quantization and loss convergence alignment against GPU baseline",
+      "End-to-end migration from legacy Tunix+MaxText stack to Trellis",
+      "Integration of agentic sandbox execution environment"
+    ],
+    "constraints": {
+      "max_rl_step_time_seconds": 600.0,
+      "correctness_gate": {
+        "numeric_tolerance": "bf16",
+        "eval_benchmark": "MLPerf-6.1-RL-Qwen3.5-397B-AgenticCoding",
+        "reference_baseline": "Converged Nvidia GPU reference baseline",
+        "max_accuracy_drop_pp": 0.0
+      }
+    }
+  }
+}

@@ -194,6 +194,22 @@ async def run_search(
             )
         except Exception as e:
           logger.error(f"Failed to generate token summary: {e}")
+        logger.info("Generating search distribution summary...")
+        try:
+          from auto_search.utils.parse_search_distribution import (
+            analyze_distribution,
+          )
+
+          distribution_summary_text = analyze_distribution(dest_dir)
+          if distribution_summary_text:
+            dist_out_file = os.path.join(dest_dir, "search_distribution.md")
+            with open(dist_out_file, "w", encoding="utf-8") as f:
+              f.write("```text\n" + distribution_summary_text + "\n```\n")
+            print(
+              f"\n\n====== SEARCH DISTRIBUTION ======\n{distribution_summary_text}\n===========================\n"
+            )
+        except Exception as e:
+          logger.error(f"Failed to generate search distribution summary: {e}")
 
       except Exception as analyze_err:
         logger.error(f"Failed to generate timing summary: {analyze_err}")

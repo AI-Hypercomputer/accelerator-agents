@@ -255,12 +255,18 @@ def analyze_path(target_path: str, real_wall_time: float = None):
   log("============================================================")
   log(f"Total Nodes/Attempts Analyzed : {total_runs}")
   if real_wall_time:
-    concurrency_factor = (global_pipeline / real_wall_time) if real_wall_time > 0 else 0
-    log(f"Aggregated Pipeline Time   : {global_pipeline/60:>7.2f} computation-minutes")
-    log(f"Real-World Wall Time       : {real_wall_time/60:>7.2f} minutes")
+    concurrency_factor = (
+      (global_pipeline / real_wall_time) if real_wall_time > 0 else 0
+    )
+    log(
+      f"Aggregated Pipeline Time   : {global_pipeline / 60:>7.2f} computation-minutes"
+    )
+    log(f"Real-World Wall Time       : {real_wall_time / 60:>7.2f} minutes")
     log(f"Concurrency Acceleration   : {concurrency_factor:>7.2f}x speedup")
   else:
-    log(f"Aggregated Pipeline Time   : {global_pipeline:>7.2f}s computation-hours")
+    log(
+      f"Aggregated Pipeline Time   : {global_pipeline:>7.2f}s computation-hours"
+    )
 
   if global_pipeline > 0:
     log(

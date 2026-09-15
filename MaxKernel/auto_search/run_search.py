@@ -3,7 +3,6 @@ import asyncio
 import json
 import logging
 import os
-import time
 import sys
 import time
 from typing import Any, Optional, Tuple
@@ -106,6 +105,7 @@ async def run_search(
   **kwargs: Any,
 ) -> Tuple[str, str]:
   """Executes the search algorithm asynchronously for a single reference file."""
+  global_start_time = time.time()
   problem_dir = os.path.dirname(os.path.abspath(reference_file_path))
   default_problem_id, ext = os.path.splitext(
     os.path.basename(reference_file_path)

@@ -56,38 +56,40 @@ def get_thinking_planner(level: str = "high") -> BuiltInPlanner:
 
 # MONKEY PATCH GENERATE_CONTENT to handle rate limits
 try:
-    import tenacity
-    from google import genai
-    import logging
+  import logging
 
-    def get_retry_decorator():
-        return tenacity.retry(
-            wait=tenacity.wait_exponential(multiplier=1, min=4, max=60),
-            stop=tenacity.stop_after_attempt(10),
-            retry=tenacity.retry_if_exception_type(Exception),
-            before_sleep=tenacity.before_sleep_log(logging.getLogger(__name__), logging.WARNING)
-        )
+  import tenacity
+  from google import genai
 
-    if not hasattr(genai.models.Models, "_original_generate_content"):
-        orig_sync = genai.models.Models.generate_content
-        genai.models.Models._original_generate_content = orig_sync
+  def get_retry_decorator():
+    return tenacity.retry(
+      wait=tenacity.wait_exponential(multiplier=1, min=4, max=60),
+      stop=tenacity.stop_after_attempt(10),
+      retry=tenacity.retry_if_exception_type(Exception),
+      before_sleep=tenacity.before_sleep_log(
+        logging.getLogger(__name__), logging.WARNING
+      ),
+    )
 
-        @get_retry_decorator()
-        def wrapped_sync(self, *args, **kwargs):
-            return orig_sync(self, *args, **kwargs)
+  if not hasattr(genai.models.Models, "_original_generate_content"):
+    orig_sync = genai.models.Models.generate_content
+    genai.models.Models._original_generate_content = orig_sync
 
-        genai.models.Models.generate_content = wrapped_sync
+    @get_retry_decorator()
+    def wrapped_sync(self, *args, **kwargs):
+      return orig_sync(self, *args, **kwargs)
 
-    if not hasattr(genai.models.AsyncModels, "_original_generate_content"):
-        orig_async = genai.models.AsyncModels.generate_content
-        genai.models.AsyncModels._original_generate_content = orig_async
+    genai.models.Models.generate_content = wrapped_sync
 
-        @get_retry_decorator()
-        async def wrapped_async(self, *args, **kwargs):
-            return await orig_async(self, *args, **kwargs)
+  if not hasattr(genai.models.AsyncModels, "_original_generate_content"):
+    orig_async = genai.models.AsyncModels.generate_content
+    genai.models.AsyncModels._original_generate_content = orig_async
 
-        genai.models.AsyncModels.generate_content = wrapped_async
+    @get_retry_decorator()
+    async def wrapped_async(self, *args, **kwargs):
+      return await orig_async(self, *args, **kwargs)
+
+    genai.models.AsyncModels.generate_content = wrapped_async
 except ImportError:
-    pass
+  pass
 # END MONKEY PATCH
-

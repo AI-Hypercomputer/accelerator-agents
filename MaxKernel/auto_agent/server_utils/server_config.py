@@ -35,7 +35,6 @@ def _resolve_config_path(cfg_path: str) -> Optional[str]:
   return None
 
 
-
 def get_local_tpu_ports(cfg_path: str = "eval_config.yaml") -> list[int]:
   """Checks eval_config.yaml and returns the ports if local TPU servers are needed."""
   resolved_path = _resolve_config_path(cfg_path)
@@ -69,10 +68,10 @@ def get_local_tpu_ports(cfg_path: str = "eval_config.yaml") -> list[int]:
 
   return [b.get("port", TPU_SERVER_PORT) for b in local_tpu_backends]
 
+
 def get_local_tpu_port(cfg_path: str = "eval_config.yaml"):
   ports = get_local_tpu_ports(cfg_path)
   return ports[0] if ports else None
-
 
 
 def get_local_cpu_port(cfg_path: str = "eval_config.yaml") -> Optional[int]:
@@ -156,7 +155,7 @@ def get_bastion_config(
 if __name__ == "__main__":
   tpu_ports = get_local_tpu_ports()
   tpu_p = tpu_ports[0] if tpu_ports else None
-  print(f"LOCAL_TPU_PORTS='{ ' '.join(map(str, tpu_ports)) }'")
+  print(f"LOCAL_TPU_PORTS='{' '.join(map(str, tpu_ports))}'")
   cpu_p = get_local_cpu_port()
   b = get_bastion_config()
 

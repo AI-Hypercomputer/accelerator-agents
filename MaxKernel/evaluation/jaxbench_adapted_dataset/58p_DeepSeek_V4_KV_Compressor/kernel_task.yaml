@@ -1,0 +1,435 @@
+task_id: 62p_DeepSeek_V4_KV_Compressor
+description: Kernel task for 62p_DeepSeek_V4_KV_Compressor
+input_gen_code: |-
+  def get_inputs():
+      import enum
+      import dataclasses
+      from typing import Any, Tuple, Optional
+      import jax
+      import jax.numpy as jnp
+      import numpy as np
+
+      def cdiv(a, b):
+          return (a + b - 1) // b
+
+
+      """CSA Configs.
+
+      Modes:
+        HCA:
+          - State Bytes: 1024 (dim) x 4 (bytes per fp32) = 4096 bytes
+          - Head Dim:    512 (bf16, no quantization)
+          - Cache:       [num_pages, _, 4, 128] uint8 (where _ = state_block_size * 8
+          or kv_block_size * 2)
+
+        CSA:
+          - State Bytes: 2048 (dim) x 4 (bytes per fp32) = 8192 bytes
+          - Head Dim:    448 fp8 + 7 scale = 462 bytes -> 512 bytes
+          - Cache:       [num_pages, _, 4, 128] uint8 (where _ = state_block_size * 16
+          or kv_block_size)
+
+        CSA-Indexer:
+          - State Bytes: 512 (dim) x 4 (bytes per fp32) = 2048 bytes
+          - Head Dim:    128 fp8 + 1 scale = 129 bytes -> 256 bytes
+          - Cache:       [num_pages, _, 4, 256] uint8 (where _ = state_block_size * 2
+          or kv_block_size // 8)
+      """
+      LANE = 128
+      SLOT_PACK = 4
+      N_FIELDS = 2
+      FP32_BYTES = 4
+      CSA_COMPRESS_RATIO = 4
+
+      class Mode(enum.Enum):
+          HCA = 'hca'
+          CSA = 'csa'
+          CSA_INDEXER = 'csa_indexer'
+      _MODE_DEFAULTS = {Mode.HCA: dict(head_dim=512, rope_head_dim=64, compress_ratio=128, quant_block=0, overlap=False, has_rope_cache=False), Mode.CSA: dict(head_dim=512, rope_head_dim=64, compress_ratio=4, quant_block=64, overlap=True, has_rope_cache=True), Mode.CSA_INDEXER: dict(head_dim=128, rope_head_dim=64, compress_ratio=4, quant_block=128, overlap=True, has_rope_cache=False)}
+
+      def select_mode(head_dim: int, overlap: bool) -> Mode:
+          """Picks the storage mode from the compressor's head_dim / overlap flag."""
+          if head_dim == LANE:
+              return Mode.CSA_INDEXER
+          return Mode.CSA if overlap else Mode.HCA
+
+      def physical_page_size(mode: Mode, kv_cache_block_size: int, compress_ratio: int) -> int:
+          """Rows per page of the uint8 cache array allocated for `mode`.
+
+        This must mirror the shapes ``KVCacheManager._create_dsv4_kv_caches``
+        allocates, because ``compress_norm_rope_store`` re-derives the whole page
+        geometry from ``cache.shape[1]``. Anything that computes slot indices for
+        that array (the compressor wrapper's state-cache ``block_size``, and
+        ``derive_metadata``) has to agree with it or writes land on the wrong page.
+        """
+          storage_block_size = kv_cache_block_size // compress_ratio
+          if mode is Mode.CSA_INDEXER:
+              return storage_block_size // SLOT_PACK
+          if mode is Mode.CSA:
+              return storage_block_size
+          return storage_block_size * 2
+
+      def state_host_page_size(mode: Mode, kv_cache_block_size: int, compress_ratio: int) -> int:
+          """Rows per page of the array that *hosts* ``mode``'s f32 compressor state."""
+          if mode is Mode.HCA:
+              return physical_page_size(Mode.CSA, kv_cache_block_size, CSA_COMPRESS_RATIO)
+          return physical_page_size(mode, kv_cache_block_size, compress_ratio)
+
+      @jax.tree_util.register_dataclass
+      @dataclasses.dataclass(frozen=True)
+      class TileSizes:
+          """Tile sizes for the kernel."""
+          tile_n: int
+
+      @jax.tree_util.register_dataclass
+      @dataclasses.dataclass(frozen=True)
+      class Dimensions:
+          """True inputs only. Anything derivable is a property below."""
+          mode: Mode = dataclasses.field(metadata=dict(static=True))
+          size_n: int
+          head_dim: int
+          rope_head_dim: int
+          compress_ratio: int
+          physical_page_size: int
+          state_physical_page_size: int
+          quant_block: int
+          overlap: bool
+          has_rope_cache: bool
+          rms_eps: float = 1e-06
+          cos_sin_dtype: jax.typing.DTypeLike = jnp.float32
+          rope_width: int = 128
+
+          @property
+          def is_quantized(self) -> bool:
+              return self.quant_block > 0
+
+          @property
+          def has_rope(self) -> bool:
+              return self.rope_head_dim > 0
+
+          @property
+          def nope_dtype(self) -> jax.typing.DTypeLike:
+              return jnp.uint8 if self.is_quantized else jnp.bfloat16
+
+          @property
+          def rope_dtype(self) -> jax.typing.DTypeLike:
+              return self.nope_dtype
+
+      @jax.tree_util.register_dataclass
+      @dataclasses.dataclass(frozen=True)
+      class Configs:
+          """Configuration for the kernel."""
+          tile_sizes: TileSizes
+          dims: Dimensions
+
+          @classmethod
+          def make(cls, mode: Mode, *, size_n, physical_page_size, state_physical_page_size=None, rms_eps=1e-06, tile_n=4, **overrides) -> 'Configs':
+              """Build a config for `mode`; `overrides` replace per-mode defaults.
+
+          `state_physical_page_size` defaults to `physical_page_size`, i.e. the
+          state and the compressed KV share one buffer.
+          """
+              actual_overrides = {**_MODE_DEFAULTS[mode], **overrides}
+              if mode == Mode.HCA:
+                  actual_overrides['quant_block'] = 0
+              dims = Dimensions(mode=mode, size_n=size_n, physical_page_size=physical_page_size, state_physical_page_size=physical_page_size if state_physical_page_size is None else state_physical_page_size, rms_eps=rms_eps, **actual_overrides)
+              return cls(tile_sizes=TileSizes(tile_n=tile_n), dims=dims)
+
+          @property
+          def overlap_factor(self) -> int:
+              """State copies kept per step: 1, or 2 when windows overlap (prev+curr)."""
+              return 1 + int(self.dims.overlap)
+
+          @property
+          def state_width(self) -> int:
+              """Width of one stored field (head_dim, doubled when overlapping)."""
+              return self.overlap_factor * self.dims.head_dim
+
+          @property
+          def head_tiles(self) -> int:
+              """head_dim split into LANE-wide compute tiles (old: slots_per_part)."""
+              return self.dims.head_dim // LANE
+
+          @property
+          def window(self) -> int:
+              """Timesteps compressed together (x overlap_factor when overlapping)."""
+              return self.dims.compress_ratio * self.overlap_factor
+
+          @property
+          def nope_dim(self) -> int:
+              """Width of the non-rope (nope) part of a head."""
+              return self.dims.head_dim - self.dims.rope_head_dim
+
+          @property
+          def nope_store_dim(self) -> int:
+              """Dimension of the nope storage (contains rope if no separate rope cache)."""
+              return self.dims.head_dim - self.dims.rope_head_dim if self.dims.has_rope_cache else self.dims.head_dim
+
+          @property
+          def half_rope(self) -> int:
+              """cos/sin split point (half the rope dim)."""
+              return self.dims.rope_head_dim // 2
+
+          @property
+          def rope_slot(self) -> int:
+              """Head-tile holding the rope channels (the last one)."""
+              return self.head_tiles - 1
+
+          @property
+          def record_bytes(self) -> int:
+              """Bytes in one packed output record (old: total_bytes_out)."""
+              if not self.dims.is_quantized:
+                  return self.dims.head_dim * 2
+              return 256 if self.dims.head_dim == LANE else 512
+
+          @property
+          def record_rows(self) -> int:
+              """Packed physical rows per output record."""
+              return cdiv(self.record_bytes, self.row_size_bytes)
+
+          @property
+          def row_size_bytes(self) -> int:
+              """Size of one physical HBM row in bytes."""
+              return self.hbm_pack * self.last_dim_size
+
+          @property
+          def hbm_pack(self) -> int:
+              """Sub-slots physically packed per slot row, <= SLOT_PACK."""
+              return SLOT_PACK
+
+          @property
+          def last_dim_size(self) -> int:
+              """Size of the last HBM cache dimension in bytes."""
+              if self.dims.mode == Mode.CSA_INDEXER:
+                  return 2 * LANE
+              return LANE
+
+          @property
+          def cache_last_dims(self) -> tuple[int, ...]:
+              return (self.hbm_pack, self.last_dim_size)
+
+          @property
+          def tokens_in_second_minor(self) -> int:
+              """Divisor to map wrapper row offset to new physical row offset."""
+              tokens_per_row = self.row_size_bytes // self.record_bytes
+              return max(1, tokens_per_row)
+
+          @property
+          def kv_stride(self) -> int:
+              """Token stride in logical slot units."""
+              if self.record_bytes <= self.row_size_bytes:
+                  return 1
+              return self.record_rows
+
+          @property
+          def physical_page_size(self) -> int:
+              """Number of physical HBM rows per page of the compressed-KV array."""
+              return self.dims.physical_page_size
+
+          @property
+          def state_physical_page_size(self) -> int:
+              """Number of physical HBM rows per page of the *state* array."""
+              return self.dims.state_physical_page_size
+
+          @property
+          def state_rows_per_token(self) -> int:
+              """Number of physical HBM rows occupied by one token's full state (kv + score)."""
+              state_bytes = N_FIELDS * self.state_width * FP32_BYTES
+              return state_bytes // self.row_size_bytes
+
+          @property
+          def field_rows(self) -> int:
+              """Number of physical HBM rows spanned by one field during gather."""
+              field_bytes = self.dims.head_dim * FP32_BYTES
+              return cdiv(field_bytes, self.row_size_bytes)
+
+          @property
+          def state_block_size(self) -> int:
+              """Number of state tokens per page of the state array."""
+              return self.state_physical_page_size // self.state_rows_per_token
+
+          @property
+          def kv_block_size(self) -> int:
+              """Number of compressed KV tokens per page."""
+              page_bytes = self.physical_page_size * self.row_size_bytes
+              return page_bytes // self.record_bytes
+
+          @property
+          def rope_page_size(self) -> int:
+              """Number of physical HBM rows per page in RoPE cache."""
+              return self.physical_page_size // self.hbm_pack
+
+          @property
+          def pages_to_buffer_per_token(self) -> int:
+              """Pages that must be resident to cover one token's window (+1 guard)."""
+              return cdiv(self.window, self.state_block_size) + 1
+
+          @property
+          def _tile_n(self) -> int:
+              return self.tile_sizes.tile_n
+
+          def window_shape(self) -> tuple[int, ...]:
+              """f32 window scratch: (fields, tile, window, head_tiles, lane)."""
+              return (N_FIELDS, self._tile_n, self.window, self.head_tiles, LANE)
+
+          def window_bytes_shape(self) -> tuple[int, ...]:
+              """uint8 view of the window scratch; each f32 lane -> FP32_BYTES rows.
+
+          Note: that trailing FP32_BYTES (4) is bytes-per-f32, NOT the HBM SLOT_PACK
+          (also 4) -- they're numerically equal but mean different things.
+
+          Returns:
+            The shape of the window bytes scratch.
+          """
+              return (N_FIELDS, self._tile_n, self.window, self.head_tiles, FP32_BYTES, LANE)
+
+          def output_shape(self) -> tuple[int, ...]:
+              """Packed output tile / VMEM block: (tile, record_rows) + cache_last_dims."""
+              return (self._tile_n, self.record_rows) + self.cache_last_dims
+
+          def page_buffer_shape(self) -> tuple[int, ...]:
+              """Page-buffer VMEM block: (tile, pages, state page rows) + cache_last_dims.
+
+          Pages are DMA'd whole out of the *state* array, so this is sized by
+          `state_physical_page_size`, not by the compressed-KV page.
+          """
+              return (self._tile_n, self.pages_to_buffer_per_token, self.state_physical_page_size) + self.cache_last_dims
+
+          def rope_output_shape(self) -> tuple[int, ...]:
+              """RoPE output VMEM block: (tile, 4, lane)."""
+              assert self.dims.has_rope_cache
+              return (self._tile_n, 4, LANE)
+
+          def cos_sin_shape(self) -> tuple[int, ...]:
+              """cos/sin VMEM block: (tile, rope_head_dim)."""
+              return (self._tile_n, self.dims.rope_head_dim)
+
+          def cache_shape(self, num_pages: int) -> tuple[int, ...]:
+              """Shape of the global HBM KV cache."""
+              return (num_pages, self.physical_page_size) + self.cache_last_dims
+
+          def state_cache_shape(self, num_pages: int) -> tuple[int, ...]:
+              """Shape of the global HBM array hosting the f32 compressor state."""
+              return (num_pages, self.state_physical_page_size) + self.cache_last_dims
+
+          def rope_cache_shape(self, num_pages: int) -> tuple[int, ...]:
+              """Shape of the global HBM RoPE cache."""
+              assert self.dims.has_rope_cache
+              return (num_pages, self.rope_page_size, 4, 128)
+
+      """Utility functions for compressor benchmarking and input generation."""
+
+      def generate_kv_slot_mapping(num_boundary_tokens: int, num_pages: int, page_size: int, slots_per_part_out: int) -> jax.Array:
+          """Generates kv_slot_mapping for boundary tokens."""
+          kv_slot_mapping_np = np.full((num_boundary_tokens,), -1, dtype=np.int32)
+          boundary_count = 0
+          total_slots_needed = num_boundary_tokens * slots_per_part_out
+          pages_needed = (total_slots_needed + page_size - 1) // page_size
+          start_page = max(0, num_pages - pages_needed)
+          for t in range(num_boundary_tokens):
+              kv_slot_mapping_np[t] = start_page * page_size + boundary_count
+              boundary_count += slots_per_part_out
+          return jnp.array(kv_slot_mapping_np, dtype=jnp.int32)
+
+      def generate_caches(cfgs: Any, num_pages: int) -> tuple[jax.Array, jax.Array | None]:
+          """Generates empty cache and rope_cache."""
+          cache = jnp.zeros(cfgs.cache_shape(num_pages), dtype=jnp.uint8)
+          if cfgs.dims.has_rope_cache:
+              rope_cache = jnp.zeros(cfgs.rope_cache_shape(num_pages), dtype=jnp.uint8)
+          else:
+              rope_cache = None
+          return (cache, rope_cache)
+
+
+      CONFIGS = {'csa_small': {'name': 'csa_small', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa', 'batch_size': 16, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 256, 'quant_block': 128, 'overlap': True, 'mode': 'prefill'}, 'csa_decode_small': {'name': 'csa_decode_small', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa', 'batch_size': 16, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 256, 'quant_block': 128, 'overlap': True, 'mode': 'decode', 'history_len': 64}, 'csa_prefill_bs512': {'name': 'csa_prefill_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 256, 'quant_block': 128, 'overlap': True, 'mode': 'prefill'}, 'csa_decode_bs512': {'name': 'csa_decode_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 256, 'quant_block': 128, 'overlap': True, 'mode': 'decode', 'history_len': 1024}, 'hca_prefill_bs512': {'name': 'hca_prefill_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'hca', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 128, 'physical_page_size': 128, 'quant_block': 0, 'overlap': False, 'mode': 'prefill'}, 'hca_decode_bs512': {'name': 'hca_decode_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'hca', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 128, 'physical_page_size': 128, 'quant_block': 0, 'overlap': False, 'mode': 'decode', 'history_len': 1024}, 'csa_indexer_prefill_bs512': {'name': 'csa_indexer_prefill_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa_indexer', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 128, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 32, 'quant_block': 128, 'overlap': True, 'mode': 'prefill'}, 'csa_indexer_decode_bs512': {'name': 'csa_indexer_decode_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa_indexer', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 128, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 32, 'quant_block': 128, 'overlap': True, 'mode': 'decode', 'history_len': 1024}}
+      CONFIG = CONFIGS['csa_small']
+
+      def create_inputs(dtype=jnp.bfloat16, config=None):
+          """Returns (cache, positions, block_table, token_to_req_indices, kv_slot_mapping, rms_weight, cos_sin_cache, rope_cache)."""
+          cfg = CONFIG if config is None else CONFIGS[config] if isinstance(config, str) else config
+          case_type = cfg.get('case_type', 'csa')
+          batch_size = cfg.get('batch_size', 512)
+          head_dim = cfg.get('head_dim', 512)
+          compress_ratio = cfg.get('compress_ratio', 4)
+          physical_page_size = cfg.get('physical_page_size', 256)
+          rope_head_dim = cfg.get('rope_head_dim', 64)
+          quant_block = cfg.get('quant_block', 128)
+          mode = cfg.get('mode', 'prefill')
+          history_len = cfg.get('history_len', 1024)
+          rms_eps = cfg.get('rms_eps', 1e-06)
+          tile_n = 4
+          if case_type == 'hca':
+              config_mode = Mode.HCA
+          elif case_type == 'csa':
+              config_mode = Mode.CSA
+          elif case_type == 'csa_indexer':
+              config_mode = Mode.CSA_INDEXER
+          else:
+              raise ValueError(f'Unknown case_type: {case_type}')
+          cfgs = Configs.make(config_mode, size_n=batch_size, physical_page_size=physical_page_size, rms_eps=rms_eps, tile_n=tile_n, head_dim=head_dim, rope_head_dim=rope_head_dim, compress_ratio=compress_ratio, quant_block=quant_block)
+          tokens_per_page = cfgs.state_block_size
+          rng = np.random.default_rng(42)
+          if mode == 'prefill':
+              num_boundary_tokens = batch_size // compress_ratio
+              assert num_boundary_tokens % 4 == 0, f'num_boundary_tokens ({num_boundary_tokens}) must be divisible by 4'
+              max_pos = num_boundary_tokens * compress_ratio
+              pages_for_state = max(1, (max_pos + tokens_per_page - 1) // tokens_per_page)
+              total_rows_needed = num_boundary_tokens * cfgs.record_rows
+              pages_for_kv_cache = max(1, (total_rows_needed + cfgs.physical_page_size - 1) // cfgs.physical_page_size)
+              num_pages = pages_for_state + pages_for_kv_cache
+              block_table = jnp.arange(pages_for_state, dtype=jnp.int32).reshape(1, pages_for_state)
+              boundary_positions = (np.arange(num_boundary_tokens) + 1) * compress_ratio - 1
+              positions_np = np.pad(boundary_positions, (0, batch_size - num_boundary_tokens), constant_values=0)
+              positions = jnp.array(positions_np, dtype=jnp.int32)
+              token_to_req_indices = jnp.zeros((batch_size,), dtype=jnp.int32)
+              kv_slot_mapping_filtered = generate_kv_slot_mapping(num_boundary_tokens, num_pages, cfgs.kv_block_size, cfgs.kv_stride)
+              kv_slot_mapping = jnp.pad(kv_slot_mapping_filtered, (0, batch_size - num_boundary_tokens), constant_values=-1)
+          elif mode == 'decode':
+              boundary_ratio = cfg.get('boundary_ratio', 1.0 / compress_ratio)
+              num_boundary_tokens = int(batch_size * boundary_ratio)
+              if boundary_ratio > 0 and num_boundary_tokens == 0:
+                  num_boundary_tokens = 1
+              num_boundary_tokens = max(4, (num_boundary_tokens + tile_n - 1) // tile_n * tile_n)
+              num_boundary_tokens = min(num_boundary_tokens, batch_size)
+              max_pos = history_len
+              pages_for_state = max(1, (max_pos + tokens_per_page - 1) // tokens_per_page)
+              total_rows_needed = num_boundary_tokens * cfgs.record_rows
+              pages_for_kv_cache = max(1, (total_rows_needed + cfgs.physical_page_size - 1) // cfgs.physical_page_size)
+              num_pages = batch_size * pages_for_state + pages_for_kv_cache
+              block_table = jnp.arange(batch_size * pages_for_state, dtype=jnp.int32).reshape(batch_size, pages_for_state)
+              max_boundary_idx = max(1, history_len // compress_ratio)
+              boundary_reqs = rng.choice(batch_size, size=num_boundary_tokens, replace=batch_size < num_boundary_tokens)
+              kv_slot_mapping_filtered = generate_kv_slot_mapping(num_boundary_tokens, num_pages, cfgs.kv_block_size, cfgs.kv_stride)
+              positions_active = np.zeros((num_boundary_tokens,), dtype=np.int32)
+              for idx in range(num_boundary_tokens):
+                  q = rng.integers(0, max_boundary_idx)
+                  positions_active[idx] = (q + 1) * compress_ratio - 1
+              positions_np = np.pad(positions_active, (0, batch_size - num_boundary_tokens), constant_values=0)
+              token_to_req_indices_np = np.pad(boundary_reqs, (0, batch_size - num_boundary_tokens), constant_values=0)
+              kv_slot_mapping_np = np.pad(kv_slot_mapping_filtered, (0, batch_size - num_boundary_tokens), constant_values=-1)
+              positions = jnp.array(positions_np, dtype=jnp.int32)
+              token_to_req_indices = jnp.array(token_to_req_indices_np, dtype=jnp.int32)
+              kv_slot_mapping = jnp.array(kv_slot_mapping_np, dtype=jnp.int32)
+          else:
+              raise ValueError(f'Unknown mode: {mode}')
+          key = jax.random.key(42)
+          k1, k2, k3, k4 = jax.random.split(key, 4)
+          rms_weight = jax.random.normal(k1, (head_dim,), dtype=jnp.float32)
+          max_p = int(np.max(positions_np)) + 1 if len(positions_np) > 0 else batch_size
+          cos_sin_len = max(max_p, batch_size)
+          cos_sin_cache = jax.random.normal(k2, (cos_sin_len, rope_head_dim), dtype=jnp.float32)
+          cache = jax.random.randint(k3, cfgs.cache_shape(num_pages), 1, 255, dtype=jnp.uint8)
+          if cfgs.dims.has_rope_cache:
+              rope_cache = jax.random.randint(k4, cfgs.rope_cache_shape(num_pages), 1, 255, dtype=jnp.uint8)
+          else:
+              rope_cache = None
+          return (cache, positions, block_table, token_to_req_indices, kv_slot_mapping, rms_weight, cos_sin_cache, rope_cache)
+
+      outputs = []
+      for cfg in CONFIGS.values():
+          dynamic_args = list(create_inputs(dtype=jnp.bfloat16, config=cfg))
+          static_args = []
+          outputs.append((dynamic_args, static_args))
+      return outputs
+
+rtol: 0.01
+atol: 0.01

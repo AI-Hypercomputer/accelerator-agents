@@ -265,7 +265,7 @@ def analyze_path(target_path: str, real_wall_time: float = None):
     log(f"Concurrency Acceleration   : {concurrency_factor:>7.2f}x speedup")
   else:
     log(
-      f"Aggregated Pipeline Time   : {global_pipeline:>7.2f}s computation-hours"
+      f"Aggregated Pipeline Time   : {global_pipeline / 3600:>7.2f} computation-hours"
     )
 
   if global_pipeline > 0:

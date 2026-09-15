@@ -69,7 +69,7 @@ def get_local_tpu_ports(cfg_path: str = "eval_config.yaml") -> list[int]:
   return [b.get("port", TPU_SERVER_PORT) for b in local_tpu_backends]
 
 
-def get_local_tpu_port(cfg_path: str = "eval_config.yaml"):
+def get_local_tpu_port(cfg_path: str = "eval_config.yaml") -> Optional[int]:
   ports = get_local_tpu_ports(cfg_path)
   return ports[0] if ports else None
 

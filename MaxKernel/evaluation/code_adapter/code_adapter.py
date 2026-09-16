@@ -1,3 +1,4 @@
+import ast
 import logging
 import time
 from typing import List, Optional, Union
@@ -11,10 +12,19 @@ from evaluation.code_adapter.prompts import (
 from evaluation.custom_types.kernel_task import KernelTask
 from hitl_agent.constants import MODEL_NAME
 
+
+# Adaptation reproduces the whole input script, so the response is long. Ask
+# for the model's full output budget rather than relying on the default.
+MAX_OUTPUT_TOKENS = 65536
+
 logging.basicConfig(
   level=logging.INFO,
   format="%(asctime)s [%(levelname)s] - %(message)s",
 )
+
+
+class OutputTruncatedError(Exception):
+  """The model ran out of output budget before finishing the script."""
 
 
 class CodeAdapter:
@@ -55,13 +65,16 @@ class CodeAdapter:
         )
       prompt = self._get_adapt_optimized_prompt(original_code, get_inputs_code)
 
-    config = genai.types.GenerateContentConfig(temperature=0.1)
+    config = genai.types.GenerateContentConfig(
+      temperature=0.1, max_output_tokens=MAX_OUTPUT_TOKENS
+    )
     attempt = 0
     while attempt < self.max_retries:
       try:
         response = self.client.models.generate_content(
           model=MODEL_NAME, contents=prompt, config=config
         )
+        self._check_finish_reason(response)
         code = response.text.strip()
         if code.startswith("```python"):
           code = code[len("```python") :].strip()
@@ -78,7 +91,21 @@ class CodeAdapter:
         ):
           raise ValueError("LLM output did not contain the required sections.")
 
+        # The section headers all appear near the top of the file, so they are
+        # still present when a long response is cut short. Parse the result to
+        # catch truncation before it reaches disk and fails inside the harness.
+        try:
+          ast.parse(code)
+        except SyntaxError as e:
+          raise ValueError(
+            f"LLM output is not valid Python (line {e.lineno}: {e.msg}). "
+            "The response was most likely truncated."
+          ) from e
+
         return code
+      except OutputTruncatedError:
+        # Deterministic: a retry produces the same overlong response.
+        raise
       except Exception as e:
         attempt += 1
         wait_time = 2**attempt
@@ -91,6 +118,26 @@ class CodeAdapter:
     raise RuntimeError(
       f"Failed to refactor code after {self.max_retries} retries."
     )
+
+  def _check_finish_reason(self, response) -> None:
+    """Raises if the model stopped for any reason other than finishing."""
+    candidates = getattr(response, "candidates", None)
+    if not candidates:
+      raise ValueError("LLM returned no candidates.")
+
+    reason = getattr(candidates[0], "finish_reason", None)
+    if reason is None or reason == genai.types.FinishReason.STOP:
+      return
+
+    if reason == genai.types.FinishReason.MAX_TOKENS:
+      usage = getattr(response, "usage_metadata", None)
+      raise OutputTruncatedError(
+        f"LLM hit the {MAX_OUTPUT_TOKENS}-token output limit, so the "
+        f"refactored code is truncated. The input script is too large to "
+        f"adapt in one response. (usage: {usage})"
+      )
+
+    raise ValueError(f"LLM stopped early with finish_reason={reason}.")
 
   def generate_kernel_task(
     self,

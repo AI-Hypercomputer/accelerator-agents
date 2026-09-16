@@ -5,6 +5,7 @@ import time
 import json
 import jax
 import jax.numpy as jnp
+import numpy as np
 import importlib
 import importlib.util
 import os
@@ -18,12 +19,14 @@ def load_module_from_path(module_name, file_path):
   if spec is None or spec.loader is None:
     raise ImportError(f"Could not load {module_name} from {file_path}")
   module = importlib.util.module_from_spec(spec)
-  # Register before exec_module: code that inspects sys.modules[cls.__module__]
-  # (e.g. dataclasses resolving string annotations) fails otherwise.
+  # Register before exec_module: modules using `from __future__ import
+  # annotations` turn every annotation into a string, and dataclasses then
+  # resolves them via sys.modules[cls.__module__], which raises
+  # AttributeError on None if the module was never registered.
   sys.modules[module_name] = module
   try:
     spec.loader.exec_module(module)
-  except Exception:
+  except BaseException:
     sys.modules.pop(module_name, None)
     raise
   return module
@@ -104,6 +107,44 @@ def benchmark(func, args, static_argnums, trace_dir=None, num_runs=20, num_warmu
       raise RuntimeError(f"Failed to extract xprof time: {e}")
 
   return avg_wall_time, xprof_time
+
+
+def diff_metrics(b, o, chunk_elems=1 << 24):
+  \"\"\"Max absolute and max relative difference between two outputs.
+
+  Computed on the host in bounded-size chunks. `b` and `o` have already been
+  pulled off the device by `jax.device_get`, so the naive
+  `jnp.max(jnp.abs((b - o) / b))` ships them straight back: the true division
+  promotes to float, and for a large integer output (e.g. a 4 GiB uint8 paged
+  KV cache) that is a 16 GiB argument plus a 16 GiB result, which does not fit
+  in HBM. These are diagnostic metrics only -- `is_correct` comes from
+  `jnp.allclose` -- but raising here used to fail the whole case.
+
+  Chunking also fixes two latent issues with the old expression: the
+  subtraction no longer wraps around for unsigned dtypes, and a NaN in one
+  chunk no longer suppresses the maximum found in the others.
+  \"\"\"
+  fb = np.asarray(b).reshape(-1)
+  fo = np.asarray(o).reshape(-1)
+  max_abs = 0.0
+  max_rel = 0.0
+  for i in range(0, fb.size, chunk_elems):
+    x = fb[i:i + chunk_elems].astype(np.float64)
+    y = fo[i:i + chunk_elems].astype(np.float64)
+    d = np.abs(x - y)
+    # max() over an empty slice is undefined; size is never 0 here but guard
+    # anyway so a zero-sized output cannot take down the comparison.
+    if d.size == 0:
+      continue
+    max_abs = max(max_abs, float(np.max(d)))
+    with np.errstate(divide="ignore", invalid="ignore"):
+      r = d / np.abs(x)
+    # Matches the previous definition |(b - o) / b|: division by a zero
+    # reference stays +inf, and 0/0 stays NaN rather than being counted.
+    r = r[~np.isnan(r)]
+    if r.size:
+      max_rel = max(max_rel, float(np.max(r)))
+  return max_abs, max_rel
 
 
 def main():
@@ -274,8 +315,9 @@ def main():
           if b.shape != o.shape:
              raise ValueError(f"Shape mismatch: {b.shape} vs {o.shape}")
           is_correct = is_correct and bool(jnp.allclose(b, o, atol=curr_atol, rtol=curr_rtol))
-          max_abs_diff = max(max_abs_diff, float(jnp.max(jnp.abs(b - o))))
-          max_rel_diff = max(max_rel_diff, float(jnp.max(jnp.abs((b - o) / b))))
+          leaf_abs, leaf_rel = diff_metrics(b, o)
+          max_abs_diff = max(max_abs_diff, leaf_abs)
+          max_rel_diff = max(max_rel_diff, leaf_rel)
       except Exception as e:
         harness_logs.append(f"Correctness check failed for input {idx}: {e}")
         is_correct = False

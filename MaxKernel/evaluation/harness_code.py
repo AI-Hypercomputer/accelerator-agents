@@ -8,6 +8,7 @@ import jax.numpy as jnp
 import importlib
 import importlib.util
 import os
+import sys
 import traceback
 import xprof_utils
 
@@ -17,7 +18,14 @@ def load_module_from_path(module_name, file_path):
   if spec is None or spec.loader is None:
     raise ImportError(f"Could not load {module_name} from {file_path}")
   module = importlib.util.module_from_spec(spec)
-  spec.loader.exec_module(module)
+  # Register before exec_module: code that inspects sys.modules[cls.__module__]
+  # (e.g. dataclasses resolving string annotations) fails otherwise.
+  sys.modules[module_name] = module
+  try:
+    spec.loader.exec_module(module)
+  except Exception:
+    sys.modules.pop(module_name, None)
+    raise
   return module
 
 

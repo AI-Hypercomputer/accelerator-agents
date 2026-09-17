@@ -873,6 +873,7 @@ def mla_sliding_window_ragged_paged_attention(
     
     output = prepare_outputs(output, actual_num_q_heads, actual_head_dim)
     out_l = out_l[:, :actual_num_q_heads]
+    out_m = out_m[:, :actual_num_q_heads]
     return output, updated_kv, out_l, out_m
 
 def computation(

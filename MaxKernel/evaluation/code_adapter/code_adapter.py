@@ -12,7 +12,6 @@ from evaluation.code_adapter.prompts import (
 from evaluation.custom_types.kernel_task import KernelTask
 from hitl_agent.constants import MODEL_NAME
 
-
 # Adaptation reproduces the whole input script, so the response is long. Ask
 # for the model's full output budget rather than relying on the default.
 MAX_OUTPUT_TOKENS = 65536

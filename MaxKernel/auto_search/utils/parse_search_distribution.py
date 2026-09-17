@@ -8,12 +8,11 @@ def analyze_distribution(target_dir: str) -> str:
   """Parses search_graph.json in the target directory and returns a markdown summary."""
   graph_json_path = os.path.join(target_dir, "search_graph.json")
   if not os.path.exists(graph_json_path):
-    return f"Error: Could not find {graph_json_path}"
-  try:
-    with open(graph_json_path, "r", encoding="utf-8") as f:
-      graph_data = json.load(f)
-  except (json.JSONDecodeError, OSError) as e:
-    return f"Error loading {graph_json_path}: {e}"
+    raise FileNotFoundError(
+      f"Missing master search_graph.json in {target_dir}. Cannot generate metrics."
+    )
+  with open(graph_json_path, "r", encoding="utf-8") as f:
+    graph_data = json.load(f)
 
   nodes = graph_data.get("nodes", {})
   # Only count actual LLM attempts (ignore base node_000)

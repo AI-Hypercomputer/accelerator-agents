@@ -14,6 +14,7 @@ def analyze_distribution(target_dir: str) -> str:
       graph_data = json.load(f)
   except (json.JSONDecodeError, OSError) as e:
     return f"Error loading {graph_json_path}: {e}"
+
   nodes = graph_data.get("nodes", {})
   # Only count actual LLM attempts (ignore base node_000)
   total_nodes = len(
@@ -24,33 +25,46 @@ def analyze_distribution(target_dir: str) -> str:
     ]
   )
 
+  framework_failures = 0
   compilation_failures = 0
+  execution_failures = 0
   correctness_failures = 0
   valid_speedups = []
 
   token_counts = []
   call_counts = []
+  corrupted_token_nodes = []
+
   lines = []
   lines.append("--- MaxKernel Search Distribution Report ---")
   lines.append(f"Problem ID: {graph_data.get('problem_id')}")
   lines.append(f"Total LLM Candidates Generated: {total_nodes}\n")
+
   for node_id, node in nodes.items():
     # Skip the baseline reference code
     if str(node_id) == "node_000" or node.get("depth") == 0:
       continue
 
-    eval_result = node.get("evaluation", {})
+    eval_result = node.get("evaluation")
 
-    # 1. Tally execution/compilation outcomes
+    # 1. Catch ADK Framework Failures (Agent crashed before it could test code)
+    if not eval_result:
+      framework_failures += 1
+      continue
+
+    # 2. Count execution/compilation outcomes (decoupled)
     if not eval_result.get("compiled", False):
       compilation_failures += 1
+    elif not eval_result.get("execution_status", True):
+      execution_failures += 1
     elif not eval_result.get("correct", False):
       correctness_failures += 1
     else:
       speedup = eval_result.get("speedup")
       if speedup is not None:
         valid_speedups.append(speedup)
-    # 2. Extract Token metrics using the relocated nodes/ directory
+
+    # 3. Extract Token metrics using the relocated nodes/ directory
     session_dir = node.get("session_dir", "")
     node_folder_name = (
       os.path.basename(session_dir.rstrip("/")) if session_dir else node_id
@@ -75,19 +89,25 @@ def analyze_distribution(target_dir: str) -> str:
           if node_calls > 0:
             token_counts.append(node_tokens)
             call_counts.append(node_calls)
+      except (json.JSONDecodeError, OSError) as e:
+        print(
+          f"WARNING: Skipping corrupted token metrics for node '{node_id}'. Cost will be undercounted! Error: {e}"
+        )
+        corrupted_token_nodes.append(node_id)
 
-      except (json.JSONDecodeError, OSError):
-        pass
-  # 3. Calculate Results
+  # 4. Calculate Results
   valid_count = len(valid_speedups)
   success_rate = (valid_count / total_nodes) * 100 if total_nodes > 0 else 0
 
   lines.append("--- Pipeline Reliability ---")
+  lines.append(f"ADK/Framework Failures: {framework_failures} / {total_nodes}")
   lines.append(f"Compile Failures: {compilation_failures} / {total_nodes}")
+  lines.append(f"Execution Failures: {execution_failures} / {total_nodes}")
   lines.append(
     f"Correctness/Test Failures: {correctness_failures} / {total_nodes}"
   )
   lines.append(f"Successful Candidates: {valid_count} ({success_rate:.1f}%)\n")
+
   lines.append("--- Performance Distribution (Speedups) ---")
   if valid_speedups:
     lines.append(f"Best Speedup:  {max(valid_speedups):.3f}x")
@@ -98,7 +118,14 @@ def analyze_distribution(target_dir: str) -> str:
     lines.append(
       "Since no candidates compiled or succeeded at all, no speed-up was found.\n"
     )
+
   lines.append("--- Cost / Overhead ---")
+
+  if corrupted_token_nodes:
+    lines.append(
+      f"WARNING: Token computations are undercounted! The following nodes had corrupted metric files: {', '.join(corrupted_token_nodes)}\n"
+    )
+
   if token_counts:
     lines.append("Tokens:")
     lines.append(f"  Min:    {min(token_counts):,}")
@@ -114,7 +141,54 @@ def analyze_distribution(target_dir: str) -> str:
     lines.append(f"  Mean:   {statistics.mean(call_counts):,.0f}")
     lines.append(f"  Max:    {max(call_counts):,}")
     lines.append(f"  SUM:    {sum(call_counts):,}\n")
-  return "\n".join(lines)
+
+  md_output = "\n".join(lines)
+
+  # 5. Save exports natively inside the run directory before returning
+  md_out = os.path.join(target_dir, "search_distribution_summary.md")
+  with open(md_out, "w", encoding="utf-8") as mdf:
+    mdf.write(md_output)
+
+  pipeline_data = {
+    "problem_id": graph_data.get("problem_id"),
+    "total_llm_candidates": total_nodes,
+    "pipeline_reliability": {
+      "framework_failures": framework_failures,
+      "compile_failures": compilation_failures,
+      "execution_failures": execution_failures,
+      "correctness_failures": correctness_failures,
+      "successful_candidates": valid_count,
+      "success_rate": success_rate,
+    },
+    "performance_speedups": {
+      "best": max(valid_speedups) if valid_speedups else None,
+      "mean": statistics.mean(valid_speedups) if valid_speedups else None,
+      "median": statistics.median(valid_speedups) if valid_speedups else None,
+      "worst": min(valid_speedups) if valid_speedups else None,
+    },
+    "overhead": {
+      "tokens": {
+        "min": min(token_counts) if token_counts else None,
+        "median": statistics.median(token_counts) if token_counts else None,
+        "mean": statistics.mean(token_counts) if token_counts else None,
+        "max": max(token_counts) if token_counts else None,
+        "sum": sum(token_counts) if token_counts else 0,
+      },
+      "calls": {
+        "min": min(call_counts) if call_counts else None,
+        "median": statistics.median(call_counts) if call_counts else None,
+        "mean": statistics.mean(call_counts) if call_counts else None,
+        "max": max(call_counts) if call_counts else None,
+        "sum": sum(call_counts) if call_counts else 0,
+      },
+    },
+  }
+
+  json_out = os.path.join(target_dir, "search_distribution_metrics.json")
+  with open(json_out, "w", encoding="utf-8") as jf:
+    json.dump(pipeline_data, jf, indent=2)
+
+  return md_output
 
 
 def parse_search_results_print(target_dir: str):

@@ -164,7 +164,7 @@ def process_file_metrics(file_path):
   return file_stats
 
 
-def analyze_path(target_path: str):
+def analyze_path(target_path: str, real_wall_time: float = None):
   path = Path(target_path)
   if path.is_file():
     files_to_process = [path]
@@ -254,9 +254,19 @@ def analyze_path(target_path: str):
   log("        MACRO SUMMARY (ACROSS ALL DISCOVERED NODES)         ")
   log("============================================================")
   log(f"Total Nodes/Attempts Analyzed : {total_runs}")
-  log(
-    f"Aggregated Pipeline Time   : {global_pipeline:>7.2f}s computation-hours"
-  )
+  if real_wall_time:
+    concurrency_factor = (
+      (global_pipeline / real_wall_time) if real_wall_time > 0 else 0
+    )
+    log(
+      f"Aggregated Pipeline Time   : {global_pipeline / 60:>7.2f} computation-minutes"
+    )
+    log(f"Real-World Wall Time       : {real_wall_time / 60:>7.2f} minutes")
+    log(f"Concurrency Acceleration   : {concurrency_factor:>7.2f}x speedup")
+  else:
+    log(
+      f"Aggregated Pipeline Time   : {global_pipeline / 3600:>7.2f} computation-hours"
+    )
 
   if global_pipeline > 0:
     log(

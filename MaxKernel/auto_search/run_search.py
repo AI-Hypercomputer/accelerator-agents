@@ -105,6 +105,7 @@ async def run_search(
   **kwargs: Any,
 ) -> Tuple[str, str]:
   """Executes the search algorithm asynchronously for a single reference file."""
+  global_start_time = time.time()
   problem_dir = os.path.dirname(os.path.abspath(reference_file_path))
   default_problem_id, ext = os.path.splitext(
     os.path.basename(reference_file_path)
@@ -172,7 +173,8 @@ async def run_search(
 
       try:
         logger.info("Generating timing summary...")
-        summary_text = analyze_path(dest_dir)
+        run_duration = time.time() - global_start_time
+        summary_text = analyze_path(dest_dir, real_wall_time=run_duration)
         out_file = os.path.join(dest_dir, "timing_summary.md")
         with open(out_file, "w") as f:
           f.write("```text\n" + summary_text + "\n```\n")

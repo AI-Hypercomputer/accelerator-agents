@@ -28,3 +28,51 @@ thinking_planner = BuiltInPlanner(
     thinking_level="high",
   )
 )
+
+
+# MONKEY PATCH GENERATE_CONTENT to handle rate limits
+try:
+  import logging
+
+  import tenacity
+  from google import genai
+
+  def get_retry_decorator():
+    return tenacity.retry(
+      wait=tenacity.wait_exponential(multiplier=1, min=4, max=60),
+      stop=tenacity.stop_after_attempt(10),
+      retry=tenacity.retry_if_exception_type(Exception),
+      before_sleep=tenacity.before_sleep_log(
+        logging.getLogger(__name__), logging.WARNING
+      ),
+    )
+
+  if not hasattr(genai.models.Models, "_original_generate_content"):
+    orig_sync = genai.models.Models.generate_content
+    genai.models.Models._original_generate_content = orig_sync
+
+    @get_retry_decorator()
+    def wrapped_sync(self, *args, **kwargs):
+      return orig_sync(self, *args, **kwargs)
+
+    genai.models.Models.generate_content = wrapped_sync
+
+  if not hasattr(genai.models.AsyncModels, "_original_generate_content"):
+    orig_async = genai.models.AsyncModels.generate_content
+    genai.models.AsyncModels._original_generate_content = orig_async
+
+    @get_retry_decorator()
+    async def wrapped_async(self, *args, **kwargs):
+      import asyncio
+
+      # Gemini API occasionally hangs indefinitely on concurrent quotas.
+      # Force a 90 second hard timeout so it triggers a tenacity retry
+      # instead of infinitely blocking the orchestrator.
+      return await asyncio.wait_for(
+        orig_async(self, *args, **kwargs), timeout=90
+      )
+
+    genai.models.AsyncModels.generate_content = wrapped_async
+except ImportError:
+  pass
+# END MONKEY PATCH

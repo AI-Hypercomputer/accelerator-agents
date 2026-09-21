@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "JAX exp 13 — MaxText XLA flag stack + bs=5: 7,415 tok/s/chip (EXCEEDS MaxText reference)"
 type: experiment
@@ -10,15 +19,6 @@ commit: "v6e8-llama3-8b-jax-20260426-exp13-maxtext-xla-bs5 (image jax-v4)"
 branched_from: v6e8-llama3-8b-jax-20260426-exp1e-baseline
 verdict: supported
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 🏆 **JAX Llama 3 8B trainer at 7,415 tok/s/chip — exceeds MaxText
 reference (7,138 tok/s/chip) by +3.9% per chip.** Stack:

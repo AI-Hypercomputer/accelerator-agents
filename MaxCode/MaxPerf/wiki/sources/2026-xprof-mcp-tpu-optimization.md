@@ -1,10 +1,3 @@
----
-title: "TPU Performance Optimization Guide (xprof-mcp docs)"
-type: source
-tags: [docs, performance, optimization, tpu, roofline, rematerialization, fusion, kv-cache, quantization, sharding, xla]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "TPU Performance Optimization Guide (xprof-mcp docs)"
+type: source
+tags: [docs, performance, optimization, tpu, roofline, rematerialization, fusion, kv-cache, quantization, sharding, xla]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 Practical optimization guide shipped inside the `xprof-mcp` repository. Synthesizes TPU hardware fundamentals, the roofline diagnostic framework, a catalogue of common gotchas (dimension alignment, dtype, materialized broadcasts, dynamic shapes, remat, TP all-reduce, KV cache decode), training and inference playbooks, XLA compiler flags, and a decision tree for profile-driven debugging. This is the highest-density practical "what to check and why" document ingested so far.
 

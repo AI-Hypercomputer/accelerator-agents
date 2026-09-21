@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "jax-huggingface (learning_machine subproject)"
 type: codebase
@@ -9,15 +18,6 @@ author: Han Qi (google)
 created: 2026-04-22
 updated: 2026-04-22
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Four-part tutorial plus matching runnable scripts showing how to execute HuggingFace PyTorch models — Llama-2-7B (transformers) and Stable Diffusion 2-base (diffusers) — under JAX via [torchax](torchax.md). The series walks from eager `torchax.extract_jax` → `jax.jit` with pytree registration → 8-way tensor parallelism → `StaticCache` + `torch.func.functional_call` for fast autoregressive decoding → `torchax.compile` for diffusion pipelines. The scripts are the canonical reference implementations the blog text narrates.
 

@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "JAX exp 47 — VMEM=65536 (lower than default 98304)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-27
 commit: "v6e8-llama3-8b-jax-20260427-exp47-vmem-65536-bs4 (image precast-1)"
 verdict: refuted
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 VMEM=65536 (lower than default 98304) — 7,377/chip 41.4 % MFU, **-4.2 %**. Refuted hard.
 

@@ -1,12 +1,3 @@
----
-title: "graphcast (google-deepmind/graphcast)"
-type: codebase
-tags: [graphcast, deepmind, weather, splash-attention, custom-mask, non-llm, wrapper]
-repo: google-deepmind/graphcast
-commit: 08cf736
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -16,6 +7,15 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "graphcast (google-deepmind/graphcast)"
+type: codebase
+tags: [graphcast, deepmind, weather, splash-attention, custom-mask, non-llm, wrapper]
+repo: google-deepmind/graphcast
+commit: 08cf736
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 DeepMind's graph-based weather-forecasting model (GraphCast + GenCast + WeatherMesh). **Wrapper over upstream splash attention** for non-LLM structured-adjacency attention; no new Pallas kernel. Ingested as the reference for [`custom-splash-masks`](../concepts/custom-splash-masks.md) — shows how to specialize splash for a non-language domain. Per-kernel detail in [§4.4 of the Pallas kernel directory](../analyses/pallas-kernel-directory/04-research-labs.md#44-google-deepmindgraphcast).
 

@@ -1,10 +1,3 @@
----
-title: "Pallas kernel directory — §5 Frameworks & quantization libraries"
-type: analysis
-tags: [directory, pallas, kernels, qwix, aqt, jaxite, pytorch-xla, marin, levanter, tunix, paxml]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Pallas kernel directory — §5 Frameworks & quantization libraries"
+type: analysis
+tags: [directory, pallas, kernels, qwix, aqt, jaxite, pytorch-xla, marin, levanter, tunix, paxml]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Ten repositories that ship Pallas kernels embedded in framework code, wrap Pallas for a different front-end, or (in one case) emit Pallas as a compiler target. These repos are **consumers and thin re-packagers** of Pallas far more than they are kernel authors — almost every genuinely novel kernel here lives in [marin/levanter](https://github.com/marin-community/marin), [google/qwix](https://github.com/google/qwix), or [google/jaxite](https://github.com/google/jaxite); the rest are glue to upstream `jax.experimental.pallas.ops.tpu.*`. Part of [2026-04-23 Pallas kernel directory](../2026-04-23-pallas-kernel-directory.md).
 

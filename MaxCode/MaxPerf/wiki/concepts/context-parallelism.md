@@ -1,11 +1,3 @@
----
-title: "Context Parallelism"
-type: concept
-tags: [stub, parallelism, attention]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 1
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 1
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Context Parallelism"
+type: concept
+tags: [stub, parallelism, attention]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 1
+---
 
 Parallelism axis that splits the **sequence** dimension across devices specifically for attention (where tokens interact), complementing tensor-parallel splits on the hidden dimension. Implemented via Ring Attention or all-to-all variants. Unlocks sequence lengths that exceed any single device's HBM. On TPU, the compute kernel is splash attention (non-ring) or the experimental `ring_attention_kernel` in tokamax.
 

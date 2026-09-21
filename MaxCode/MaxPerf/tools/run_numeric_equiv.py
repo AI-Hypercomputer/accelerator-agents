@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
 # pylint: skip-file
+#!/usr/bin/env python3
 """run_numeric_equiv.py — Run 100-prompt corpus to generate references or compare outputs.
 
 Usage:
@@ -41,7 +41,6 @@ def get_model_name(host, port):
     print(f"Error connecting to server at {url}: {e}", file=sys.stderr)
     sys.exit(1)
 
-
 def query_completion(host, port, model, prompt_text, max_tokens):
   url = f"http://{host}:{port}/v1/completions"
   payload = {
@@ -62,7 +61,6 @@ def query_completion(host, port, model, prompt_text, max_tokens):
   except Exception as e:
     return {"status": "error", "error": str(e)}
 
-
 def load_prompts():
   prompts = []
   if not os.path.isfile(PROMPTS_PATH):
@@ -75,7 +73,6 @@ def load_prompts():
         continue
       prompts.append(json.loads(line))
   return prompts
-
 
 def main():
   parser = argparse.ArgumentParser(description="Numeric Equivalence Tool")
@@ -180,7 +177,6 @@ def main():
     else:
       print("Numeric equivalence passed! All 100 prompts match exactly.")
       sys.exit(0)
-
 
 if __name__ == "__main__":
   main()

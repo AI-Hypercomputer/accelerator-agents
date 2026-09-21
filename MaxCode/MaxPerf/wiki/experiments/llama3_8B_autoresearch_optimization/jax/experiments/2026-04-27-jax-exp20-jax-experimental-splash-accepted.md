@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "JAX exp 20 — Replace tokamax-splash with jax-experimental splash"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-27
 commit: "v6e8-llama3-8b-jax-20260427-exp20-jax-experimental-splash (image precast-1)"
 verdict: supported
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Replace tokamax-splash with jax-experimental splash — 7,142/chip 40.0 % MFU; **almost exactly MaxText's 7,138 number**.
 

@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "MaxText Gemma 4 E4B v6e-8 reference baseline (APPROXIMATION; supported, 282.9 TFLOP/s/device, 30.8% MFU)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-25
 commit: 532c8b3d8
 verdict: supported
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 > **⚠️ This is an architectural approximation, not a true E4B port.** See [`../README.md`](../README.md) for the full caveat. Short version: HF E4B uses `num_kv_shared_layers=18` (last 18 layers reuse K/V from earlier same-type layers); MaxText doesn't implement this. The model run here has 18 extra k/v projection sets — about **+47M params (~0.6 % over true E4B)**. Throughput is a measurement of the dense-shape model that this config builds, not directly comparable to a true E4B implementation.
 

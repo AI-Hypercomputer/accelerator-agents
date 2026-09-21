@@ -19,12 +19,12 @@ and for the one ``rigging.filesystem`` call site inside
 path because we pass ``implementation="pallas_tpu"`` with block sizes that
 have a tuned match (see ``tuned_block_sizes.py``).
 """
-
 from __future__ import annotations
 
 from pathlib import Path
 import sys
 import types
+
 
 _LEVANTER_SRC = (
     Path(__file__).resolve().parents[7]

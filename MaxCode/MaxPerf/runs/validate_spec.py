@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
 # pylint: skip-file
+#!/usr/bin/env python3
 """validate_spec.py — Validation and artifact generation utility for optimization_spec.json.
 
 Validates the standardization schema and provides helper extraction for:

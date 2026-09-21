@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "JAX exp 54 — Pre-cast bf16 weights once per train_step (vs cast inside model_fn)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-27
 commit: "v6e8-llama3-8b-jax-20260427-exp54-precast-bf16-weights-bs4 (image precast-1)"
 verdict: refuted
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Pre-cast bf16 weights once per train_step (vs cast inside model_fn) — 7,615/chip 42.7 % MFU, **-1.1 %**.
 

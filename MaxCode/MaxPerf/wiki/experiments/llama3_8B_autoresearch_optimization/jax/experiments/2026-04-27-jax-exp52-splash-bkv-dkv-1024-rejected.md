@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "JAX exp 52 — SPLASH_BKV_DKV=1024 (smaller bwd block; default 2048)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-27
 commit: "v6e8-llama3-8b-jax-20260427-exp52-splash-bkv-dkv-1024 (image precast-1)"
 verdict: refuted
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 SPLASH_BKV_DKV=1024 (smaller bwd block; default 2048) — 7,446/chip 41.7 % MFU, **-3.3 %**.
 

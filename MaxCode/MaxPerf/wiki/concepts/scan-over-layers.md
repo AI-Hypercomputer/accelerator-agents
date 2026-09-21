@@ -1,11 +1,3 @@
----
-title: "Scan Over Layers"
-type: concept
-tags: [stub, optimization, compile-time]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 1
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 1
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Scan Over Layers"
+type: concept
+tags: [stub, optimization, compile-time]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 1
+---
 
 `jax.lax.scan` / torchprime `scan_layers` pattern that folds transformer layers into a scan; compile time O(N)→O(1) with a backward sharding gotcha.
 

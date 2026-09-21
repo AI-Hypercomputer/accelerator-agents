@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "exp 53 — Splash block-size sweep at seq=2048 b=1 fp32-master"
 type: experiment
@@ -9,15 +18,6 @@ tags: [experiment, jax, gemma4, splash, fp32-master, block-sweep, flat, rejected
 created: 2026-04-24
 updated: 2026-04-24
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Follow-up from the new-regime baseline ([exp 52](2026-04-24-exp52-jax-fp32master-seq2k-accepted.md)). At seq=2048 the default splash block_q=min(1024,seq)=1024 gives 2 tiles per head; try full-tile (block=2048) and smaller (block=512) to see if either moves the needle. Outcome: **block=2048 errors out of VMEM**, block=512 is dead flat (−0.0 %, within noise). Splash block size is not a TPS lever at this config. Mirrors the [exp 48 plateau](2026-04-24-exp48-jax-splash-param-sweep-potential.md) observation in the old regime.
 

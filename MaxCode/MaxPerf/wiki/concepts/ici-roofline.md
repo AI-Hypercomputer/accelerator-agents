@@ -1,11 +1,3 @@
----
-title: "ICI Roofline"
-type: concept
-tags: [stub, performance, interconnect]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 1
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 1
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "ICI Roofline"
+type: concept
+tags: [stub, performance, interconnect]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 1
+---
 
 Bandwidth ceiling imposed by intra-slice interconnect on sharded operations; crossover depends on the sharded dimension, not batch size.
 

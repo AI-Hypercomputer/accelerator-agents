@@ -1,5 +1,5 @@
-#!/usr/bin/env python
 # pylint: skip-file
+#!/usr/bin/env python
 """Forward numerical parity: native-JAX port vs HF PyTorch reference.
 
 Loads Gemma 4 E4B in both stacks on CPU (bf16), feeds an all-zero input of
@@ -11,7 +11,6 @@ ground truth. The JAX port should match within bf16 tolerance (abs_err <=
 1e-2 is the bar given to us; realistically bf16 softmax/logits are noisy
 at ~5e-3 on a 42-layer model with softcap).
 """
-
 from __future__ import annotations
 
 import os
@@ -24,6 +23,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import torch
+
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))

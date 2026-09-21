@@ -1,10 +1,3 @@
----
-title: "Pallas-on-Triton fused GEMM + activation + GEMM"
-type: concept
-tags: [pallas, triton, gpu, gated-linear-unit, swiglu, fused-activation, alphafold3, stub]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Pallas-on-Triton fused GEMM + activation + GEMM"
+type: concept
+tags: [pallas, triton, gpu, gated-linear-unit, swiglu, fused-activation, alphafold3, stub]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Pattern: two matmuls sharing one activation load, with the activation function (SiLU / GELU / ...) applied between them — all in a single Pallas-on-Triton kernel with optional epilogue and `dst` output aliasing. First-party reference: AlphaFold3 `PallasGatedLinearUnit` @ v3.0.1. *Stub — expand when more sources are available.*
 

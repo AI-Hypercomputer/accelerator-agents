@@ -1,12 +1,3 @@
----
-title: "qwix (google/qwix)"
-type: codebase
-tags: [qwix, quantization, pallas, mosaic-tpu, qarray, aqt-successor, qat, ptq]
-repo: google/qwix
-commit: b966dc4
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -16,6 +7,15 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "qwix (google/qwix)"
+type: codebase
+tags: [qwix, quantization, pallas, mosaic-tpu, qarray, aqt-successor, qat, ptq]
+repo: google/qwix
+commit: b966dc4
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Google's quantization framework — **successor to [AQT](aqt.md)**. Provides a `QArray` tensor type and `pallas_call` wrappers that make Pallas kernels quantization-aware. Used by [maxtext](maxtext.md) Megablox for int4/int8 MoE. TPU Pallas surface concentrated in `qwix/contrib/kernels/quantized_matmul.py`. Per-kernel detail in [§5 of the Pallas kernel directory](../analyses/pallas-kernel-directory/05-frameworks-quant.md).
 

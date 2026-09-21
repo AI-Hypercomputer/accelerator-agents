@@ -12,7 +12,6 @@ Llama 3 has its OWN lm_head — there is no weight-tying special case
 (unlike Gemma 4 E4B). No multimodal / no shared-KV layers / no
 modality-specific keys.
 """
-
 from __future__ import annotations
 
 import glob
@@ -24,6 +23,7 @@ from flax import nnx
 import jax
 import jax.numpy as jnp
 import numpy as np
+
 
 # -----------------------------------------------------------------------------
 # Safetensors discovery + iteration

@@ -1,12 +1,3 @@
----
-title: "ejkernel (erfanzar/ejkernel)"
-type: codebase
-tags: [ejkernel, pallas, mosaic-tpu, triton, community, flash-attention, paged-attention, mla, gated-delta-rule, quantized-matmul, all-gather-matmul, ring-attention-wrapper]
-repo: erfanzar/ejkernel
-commit: f2289a0
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -16,6 +7,15 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "ejkernel (erfanzar/ejkernel)"
+type: codebase
+tags: [ejkernel, pallas, mosaic-tpu, triton, community, flash-attention, paged-attention, mla, gated-delta-rule, quantized-matmul, all-gather-matmul, ring-attention-wrapper]
+repo: erfanzar/ejkernel
+commit: f2289a0
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Single-author community kernel library positioning as "production-grade" — **broadest community TPU Pallas surface** surveyed (17 TPU kernels). Consumed by [EasyDeL](EasyDeL.md) via an operations registry. License Apache-2.0. Each TPU kernel is a folder under `ejkernel/kernels/_pallas/tpu/<kernel>/` with `_interface.py`, `_pallas_impl_fwd.py`, `_pallas_impl_bwd.py`. **Ring-attention here is explicitly a Splash wrapper — orchestration, not a novel kernel.** Per-kernel detail in [§6.1 of the Pallas kernel directory](../analyses/pallas-kernel-directory/06-community-research.md#61-erfanzarejkernel).
 

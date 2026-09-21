@@ -1,10 +1,3 @@
----
-title: "XProf Roofline Model Tool"
-type: source
-tags: [docs, profiler, roofline, arithmetic-intensity, memory-bound, compute-bound, hbm, vmem, cmem]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf Roofline Model Tool"
+type: source
+tags: [docs, profiler, roofline, arithmetic-intensity, memory-bound, compute-bound, hbm, vmem, cmem]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 The Roofline Model tool in xprof is a visual performance model that classifies a program (or individual ops) as memory-bound vs. compute-bound by plotting achieved FLOPS/s against operational intensity (FLOPS per byte accessed). It draws the hardware's theoretical "roof" — the minimum of peak FLOPS and (operational intensity × peak memory bandwidth) — and shows how far the workload sits from that ceiling. Supported on TPU (GA) and GPU (beta).
 

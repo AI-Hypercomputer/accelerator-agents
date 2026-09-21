@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 72a — tokamax-shipped splash attention (use_base2_exp + fuse_reciprocal) @ bs=3 seq=8192 (ACCEPTED, NEW PROGRAM-TARGET BEST)"
 type: experiment
@@ -10,15 +19,6 @@ commit: "v6e8-llama3-8b-torchax-20260426-exp72a-tokamax-splash (image hf-v34)"
 branched_from: v6e8-llama3-8b-torchax-20260426-exp65-cxla-autotune
 verdict: supported
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 🏆 **Program-target advanced.** Replacing the upstream
 `jax.experimental.pallas.ops.tpu.splash_attention` kernel with the tokamax-

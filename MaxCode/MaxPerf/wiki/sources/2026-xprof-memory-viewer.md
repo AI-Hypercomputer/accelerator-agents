@@ -1,10 +1,3 @@
----
-title: "XProf Memory Viewer (docs)"
-type: source
-tags: [docs, profiler, xprof, memory-viewer, hbm, vmem, cmem, tpu, gpu]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf Memory Viewer (docs)"
+type: source
+tags: [docs, profiler, xprof, memory-viewer, hbm, vmem, cmem, tpu, gpu]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 Memory Viewer is the **static** memory-analysis tool in XProf — built entirely from XLA compiler output, it displays peak-usage attribution, buffer lifetimes, and padding overhead for a single HLO module.
 

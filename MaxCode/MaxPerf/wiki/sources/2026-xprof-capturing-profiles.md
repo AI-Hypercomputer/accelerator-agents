@@ -1,10 +1,3 @@
----
-title: "XProf docs: Capturing profiles"
-type: source
-tags: [docs, profiler, profile-capture, xprof, tpu, gpu]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf docs: Capturing profiles"
+type: source
+tags: [docs, profiler, profile-capture, xprof, tpu, gpu]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 Top-level XProf guide that enumerates the two mechanisms for capturing a profile — **programmatic** (code-instrumented `start_trace`/`stop_trace` or context manager) and **on-demand / manual** (XProf UI's "CAPTURE PROFILE" button talks to a gRPC profiler server started inside the ML workload). It also introduces **continuous profiling snapshots** (retroactive capture at an instant), explains how a single run can hold multiple sessions, recommends `cloud-diagnostics-xprof` for GCP, and lists common troubleshooting cases. This is the "start here" doc — framework specifics live in the JAX/PyTorch-XLA/TensorFlow sibling pages.
 

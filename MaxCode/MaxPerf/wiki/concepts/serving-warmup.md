@@ -1,11 +1,3 @@
----
-title: "Serving Warmup"
-type: concept
-tags: [stub, inference, workflow]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 1
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 1
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Serving Warmup"
+type: concept
+tags: [stub, inference, workflow]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 1
+---
 
 Pre-compiling and warming every (batch, seq_len) shape before accepting production traffic to avoid runtime recompilation stalls.
 

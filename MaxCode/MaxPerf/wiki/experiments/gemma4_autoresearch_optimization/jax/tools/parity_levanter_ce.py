@@ -19,7 +19,6 @@ Usage::
 
 from inside ``wiki/experiments/gemma4_autoresearch_optimization/jax/``.
 """
-
 from __future__ import annotations
 
 import os

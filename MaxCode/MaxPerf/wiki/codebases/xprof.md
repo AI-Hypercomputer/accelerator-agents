@@ -1,12 +1,4 @@
----
-title: "XProf (OpenXLA profiler + TensorBoard plugin)"
-type: codebase
-tags: [profiler, xplane, hlo, tpu, openxla, tensorboard, trace-viewer, roofline]
-commit: 2e33c0119d9ccaba7630e193bc7bfa014ce64550
-repo: https://github.com/openxla/xprof
-created: 2026-04-22
-updated: 2026-04-22
----
+<!-- disableFinding("webserver") -->
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -16,6 +8,15 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf (OpenXLA profiler + TensorBoard plugin)"
+type: codebase
+tags: [profiler, xplane, hlo, tpu, openxla, tensorboard, trace-viewer, roofline]
+commit: 2e33c0119d9ccaba7630e193bc7bfa014ce64550
+repo: https://github.com/openxla/xprof
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 XProf is OpenXLA's performance profiler for JAX, PyTorch/XLA, and TensorFlow workloads — the primary profiler whose outputs (`.xplane.pb` traces, HLO dumps, and derived tool views) every experiment in this wiki consumes. This page describes the *tool's structure*: where profile formats live, how metrics are computed, and what the CLI/plugin surface looks like. Deep concept docs under `raw/code/xprof/docs/` will be ingested separately as `source` pages.
 
@@ -90,7 +91,7 @@ Boundaries:
 - `README.md` — CLI args, logdir layout (`<log_dir>/plugins/profile/<session>/*.xplane.pb`), distributed profiling setup.
 - `docs/` — 18 markdown concept guides (capturing, trace viewer, roofline, memory, HLO op stats, megascale, JAX/PyTorch-XLA profiling, perf counters, utilization viewer, etc.). **Ingested separately as `source` pages** — do not duplicate here; back-link from those pages.
 - `plugin/xprof/profile_plugin.py` (1900 lines) — the Python HTTP surface; route table, tool dispatch, cache, capture, CSV export.
-- `plugin/xprof/server.py` — standalone web server (cheroot WSGI) and CLI flag parsing.
+- `plugin/xprof/server.py` — standalone webserver (cheroot WSGI) and CLI flag parsing.
 - `plugin/xprof/profile_io.py` — `.xplane.pb` discovery and GCS/local filesystem abstraction.
 - `plugin/xprof/convert/raw_to_tool_data.py` — Python-side tool dispatch; formats the `params` dict passed to each C++ processor.
 - `plugin/xprof/protobuf/*.proto` — **all tool output schemas** (see below).

@@ -1,10 +1,3 @@
----
-title: "manual MLIR-dialect Pallas (below `pallas_call`)"
-type: concept
-tags: [pallas, mosaic-tpu, mlir, dialect, sparsecore, tcgen05, maxtext, tokamax, stub]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "manual MLIR-dialect Pallas (below `pallas_call`)"
+type: concept
+tags: [pallas, mosaic-tpu, mlir, dialect, sparsecore, tcgen05, maxtext, tokamax, stub]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 When `pl.pallas_call` doesn't expose the hardware feature you need (SparseCore primitives, Blackwell TCGEN05 / TMEM, specific register layouts), drop below it to `jax.experimental.mosaic` + `jaxlib.mlir.dialects.{arith, func, memref, scf, vector}`. First-party references: MaxText `sc_gather_reduce.py` (SparseCore), tokamax SM100 attention (TMEM). *Stub — expand when more sources are available.*
 

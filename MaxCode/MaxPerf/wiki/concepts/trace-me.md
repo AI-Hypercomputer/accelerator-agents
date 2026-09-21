@@ -1,11 +1,3 @@
----
-title: "TraceMe"
-type: concept
-tags: [stub, profiling]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 5
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 5
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "TraceMe"
+type: concept
+tags: [stub, profiling]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 5
+---
 
 Lower-level annotation primitive in the XProf tracing runtime that emits a named timeline event; all framework-specific trace wrappers (`jax.profiler.TraceAnnotation`, `torch_xla.debug.profiler.Trace` / `xp.Trace`, `tf.profiler.experimental.Trace`) ultimately lower to `TraceMe`. Appears as its own track in the Trace Viewer.
 

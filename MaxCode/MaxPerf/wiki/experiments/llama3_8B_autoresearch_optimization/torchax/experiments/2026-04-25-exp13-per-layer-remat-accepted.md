@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 13 — Per-layer gradient_checkpoint (ACCEPTED at OOM-shapes; bs=4 seq=2048 + bs=8 seq=1024 unlocked)"
 type: experiment
@@ -10,15 +19,6 @@ commit: "v6e8-llama3-8b-torchax-20260425-exp13-scan (image hf-v5)"
 branched_from: v6e8-llama3-8b-torchax-20260425-exp9-splash-autotuned-bs4
 verdict: supported
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 After [exp 11's](2026-04-25-exp11-remat-rejected.md) finding that an
 **outer-loss-only** `gradient_checkpoint` with `nothing_saveable` doesn't

@@ -1,5 +1,5 @@
-#!/usr/bin/env python
 # pylint: skip-file
+#!/usr/bin/env python
 """Numerical parity: splash-pallas attention vs XLA-SDPA inside the NNX port.
 
 Two levels of comparison:
@@ -13,7 +13,6 @@ Two levels of comparison:
 Runs on-TPU because splash is a TPU-only kernel. Tests one sliding-window
 layer and one full-attention layer.
 """
-
 from __future__ import annotations
 
 import os

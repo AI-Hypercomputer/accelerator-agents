@@ -1,12 +1,3 @@
----
-title: "pallas-forge"
-type: codebase
-tags: [pallas, mosaic, tpu, autotuning, roofline, rmsnorm, swiglu, matmul, kernels, teaching]
-repo: linhkid/pallas-forge
-commit: 090510b7b36796a31f7bacee04c31d7e1909cf76
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -16,6 +7,15 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "pallas-forge"
+type: codebase
+tags: [pallas, mosaic, tpu, autotuning, roofline, rmsnorm, swiglu, matmul, kernels, teaching]
+repo: linhkid/pallas-forge
+commit: 090510b7b36796a31f7bacee04c31d7e1909cf76
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Lightweight auto-tuning framework for [Pallas](../concepts/pallas-kernel.md) kernels on TPU. Ships three reference kernels (tiled matmul, fused RMSNorm+residual, fused SwiGLU/GeGLU), a kernel-agnostic grid/random-search tuner with proper warmup + statistical timing, and a roofline + XProf-trace integration. The library's stated thesis is explicitly honest: it helps answer *"is my custom kernel actually beating XLA?"* — and in two of its three reference kernels on v5e, the answer is **no**. Already used once in this wiki's autoresearch loop (gemma4 [exp 20](../experiments/gemma4_autoresearch_optimization/2026-04-23-exp20-pallas-forge-rmsnorm-rejected.md)) and found to lack backward passes, making it unusable in training as-is.
 

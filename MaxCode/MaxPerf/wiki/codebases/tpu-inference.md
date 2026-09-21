@@ -1,12 +1,3 @@
----
-title: "tpu-inference (vllm-project/tpu-inference)"
-type: codebase
-tags: [vllm, tpu-inference, pallas, mosaic-tpu, ragged-paged-attention, mla, megablox, fused-moe, quantized-matmul, all-gather-matmul, gdn, sparsecore, crown-jewel-tuning-tables]
-repo: vllm-project/tpu-inference
-commit: a657060d
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -16,6 +7,15 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "tpu-inference (vllm-project/tpu-inference)"
+type: codebase
+tags: [vllm, tpu-inference, pallas, mosaic-tpu, ragged-paged-attention, mla, megablox, fused-moe, quantized-matmul, all-gather-matmul, gdn, sparsecore, crown-jewel-tuning-tables]
+repo: vllm-project/tpu-inference
+commit: a657060d
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 vLLM's TPU inference backend and the **most comprehensive Pallas kernel collection** surveyed in this wiki — broadest novel-content surface on TPU. Authoritative author for: Ragged-Paged-Attention v2/v3 (+ `_hd64`), Multi-Latent Attention v1/v2, Fused-MoE v1, blockwise Quantized Matmul (600+ tuned entries), Fused AllGather+Matmul (collective overlap), GDN/triangle-solver (Qwen-Next), SparseCore gather/scatter (v5p/v7x), structured sparse matmul v1. **Crown-jewel tuning artifacts**: ~1,200 RPA v2 entries, 600+ quantized_matmul entries (v6 96 MiB VMEM / v7 48 MiB VMEM), hundreds of RPA v3 entries. Per-kernel detail in [§3.1 of the Pallas kernel directory](../analyses/pallas-kernel-directory/03-inference-engines.md#31-vllm-projecttpu-inference).
 

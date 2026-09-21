@@ -1,12 +1,3 @@
----
-title: "maxtext (AI-Hypercomputer/maxtext)"
-type: codebase
-tags: [maxtext, pallas, mosaic-tpu, splash, paged-attention, megablox, sparsecore, gemma, llama, deepseek, trainer]
-repo: AI-Hypercomputer/maxtext
-commit: 532c8b3d8
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -16,6 +7,15 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "maxtext (AI-Hypercomputer/maxtext)"
+type: codebase
+tags: [maxtext, pallas, mosaic-tpu, splash, paged-attention, megablox, sparsecore, gemma, llama, deepseek, trainer]
+repo: AI-Hypercomputer/maxtext
+commit: 532c8b3d8
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Google AI-Hypercomputer's reference JAX trainer for Gemma / Llama / DeepSeek / Qwen / Mistral / Kimi on TPU. **The closest public analogue of this wiki's gemma4 program**. Ships Pallas kernels for training attention (splash), serving attention (paged + ragged), and MoE (megablox GMM with int4/int8 via qwix). Notable: `sc_gather_reduce.py` uses raw MLIR dialects below `pallas_call` for SparseCore (v5p/v7x) — unique MLIR-Pallas entry in the ecosystem. Per-kernel detail in [§2.1 of the Pallas kernel directory](../analyses/pallas-kernel-directory/02-ai-hypercomputer.md#21-ai-hypercomputermaxtext).
 

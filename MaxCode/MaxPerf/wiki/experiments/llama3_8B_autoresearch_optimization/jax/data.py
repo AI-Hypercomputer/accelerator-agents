@@ -3,12 +3,12 @@
 
 Mirrors `../torchax/data.py` so the two trainers see identical batches.
 """
-
 from __future__ import annotations
 
 from typing import Iterator, Optional, Tuple
 
 import numpy as np
+
 
 IGNORE_INDEX = -100
 

@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 17 — bs=1 seq=8192 + per-layer remat (ACCEPTED, 32.2% MFU at program-target seq)"
 type: experiment
@@ -10,15 +19,6 @@ commit: "v6e8-llama3-8b-torchax-20260425-exp13-scan (image hf-v5)"
 branched_from: v6e8-llama3-8b-torchax-20260425-exp13-scan
 verdict: supported
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 **First successful run at the program-target sequence length** —
 [program.md](../../program.md) calls out `seq=8192` as the final target.

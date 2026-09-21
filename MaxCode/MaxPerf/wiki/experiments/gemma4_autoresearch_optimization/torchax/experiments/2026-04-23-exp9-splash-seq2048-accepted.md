@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 9 — splash attention at seq=2048 batch=1 (ACCEPTED, +1.9% + fixed NaN)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: "n/a (pre-branching-model, consolidated into 71a45ae)"
 verdict: supported
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 > *Backfilled from `RESULTS.tsv` + `OBSERVATIONS.md` threading + commit `71a45ae` narrative. The original run predates the per-experiment branching discipline; the granular pass happens to be captured in the aggregate-commit but not in a dedicated writeup until now.*
 

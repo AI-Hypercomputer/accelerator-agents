@@ -1,10 +1,3 @@
----
-title: "XProf Megascale Viewer"
-type: source
-tags: [docs, profiler, megascale, dcn, collective-communication, perfetto, multi-slice, action-graph]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf Megascale Viewer"
+type: source
+tags: [docs, profiler, megascale, dcn, collective-communication, perfetto, multi-slice, action-graph]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 The Megascale Viewer is xprof's replacement for the older Megascale Stats tool. It opens a profile inside Perfetto UI and exposes, per host, aggregated network counters plus per-TPU timelines that include a **Megascale** track whose children are the action graphs of individual Megascale collectives. This lets the user connect a slow TPU op (e.g. a long `recv-done`) to the concrete host-side action (NetworkSend / NetworkReceive / D2H / H2D) that unblocked it, and read network latency, transfer size, and peer device IDs directly from event arguments.
 

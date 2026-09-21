@@ -58,7 +58,6 @@ body) fits and matches exp 36's remat choices on a per-layer basis.
 Env gate: set ``JAX_SCAN_LAYERS=1`` to select this path.
 Default off — exp 36 (Python for-loop) remains the baseline.
 """
-
 from __future__ import annotations
 
 import os

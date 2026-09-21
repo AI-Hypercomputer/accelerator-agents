@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 39 — JAX splash + batch=4 (REJECTED, −6.4%; memory-pressure regression)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: pending
 verdict: refuted
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Bumped batch from 3 (exp 36, the JAX-stack best) to 4. **Batch=4 FITS on the JAX stack** where torchax exp 22 compile-time OOM'd at the same config — but **TPS regresses −6.4 % (34,614 → 32,402)**. Memory pressure at the HBM ceiling slows per-token execution: step time 355 → 506 ms for 4/3 tokens, giving per-token 28.88 → 30.86 µs.
 

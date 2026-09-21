@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 3 — Splash + bs=4 (ACCEPTED, +55.6% TPS, +12.8 pp MFU)"
 type: experiment
@@ -10,15 +19,6 @@ commit: "v6e8-llama3-8b-torchax-20260425-exp3-splash-bs4"
 branched_from: v6e8-llama3-8b-torchax-20260425-exp2-splash-bs2
 verdict: supported
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 With splash attention installed (from [exp 2](2026-04-25-exp2-splash-bs2-potential.md)),
 double the per-chip batch from 2 to **4**. Bs=4 was OOM on the baseline by

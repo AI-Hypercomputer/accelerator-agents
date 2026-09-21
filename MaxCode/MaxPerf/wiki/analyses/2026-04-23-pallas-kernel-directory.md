@@ -1,10 +1,3 @@
----
-title: "Directory: Pallas kernels across the JAX ecosystem"
-type: analysis
-tags: [directory, pallas, kernels, catalog, tpu, gpu, survey]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Directory: Pallas kernels across the JAX ecosystem"
+type: analysis
+tags: [directory, pallas, kernels, catalog, tpu, gpu, survey]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Repo-by-repo catalog of every Pallas kernel surfaced across ~30 public repositories, with source-code references, stability statements, performance claims (verbatim from source when they exist), application use cases, and known callers. This is a directory, not a synthesis — the page answers "where does Pallas kernel X live, is it maintained, and who uses it?" for the widest possible value of X. **Detailed per-kernel rows live in 6 subpages under [pallas-kernel-directory/](pallas-kernel-directory/);** this page is the cross-cutting index that groups by functional category, summarises the vendoring graph, ranks ingest candidates, and reconciles findings against the [2026-04-23 Pallas kernel source survey](2026-04-23-pallas-kernel-source-survey.md).
 

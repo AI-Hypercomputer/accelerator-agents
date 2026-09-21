@@ -1,11 +1,3 @@
----
-title: "TPU Duty Cycle"
-type: concept
-tags: [stub, metric, performance]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 1
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 1
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "TPU Duty Cycle"
+type: concept
+tags: [stub, metric, performance]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 1
+---
 
 Fraction of wall time during which the TPU was busy executing work.
 

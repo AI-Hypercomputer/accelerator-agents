@@ -1,11 +1,3 @@
----
-title: "Mosaic Kernel"
-type: concept
-tags: [stub, compiler, kernels]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 3
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 3
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Mosaic Kernel"
+type: concept
+tags: [stub, compiler, kernels]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 3
+---
 
 TPU-targeted kernel lowering backend used by Pallas; the canonical path to authoring custom TPU kernels.
 

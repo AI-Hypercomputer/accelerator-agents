@@ -1,11 +1,3 @@
----
-title: "ICI (Inter-Chip Interconnect)"
-type: concept
-tags: [stub, hardware, interconnect]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 6
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 6
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "ICI (Inter-Chip Interconnect)"
+type: concept
+tags: [stub, hardware, interconnect]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 6
+---
 
 Intra-slice high-bandwidth interconnect between TPU chips within an island; used for tensor-parallel and FSDP collectives. Distinct from DCN.
 

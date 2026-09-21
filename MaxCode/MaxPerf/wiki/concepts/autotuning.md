@@ -1,11 +1,3 @@
----
-title: "Autotuning"
-type: concept
-tags: [stub, compiler, optimization]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 3
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 3
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Autotuning"
+type: concept
+tags: [stub, compiler, optimization]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 3
+---
 
 Search over kernel-config space to find the fastest implementation for a given shape/dtype; applies to XLA and to Tokamax's HLO-walking autotuner.
 

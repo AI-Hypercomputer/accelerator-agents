@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 30 — latency_hiding_scheduler flag in isolation (INCONCLUSIVE/no-op; clears a culprit)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: "branch perfautoresearch/v6e4-20260423-exp30-latency-hiding-solo"
 verdict: inconclusive
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Enabled **only** `--xla_tpu_enable_latency_hiding_scheduler=true` via `LIBTPU_INIT_ARGS`, with no other flag changes. Goal: decide whether latency-hiding was the bad actor in the exp 1 / exp 13 / exp 21 collective-flag-bundle regressions, or if the async-collective-fusion flags were. **Result: TPS 33,371 vs exp 25's 33,372 (−0.003 %, i.e. statistically identical).** Latency-hiding-scheduler is a no-op at this workload size — neither helps nor hurts. The async-collective-fusion flags are therefore the bundle regression's culprit.
 

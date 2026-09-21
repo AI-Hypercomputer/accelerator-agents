@@ -1,11 +1,3 @@
----
-title: "Dtype Strategy"
-type: concept
-tags: [stub, optimization]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 1
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 1
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Dtype Strategy"
+type: concept
+tags: [stub, optimization]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 1
+---
 
 Choice and mixing of bf16, fp32, fp8, int8 across params/activations/compute; bf16 is native on MXU and fp32 weights force per-matmul cast (~17% cost).
 

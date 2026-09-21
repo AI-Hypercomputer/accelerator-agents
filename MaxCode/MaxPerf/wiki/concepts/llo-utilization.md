@@ -1,11 +1,4 @@
----
-title: "LLO Utilization"
-type: concept
-tags: [profiling, kernels, bottlenecks, custom-calls]
-created: 2026-04-22
-updated: 2026-07-13
-sources: 1
----
+<!-- disableFinding("vice versa") -->
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +8,14 @@ sources: 1
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "LLO Utilization"
+type: concept
+tags: [profiling, kernels, bottlenecks, custom-calls]
+created: 2026-04-22
+updated: 2026-07-13
+sources: 1
+---
 
 The **LLO (Low-Level Op) Utilization** track is a visualization in the XProf Trace Viewer that displays hardware-resource usage inside TPU custom calls (including Pallas and Mosaic kernels). Since custom calls are natively compiled outside of standard XLA fusion passes, they appear as opaque blocks by default. Inspecting LLO tracks is critical for diagnosing performance bottlenecks inside custom low-level kernels.
 
@@ -62,7 +63,7 @@ By analyzing the LLO tracks, you can determine why a kernel is underperforming a
 
 ### C. Pipeline Stage Imbalance (bubbles)
 *   **Symptom**: Alternating high utilization peaks between MXU (matrix operations) and VPU (vector calculations, e.g., softmax/activations).
-*   **Cause**: Pipeline stages are serialized; the MXU sits idle while the VPU completes vector reductions, or the other way around.
+*   **Cause**: Pipeline stages are serialized; the MXU sits idle while the VPU completes vector reductions, or vice versa.
 *   **Resolution**: Re-size the thread tile blocks (using algebraic pipeline stage balancing) so that both stages take equal wall-clock execution time per loop iteration.
 
 ---

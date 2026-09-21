@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 3 — full activation remat via jax.checkpoint (KEEP, memory-first prep)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: "wiki:HEAD; train.py: grad_fn = jax.value_and_grad(jax.checkpoint(forward_loss))"
 verdict: supported
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Wrapped `forward_loss` with `jax.checkpoint` to recompute every activation during the backward pass instead of stashing intermediates. **Peak HBM dropped 29.69 → 21.08 GiB (−29%)** at the cost of **+27.5% step time** — within the predicted 30–40% full-remat overhead. This is the memory-first prep step for exp 4 (doubled batch).
 

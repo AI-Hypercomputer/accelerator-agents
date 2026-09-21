@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
 # pylint: skip-file
+#!/usr/bin/env python3
 import os
 
 file_path = os.path.expanduser("~/bench_serving/backend_request_func.py")

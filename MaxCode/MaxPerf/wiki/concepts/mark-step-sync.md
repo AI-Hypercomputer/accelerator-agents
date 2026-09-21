@@ -1,11 +1,3 @@
----
-title: "Mark-Step Sync"
-type: concept
-tags: [stub, profiling, pytorch, compile-time]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 3
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 3
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Mark-Step Sync"
+type: concept
+tags: [stub, profiling, pytorch, compile-time]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 3
+---
 
 PyTorch/XLA lazy-execution boundary (`xm.mark_step`, `torch_xla.step`) that forces graph compilation and execution — required to get meaningful profile intervals.
 

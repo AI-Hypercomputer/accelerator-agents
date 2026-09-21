@@ -1,10 +1,3 @@
----
-title: "online softmax with logit sink"
-type: concept
-tags: [pallas, attention, softmax, flash-attention, splash-attention, axlearn, stub]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "online softmax with logit sink"
+type: concept
+tags: [pallas, attention, softmax, flash-attention, splash-attention, axlearn, stub]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Extension to the online-softmax step in flash/splash attention that adds a learnable "sink" logit to the denominator — widely used as a streaming-attention regularizer. *Stub — expand when more sources are available.*
 

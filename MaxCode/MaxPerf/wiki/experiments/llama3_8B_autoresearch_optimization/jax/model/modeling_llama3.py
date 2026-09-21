@@ -42,7 +42,6 @@ Attention dispatch is env-gated by ``JAX_ATTENTION_IMPL``:
   - "xla":   plain `jnp.einsum` SDPA with explicit `_repeat_kv` for GQA
     (used as the SDPA fallback / numerical reference).
 """
-
 from __future__ import annotations
 
 import math
@@ -53,6 +52,7 @@ from flax import nnx
 import jax
 import jax.numpy as jnp
 from transformers import LlamaConfig
+
 
 # -----------------------------------------------------------------------------
 # Stateless helpers (pure jax — not nnx.Modules)

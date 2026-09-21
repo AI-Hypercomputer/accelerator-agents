@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 35 — splash pallas attention in JAX (POTENTIAL, +0.3 % TPS vs exp 34, flat within noise)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: TBD
 verdict: inconclusive
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Wire `jax.experimental.pallas.ops.tpu.splash_attention` into the native-JAX (Flax NNX) port. Mirrors the torchax exp-8/17/24/25 compound. Expected +2–5 % TPS at batch=1 seq=1024 based on the torchax exp-8 gain at batch=2; actual result: **+0.33 % (30,386 TPS vs 30,285 baseline)** — **flat within noise**. Verdict: `-potential`. The kernel works correctly (loss trajectory identical to exp 34: both land at **2.2969 at step 19**; smoke-5 loss at steps 2/4 = 2.97/2.02 matches baseline 2.94/1.98 within bf16-reorder noise), and the HLO-op diff shows splash does save ~65 ms / 3-step window on `convolution fusion` — but splash itself adds ~17 ms / 3-step in `custom fusion`, so net step-time delta is +0.1 ms (noise).
 

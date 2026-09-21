@@ -1,5 +1,5 @@
-#!/usr/bin/env python
 # pylint: skip-file
+#!/usr/bin/env python
 """Gemma 4 E4B fine-tune trainer — **native JAX** (Flax NNX).
 
 Mirrors the torchax trainer's CLI, summary block, sharding strategy, and
@@ -13,7 +13,6 @@ Differences from the torchax path:
     follow-up — see the `_attn_xla_sdpa` comment in the model file.
   - weights are loaded in bf16 directly into sharded jax.Arrays.
 """
-
 from __future__ import annotations
 
 import argparse
@@ -23,6 +22,7 @@ import random
 import sys
 import time
 from typing import Optional
+
 
 DEFAULTS = {
     "model_id": "google/gemma-4-E4B",

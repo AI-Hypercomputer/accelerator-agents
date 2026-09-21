@@ -1,10 +1,3 @@
----
-title: "tokamax docs — splash attention (TPU)"
-type: source
-tags: [docs, kernels, pallas, attention, splash-attention, flash-attention, tpu, stub]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "tokamax docs — splash attention (TPU)"
+type: source
+tags: [docs, kernels, pallas, attention, splash-attention, flash-attention, tpu, stub]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 The splash-attention doc in the tokamax repo is a placeholder at the time of ingest — the full kernel deep-dive is "coming soon". The authoritative description of the kernel lives in the code itself (`tokamax/_src/ops/experimental/tpu/splash_attention/`) and in the [tokamax codebase page](../codebases/tokamax.md). This source page captures what the doc *does* say, records that splash attention is currently tokamax's headline TPU attention kernel, and points downstream `splash-attention` concept work at the code rather than the doc.
 

@@ -1,12 +1,3 @@
----
-title: "jaxite (google/jaxite)"
-type: codebase
-tags: [jaxite, fhe, cggi, bootstrap, pallas, mosaic-tpu, non-ml, integer-arithmetic, niche]
-repo: google/jaxite
-commit: e4a3351
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -16,6 +7,15 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "jaxite (google/jaxite)"
+type: codebase
+tags: [jaxite, fhe, cggi, bootstrap, pallas, mosaic-tpu, non-ml, integer-arithmetic, niche]
+repo: google/jaxite
+commit: e4a3351
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Google's JAX-based **Fully Homomorphic Encryption** (FHE) library. Ingested for one data-point: `jaxite_lib/polymul_kernel.py` — the only non-ML Pallas TPU kernel in this wiki. CGGI boolean-gate bootstrap via **negacyclic polymul** implemented as **four byte-split bf16 matmuls reassembled to u32**. Concrete reference for integer-heavy Pallas patterns. Per-kernel detail in [§5 of the Pallas kernel directory](../analyses/pallas-kernel-directory/05-frameworks-quant.md).
 

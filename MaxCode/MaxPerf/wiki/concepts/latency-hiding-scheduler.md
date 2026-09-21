@@ -1,11 +1,3 @@
----
-title: "Latency-Hiding Scheduler"
-type: concept
-tags: [stub, compiler, optimization]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 1
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 1
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Latency-Hiding Scheduler"
+type: concept
+tags: [stub, compiler, optimization]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 1
+---
 
 XLA scheduling pass enabled via `--xla_tpu_enable_latency_hiding_scheduler`; overlaps collectives with compute.
 

@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 2 — Splash attention at bs=2 seq=1024 (POTENTIAL, +1.6% within noise)"
 type: experiment
@@ -10,15 +19,6 @@ commit: "v6e8-llama3-8b-torchax-20260425-exp2-splash-bs2"
 branched_from: v6e8-llama3-8b-torchax-20260425-baseline
 verdict: potential
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Replaced HF SDPA's default backend with the canonical TPU splash-attention
 kernel via `env.override_op_definition(F.scaled_dot_product_attention, …)`,

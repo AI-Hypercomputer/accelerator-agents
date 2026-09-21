@@ -1,11 +1,3 @@
----
-title: "Ridge Point"
-type: concept
-tags: [stub, performance, analysis]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 2
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 2
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Ridge Point"
+type: concept
+tags: [stub, performance, analysis]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 2
+---
 
 Arithmetic intensity (FLOPs/byte) at which the slanted memory-bandwidth ceiling meets the horizontal peak-FLOPs ceiling on the roofline. Kernels with intensity below the ridge point are memory-bound; above it, compute-bound. On TPU the ridge point is set by `peak_flops / hbm_bandwidth` and shifts with dtype (bf16 vs fp8 vs int8) and generation.
 

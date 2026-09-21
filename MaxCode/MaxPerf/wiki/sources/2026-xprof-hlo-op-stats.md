@@ -1,10 +1,3 @@
----
-title: "XProf — HLO Op Stats Tool"
-type: source
-tags: [docs, profiler, hlo, xprof, op-stats, roofline]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf — HLO Op Stats Tool"
+type: source
+tags: [docs, profiler, hlo, xprof, op-stats, roofline]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 XProf documentation for the **HLO Op Stats** tool: a per-op tabular breakdown of every HLO operation executed during a profiling session, plus summary charts. This is the primary lens for finding the most time-consuming HLO ops and judging whether they are compute- or memory-bound on TPU (and GPU).
 

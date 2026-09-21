@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 29 — splash asymmetric blocks block_q=1024, block_kv=512 (REFUTED, −0.37%)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: "branch perfautoresearch/v6e4-20260423-exp29-splash-asymmetric"
 verdict: refuted
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Tried halving `block_kv` (and `block_kv_compute`) to 512 while keeping `block_q` at 1024, under the theory that a smaller KV tile would reduce per-tile VMEM and increase concurrency on the splash scheduler. **Result: −0.37 % TPS vs exp 25 — within noise, but directionally worse.** Larger symmetric block_kv = block_q = 1024 wins.
 

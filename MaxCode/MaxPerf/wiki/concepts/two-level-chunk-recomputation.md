@@ -1,10 +1,3 @@
----
-title: "two-level chunk/subchunk recomputation (SSD pattern)"
-type: concept
-tags: [pallas, ssm, mamba, mamba2, ssd, rematerialization, axlearn, stub]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "two-level chunk/subchunk recomputation (SSD pattern)"
+type: concept
+tags: [pallas, ssm, mamba, mamba2, ssd, rematerialization, axlearn, stub]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Memory-saving pattern for Pallas linear-recurrence kernels: store coarse-grained "chunk-level" carries, recompute fine-grained "subchunk-level" states on backward. Originates in AxLearn's Mamba2 SSD kernel (`ssd_kernels.py`). *Stub — expand when more sources are available.*
 

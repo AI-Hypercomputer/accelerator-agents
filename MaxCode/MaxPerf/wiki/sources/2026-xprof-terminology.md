@@ -1,10 +1,3 @@
----
-title: "XProf Terminology (docs)"
-type: source
-tags: [docs, profiler, xprof, terminology]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf Terminology (docs)"
+type: source
+tags: [docs, profiler, xprof, terminology]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 Short glossary of the core terms XProf uses to talk about profiling: profile, session, run, host, device, step. Anchor definitions for the rest of the XProf source pages.
 

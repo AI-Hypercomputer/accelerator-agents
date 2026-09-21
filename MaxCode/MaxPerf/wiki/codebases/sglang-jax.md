@@ -1,12 +1,3 @@
----
-title: "sglang-jax (sgl-project/sglang-jax)"
-type: codebase
-tags: [sglang, sglang-jax, pallas, mosaic-tpu, ragged-paged-attention, speculative-decoding, eagle, tree-verify, simple-gla, crown-jewel-tuning-tables]
-repo: sgl-project/sglang-jax
-commit: 7907875a
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -16,6 +7,15 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "sglang-jax (sgl-project/sglang-jax)"
+type: codebase
+tags: [sglang, sglang-jax, pallas, mosaic-tpu, ragged-paged-attention, speculative-decoding, eagle, tree-verify, simple-gla, crown-jewel-tuning-tables]
+repo: sgl-project/sglang-jax
+commit: 7907875a
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 SGLang's JAX port — mostly a **vendored subset of [tpu-inference](tpu-inference.md)** plus SGLang-specific additions. The two genuinely-novel contributions are **speculative-decoding tree kernels** (EAGLE tree sampling, draft-tree building, greedy tree verify — no public analogue anywhere else) and the **largest tuning table in the ecosystem** (~2,000+ RPA entries across v4 / v5 / v6e / v7). Ingested with the narrow scope the Wave 4 recommendation suggested: speculative-decoding kernels + the tuning table; the vendored kernels are documented but deferred to [tpu-inference](tpu-inference.md). Per-kernel detail in [§3.2 of the Pallas kernel directory](../analyses/pallas-kernel-directory/03-inference-engines.md#32-sgl-projectsglang-jax).
 

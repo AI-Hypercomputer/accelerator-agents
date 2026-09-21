@@ -1,10 +1,3 @@
----
-title: "Gemma 4 E4B — JAX-stack optimization ceiling + process retrospective"
-type: analysis
-tags: [analysis, gemma4, v6e4, jax, ceiling, retrospective, process-improvement]
-created: 2026-04-24
-updated: 2026-04-24
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-24
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Gemma 4 E4B — JAX-stack optimization ceiling + process retrospective"
+type: analysis
+tags: [analysis, gemma4, v6e4, jax, ceiling, retrospective, process-improvement]
+created: 2026-04-24
+updated: 2026-04-24
+---
 
 Synthesis of the JAX-stack arc (exp 34 → 49) plus **process retrospective** from ~49 experiments across both stacks. Sibling of [2026-04-23-gemma4-v6e4-optimization-ceiling.md](2026-04-23-gemma4-v6e4-optimization-ceiling.md) which covered only the torchax stack.
 

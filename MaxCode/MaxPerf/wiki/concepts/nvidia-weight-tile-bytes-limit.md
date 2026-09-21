@@ -1,10 +1,3 @@
----
-title: "NVIDIA weight-tile bytes limit (101,376 bytes)"
-type: concept
-tags: [nvidia, gpu, pallas, triton, h100, gb10, a100, shared-memory, stub]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "NVIDIA weight-tile bytes limit (101,376 bytes)"
+type: concept
+tags: [nvidia, gpu, pallas, triton, h100, gb10, a100, shared-memory, stub]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Per-SM shared memory budget available for the weight tile in an NVIDIA Pallas/Triton kernel: **101,376 bytes** (H100 has 232,448 per-SM shared, minus ~131 KB overhead for input tiles / accumulators / Triton metadata). Same limit applies across H100 / A100 / GB10. First-party reference: marin/levanter fused CE loss GPU kernel. *Stub — expand when more sources are available.*
 

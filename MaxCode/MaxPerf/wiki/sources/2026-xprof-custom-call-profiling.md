@@ -1,10 +1,3 @@
----
-title: "XProf — Custom Call Profiling"
-type: source
-tags: [docs, profiler, xprof, custom-call, pallas, mosaic, llo, xla-flags]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf — Custom Call Profiling"
+type: source
+tags: [docs, profiler, xprof, custom-call, pallas, mosaic, llo, xla-flags]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 XProf documentation for **Custom Call Profiling**: how to make XLA custom calls (including Pallas and Mosaic kernels) visible in the Trace Viewer, with LLO (Low-Level Optimizer) utilization information. Off by default; enabled via two XLA flags. Critical for anyone writing or optimizing custom kernels on TPU.
 

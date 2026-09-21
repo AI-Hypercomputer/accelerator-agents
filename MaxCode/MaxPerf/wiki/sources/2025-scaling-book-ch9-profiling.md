@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "How to Scale Your Model — Ch 9: How to Profile TPU Programs"
 type: source
@@ -10,15 +19,6 @@ upstream: https://jax-ml.github.io/scaling-book/profiling
 created: 2026-04-23
 updated: 2026-04-23
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Chapter 9 of the scaling-book. **How to read a TPU profile** — the XLA / HLO / LLO lowering chain, HLO-op notation (shape × layout × tiling × memory-space), and the three main xprof viewers. Worked example verifying an FFW matmul matches its roofline within 0.4%.
 

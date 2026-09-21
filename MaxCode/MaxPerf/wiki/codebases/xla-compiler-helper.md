@@ -1,11 +1,3 @@
----
-title: "xla-compiler-helper"
-type: codebase
-tags: [mcp, compiler, agent-tooling, xla, pallas, active-documentation]
-commit: experimental
-created: 2026-06-02
-updated: 2026-06-02
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ updated: 2026-06-02
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "xla-compiler-helper"
+type: codebase
+tags: [mcp, compiler, agent-tooling, xla, pallas, active-documentation]
+commit: experimental
+created: 2026-06-02
+updated: 2026-06-02
+---
 
 `xla-compiler-helper` (XLA Compiler Assistant / XLA ADE) is an MCP (Model Context Protocol) server that equips AI agents and developers with a unified interface to query XLA compiler details, author custom Pallas kernels, and inspect compiler flags.
 

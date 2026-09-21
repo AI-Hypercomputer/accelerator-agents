@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
 # pylint: skip-file
+#!/usr/bin/env python3
 import os
 
 PATH = "/home/gvanica_google_com/tpu-inference/tpu_inference/platforms/tpu_platform.py"

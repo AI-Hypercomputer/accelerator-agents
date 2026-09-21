@@ -1,11 +1,3 @@
----
-title: "Send/Recv-Done Quartet"
-type: concept
-tags: [stub, compiler, communication]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 2
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 2
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Send/Recv-Done Quartet"
+type: concept
+tags: [stub, compiler, communication]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 2
+---
 
 XLA's four-op pattern (`send`, `send-done`, `recv`, `recv-done`) implementing an async collective on TPU.
 

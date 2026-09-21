@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "How to Run a Hugging Face Model in JAX (Part 1): single-device forward + jax.jit"
 type: source
@@ -8,15 +17,6 @@ companion_script: jax_hg_01.py
 created: 2026-04-22
 updated: 2026-04-22
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Blog post #1 of a four-part series. Establishes the baseline: run `meta-llama/Llama-2-7b-hf` in bfloat16 single-device on TPU v6e via `torchax.extract_jax`, resolve pytree registration and static-arg errors, and JIT-compile the forward pass. Headline measured result: **first JIT call 4.365 s, cached calls 13 ms** on TPU v6e.
 

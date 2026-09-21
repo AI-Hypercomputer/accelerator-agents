@@ -1,10 +1,3 @@
----
-title: "Bottleneck reverse-index — profile bucket → candidate levers"
-type: analysis
-tags: [bottleneck, profile, hypothesis-generation, reverse-index, methodology]
-created: 2026-04-30
-updated: 2026-04-30
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-30
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Bottleneck reverse-index — profile bucket → candidate levers"
+type: analysis
+tags: [bottleneck, profile, hypothesis-generation, reverse-index, methodology]
+created: 2026-04-30
+updated: 2026-04-30
+---
 
 A reverse index keyed by xprof profile bucket. Given a profile that shows category X dominant or anomalous, jump straight to: (a) the concepts/techniques known to move that bucket on TPU, (b) hypotheses already tried in this wiki for that bucket and the verdicts, (c) open hypotheses tagged for it. The point is to short-circuit the rediscovery tax — never re-propose Pallas RMSNorm if the HLO check already showed XLA fuses it.
 

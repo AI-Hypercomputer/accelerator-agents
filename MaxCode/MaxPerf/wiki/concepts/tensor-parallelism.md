@@ -1,11 +1,3 @@
----
-title: "Tensor Parallelism"
-type: concept
-tags: [stub, parallelism]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 2
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 2
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Tensor Parallelism"
+type: concept
+tags: [stub, parallelism]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 2
+---
 
 Splits individual ops (matmul) across devices; cheap within an ICI island (≤8 on most generations), expensive across nodes.
 

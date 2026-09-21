@@ -1,10 +1,3 @@
----
-title: "Pallas kernel directory — §4 Research labs (Apple AxLearn + Google DeepMind)"
-type: analysis
-tags: [directory, pallas, kernels, axlearn, deepmind, alphafold3, recurrentgemma, graphcast]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Pallas kernel directory — §4 Research labs (Apple AxLearn + Google DeepMind)"
+type: analysis
+tags: [directory, pallas, kernels, axlearn, deepmind, alphafold3, recurrentgemma, graphcast]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Catalog of Pallas kernels published by Apple AxLearn and several public Google DeepMind repositories. These labs ship the most diverse set of published **non-upstream** Pallas kernels: SSM / linear-attention families (AxLearn is the only public source for Mamba/Mamba2/linear-attention Pallas kernels), a fused GLU kernel (AlphaFold 3), a canonical linear-recurrence LRU scan (RecurrentGemma), and non-LLM sparse attention (GraphCast). [Simply](https://github.com/google-deepmind/simply) and [GraphCast](https://github.com/google-deepmind/graphcast) are included for completeness; both wrap upstream JAX Pallas kernels rather than defining their own. Part of [2026-04-23 Pallas kernel directory](../2026-04-23-pallas-kernel-directory.md).
 

@@ -22,7 +22,6 @@ Usage:
     model = Gemma4ForCausalLM(cfg, dtype=jnp.bfloat16, rngs=nnx.Rngs(0))
     load_hf_weights(model, "/path/to/model.safetensors")
 """
-
 from __future__ import annotations
 
 import glob
@@ -33,6 +32,7 @@ from typing import Iterator
 from flax import nnx
 import jax
 import jax.numpy as jnp
+
 
 _LANGUAGE_PREFIX = "model.language_model."
 

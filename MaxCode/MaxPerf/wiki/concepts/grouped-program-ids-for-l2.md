@@ -1,10 +1,3 @@
----
-title: "grouped program-IDs for L2 cache reuse"
-type: concept
-tags: [pallas, triton, gpu, l2-cache, program-id, alphafold3, stub]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "grouped program-IDs for L2 cache reuse"
+type: concept
+tags: [pallas, triton, gpu, l2-cache, program-id, alphafold3, stub]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Reorder the (block_m, block_n) program-id sequence so tiles that share loaded inputs run back-to-back, letting L2 serve them instead of HBM. GPU-side technique (for Triton/Mosaic-GPU Pallas); analogue on TPU is VMEM reuse via BlockSpec reuse. *Stub — expand when more sources are available.*
 

@@ -1,11 +1,3 @@
----
-title: "XLA Fusion"
-type: concept
-tags: [stub, compiler, optimization]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 4
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 4
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XLA Fusion"
+type: concept
+tags: [stub, compiler, optimization]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 4
+---
 
 Compiler pass that merges multiple HLO ops into one kernel; materialized broadcasts (e.g. argmax over add-broadcast) can break fusion and land intermediate tensors in HBM.
 

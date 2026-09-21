@@ -1,10 +1,3 @@
----
-title: "tokamax docs — autotuning framework"
-type: source
-tags: [docs, kernels, pallas, autotune, tuning, cache, stub]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "tokamax docs — autotuning framework"
+type: source
+tags: [docs, kernels, pallas, autotune, tuning, cache, stub]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 The autotuning doc in the tokamax repo is a placeholder at the time of ingest — the prose deep-dive is "coming soon". What we know about the autotuning framework comes from the basic-usage doc, the codebase, and the `AutotuningResult` API. This source page captures that, flags what is still unknown about autotuner internals, and points downstream `autotuning` concept work at the code rather than this doc.
 

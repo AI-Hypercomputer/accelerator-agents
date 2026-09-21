@@ -1,10 +1,3 @@
----
-title: "VMEM budget (per TPU generation)"
-type: concept
-tags: [vmem, tpu, hardware, tpu-v4, tpu-v5e, tpu-v5p, tpu-v6e, tpu-v7, autotuning]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "VMEM budget (per TPU generation)"
+type: concept
+tags: [vmem, tpu, hardware, tpu-v4, tpu-v5e, tpu-v5p, tpu-v6e, tpu-v7, autotuning]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Per-generation TPU VMEM (on-chip vector scratchpad) capacity, baked into several production kernels as hard constants. Respect these budgets when choosing Pallas block sizes — exceeding them triggers `resource_exhausted` at lowering.
 

@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 8 — splash attention via Pallas (KEEP, new best +2.7 %)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: "wiki:HEAD + new pallas_attention.py + register_splash_attention in train.py"
 verdict: supported
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 First Pallas-kernel experiment. Registered a custom attention function in HF's `ALL_ATTENTION_FUNCTIONS` that dispatches through `jax.experimental.pallas.ops.tpu.splash_attention_kernel` via `torchax.interop.call_jax` + `jax.shard_map`. **Modest but real win: +2.7 % TPS vs baseline**, loss trajectory preserved.
 

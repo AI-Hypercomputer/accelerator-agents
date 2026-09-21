@@ -17,7 +17,6 @@ metric-for-metric so the two stacks can be A/B'd directly. Differences:
 Compile cache: set ``JAX_COMPILATION_CACHE_DIR`` to a persistent path so
 cold-compile cost amortizes across runs.
 """
-
 from __future__ import annotations
 
 import functools
@@ -55,6 +54,7 @@ import jax.numpy as jnp
 import optax
 from flax import nnx
 from jax.sharding import NamedSharding, PartitionSpec as P
+
 
 # Make the local `splash_attn.py` and `data.py` importable when run as
 # `python -m train`.

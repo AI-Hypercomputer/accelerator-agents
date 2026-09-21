@@ -1,10 +1,3 @@
----
-title: "XProf docs: Kubernetes distributed deployment"
-type: source
-tags: [docs, profiler, deployment, kubernetes, aggregator-worker]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf docs: Kubernetes distributed deployment"
+type: source
+tags: [docs, profiler, deployment, kubernetes, aggregator-worker]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 How to run XProf distributed on Kubernetes using an **aggregator + worker** pattern — a single-replica aggregator accepts UI traffic and dispatches profiling tasks round-robin to N worker replicas behind a headless Service. Operational background for experiment-runners; the important facts are the port layout, the round-robin gRPC discovery mechanism (headless Service + `GRPC_LB_POLICY=round_robin`), and the explicit incompatibility with Horizontal Pod Autoscaling.
 

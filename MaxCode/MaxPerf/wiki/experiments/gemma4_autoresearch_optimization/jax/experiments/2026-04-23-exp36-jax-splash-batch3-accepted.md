@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 36 — splash + batch=3 in JAX (ACCEPTED, +13.9 % TPS, new JAX-stack best, beats torchax session-best by +3.7 %)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: e6fb4c6
 verdict: supported
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Stack [exp 35](2026-04-23-exp35-jax-splash-potential.md) (splash attention wired into the native-JAX port) with **batch=3**. The hypothesis was: splash's per-token-fixed launch overhead is mostly constant at batch=1 seq=1024, so the matmul savings it created only pay rent when activation work grows. Raise batch to 3 and the ratio flips. Result: **34,614 TPS at 355.0 ms/step** — **+13.9 % over exp 35's 30,386 TPS**, new JAX-stack best. The JAX stack now **beats the torchax session-best** ([exp 25: 33,372 TPS](../../torchax/experiments/2026-04-23-exp25-splash-block1024-accepted.md)) by **+3.7 %**, without bf16 cross-entropy yet (exp 37).
 

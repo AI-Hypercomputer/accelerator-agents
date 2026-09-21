@@ -1,10 +1,3 @@
----
-title: "XProf Megascale Viewer — PerfettoSQL Query Cookbook"
-type: source
-tags: [docs, profiler, megascale, dcn, perfetto, perfettosql, sql, collective-communication]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf Megascale Viewer — PerfettoSQL Query Cookbook"
+type: source
+tags: [docs, profiler, megascale, dcn, perfetto, perfettosql, sql, collective-communication]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 A short cookbook of three PerfettoSQL queries to run inside the Megascale Viewer in Perfetto UI: list all recv-done ops, compute per-op duration statistics (p50/p90/p99/mean/sum/count, plus p99/mean ratio), and list all `NetworkReceive END` actions with network latency and transfer size extracted from event arguments. These are the queries the Megascale Viewer doc uses for its outlier-finding user journey.
 

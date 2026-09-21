@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 47 — marin/levanter fused linear+softcap+CE Pallas kernel on JAX stack (REJECTED, -5.61 % TPS, custom-call + all-gather tax)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-24
 commit: 573852c
 verdict: refuted
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Integrate [marin/levanter](../../../../../raw/code/marin/lib/levanter/src/levanter/kernels/pallas/fused_cross_entropy_loss/)'s `linear_softmax_cross_entropy_loss_pallas` — the only public TPU Pallas CE kernel with native `logit_soft_cap` support — as a `JAX_CE_IMPL=levanter` gate in the native-JAX trainer. Softcap is applied inline on each VMEM logits tile inside the kernel, so the `[B, S, V]` logits never materialize in HBM (the blocker that invalidated [exp 43](2026-04-23-exp43-jax-tokamax-ce-rejected.md)). **Result: parity passes (bf16 |Δloss| 0.048 vs tol 0.05), smoke-step-4 loss within 0.5 % of exp 36, but steady-state TPS regresses −5.61 % (34,614 → 32,671) — rejected per the decision tree.** The Pallas custom-call boundary + `w_hv` all-gather tax inside the `shard_map` wrapper outweighs the logits-materialization savings on this workload (CE is already <3 % of step time at b=3).
 

@@ -1,10 +1,3 @@
----
-title: "XProf Megascale Stats Tool"
-type: source
-tags: [docs, profiler, megascale, dcn, collective-communication, multi-slice, tpu-stall]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf Megascale Stats Tool"
+type: source
+tags: [docs, profiler, megascale, dcn, collective-communication, multi-slice, tpu-stall]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 The Megascale Stats tool analyzes inter-slice collective communication performance for workloads that span multiple TPU slices over the Data Center Network (DCN). It produces a per-collective, per-TPU table that quantifies how much time each collective spends stalling the TPU vs. transmitting data, and what bandwidth would be required to fit the transfer inside the available slack. **Note:** this tool is slated for deprecation and is being replaced by the Megascale Viewer.
 

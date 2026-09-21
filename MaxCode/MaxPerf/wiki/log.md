@@ -1,3 +1,4 @@
+<!-- disableFinding("black-box") -->
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -778,7 +779,7 @@ Loss values are around 11.9 (synthetic random data), bf16 precision floor ≈ 0.
   - `wiki/experiments/gemma4_autoresearch_optimization/jax/` — secondary, native-JAX port (port-equivalence discipline required: must reproduce torchax-baseline outputs within bf16 tolerance before perf numbers count).
   Each subfolder has its own README documenting conventions (dated copies for divergent scripts, relative-path references from experiment pages, binaries go to `raw/profiles/`, not these folders). The program's top-level README links both. Next SCHEMA.md update should codify `wiki/experiments/<program-slug>/` folders with execution-path-named subfolders for code as a permitted layout.
 - Hypotheses are listed on the program page but **not filed as `wiki/hypotheses/*.md` individually** — the program page serves as the consolidated ranked list. Once individual hypotheses become in-flight experiments, each will be promoted to `wiki/hypotheses/<slug>.md` per schema.
-- **Gemma 4 E4B**: user confirmed the identifier is correct (per https://huggingface.co/google/gemma-4-E4B). Claude's training cutoff predates this model's release; treating it as an opaque-box target with Gemma-family architecture (GQA, SwiGLU, RMSNorm) until the baseline ingest confirms exact config.
+- **Gemma 4 E4B**: user confirmed the identifier is correct (per https://huggingface.co/google/gemma-4-E4B). Claude's training cutoff predates this model's release; treating it as a black-box target with Gemma-family architecture (GQA, SwiGLU, RMSNorm) until the baseline ingest confirms exact config.
 
 ## [2026-04-22] lint | link hygiene + cross-link + 4 missing stubs
 

@@ -1,11 +1,3 @@
----
-title: "Attention Block Sizes"
-type: concept
-tags: [stub, kernel, tuning]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 3
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 3
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Attention Block Sizes"
+type: concept
+tags: [stub, kernel, tuning]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 3
+---
 
 Tunable tile sizes (`block_q`, `block_kv`, `block_kv_compute`) for TPU flash/splash attention; backward-pass block sizes (`block_q_dkv`, etc.) exposed via `SplashConfig` but currently hidden from tokamax's autotuner.
 

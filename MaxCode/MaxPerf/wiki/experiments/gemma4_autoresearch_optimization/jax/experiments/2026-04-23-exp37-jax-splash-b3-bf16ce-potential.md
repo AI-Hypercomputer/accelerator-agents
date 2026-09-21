@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 37 — splash + b=3 + bf16 CE gate in JAX (POTENTIAL, flat, JAX port was already bf16-CE)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: 0c44f60
 verdict: inconclusive
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Stack bf16 cross-entropy on top of [exp 36](2026-04-23-exp36-jax-splash-batch3-accepted.md) (splash + batch=3). The torchax analog ([exp 12](../../torchax/experiments/2026-04-23-exp12-bf16-ce-accepted.md)) removed an explicit `.to(torch.float32)` cast and won +3.0 % TPS / −1.5 GiB HBM. **Result on the JAX port: 34,629 TPS, +0.04 % vs exp 36 — dead flat.** Peak HBM 27.45 GiB (87.84 %), actually +0.34 GiB vs exp 36 rather than −1.5 GiB. Loss trajectory identical. Verdict: `potential` (flat-within-noise).
 

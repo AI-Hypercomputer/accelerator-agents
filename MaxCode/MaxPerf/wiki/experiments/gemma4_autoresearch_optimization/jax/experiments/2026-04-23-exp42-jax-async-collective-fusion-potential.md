@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 42 — JAX async_collective_fusion in isolation (POTENTIAL, +0.04% flat)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: pending
 verdict: inconclusive
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Enabled only `--xla_tpu_enable_async_collective_fusion=true` via `LIBTPU_INIT_ARGS` on the JAX stack at exp 36's config. **Result: 34,629 TPS vs exp 36's 34,614 — +0.043 % flat.** A third data point in the culprit-isolation series alongside torchax exp 30 / 31 and JAX exp 38: none of the individually-named collective-overlap flags regress; the bundle regression in torchax exp 1 / 13 / 21 must come from specific **combinations** (likely `fuse_all_gather` + `multiple_steps` together).
 

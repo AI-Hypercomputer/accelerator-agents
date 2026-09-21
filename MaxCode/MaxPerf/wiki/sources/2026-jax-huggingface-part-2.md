@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "How to Run a Hugging Face Model in JAX (Part 2): 8-way tensor parallelism"
 type: source
@@ -8,15 +17,6 @@ companion_script: jax_hg_02.py
 created: 2026-04-22
 updated: 2026-04-22
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Blog post #2 of a four-part series. Extends Part 1's single-chip forward pass to 8-way tensor parallelism (NeMo-Megatron sharding) on an 8-chip TPU v6e host using JAX's gSPMD programming model. Headline measured result: **~4.3× end-to-end speedup** on 8 chips vs 1 chip for Llama-2-7B forward — i.e. **3.4–3.8 ms cached** per call vs the 13 ms single-chip baseline. The post explicitly notes the speedup is sub-linear and points at `jax.profiler.trace` + xprof as the tool to understand why.
 

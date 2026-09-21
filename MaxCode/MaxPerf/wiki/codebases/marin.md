@@ -1,12 +1,3 @@
----
-title: "marin (marin-community/marin) — narrow: levanter Pallas kernels + autotune harness"
-type: codebase
-tags: [marin, levanter, pallas, autotune-harness, fused-cross-entropy-loss, mamba, ssd, deployment-time-tuner, crown-jewel]
-repo: marin-community/marin
-commit: 7a56e016d
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -16,6 +7,15 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "marin (marin-community/marin) — narrow: levanter Pallas kernels + autotune harness"
+type: codebase
+tags: [marin, levanter, pallas, autotune-harness, fused-cross-entropy-loss, mamba, ssd, deployment-time-tuner, crown-jewel]
+repo: marin-community/marin
+commit: 7a56e016d
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Ingestion narrow-scoped to `lib/levanter/src/levanter/kernels/pallas/` — the **deployment-time autotune harness** and fused-cross-entropy-loss kernels. **The single most-valuable non-kernel artifact surveyed in this wiki**: a kernel-agnostic, shard-aware, compile-cost-aware, GCS-persistent autotuner — superior to tokamax's write-time autotune for an autoresearch loop. The patterns this wiki should emulate. Per-kernel detail in [§5.8 of the Pallas kernel directory](../analyses/pallas-kernel-directory/05-frameworks-quant.md#58-marin-communitymarin-vendors-levanter).
 

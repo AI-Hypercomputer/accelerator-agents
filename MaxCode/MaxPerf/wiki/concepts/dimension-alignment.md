@@ -1,11 +1,3 @@
----
-title: "Dimension Alignment"
-type: concept
-tags: [stub, optimization]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 1
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 1
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Dimension Alignment"
+type: concept
+tags: [stub, optimization]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 1
+---
 
 Rules for shape divisibility so MXU doesn't waste cycles: batch multiple of 64/1024, hidden multiple of 128/256, sharded dims respect per-chip (not global) alignment.
 

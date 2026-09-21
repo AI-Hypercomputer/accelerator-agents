@@ -1,10 +1,3 @@
----
-title: "DMA-overhead-bytes heuristic for TPU Pallas block-size autotuning"
-type: concept
-tags: [pallas, dma, vmem, autotuning, block-size, simply, stub]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "DMA-overhead-bytes heuristic for TPU Pallas block-size autotuning"
+type: concept
+tags: [pallas, dma, vmem, autotuning, block-size, simply, stub]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Pattern: when autotuning TPU Pallas block sizes, model DMA setup as a **fixed ~0.5 MiB of virtual bytes** and balance that against padding overhead when choosing block shape. Introduced in DeepMind's `simply` repo; portable to any paged TPU kernel. *Stub — expand when more sources are available.*
 

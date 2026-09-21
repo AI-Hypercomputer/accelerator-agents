@@ -1,12 +1,3 @@
----
-title: "maxdiffusion (AI-Hypercomputer/maxdiffusion)"
-type: codebase
-tags: [maxdiffusion, diffusion, pallas, mosaic-tpu, splash, ring-attention, tokamax-ring, flux, wan, sdxl, ltx]
-repo: AI-Hypercomputer/maxdiffusion
-commit: c98002fe
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -16,6 +7,15 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "maxdiffusion (AI-Hypercomputer/maxdiffusion)"
+type: codebase
+tags: [maxdiffusion, diffusion, pallas, mosaic-tpu, splash, ring-attention, tokamax-ring, flux, wan, sdxl, ltx]
+repo: AI-Hypercomputer/maxdiffusion
+commit: c98002fe
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Google AI-Hypercomputer's reference JAX diffusion trainer — Flux / Wan / SDXL / LTX. Ingestion narrow-scoped to `src/maxdiffusion/kernels/splash_attention/` per the analysis's Wave 4 scoping recommendation — **the only repo where ring-attention is wired in as a first-class splash-integrated kernel**. Announced 2026-04-16: *"Support for Tokamax Ring Attention kernel is now added."* Per-kernel detail in [§2.2 of the Pallas kernel directory](../analyses/pallas-kernel-directory/02-ai-hypercomputer.md#22-ai-hypercomputermaxdiffusion).
 

@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 48 — JAX splash-kernel parameter sweep (POTENTIAL, plateau at exp-36 defaults)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-24
 commit: pending
 verdict: inconclusive
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Plumbed splash-attention knobs through env vars (`SPLASH_BLOCK_Q`, `SPLASH_BLOCK_KV`, `SPLASH_BLOCK_KV_COMPUTE`, `SPLASH_BLOCK_Q_DKV`, `SPLASH_BLOCK_KV_DKV`, `SPLASH_BLOCK_KV_DKV_COMPUTE`, `SPLASH_QKV_LAYOUT`, `SPLASH_USE_FUSED_BWD`) in `jax/model/pallas_attention.py`, with defaults preserving exp 36's winning config. Swept four non-baseline variants; **all landed flat within ±0.5 % of exp 36 (34,614 TPS). Exp 36's defaults are on a plateau at the local optimum — no marginal knob tuning unlocks further gain on this stack.**
 

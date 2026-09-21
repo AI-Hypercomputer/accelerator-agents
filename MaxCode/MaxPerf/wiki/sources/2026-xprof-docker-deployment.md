@@ -1,10 +1,3 @@
----
-title: "XProf docs: Docker deployment"
-type: source
-tags: [docs, profiler, deployment, docker, gcs]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf docs: Docker deployment"
+type: source
+tags: [docs, profiler, deployment, docker, gcs]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 Minimal recipe for building and running an XProf Docker image off the public PyPI release. This is operational background for experiment-runners — not a performance surface — but it documents the expected port map (`8791` UI, `50051` worker gRPC) and the two supported logdir mount patterns (local directory vs. GCS with mounted `gcloud` creds). The doc is short and example-driven; everything below is a compression, not an expansion.
 

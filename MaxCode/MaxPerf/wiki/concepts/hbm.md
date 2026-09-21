@@ -1,11 +1,3 @@
----
-title: "HBM (High-Bandwidth Memory)"
-type: concept
-tags: [stub, memory, architecture]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 5
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 5
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "HBM (High-Bandwidth Memory)"
+type: concept
+tags: [stub, memory, architecture]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 5
+---
 
 On-package DRAM attached to each TPU chip; tens of GB capacity, hundreds of GB/s bandwidth; primary location for model weights, activations, and KV cache.
 

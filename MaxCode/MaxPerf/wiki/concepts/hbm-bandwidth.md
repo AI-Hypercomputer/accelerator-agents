@@ -1,11 +1,3 @@
----
-title: "HBM Bandwidth"
-type: concept
-tags: [stub, metric, memory, hardware]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 4
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 4
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "HBM Bandwidth"
+type: concept
+tags: [stub, metric, memory, hardware]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 4
+---
 
 Peak aggregate throughput of on-package HBM per TPU chip (GB/s), set by the chip generation (v4/v5e/v5p/v6e). Distinct from [HBM](hbm.md), which names the memory tier itself — HBM Bandwidth is the scalar that sets the roofline's memory slope and therefore the ridge point beyond which kernels become compute-bound.
 

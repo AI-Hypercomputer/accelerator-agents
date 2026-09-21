@@ -1,11 +1,3 @@
----
-title: "MXU Utilization"
-type: concept
-tags: [stub, metric, performance]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 3
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 3
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "MXU Utilization"
+type: concept
+tags: [stub, metric, performance]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 3
+---
 
 Fraction of peak matrix-unit throughput achieved; bf16-normalized by default in xprof.
 

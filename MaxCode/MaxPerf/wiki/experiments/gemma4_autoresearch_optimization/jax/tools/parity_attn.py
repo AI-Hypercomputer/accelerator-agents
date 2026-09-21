@@ -1,5 +1,5 @@
-#!/usr/bin/env python
 # pylint: skip-file
+#!/usr/bin/env python
 """Attention-only parity check between HF Gemma4TextAttention (eager) and
 
 our NNX port.

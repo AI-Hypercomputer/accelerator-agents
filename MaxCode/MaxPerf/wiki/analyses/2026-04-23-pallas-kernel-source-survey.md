@@ -1,10 +1,3 @@
----
-title: "Survey: Public sources of JAX Pallas kernel code"
-type: analysis
-tags: [survey, pallas, kernels, tpu, gpu, ingest-candidates]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Survey: Public sources of JAX Pallas kernel code"
+type: analysis
+tags: [survey, pallas, kernels, tpu, gpu, ingest-candidates]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Web-research survey of every public source of JAX Pallas kernel code I could find as of 2026-04-23. The goal is to identify **which repos are worth ingesting as wiki codebases** to widen the optimization search space beyond what the currently-ingested [tokamax](../codebases/tokamax.md) + upstream JAX (`jax.experimental.pallas.ops.tpu`) provide. Findings are organized by tier (production-grade libraries → embedded kernels in monorepos → research companion code → pedagogy → meta/agents → marginal). Each entry includes what kernels it carries that are **not** already in tokamax or upstream JAX, which is the criterion for ingestion priority. Several entries directly affect previously filed hypothesis candidates on [sources/2025-ultrascale-playbook.md](../sources/2025-ultrascale-playbook.md) — see § *Direct impact on open wiki state*.
 

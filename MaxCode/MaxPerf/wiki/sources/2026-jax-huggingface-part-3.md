@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "How to Run a Hugging Face Model in JAX (Part 3): StaticCache + jax.jit autoregressive decoding"
 type: source
@@ -8,15 +17,6 @@ companion_script: jax_hg_03.py
 created: 2026-04-22
 updated: 2026-04-22
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Blog post #3 of a four-part series. Opens with a deep-dive on how `torchax` actually works (it wraps `jax.Array` in a `torch.Tensor` subclass — the "trojan tensor"), then builds an autoregressive decoder that is fast enough to be useful: **50-token Llama-2-7B decode in 14.77 s** with `StaticCache` + `tx.interop.jax_jit` + `torch.func.functional_call`, down from **130.9 s** for `DynamicCache` eager and **88.4 s** for `StaticCache` eager-no-jit. An 8.9× speedup.
 

@@ -1,10 +1,3 @@
----
-title: "XProf docs: Optimize TensorFlow performance using XProf"
-type: source
-tags: [docs, profiler, tensorflow, keras, profile-capture, tpu, gpu]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf docs: Optimize TensorFlow performance using XProf"
+type: source
+tags: [docs, profiler, tensorflow, keras, profile-capture, tpu, gpu]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 TensorFlow-specific XProf capture guide. Documents four profiling APIs (Keras `TensorBoard` callback, `tf.profiler.experimental.start`/`stop`, the `tf.profiler.experimental.Profile` context manager, and sampling mode via `tf.profiler.experimental.server.start` + `client.trace(...)`), a custom-training-loop step-annotation pattern using `tf.profiler.experimental.Trace(name, step_num=..., _r=1)`, and a table of which APIs support local / remote / multi-worker / which hardware platforms. Includes the important warning that profiling too many steps can OOM, and the correct placement of the dataset iterator relative to the step trace context.
 

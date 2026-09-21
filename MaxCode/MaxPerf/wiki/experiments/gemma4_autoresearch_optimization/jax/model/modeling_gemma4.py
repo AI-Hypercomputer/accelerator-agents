@@ -16,7 +16,6 @@ Critical divergences from the torch reference documented inline with
 is set. Selection is per-call (env var read at forward time), so the same
 compiled module handles both paths across processes.
 """
-
 from __future__ import annotations
 
 import math
@@ -27,6 +26,7 @@ from flax import nnx
 import jax
 import jax.numpy as jnp
 from transformers import Gemma4TextConfig
+
 
 # -----------------------------------------------------------------------------
 # Small helpers (stateless pure jax — not nnx.Modules)

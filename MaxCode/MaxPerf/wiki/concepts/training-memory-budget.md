@@ -1,11 +1,3 @@
----
-title: "Training Memory Budget"
-type: concept
-tags: [stub, training, memory]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 1
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 1
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Training Memory Budget"
+type: concept
+tags: [stub, training, memory]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 1
+---
 
 Rule of thumb for bf16 parameters + AdamW optimizer: ~16 bytes/param (2 param + 2 grad + 4 m + 4 v + 4 master).
 

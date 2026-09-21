@@ -1,11 +1,3 @@
----
-title: "HLO Dumping and Diffing"
-type: concept
-tags: [workflow, debugging, compiler, hlo]
-created: 2026-04-22
-updated: 2026-05-06
-sources: 4
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 4
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "HLO Dumping and Diffing"
+type: concept
+tags: [workflow, debugging, compiler, hlo]
+created: 2026-04-22
+updated: 2026-05-06
+sources: 4
+---
 
 HLO dumping captures the XLA compiler's intermediate representation at various optimization stages, and HLO diffing compares those stages to reveal what the compiler did (or failed to do). This is the primary diagnostic workflow for fusion analysis, kernel-replacement hypothesis pre-filtering, sharding verification, and offline HLO analysis without TPU access.
 

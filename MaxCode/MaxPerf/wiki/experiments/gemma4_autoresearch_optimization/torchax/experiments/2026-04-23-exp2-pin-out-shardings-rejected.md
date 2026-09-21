@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 2 — pin out_shardings to fix step-1 recompile (CRASH)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: "wiki:HEAD (torchax submodule 8f957d1); attempted train.py change; reverted"
 verdict: invalid
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Attempt to fix the ~150 s step-1 recompile by pinning `out_shardings` on `jax.jit` to equal the input shardings. Pre-trace `ValueError` from tied-weight sharding plumbing; reverted and filed. The step-1 recompile remains open — costs ~150 s per run of iteration overhead.
 

@@ -1,11 +1,3 @@
----
-title: "Collective Communication"
-type: concept
-tags: [stub, parallelism, communication]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 4
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 4
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Collective Communication"
+type: concept
+tags: [stub, parallelism, communication]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 4
+---
 
 Cross-replica operations (all-reduce, all-gather, reduce-scatter, etc.) that synchronize or redistribute data.
 

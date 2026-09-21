@@ -1,10 +1,3 @@
----
-title: "Gemma 4 JAX stack — fp32-master + bf16-compute AMP regime ceiling (seq=8192 target)"
-type: analysis
-tags: [analysis, gemma4, jax, mixed-precision, fp32-master, seq8192, ceiling, memory-wall]
-created: 2026-04-24
-updated: 2026-04-24
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-24
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Gemma 4 JAX stack — fp32-master + bf16-compute AMP regime ceiling (seq=8192 target)"
+type: analysis
+tags: [analysis, gemma4, jax, mixed-precision, fp32-master, seq8192, ceiling, memory-wall]
+created: 2026-04-24
+updated: 2026-04-24
+---
 
 User shifted the optimization target to a **new regime** on 2026-04-24: fp32 master weights (for the optimizer), bf16 matmul/conv compute (standard AMP), and `seq_len=8192` as the new default. This analysis records the findings from the first optimization loop at that regime on the JAX stack (exps 52–53), the memory wall reached at seq=8192, and the recommended path forward.
 

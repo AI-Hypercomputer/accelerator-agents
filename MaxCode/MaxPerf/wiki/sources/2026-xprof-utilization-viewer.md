@@ -1,10 +1,3 @@
----
-title: "XProf Utilization Viewer (docs)"
-type: source
-tags: [docs, profiler, xprof, utilization-viewer, tensorcore, mxu, dma, tpu]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf Utilization Viewer (docs)"
+type: source
+tags: [docs, profiler, xprof, utilization-viewer, tensorcore, mxu, dma, tpu]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 Utilization Viewer is a **TPU-only**, nightly-build XProf tool that surfaces per-chip, per-Tensor-Node utilization of execution units and DMA paths as four bar charts — effectively a hardware-counter-backed bird's-eye view of where the TPU's silicon was busy.
 

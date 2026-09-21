@@ -1,11 +1,3 @@
----
-title: "autoresearch (Karpathy)"
-type: codebase
-tags: [methodology, reference]
-commit: 228791fb499afffb54b46200aca536f79142f117
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "autoresearch (Karpathy)"
+type: codebase
+tags: [methodology, reference]
+commit: 228791fb499afffb54b46200aca536f79142f117
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 Karpathy's reference implementation of the autonomous research loop: a single H100, a simplified nanochat pretraining setup, a fixed 5-minute wall-clock budget, and `val_bpb` as the single metric. An agent autonomously edits `train.py`, runs a 5-minute experiment, and advances or rewinds the branch based on whether `val_bpb` improved. **This wiki ingests autoresearch as a methodology reference only** — there is no TPU-specific content in the repo. What we take from it is the *shape* of the loop (agent-editable file, human-editable prompt, fixed budget, fair metric, append-only results log). The wiki's own SCHEMA.md is an adaptation of that pattern to TPU performance optimization.
 

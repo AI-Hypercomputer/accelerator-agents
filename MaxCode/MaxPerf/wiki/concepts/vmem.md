@@ -1,11 +1,3 @@
----
-title: "VMEM (Vector Memory)"
-type: concept
-tags: [stub, memory, architecture]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 4
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 4
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "VMEM (Vector Memory)"
+type: concept
+tags: [stub, memory, architecture]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 4
+---
 
 On-chip scratchpad memory (tens of MB) local to each TensorCore; target for attention kernels and other latency-sensitive tiled computations.
 

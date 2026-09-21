@@ -1,11 +1,3 @@
----
-title: "Trace Event Categories"
-type: concept
-tags: [stub, profiling]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 1
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 1
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Trace Event Categories"
+type: concept
+tags: [stub, profiling]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 1
+---
 
 Catalog of Trace Viewer track kinds: Steps, XLA Ops, Framework Ops, TraceMe, Host Offload, SparseCore, Launch Stats.
 

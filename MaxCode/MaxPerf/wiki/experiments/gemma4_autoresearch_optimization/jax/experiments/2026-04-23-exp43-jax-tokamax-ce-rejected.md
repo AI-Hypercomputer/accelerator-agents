@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 43 — tokamax.linear_softmax_cross_entropy_loss on JAX stack (INVALID / rejected, API-precondition failure — no softcap support)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-24
 commit: c1927ba
 verdict: invalid
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Attempt to integrate `tokamax.linear_softmax_cross_entropy_loss` (fused `linear + log_softmax + CE` Pallas kernel that never materializes the full `[B, S, V]` logits tensor) into the JAX-stack trainer to free ~1.5 GiB of HBM and remove one pass over the vocab-dimensioned logits. **Result: INVALID before any run — the tokamax public API has no `logits_soft_cap` (or equivalent) argument, and Gemma 4's `final_logit_softcapping=30.0` (`logits = 30 * tanh(logits / 30)`) is a non-linear transform applied element-wise to the `[B, S, V]` logits. Applying the softcap externally requires materializing that tensor, which defeats the only reason to use the fused kernel. Skipping the softcap violates the program's architecture contract ("You CANNOT: Skip `final_logit_softcapping=30.0`"). No code merged, no experiment run.**
 

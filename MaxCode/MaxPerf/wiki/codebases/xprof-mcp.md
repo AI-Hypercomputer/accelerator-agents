@@ -1,11 +1,3 @@
----
-title: "xprof-mcp"
-type: codebase
-tags: [mcp, profiler, agent-tooling, xprof, hlo, xla]
-commit: 9970d651402194b487e7025b3f9dc66643cb34bc
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "xprof-mcp"
+type: codebase
+tags: [mcp, profiler, agent-tooling, xprof, hlo, xla]
+commit: 9970d651402194b487e7025b3f9dc66643cb34bc
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 `xprof-mcp` is an MCP (Model Context Protocol) server that exposes the OSS [xprof](https://github.com/openxla/xprof) profiler to an AI agent. In this wiki, it is the bridge between `raw/profiles/` artifacts and `observation` / `experiment` pages: the same agent that maintains this knowledge base calls these tools to read step time, HLO, memory, and timeline data out of captured profiles.
 

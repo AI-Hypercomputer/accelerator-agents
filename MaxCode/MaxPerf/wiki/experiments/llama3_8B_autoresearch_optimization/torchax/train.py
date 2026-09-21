@@ -20,7 +20,6 @@ Compile cache: set `JAX_COMPILATION_CACHE_DIR` (env var) to a persistent path
 to amortize cold-compile cost across runs. Cold compile of llama3-8b is
 ~3 min on v6e-4; cache-hit drops to ~10 s.
 """
-
 from __future__ import annotations
 
 import functools
@@ -66,10 +65,10 @@ import helper  # local sibling
 from model import LlamaForCausalLM, AutoTokenizer
 from model.sharding import SHARDING_MAP, _process_sharding_name
 
+
 # -----------------------------------------------------------------------------
 # Multi/single-host device_put helper (canonical pattern).
 # -----------------------------------------------------------------------------
-
 
 def sharded_device_put(tensor: jax.Array, sharding) -> jax.Array:
   """Place a host-local jax.Array on a multi-device mesh, correctly handling
@@ -91,7 +90,6 @@ def sharded_device_put(tensor: jax.Array, sharding) -> jax.Array:
 # -----------------------------------------------------------------------------
 # Per-shard weight init via `jax.make_array_from_callback`.
 # -----------------------------------------------------------------------------
-
 
 def _make_weight_shard(weight_meta, slice_index):
   shard_meta = weight_meta[slice_index]

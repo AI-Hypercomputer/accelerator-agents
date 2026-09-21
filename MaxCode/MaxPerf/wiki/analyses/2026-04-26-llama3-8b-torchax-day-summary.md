@@ -1,10 +1,3 @@
----
-title: "Llama 3 8B torchax v6e-8 — 2026-04-26 day summary: morning baseline → end-of-day frontier"
-type: analysis
-tags: [llama3, torchax, summary, mfu, optimization-loop, milestone]
-created: 2026-04-26
-updated: 2026-04-26
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-26
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Llama 3 8B torchax v6e-8 — 2026-04-26 day summary: morning baseline → end-of-day frontier"
+type: analysis
+tags: [llama3, torchax, summary, mfu, optimization-loop, milestone]
+created: 2026-04-26
+updated: 2026-04-26
+---
 
 Single-day summary of the optimization loop on `meta-llama/Meta-Llama-3-8B`,
 torchax + JAX on v6e-8 (single slice, 8 chips, 2 hosts × 4 local devices),

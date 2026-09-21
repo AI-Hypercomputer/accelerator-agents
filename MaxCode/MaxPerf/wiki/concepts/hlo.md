@@ -1,11 +1,3 @@
----
-title: "HLO (High Level Optimizer IR)"
-type: concept
-tags: [stub, compiler, ir]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 3
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 3
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "HLO (High Level Optimizer IR)"
+type: concept
+tags: [stub, compiler, ir]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 3
+---
 
 XLA's graph IR; the layer on which profiling metrics and compiler passes operate.
 

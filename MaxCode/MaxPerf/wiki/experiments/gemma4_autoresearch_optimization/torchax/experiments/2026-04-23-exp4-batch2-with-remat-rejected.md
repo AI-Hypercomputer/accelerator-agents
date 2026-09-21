@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 4 — double batch with full remat (DISCARD, chain net −9 % TPS)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: "wiki:HEAD (exp3 code + --batch_size 2)"
 verdict: refuted
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Doubled batch from 1 to 2 (on top of exp 3's full-remat code change), expecting the per-step amortization of 2× tokens to outweigh remat's compute tax. Didn't: per-token cost is still above baseline. Chain exp 3 + exp 4 is net **−9 % TPS** vs pre-remat baseline.
 

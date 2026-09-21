@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Pallas RMSNorm+matmul-prologue fusion (Llama 3 8B JAX)"
 type: hypothesis
@@ -11,15 +20,6 @@ confidence: medium
 effort: L
 origin: jax-exp28b-profile-2026-04-26
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Custom Pallas TPU kernel that fuses **RMSNorm + bf16 cast + the matmul that follows** (the QKV projections after `input_layernorm`, the gate/up projections after `post_attention_layernorm`) so the post-norm activation never round-trips through HBM. Targets the 9.2 % loop-fusion line and a portion of the 20.6 % non-MXU matmul time observed in [exp 28b's profile](../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp27-28-sparsecore-rs-ag-offload-frontier.md#profile).
 

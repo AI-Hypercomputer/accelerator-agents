@@ -1,10 +1,3 @@
----
-title: "XProf Overview Page (docs)"
-type: source
-tags: [docs, profiler, xprof, overview, tpu, gpu]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf Overview Page (docs)"
+type: source
+tags: [docs, profiler, xprof, overview, tpu, gpu]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 The XProf Overview Page is the top-level, aggregated entry point into a profile — it summarizes step time, hardware utilization, and where time is spent, and acts as the launchpad for the more detailed XProf tools (Trace Viewer, Memory Viewer, Graph Viewer, etc.).
 

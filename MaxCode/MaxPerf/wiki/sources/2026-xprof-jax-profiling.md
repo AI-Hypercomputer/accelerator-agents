@@ -1,10 +1,3 @@
----
-title: "XProf docs: Profiling JAX computations"
-type: source
-tags: [docs, profiler, jax, tpu, gpu, profile-capture]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf docs: Profiling JAX computations"
+type: source
+tags: [docs, profiler, jax, tpu, gpu, profile-capture]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 The JAX-specific capture guide for XProf. Covers programmatic tracing with `jax.profiler.start_trace` / `stop_trace` / `trace` context manager, manual capture via the XProf UI talking to `jax.profiler.start_server(port)`, continuous profiling snapshots via the `xprof.api.continuous_profiling_snapshot` module, `jax.profiler.TraceAnnotation` for custom trace events, and the full `jax.profiler.ProfileOptions` surface (host/device/python tracer levels, TPU sparse-core tracing knobs, GPU CUPTI knobs). This is the primary reference for any JAX experiment in this wiki.
 

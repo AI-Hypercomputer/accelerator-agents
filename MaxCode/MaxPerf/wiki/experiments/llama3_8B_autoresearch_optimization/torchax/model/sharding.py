@@ -36,6 +36,7 @@ HF Llama parameter naming (different from torchtitan):
 import jax
 from jax.sharding import NamedSharding, PartitionSpec as P
 
+
 # FSDP-only spec. For each row, the tuple is the PartitionSpec across mesh axes
 # in the canonical mesh order ('fsdp', 'tp'). Empty tuple () = replicated.
 SHARDING_MAP = {

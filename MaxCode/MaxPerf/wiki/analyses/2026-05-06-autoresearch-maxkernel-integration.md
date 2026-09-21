@@ -1,10 +1,3 @@
----
-title: "Autoresearch–MaxKernel Integration Design"
-type: analysis
-tags: [integration, maxkernel, architecture, autoresearch]
-created: 2026-05-06
-updated: 2026-05-06
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-05-06
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Autoresearch–MaxKernel Integration Design"
+type: analysis
+tags: [integration, maxkernel, architecture, autoresearch]
+created: 2026-05-06
+updated: 2026-05-06
+---
 
 Design document for integrating the autoresearch optimization loop with [MaxKernel](https://github.com/AI-Hypercomputer/accelerator-agents/tree/main/MaxKernel) as the kernel-authoring backend.
 

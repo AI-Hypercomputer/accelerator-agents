@@ -1,11 +1,3 @@
----
-title: "Sequence Parallelism"
-type: concept
-tags: [stub, parallelism]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 1
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 1
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Sequence Parallelism"
+type: concept
+tags: [stub, parallelism]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 1
+---
 
 Companion to tensor parallelism: shards the non-matmul ops (LayerNorm, Dropout, residual) along the sequence axis so their activation memory scales with `sp_size`. Replaces the TP block's internal `all_reduce` with a `reduce_scatter` + `all_gather` pair of the same aggregate volume — no extra communication, reduced activation memory. In JAX this falls out of a `PartitionSpec` over the sequence axis.
 

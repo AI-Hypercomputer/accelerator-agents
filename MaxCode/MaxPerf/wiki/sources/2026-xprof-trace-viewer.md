@@ -1,10 +1,3 @@
----
-title: "XProf Trace Viewer (docs)"
-type: source
-tags: [docs, profiler, xprof, trace-viewer, tpu, gpu]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf Trace Viewer (docs)"
+type: source
+tags: [docs, profiler, xprof, trace-viewer, tpu, gpu]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 The XProf Trace Viewer is a timeline UI for events captured during profiling — host threads, accelerator cores, streams, XLA ops, framework ops, source annotations, and host offload — used to identify bottlenecks, gaps, and launch latencies.
 

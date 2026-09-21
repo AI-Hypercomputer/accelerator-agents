@@ -1,4 +1,3 @@
-# pylint: skip-file
 """MCP server for XLA ADE (Active Documentation Engine)."""
 
 import asyncio

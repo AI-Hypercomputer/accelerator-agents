@@ -1,11 +1,3 @@
----
-title: "Step time"
-type: concept
-tags: [stub, metric, performance]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 2
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 2
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Step time"
+type: concept
+tags: [stub, metric, performance]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 2
+---
 
 Wall-clock duration of one training iteration; the core metric this wiki optimizes.
 

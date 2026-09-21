@@ -1,11 +1,3 @@
----
-title: "torchax"
-type: codebase
-tags: [framework, pytorch, jax-interop, tpu-backend]
-commit: 8f957d11128ee273a14414750b3998870f933d15
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "torchax"
+type: codebase
+tags: [framework, pytorch, jax-interop, tpu-backend]
+commit: 8f957d11128ee273a14414750b3998870f933d15
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 torchax is a PyTorch backend that runs PyTorch programs on TPU by dispatching every PyTorch op to a JAX equivalent. It is the torch-to-TPU bridge for any torch-origin model under optimization in this wiki — it supplies the `Tensor` subclass, the op lowering tables, the `jax.jit` entry point, and the interop for moving values between `torch.Tensor` and `jax.Array` pytrees. Upstream version at this commit is `0.0.12`.
 

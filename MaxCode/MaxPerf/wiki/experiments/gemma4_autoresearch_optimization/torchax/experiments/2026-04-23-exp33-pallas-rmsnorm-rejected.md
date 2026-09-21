@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 33 — hand-written Pallas RMSNorm + custom_vjp (REFUTED, -8.1 %)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: "branch perfautoresearch/v6e4-20260423-exp33-pallas-rmsnorm (not merged)"
 verdict: refuted
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Second hand-rolled-Pallas experiment after [exp 8 (splash attention)](2026-04-23-exp8-splash-attention-accepted.md). Goal: replace Gemma 4's 250+ `Gemma4RMSNorm` invocations per step with a TPU Pallas kernel + hand-written `jax.custom_vjp`, collapsing XLA's per-norm `loop fusion` cost into a single Mosaic custom-call. **Result: -8.1 % TPS.** Loss trajectory preserved (kernel numerics correct — unit-tested to within bf16 epsilon). The regression is a boundary-cost story: every norm now crosses a shard_map + custom-call boundary that the XLA fusion pass can no longer thread through neighbouring work.
 

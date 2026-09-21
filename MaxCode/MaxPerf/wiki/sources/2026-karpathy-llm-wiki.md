@@ -1,12 +1,4 @@
----
-title: "LLM Wiki — a pattern for building personal knowledge bases with LLMs"
-type: source
-tags: [article, methodology, knowledge-base, llm-wiki, schema, obsidian]
-author: Andrej Karpathy
-upstream: https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
-created: 2026-04-23
-updated: 2026-04-23
----
+<!-- disableFinding("sane") -->
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -16,6 +8,15 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "LLM Wiki — a pattern for building personal knowledge bases with LLMs"
+type: source
+tags: [article, methodology, knowledge-base, llm-wiki, schema, obsidian]
+author: Andrej Karpathy
+upstream: https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Karpathy's "idea file" describing the **LLM-wiki pattern**: an agent incrementally builds and maintains a persistent, interlinked markdown wiki that sits between the human's raw sources and the human's queries — *compiling* knowledge once and keeping it current rather than re-deriving it on every RAG query. This wiki's [SCHEMA.md](../../SCHEMA.md) is a domain-specialized instantiation of this pattern; ingesting the article makes the source-of-design explicit and ties the methodology back to its origin.
 
@@ -89,7 +90,7 @@ This source **directly informs** the wiki's operating protocol:
 - [wiki/log.md](../log.md) — the "append-only chronological record" with the prefix-pattern Karpathy recommends.
 
 Related ingested material:
-- [autoresearch (codebase)](../codebases/autoresearch.md) — Karpathy's parallel reference implementation of the **autoresearch** loop (experiment-ranking, verdicts, priors). This wiki's autoresearch mechanics borrow from that codebase; its maintenance mechanics borrow from the LLM-wiki article. The two documents are complementary: one says "how to run experiments", the other says "how to keep the knowledge base sensible while doing so".
+- [autoresearch (codebase)](../codebases/autoresearch.md) — Karpathy's parallel reference implementation of the **autoresearch** loop (experiment-ranking, verdicts, priors). This wiki's autoresearch mechanics borrow from that codebase; its maintenance mechanics borrow from the LLM-wiki article. The two documents are complementary: one says "how to run experiments", the other says "how to keep the knowledge base sane while doing so".
 
 ## See also
 

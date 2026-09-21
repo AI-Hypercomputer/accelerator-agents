@@ -1,10 +1,3 @@
----
-title: "Pallas kernel directory — §2 Google AI-Hypercomputer stacks"
-type: analysis
-tags: [directory, pallas, kernels, maxtext, maxdiffusion, jetstream]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Pallas kernel directory — §2 Google AI-Hypercomputer stacks"
+type: analysis
+tags: [directory, pallas, kernels, maxtext, maxdiffusion, jetstream]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Catalog of Pallas kernels embedded in Google AI-Hypercomputer's three training/serving stacks: [MaxText](https://github.com/AI-Hypercomputer/maxtext) (Gemma/Llama/DeepSeek/Qwen/Mistral/Kimi reference trainer), [MaxDiffusion](https://github.com/AI-Hypercomputer/maxdiffusion) (Flux/Wan/SDXL/LTX diffusion reference), and [JetStream](https://github.com/AI-Hypercomputer/JetStream) (inference engine, **being archived 2026-02-01** with functionality migrating to [AI-Hypercomputer/tpu-inference](https://github.com/AI-Hypercomputer/tpu-inference)). All are Apache-2.0. Every kernel is `mosaic_tpu` backend — none of these repos ship Mosaic-GPU or Triton kernels. Part of [2026-04-23 Pallas kernel directory](../2026-04-23-pallas-kernel-directory.md).
 

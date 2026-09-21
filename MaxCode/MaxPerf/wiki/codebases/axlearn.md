@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "axlearn (apple/axlearn)"
 type: codebase
@@ -8,15 +17,6 @@ paper: "arXiv:2507.05411"
 created: 2026-04-23
 updated: 2026-04-23
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Apple's public training framework and the **single largest source of non-upstream Pallas kernels** surveyed in this wiki. Ships side-by-side TPU (Mosaic) + GPU (Triton) Pallas implementations for flash attention (splash extensions with dropout + logit sink), paged attention (block-sparse offset masks), decoding, grouped matmul — plus **exclusive Pallas kernels for Mamba1, Mamba2 (SSD), and RAttention linear attention** that exist nowhere else publicly. Per-kernel detail in [§4.1 of the Pallas kernel directory](../analyses/pallas-kernel-directory/04-research-labs.md#41-appleaxlearn).
 

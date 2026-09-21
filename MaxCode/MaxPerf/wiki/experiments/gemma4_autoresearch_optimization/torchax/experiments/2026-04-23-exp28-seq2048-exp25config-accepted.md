@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 28 — seq=2048 batch=1 at exp25 config (KEEP, +0.9% over exp14)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: "branch perfautoresearch/v6e4-20260423-exp28-seq2048-exp25config"
 verdict: supported
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Rerun seq=2048 b=1 at the current-best configuration (exp25: splash + SEQ_MINOR + block=1024 + fused_bwd + bf16 CE). The last direct data point at seq=2048 b=1 was exp 14 (31,960 TPS, on the splash + fused_bwd + bf16 CE stack before SEQ_MINOR and block=1024 landed). Goal: see whether exp25's block/layout improvements extend to long sequences.
 

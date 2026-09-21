@@ -1,6 +1,5 @@
 # pylint: skip-file
 """WikiText loader + fixed-length packer for Llama 3 8B fine-tune."""
-
 from __future__ import annotations
 from typing import Iterator, Tuple
 import numpy as np

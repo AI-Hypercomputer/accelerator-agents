@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "How to Scale Your Model — Ch 11: How to Think About GPUs"
 type: source
@@ -10,15 +19,6 @@ upstream: https://jax-ml.github.io/scaling-book/gpus
 created: 2026-04-23
 updated: 2026-04-23
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Chapter 11 of the scaling-book. **GPU-vs-TPU comparison framing**: Tensor Cores, NVLink / NVSwitch / InfiniBand hierarchy, structured sparsity, FP8. For this wiki — a TPU-focused autoresearch — included as GPU↔TPU translation reference rather than primary content.
 

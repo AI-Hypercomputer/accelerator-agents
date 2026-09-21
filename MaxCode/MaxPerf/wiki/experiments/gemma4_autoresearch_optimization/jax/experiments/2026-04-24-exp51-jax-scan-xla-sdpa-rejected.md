@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 51 — JAX scan-over-layers + XLA SDPA (REJECTED, −60%; splash cleared as scan-regression culprit)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-24
 commit: pending
 verdict: refuted
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Isolation test: take exp 50's two-scan split implementation and swap **splash → XLA SDPA** (`JAX_ATTENTION_IMPL=xla JAX_SCAN_LAYERS=1`). **Result: 13,792 TPS / 9.19 % MFU — −60 % vs exp 36 and −52 % vs scan+splash (exp 50).** Splash is NOT the scan regression culprit; it's what keeps scan viable at all on this stack. Scan + XLA SDPA is catastrophically worse than no-scan XLA SDPA (exp 34's 30,285 TPS).
 

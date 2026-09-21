@@ -1,10 +1,3 @@
----
-title: "tokamax docs — benchmarking"
-type: source
-tags: [docs, kernels, benchmark, xprof, cupti, timing, tpu, gpu]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "tokamax docs — benchmarking"
+type: source
+tags: [docs, kernels, benchmark, xprof, cupti, timing, tpu, gpu]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 How tokamax isolates *accelerator* time from JAX/Python dispatch overhead. Tokamax ships `standardize_function` (to build a clean jittable form) and `benchmark` (to actually time it), plus a `method=` kwarg selecting the underlying profiler — typically XProf on TPU and XProf-CUPTI or raw CUPTI on GPU — and a `mode=` kwarg selecting which pass to time (fwd / fwd+residuals / vjp / fwd+vjp). For the TPU performance loop this is the doc that defines what "kernel time" means.
 

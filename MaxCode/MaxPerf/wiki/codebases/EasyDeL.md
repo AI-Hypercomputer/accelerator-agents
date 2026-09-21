@@ -1,12 +1,3 @@
----
-title: "EasyDeL (erfanzar/EasyDeL)"
-type: codebase
-tags: [EasyDeL, ejkernel, pallas, mosaic-tpu, training, serving, operations-registry, ssm, gated-delta-rule, kimi-linear]
-repo: erfanzar/EasyDeL
-commit: 090a03b2
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -16,6 +7,15 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "EasyDeL (erfanzar/EasyDeL)"
+type: codebase
+tags: [EasyDeL, ejkernel, pallas, mosaic-tpu, training, serving, operations-registry, ssm, gated-delta-rule, kimi-linear]
+repo: erfanzar/EasyDeL
+commit: 090a03b2
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Training / serving framework that **consumes [ejkernel](ejkernel.md)**. TPU Pallas usage lives in `easydel/operations/kernels/`, which re-exports ejkernel implementations through an operations registry. Unique EasyDeL-side content: `glm_moe_dsa_indexer.py` (GLM MoE DSA index op). Otherwise the TPU kernels here are thin adapters. Ingested as the companion to ejkernel per the Wave 4 ingestion recommendation (they're meant to be read together). Per-kernel detail in [§6.2 of the Pallas kernel directory](../analyses/pallas-kernel-directory/06-community-research.md#62-erfanzareasydel).
 

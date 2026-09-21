@@ -1,11 +1,3 @@
----
-title: "MFU (Model FLOPs Utilization)"
-type: concept
-tags: [stub, metric, performance]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 2
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 2
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "MFU (Model FLOPs Utilization)"
+type: concept
+tags: [stub, metric, performance]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 2
+---
 
 Achieved model FLOPs/s divided by peak device FLOPs/s; headline training-efficiency metric.
 

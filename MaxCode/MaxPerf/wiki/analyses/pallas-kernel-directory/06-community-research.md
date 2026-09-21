@@ -1,10 +1,3 @@
----
-title: "Pallas kernel directory — §6 Community & research-companion repos"
-type: analysis
-tags: [directory, pallas, kernels, ejkernel, easydel, ringattention, community]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Pallas kernel directory — §6 Community & research-companion repos"
+type: analysis
+tags: [directory, pallas, kernels, ejkernel, easydel, ringattention, community]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Catalog of community and research-companion Pallas repositories — smaller repos, often paper companions or individual-author kernel libraries. Several advertise "Pallas" but target Triton/Mosaic-GPU, not TPU — flagged explicitly. Part of [2026-04-23 Pallas kernel directory](../2026-04-23-pallas-kernel-directory.md).
 

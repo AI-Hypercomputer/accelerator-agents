@@ -1,11 +1,3 @@
----
-title: "XLA Custom Call"
-type: concept
-tags: [stub, compiler, kernels]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 2
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 2
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XLA Custom Call"
+type: concept
+tags: [stub, compiler, kernels]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 2
+---
 
 Mechanism by which non-native kernels (Pallas, Mosaic, cuDNN, etc.) are embedded into an XLA program.
 

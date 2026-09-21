@@ -1,11 +1,3 @@
----
-title: "scaling-book — How To Scale Your Model"
-type: codebase
-tags: [book, reference]
-commit: 6cda371aa898f6ef1de92d617e2fe5bbff45aaa5
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "scaling-book — How To Scale Your Model"
+type: codebase
+tags: [book, reference]
+commit: 6cda371aa898f6ef1de92d617e2fe5bbff45aaa5
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 `scaling-book` is the Jekyll-based source for the book *How To Scale Your Model: A Systems View of LLMs on TPUs* by Jacob Austin, Sholto Douglas, Roy Frostig, Anselm Levskaya, Charlie Chen, Sharad Vikram, Federico Lebron, Peter Choy, Vinay Ramasesh, Albert Webson, and Reiner Pope (Google DeepMind, 2025). It is **prose, not a library** — the wiki value is in the individual chapters, each of which will be ingested as its own `source` page in a later wave. This page is a thin index that frames the repo and maps chapters to their planned source-page slugs.
 

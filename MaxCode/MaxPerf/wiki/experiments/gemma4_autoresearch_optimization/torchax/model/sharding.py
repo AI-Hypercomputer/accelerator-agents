@@ -30,6 +30,7 @@ import jax
 from jax.experimental import mesh_utils
 from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
 
+
 # -----------------------------------------------------------------------------
 # Mesh axis names — only the axes actually present in a given mesh are used.
 # -----------------------------------------------------------------------------

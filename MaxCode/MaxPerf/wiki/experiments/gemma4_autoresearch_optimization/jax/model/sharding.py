@@ -16,7 +16,6 @@ not from HF state_dict keys like the torchax version — but the name
 pattern matching keeps functional parity (``.q_proj.weight``,
 ``.gate_proj.weight`` etc.).
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -27,6 +26,7 @@ import jax
 from jax.experimental import mesh_utils
 import jax.numpy as jnp
 from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
+
 
 AXIS_FSDP = "fsdp"
 AXIS_DP = "dp"

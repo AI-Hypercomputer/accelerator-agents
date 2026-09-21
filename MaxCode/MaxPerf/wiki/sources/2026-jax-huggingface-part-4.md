@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "How to Run a Hugging Face Model in JAX (Part 4): Stable Diffusion via torchax.compile"
 type: source
@@ -8,15 +17,6 @@ companion_script: jax_hg_04.py
 created: 2026-04-22
 updated: 2026-04-22
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Blog post #4 of a four-part series. Applies the pattern to an image-generation pipeline: `stabilityai/stable-diffusion-2-base` via `diffusers.StableDiffusionPipeline`. Shows `torchax.compile` (instead of `extract_jax`) because the pipeline is not a single `nn.Module`. Headline measured result: **5.9 s → 1.07 s per image on A100 GPU** after correctly compiling the VAE's `decode` method. Hardware here is **A100 GPU, not TPU** — numbers do not transfer, but the patterns do.
 

@@ -1,10 +1,3 @@
----
-title: "Llama 3 8B torchax — converged-stack bottleneck breakdown (xprof)"
-type: observation
-tags: [llama3, torchax, profile, bottleneck, mxu, pallas, splash, tokamax, ce]
-created: 2026-04-26
-updated: 2026-04-26
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-26
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Llama 3 8B torchax — converged-stack bottleneck breakdown (xprof)"
+type: observation
+tags: [llama3, torchax, profile, bottleneck, mxu, pallas, splash, tokamax, ce]
+created: 2026-04-26
+updated: 2026-04-26
+---
 
 xprof breakdown of the **2026-04-26 program-target frontier** stack (scan +
 splash + tokamax CE w/ autotune + fp32 master + bf16 compute + VMEM=98 KiB

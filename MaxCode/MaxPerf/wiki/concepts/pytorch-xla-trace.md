@@ -1,11 +1,3 @@
----
-title: "PyTorch/XLA Trace"
-type: concept
-tags: [stub, profiling, pytorch]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 1
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 1
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "PyTorch/XLA Trace"
+type: concept
+tags: [stub, profiling, pytorch]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 1
+---
 
 `torch_xla.debug.profiler.start_trace` / `stop_trace` / `xp.Trace` surface for capturing XProf profiles from PyTorch/XLA.
 

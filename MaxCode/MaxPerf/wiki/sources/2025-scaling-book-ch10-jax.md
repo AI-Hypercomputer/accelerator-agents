@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "How to Scale Your Model — Ch 10: Programming TPUs in JAX"
 type: source
@@ -10,15 +19,6 @@ upstream: https://jax-ml.github.io/scaling-book/jax-stuff
 created: 2026-04-23
 updated: 2026-04-23
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Chapter 10 of the scaling-book. **Three parallelism programming models in JAX** — Auto (Shardy-decides), Explicit (type-system-propagated), and Manual `shard_map` (device-local, write-collectives-by-hand). Worked **collective-matmul** example: 1.27× speedup over naive AllGather+matmul via `ppermute` in a `fori_loop`.
 

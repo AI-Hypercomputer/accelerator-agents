@@ -1,10 +1,3 @@
----
-title: "compile-time-aware autotune candidate filtering"
-type: concept
-tags: [autotuning, xla-compile-time, marin, levanter, stub]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "compile-time-aware autotune candidate filtering"
+type: concept
+tags: [autotuning, xla-compile-time, marin, levanter, stub]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Discard autotune candidates whose XLA compile time alone dominates the training-step wall-clock. marin/levanter constant: `_AUTOTUNE_COMPILE_HIT_THRESHOLD_S = 0.20` seconds. *Stub — expand when more sources are available.*
 

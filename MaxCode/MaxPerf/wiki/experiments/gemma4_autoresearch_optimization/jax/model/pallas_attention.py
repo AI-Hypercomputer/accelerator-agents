@@ -32,7 +32,6 @@ baseline):
   - sliding-window masks use LocalMask(window_size=(W, 0))
   - causal full layers use CausalMask
 """
-
 from __future__ import annotations
 
 import functools
@@ -41,6 +40,7 @@ from typing import Any, Optional
 
 import jax
 import jax.numpy as jnp
+
 
 # ---------------------------------------------------------------------------
 # Mesh handle — shard_map needs a concrete Mesh (Mosaic custom-calls cannot be

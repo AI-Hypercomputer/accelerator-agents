@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 5 — selective remat (checkpoint_dots_with_no_batch_dims) (KEEP, memory-win low tax)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: "wiki:HEAD; train.py: jax.checkpoint(forward_loss, policy=checkpoint_dots_with_no_batch_dims)"
 verdict: supported
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Replaced exp 3's full remat with the **selective** policy `checkpoint_dots_with_no_batch_dims`: save the matmul outputs (dots), recompute only the cheap elementwise intermediates. Mechanism-wise this is a much better trade — +8.7 % step time (vs full remat's +27.5 %), no forward-doubling of all-gather, and **better** peak HBM (19.3 vs 21.1 GiB). Unlocks exp 6 (batch=2) which becomes the first TPS win.
 

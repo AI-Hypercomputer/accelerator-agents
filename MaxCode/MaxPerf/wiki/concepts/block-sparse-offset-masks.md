@@ -1,10 +1,3 @@
----
-title: "block-sparse offset masks for paged attention"
-type: concept
-tags: [pallas, paged-attention, sliding-window, sparse-mask, axlearn, stub]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "block-sparse offset masks for paged attention"
+type: concept
+tags: [pallas, paged-attention, sliding-window, sparse-mask, axlearn, stub]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Precompute an `(n_kv_blocks, n_kv_blocks)` table of offsets into **unmasked KV blocks only** and load from the offset table in the kernel. Turns sliding-window / block-sparse attention into a dense-load-over-sparse-offsets pattern. First-party reference: AxLearn `tpu_paged_attention_kernel.py`. *Stub — expand when more sources are available.*
 

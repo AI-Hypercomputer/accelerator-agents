@@ -45,8 +45,9 @@ for prompt in "${AGENT_PROMPTS[@]}"; do
   fi
 done
 
+# --- RESULTS.tsv header check (18 columns) ---
 if [ -f "$ROOT/RESULTS.tsv" ]; then
-  EXPECTED_HEADER=$(printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s" date class branch experiment_slug agent verdict tps_per_chip p50_tpot_ms p99_tpot_ms hbm_peak_gib diagnostic_vector_delta numeric_equiv_pass vreg_spill_delta compile_time_s eval_humaneval eval_mbpp profile_gcs_path notes)
+  EXPECTED_HEADER=$(printf 'date\tclass\tbranch\texperiment_slug\tagent\tverdict\ttps_per_chip\tp50_tpot_ms\tp99_tpot_ms\thbm_peak_gib\tdiagnostic_vector_delta\tnumeric_equiv_pass\tvreg_spill_delta\tcompile_time_s\teval_humaneval\teval_mbpp\tprofile_gcs_path\tnotes')
   ACTUAL_HEADER=$(head -1 "$ROOT/RESULTS.tsv")
   if [ "$ACTUAL_HEADER" != "$EXPECTED_HEADER" ]; then
     err "RESULTS.tsv header does not match 18-column spec"

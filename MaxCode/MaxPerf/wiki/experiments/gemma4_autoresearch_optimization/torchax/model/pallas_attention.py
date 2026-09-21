@@ -55,6 +55,7 @@ from typing import Any, Optional
 
 import torch
 
+
 # Imports that pull in JAX / Pallas are deferred inside functions so this
 # module can be imported in environments without a TPU present.
 
@@ -233,7 +234,6 @@ def _xla_fallback_fwd(q, k, v, scaling: float, sliding_window: int | None):
 # ---------------------------------------------------------------------------
 # HuggingFace attention-interface function
 # ---------------------------------------------------------------------------
-
 
 def splash_attention_fn(
     module: torch.nn.Module,

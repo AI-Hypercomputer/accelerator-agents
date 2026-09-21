@@ -1,6 +1,5 @@
 # pylint: skip-file
 """Llama 3 8B native-JAX (Flax NNX) model package."""
-
 from .modeling_llama3 import (
     LlamaAttention,
     LlamaDecoderLayer,

@@ -28,7 +28,6 @@ Default sweep:
 Llama 3 8B per-chip shape (post FSDP fsdp=8, bs=5 globally=40):
   B=5, Hq=32, Hkv=8, L=8192, hd=128
 """
-
 from __future__ import annotations
 
 import argparse
@@ -38,7 +37,6 @@ import time
 from typing import Any
 
 import jax
-
 # Upstream jax-experimental splash
 from jax.experimental.pallas.ops.tpu.splash_attention import (
     splash_attention_kernel as jax_splash,
@@ -56,6 +54,7 @@ from tokamax._src.ops.experimental.tpu.splash_attention import (
 from tokamax._src.ops.experimental.tpu.splash_attention import (
     splash_attention_mask as tk_mask,
 )
+
 
 # Llama 3 8B per-chip GQA shape.
 HQ = 32

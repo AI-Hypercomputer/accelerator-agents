@@ -1,11 +1,3 @@
----
-title: "Reduce-Scatter"
-type: concept
-tags: [stub, parallelism, communication]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 3
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 3
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Reduce-Scatter"
+type: concept
+tags: [stub, parallelism, communication]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 3
+---
 
 Collective op that reduces (sums) a tensor across replicas and distributes the result as equal shards, one per replica. Conceptually an all-reduce whose output is sharded rather than replicated. FSDP/ZeRO-3 pairs an all-gather on the forward pass with a reduce-scatter on the backward pass (one of each per layer). Sequence parallelism replaces the TP block's internal all-reduce with a reduce-scatter + all-gather pair of the same aggregate volume.
 

@@ -1,12 +1,3 @@
----
-title: "ringattention (haoliuhl/ringattention)"
-type: codebase
-tags: [ring-attention, pallas, mosaic-tpu, sequence-parallelism, long-context, paper-companion, liu-2023]
-repo: haoliuhl/ringattention
-commit: d2ea1af
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -16,6 +7,15 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "ringattention (haoliuhl/ringattention)"
+type: codebase
+tags: [ring-attention, pallas, mosaic-tpu, sequence-parallelism, long-context, paper-companion, liu-2023]
+repo: haoliuhl/ringattention
+commit: d2ea1af
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Paper companion for [Liu et al. 2023 "Ring Attention with Blockwise Transformers"](https://arxiv.org/abs/2310.01889) — **the canonical public Pallas TPU ring-attention implementation**. Single-file kernel (`ringattention_pallas_tpu.py`) directly implementing the paper. Low-maintenance (770★, last updated 2025-10-13) but stable and verbatim. **Unidirectional ring; straight `below_or_on_diag` causal mask — no Zig-Zag / load-balanced variant.** Per-kernel detail in [§6.4 of the Pallas kernel directory](../analyses/pallas-kernel-directory/06-community-research.md#64-haoliuhlringattention).
 

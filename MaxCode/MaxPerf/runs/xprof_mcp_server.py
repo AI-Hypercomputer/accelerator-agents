@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
 # pylint: skip-file
+#!/usr/bin/env python3
 """xprof_mcp_server.py — Standalone FastMCP Server for the TPU XPROF Profiler.
 
 This script runs on your TPU VM and proxies xprof TensorBoard plugin endpoints
@@ -29,7 +29,6 @@ XPROF_HOST = "localhost"
 XPROF_PORT = 8791
 XPROF_BASE_URL = f"http://{XPROF_HOST}:{XPROF_PORT}/data/plugin/profile"
 
-
 def query_xprof_api(tag: str, run: str, params: dict = None) -> dict:
   """Helper to fetch data from the xprof TensorBoard plugin HTTP endpoints."""
   url = f"{XPROF_BASE_URL}/data"
@@ -53,7 +52,6 @@ def query_xprof_api(tag: str, run: str, params: dict = None) -> dict:
   except Exception as e:
     return {"status": "error", "message": str(e)}
 
-
 @mcp.tool()
 def list_runs() -> str:
   """List all available profiling runs collected in the logdir."""
@@ -68,13 +66,11 @@ def list_runs() -> str:
   except Exception as e:
     return f"Error listing runs: {str(e)}. Ensure backend xprof is running."
 
-
 @mcp.tool()
 def get_overview(run: str) -> str:
   """Get high-level TPU performance overview (step time, MXU utility, HBM BW, idle %)."""
   res = query_xprof_api("overview_page", run)
   return str(res)
-
 
 @mcp.tool()
 def get_memory_profile(run: str) -> str:
@@ -82,13 +78,11 @@ def get_memory_profile(run: str) -> str:
   res = query_xprof_api("memory_profile", run)
   return str(res)
 
-
 @mcp.tool()
 def get_top_hlo_ops(run: str) -> str:
   """Get top HLO operations ranked by execution time, FLOPs, and bytes accessed."""
   res = query_xprof_api("hlo_stats", run)
   return str(res)
-
 
 @mcp.tool()
 def get_op_profile(run: str) -> str:
@@ -96,20 +90,17 @@ def get_op_profile(run: str) -> str:
   res = query_xprof_api("op_profile", run)
   return str(res)
 
-
 @mcp.tool()
 def get_device_information(run: str) -> str:
   """Get details about accelerator hardware limits and critical intensity points."""
   res = query_xprof_api("roofline_model", run)
   return str(res)
 
-
 @mcp.tool()
 def list_hlo_modules(run: str) -> str:
   """List all compiled HLO program module names in the run."""
   res = query_xprof_api("module_list", run)
   return str(res)
-
 
 @mcp.tool()
 def get_hlo_module_content(run: str, module: str) -> str:
@@ -118,7 +109,6 @@ def get_hlo_module_content(run: str, module: str) -> str:
       "graph_viewer", run, {"type": "long_txt", "module": module}
   )
   return str(res)
-
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description="xprof-mcp FastMCP Server")

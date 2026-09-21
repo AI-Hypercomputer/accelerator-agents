@@ -1,10 +1,3 @@
----
-title: "jaxpr-hash cache keys for Pallas autotune"
-type: concept
-tags: [autotuning, jaxpr, cache, marin, levanter, stub]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "jaxpr-hash cache keys for Pallas autotune"
+type: concept
+tags: [autotuning, jaxpr, cache, marin, levanter, stub]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Pin an autotune cache entry to the stringified jaxpr of the function being tuned, so silent shape/dtype/soft-cap/flag changes invalidate the cache. First-party reference: marin/levanter `_autotune_jaxpr_hash`. *Stub — expand when more sources are available.*
 

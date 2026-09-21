@@ -1,10 +1,3 @@
----
-title: "TPU Optimization — Running Large Models in Dummy/Random Weight Mode"
-type: analysis
-tags: [analysis, tpu, dummy-weights, compile-time, profiling, roofline, autotune, maxperf]
-created: 2026-05-12
-updated: 2026-05-12
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-05-12
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "TPU Optimization — Running Large Models in Dummy/Random Weight Mode"
+type: analysis
+tags: [analysis, tpu, dummy-weights, compile-time, profiling, roofline, autotune, maxperf]
+created: 2026-05-12
+updated: 2026-05-12
+---
 
 ## Headline Comparison
 

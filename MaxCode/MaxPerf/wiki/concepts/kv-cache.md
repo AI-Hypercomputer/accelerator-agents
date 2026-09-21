@@ -1,11 +1,3 @@
----
-title: "KV Cache"
-type: concept
-tags: [stub, inference]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 2
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 2
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "KV Cache"
+type: concept
+tags: [stub, inference]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 2
+---
 
 Per-token key/value cache consumed during autoregressive decode; streaming the full cache through HBM at each step makes decode bandwidth-bound at small batch.
 

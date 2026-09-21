@@ -1,12 +1,3 @@
----
-title: "jax (jax-ml/jax)"
-type: codebase
-tags: [jax, xla, pallas, mosaic, tpu, jit, sharding, profiler, roofline, scan, rematerialization, compilation-cache]
-repo: jax-ml/jax
-commit: feb5ba05855a9e1fdf6d3095b6f5b87614bdbbc7
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -16,6 +7,15 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "jax (jax-ml/jax)"
+type: codebase
+tags: [jax, xla, pallas, mosaic, tpu, jit, sharding, profiler, roofline, scan, rematerialization, compilation-cache]
+repo: jax-ml/jax
+commit: feb5ba05855a9e1fdf6d3095b6f5b87614bdbbc7
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 The JAX library itself — the ground-truth for every transformation, kernel, and TPU surface the rest of this wiki builds on. Every other ingested codebase ([torchax](torchax.md), [tokamax](tokamax.md), [pallas-forge](pallas-forge.md), [xprof](xprof.md), [xprof-mcp](xprof-mcp.md), [jax-huggingface](jax-huggingface.md), [scaling-book](scaling-book.md)) imports or lowers through this repo. It also ships **first-party reference TPU Pallas kernels** (`flash_attention`, `splash_attention`, `paged_attention`, `ragged_paged_attention`, `megablox`, `matmul`, `all_gather`, `threefry`) that the wiki's Pallas-kernel analysis treats as canonical. **Commit `feb5ba05` was `HEAD` on 2026-04-23** — a bleeding-edge pin; rerun `git submodule update --remote` to bump.
 

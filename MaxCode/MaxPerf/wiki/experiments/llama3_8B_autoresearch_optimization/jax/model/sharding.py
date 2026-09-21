@@ -21,7 +21,6 @@ Llama 3 8B dims:
   head_dim = 128. All hidden/ffn/vocab dims are divisible by 8 → both
   fsdp=8 and tp=8 are sharding-friendly.
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -31,6 +30,7 @@ from flax import nnx
 import jax
 from jax.experimental import mesh_utils
 from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
+
 
 AXIS_FSDP = "fsdp"
 AXIS_TP = "tp"

@@ -1,10 +1,3 @@
----
-title: "VMEM-OOM-aware autotune fallthrough"
-type: concept
-tags: [autotuning, vmem, tpu, oom, marin, levanter, stub]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "VMEM-OOM-aware autotune fallthrough"
+type: concept
+tags: [autotuning, vmem, tpu, oom, marin, levanter, stub]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Catch `resource_exhausted ... vmem` errors during autotune candidate compilation and **demote** the candidate (move to next) instead of raising. First-party reference: marin/levanter `_is_tpu_vmem_compile_error`. *Stub — expand when more sources are available.*
 

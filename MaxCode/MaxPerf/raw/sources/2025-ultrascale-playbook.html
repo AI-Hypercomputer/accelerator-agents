@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 <!DOCTYPE html>
 <html>
 
@@ -688,7 +697,7 @@
 
 
         <p>This involves our first “distributed communication” primitive, <em><strong>all-reduce</em></strong>, which handles the synchronization and communication between GPU instances and nodes.</p>
-                <!-- RH: In this figure, on the right, can "AllReduce Grads" be changed to "All-reduce grads"? -->
+        <!-- RH: In this figure, on the right, can "AllReduce Grads" be changed to "All-reduce grads"? -->
         <p><img alt="image.png" src="/assets/images/dp_overlap1.svg" /></p>
 
         <p>A naive DP implementation would just wait for the backward pass to finish so that we have all the gradients, then trigger an all-reduce over all the DP ranks to sync the gradients. But such sequential steps of computation followed by communication are <strong>A BIG NO-NO</strong> because we don’t want our GPUs to stay idle while communication is happening, like in the above image.</p>
@@ -702,7 +711,7 @@
         <p>The main drawback of the naive DP approach we’ve just described is that after the backward pass (<em>computation</em>), we have to wait for gradient synchronization (<em>communication</em>) before updating the parameters. Could we overlap this communication with our computation? The answer is yes!</p>
 
         <p>As shown in the figure above, the gradients (pink boxes) for a layer can be gathered and summed even before the gradients from earlier layers (the pink boxes to their left) have been computed. For example, as soon as the backward pass of the last layer is complete (the last box on the right), those gradients can already be gathered and summed while the backward computations continue for earlier layers, moving toward the left.</p>
-                <!-- RH: In this figure, on the right, can "AllReduce Grads" be changed to "All-reduce grads"? -->
+        <!-- RH: In this figure, on the right, can "AllReduce Grads" be changed to "All-reduce grads"? -->
         <p><img alt="image.png" src="/assets/images/dp_overlap2.svg"/></p>
 
         <p>This can be achieved in PyTorch by attaching an <em>all-reduce hook function</em> to each parameter. An all-reduce operation is then triggered as soon as the gradient for that parameter is ready, while the gradients for other parameters are still being computed. This approach overlaps most of the all-reduce operations with gradient calculations, thereby improving efficiency. Here's a simple function to attach a hook:</p>
@@ -737,7 +746,7 @@
 
         <p>GPU operations are usually more efficient when performed on large tensors, rather than having many operations running on smaller tensors. This is also true for communication operations. Thus, we can advantageously group gradients into “buckets” and launch a single all-reduce for all the gradients within the same bucket instead of performing independent all-reduce operations for each gradient. It will generally look like the following:
         </p>
-                <!-- RH: In this figure, on the right, can "AllReduce Grads" be changed to "All-reduce grads"? -->
+        <!-- RH: In this figure, on the right, can "AllReduce Grads" be changed to "All-reduce grads"? -->
         <p><img alt="dp_overlap3.svg" src="/assets/images/dp_overlap3.svg" /></p>
 
         <p>Think of it like packing items into boxes before shipping them. It's more efficient to send a few big boxes than many small ones. By performing a single all-reduce operation for each bucket, we can significantly reduce the communication overhead and speed up the communication operation.</p>
@@ -1724,7 +1733,7 @@
         <p>However, there are a few major differences between the PP and ZeRO-3 approaches:</p>
 
         <aside>Note here that we say "a layer" to simplify, but the actual sharding unit of the model can vary - it might be multiple layers, a single layer, or even a subset of a layer, depending on the specific implementation.</aside>
-                <div class="l-body">
+        <div class="l-body">
         <table>
             <thead>
               <tr>
@@ -1806,7 +1815,7 @@
         </div>
 
         <h3>Scope and focus</h3>
-                <p>Let's also quickly summarize the sub-parts of the model where these different parallelism strategies have the most impact:</p>
+        <p>Let's also quickly summarize the sub-parts of the model where these different parallelism strategies have the most impact:</p>
 
         <ul>
             <li>Tensor parallelism (and sequence parallelism) affects computation throughout the entire model by sharding both weights and activations.</li>
@@ -1848,7 +1857,7 @@
            </table>
 
         <h3>Summarizing it all</h3>
-                <p>Now, what about gathering all the techniques we've seen into a single diagram combining them all? Yes, we're up for the challenge!</p>
+        <p>Now, what about gathering all the techniques we've seen into a single diagram combining them all? Yes, we're up for the challenge!</p>
         <p>In this summary diagram, you will find illustrated activations and modules for a single transformer layer, in its MoE variant. We also illustrate the various directions of parallelism and the communication operations we've been discussing in the previous sections.</p>
         <!-- RH: OK that this figure uses FSDP and not ZeRO-3? If you happen to be editing it, I'd also use "All-gather" instead of "AllGather". -->
         <div class="large-image-background-transparent">
@@ -2024,7 +2033,7 @@
     </div>
         <p>From this high-level visualization, we can draw several important insights:</p>
 
-                <ul>
+        <ul>
         <li>First, as we increase the number of nodes (higher parallelism), we observe a decrease in efficiency. This effect is particularly pronounced for smaller models, which have a lower compute to model size ratio. While we might typically compensate for small model size by increasing the batch size, we're constrained by our global batch size limit of 1M.</li>
 
         <li>Second, larger models present a different challenge. As model size increases, memory requirements grow substantially. This creates two scenarios with fewer nodes: either the model doesn't fit at all, or it fits but runs inefficiently due to operating near the GPU memory limits (see for instance the 80B parameter model training on 4 nodes).</li>
@@ -2605,7 +2614,7 @@
         </ol>
 
         <p>With these techniques, we can get stable training while benefitting from higher throughput due to the faster, lower-precision arithmetic operations.</p>
-                <p>Naturally, as a curious reader – and by now slightly addicted to maximizing the throughput – you may ask the question: Can we go further and faster than 16-bit precision? </p>
+        <p>Naturally, as a curious reader – and by now slightly addicted to maximizing the throughput – you may ask the question: Can we go further and faster than 16-bit precision? </p>
 
         <p>Maybe!</p>
 
@@ -3285,8 +3294,8 @@
 
         <d-code block language="python">
             Before ReduceScatter on rank 0: [tensor([1., 2.], device='cuda:0'),
-                                                                   tensor([1., 4.], device='cuda:0'),
-                                                                   tensor([1., 8.], device='cuda:0')]
+                                             tensor([1., 4.], device='cuda:0'),
+                                             tensor([1., 8.], device='cuda:0')]
             Before ReduceScatter on rank 1: [tensor([2., 4.], device='cuda:1'),
                                              tensor([4., 16.], device='cuda:1'),
                                              tensor([8., 64.], device='cuda:1')]
@@ -3508,7 +3517,7 @@
             </div>
         </div>
 
-                <h4>CPP extension</h4>
+        <h4>CPP extension</h4>
 
         <p>If the kernel you want to profile isn't already integrated into PyTorch, you can use PyTorch's <code>cpp_extension</code> module to easily compile and run custom CUDA code. The process is straightforward — just create your CUDA kernel in a <em>.cu</em> file, and use the <code>load</code> function from the <code>cpp_extension</code> module to load it in Python.</p>
 

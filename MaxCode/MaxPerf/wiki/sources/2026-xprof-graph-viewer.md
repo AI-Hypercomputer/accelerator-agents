@@ -1,10 +1,3 @@
----
-title: "XProf Graph Viewer (docs)"
-type: source
-tags: [docs, profiler, xprof, graph-viewer, hlo, xla, tpu, gpu]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf Graph Viewer (docs)"
+type: source
+tags: [docs, profiler, xprof, graph-viewer, hlo, xla, tpu, gpu]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 Graph Viewer renders the XLA **optimized-HLO** graph with overlaid runtime statistics — the go-to tool for inspecting the shape of the computation the compiler actually produced and the measured cost of individual ops.
 

@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 32 — 2D mesh dp=2 tp=2 batch=2 (REFUTED, 2.4× slower at same global batch)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: "branch perfautoresearch/v6e4-20260423-exp32-2d-mesh-tp2"
 verdict: refuted
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Wired a 2D `(dp=2, tp=2)` mesh with hybrid tp+dp sharding: MLP / attention projections tp-sharded on their NeMo-Megatron axis AND dp-sharded on the other axis (so opt-state is 4-way = 2×2 per chip, matching 1D fsdp=4). Non-TP params dp-sharded FSDP-style. Goal: shard heads across tp for parallel per-chip attention compute; unlock batch=4 via reduced per-chip memory. **Result: batch=3 still compile-time OOMs (by 1.15 GiB); batch=2 runs but is 12,711 TPS at global batch=4 vs baseline's 30,570 same global batch — 2.4× regression. TP overhead at 2 chips/axis dominates.** Refuted, not merged.
 

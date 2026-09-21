@@ -1,11 +1,3 @@
----
-title: "FSDP (Fully Sharded Data Parallelism)"
-type: concept
-tags: [stub, parallelism]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 1
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 1
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "FSDP (Fully Sharded Data Parallelism)"
+type: concept
+tags: [stub, parallelism]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 1
+---
 
 Shards optimizer states, gradients, and parameters across data-parallel replicas; uses all-gather + reduce-scatter on ICI.
 

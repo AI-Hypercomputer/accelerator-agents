@@ -1,11 +1,3 @@
----
-title: "CMEM (TPU v4 on-chip memory)"
-type: concept
-tags: [stub, memory, architecture, hardware]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 3
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 3
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "CMEM (TPU v4 on-chip memory)"
+type: concept
+tags: [stub, memory, architecture, hardware]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 3
+---
 
 TPU v4-specific on-chip memory tier surfaced in xprof; has its own roofline line. Not present on v5e/v5p/v6e.
 

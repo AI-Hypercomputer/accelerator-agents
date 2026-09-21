@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 38 — latency-hiding scheduler on JAX splash+b3 (POTENTIAL, +0.06% flat)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: pending
 verdict: inconclusive
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Same JAX stack as exp 36 (splash + batch=3 + bf16 CE by construction), with `--xla_tpu_enable_latency_hiding_scheduler=true` added via `LIBTPU_INIT_ARGS`. **Result: 34,634 TPS vs exp 36's 34,614 — +0.06 %, flat.** No-op, mirroring the torchax exp 30 result on the same flag.
 

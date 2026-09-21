@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 27 — tokamax.dot_product_attention (PARKED, sliding-window unsupported)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: "branch perfautoresearch/v6e4-20260423-exp27-tokamax-dpa"
 verdict: parked
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Tried to swap our direct `make_splash_mha_single_device` wiring for `tokamax.dot_product_attention(implementation="mosaic")`. Same splash kernel under the hood, but tokamax's mosaic_tpu path sets `use_base2_exp=True` in the softmax (TPU-native exp2 instead of natural exp). **Blocked: tokamax's mosaic_tpu kernel does not support `mask.k_start`, i.e. sliding-window attention.** Gemma 4 has 21 sliding-window layers out of 42, all of which fall back to XLA — dominating step time. Parked.
 

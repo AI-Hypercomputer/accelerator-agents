@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "alphafold3 (google-deepmind/alphafold3) — pinned v3.0.1"
 type: codebase
@@ -8,15 +17,6 @@ pinned_tag: "v3.0.1"
 created: 2026-04-23
 updated: 2026-04-23
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Ingested scope: **only `src/alphafold3/jax/gated_linear_unit/`**, pinned to **tag `v3.0.1`** (commit `231efc9`). The kernels were **removed from `main` after v3.0.1** — always pin the v3.0.1 tag in links. Contains the only public, production-grade **Pallas fused-GLU kernel** (GPU, via Triton-on-Pallas), plus an autotuned block-size search. This is the reference architecture for "what a fused `activation(x @ W_gate) * (x @ W_up)` kernel looks like" — directly informative for closing tokamax's missing TPU Pallas fused GLU, though porting to Mosaic-TPU requires HLO-level validation that XLA isn't already fusing the pattern (same lesson as exp 33's RMSNorm result). Per-kernel detail in [§4.5 of the Pallas kernel directory](../analyses/pallas-kernel-directory/04-research-labs.md#45-google-deepmindalphafold3-pinned-to-tag-v301).
 

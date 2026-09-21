@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "exp 52 — JAX fp32-master + bf16-compute AMP baseline (seq=2048 b=1, seq=8192 OOM)"
 type: experiment
@@ -9,15 +18,6 @@ tags: [experiment, jax, gemma4, mixed-precision, fp32-master, seq8192, new-regim
 created: 2026-04-24
 updated: 2026-04-24
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 **Reference baseline for the fp32-master + bf16-compute AMP regime on the JAX stack.** The user-requested target (`seq_len=8192 b=1 fp32-master`) **OOMs on v6e-4** at compile time (35.18 GiB peak vs 31.25 GiB per-chip capacity — exceeded by 3.93 GiB); legacy bf16-everywhere is also OOM at seq=8192 (36.16 GiB, exceeded by 4.91 GiB). The seq=2048 b=1 fp32-master / bf16-compute config is the **largest feasible configuration on v6e-4** in this regime and is filed as the new-regime reference baseline.
 

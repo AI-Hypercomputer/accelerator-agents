@@ -1,11 +1,3 @@
----
-title: "TPU Memory Hierarchy"
-type: concept
-tags: [stub, memory, architecture]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 4
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 4
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "TPU Memory Hierarchy"
+type: concept
+tags: [stub, memory, architecture]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 4
+---
 
 TPU memory stack spanning on-chip VMEM/SMEM/CMEM, package HBM, and host RAM; understanding the stack is foundational to every optimization decision.
 

@@ -3,7 +3,6 @@ from absl import app
 import xmanager as xm
 from xmanager import xm_abc
 
-
 def main(_):
   with xm_abc.create_experiment(
       experiment_title='Ghostfish Training Experiment'
@@ -43,7 +42,6 @@ def main(_):
 
     # Add the job to the experiment
     experiment.add(job)
-
 
 if __name__ == '__main__':
   app.run(main)

@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 41 — JAX VMEM limit 512 MiB (REJECTED, −13.8%)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: pending
 verdict: refuted
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Bumped `--xla_tpu_scoped_vmem_limit_kib` from the default 131,072 KiB (128 MiB) to 524,288 KiB (512 MiB) on the JAX stack at exp 36's config. **Result: −13.8 % TPS (34,614 → 29,832), MFU 23.05 → 19.87 %.** Larger VMEM budget pessimizes — scheduler/cost-model decisions worsen, not better.
 

@@ -1,10 +1,3 @@
----
-title: "Gemma 4 E4B on v6e-4: optimization ceiling analysis (exp 1–33)"
-type: analysis
-tags: [analysis, gemma4, v6e4, ceiling, pallas, fsdp, xla-fusion]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Gemma 4 E4B on v6e-4: optimization ceiling analysis (exp 1–33)"
+type: analysis
+tags: [analysis, gemma4, v6e4, ceiling, pallas, fsdp, xla-fusion]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Synthesis of the 33-experiment autoresearch loop optimizing Gemma 4 E4B pretraining throughput on TPU v6e-4 with torchax + HuggingFace + JAX/Pallas. **Current best (exp 25): 33,372 TPS at seq=1024 batch=3 fsdp=4 bf16**, +9.2 % over the initial baseline-seq1024 reference of 30,570 TPS. The optimization loop has reached diminishing returns on this hardware/model combo — 8 experiments since exp 25 (exp 26–33) produced no further wins. This page explains why, and what would move the needle next.
 

@@ -1,11 +1,3 @@
----
-title: "HLO Op"
-type: concept
-tags: [stub, compiler, ir]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 2
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 2
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "HLO Op"
+type: concept
+tags: [stub, compiler, ir]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 2
+---
 
 Single operation node in the HLO graph; xprof ranks and attributes time to these.
 

@@ -1,11 +1,3 @@
----
-title: "Rematerialization"
-type: concept
-tags: [stub, optimization]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 2
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 2
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Rematerialization"
+type: concept
+tags: [stub, optimization]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 2
+---
 
 Recomputing activations during the backward pass to save HBM; selective AC trades ~2.7% extra compute for ~70% activation memory.
 

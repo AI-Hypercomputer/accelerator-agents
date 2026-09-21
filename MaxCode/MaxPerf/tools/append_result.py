@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
 # pylint: skip-file
+#!/usr/bin/env python3
 """append_result.py — Append a validated row to RESULTS.tsv.
 
 Usage:

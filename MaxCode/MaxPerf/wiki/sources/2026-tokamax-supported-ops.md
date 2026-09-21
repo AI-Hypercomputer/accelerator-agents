@@ -1,10 +1,3 @@
----
-title: "tokamax docs — supported ops and hardware"
-type: source
-tags: [docs, kernels, pallas, attention, glu, layer-norm, rms-norm, ragged-dot, moe, tpu, gpu]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "tokamax docs — supported ops and hardware"
+type: source
+tags: [docs, kernels, pallas, attention, glu, layer-norm, rms-norm, ragged-dot, moe, tpu, gpu]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 Short doc page from the tokamax repository enumerating which kernels ship today and which accelerator families they target. It is the authoritative "what is actually implemented" statement for tokamax, as opposed to the ambition in the README. For the TPU performance wiki, it pins down exactly which tokamax entry points are usable on TPU and which are GPU-only.
 

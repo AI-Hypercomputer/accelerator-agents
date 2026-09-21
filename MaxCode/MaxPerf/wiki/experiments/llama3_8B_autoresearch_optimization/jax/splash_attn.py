@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import functools
-
 # Optional tokamax-shipped splash impl. Tokamax adds knobs not in upstream
 # JAX's splash: `use_base2_exp`, `fuse_reciprocal`, `use_experimental_scheduler`,
 # `dq_reduction_steps`. Toggle with env var USE_TOKAMAX_SPLASH=1.
@@ -63,7 +62,6 @@ def tpu_splash_attention(
   # workspace per call. min(global, seq_len) clamps to seq for shorter seqs.
   # Allow env-var override per block size for sweeping without rebuilds.
   import os as _os
-
   global_block_q = int(_os.environ.get("SPLASH_BQ", "2048"))
   global_block_kv = int(_os.environ.get("SPLASH_BKV", "1024"))
   global_block_kv_compute = int(_os.environ.get("SPLASH_BKV_COMPUTE", "1024"))

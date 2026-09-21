@@ -1,12 +1,3 @@
----
-title: "recurrentgemma (google-deepmind/recurrentgemma)"
-type: codebase
-tags: [recurrentgemma, griffin, deepmind, pallas, mosaic-tpu, lru, linear-recurrence, ssm]
-repo: google-deepmind/recurrentgemma
-commit: 2efa84d
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -16,6 +7,15 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "recurrentgemma (google-deepmind/recurrentgemma)"
+type: codebase
+tags: [recurrentgemma, griffin, deepmind, pallas, mosaic-tpu, lru, linear-recurrence, ssm]
+repo: google-deepmind/recurrentgemma
+commit: 2efa84d
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Small but load-bearing: ships **the canonical public Mosaic-TPU Pallas LRU scan** (`h_t = a_t · h_{t-1} + x_t`), backing the Griffin / RecurrentGemma RG-LRU block. Single kernel, fwd + bwd, supports **real and complex accumulators** (rare), with a `multi_shard_correction` for sequence-parallel training. **Direct ancestor of axlearn's Mamba Pallas kernel** — [axlearn](axlearn.md) imports the LRU pattern from here. Per-kernel detail in [§4.2 of the Pallas kernel directory](../analyses/pallas-kernel-directory/04-research-labs.md#42-google-deepmindrecurrentgemma).
 

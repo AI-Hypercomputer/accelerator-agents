@@ -1,11 +1,3 @@
----
-title: "XLA Flags"
-type: concept
-tags: [stub, compiler, configuration]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 3
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 3
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XLA Flags"
+type: concept
+tags: [stub, compiler, configuration]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 3
+---
 
 Compiler/runtime flags passed via `XLA_FLAGS` or `LIBTPU_INIT_ARGS`; canonical surface for scheduler, async-collective, and memory knobs.
 

@@ -1,10 +1,3 @@
----
-title: "XProf — Perf Counters Tool"
-type: source
-tags: [docs, profiler, xprof, perf-counters, hardware-counters, nightly]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf — Perf Counters Tool"
+type: source
+tags: [docs, profiler, xprof, perf-counters, hardware-counters, nightly]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 XProf documentation for the **Perf Counters** tool: a tabular display of hardware performance counters collected during a profiling session, with filtering by host, chip, counter name, sample, and counter set. Currently available only in **nightly builds**. This is the lowest-level quantitative lens XProf exposes — the place to read raw HW counter values (for example, issue-slot counters) rather than compiler-derived rates.
 

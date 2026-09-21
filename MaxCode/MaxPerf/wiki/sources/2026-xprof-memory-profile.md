@@ -1,10 +1,3 @@
----
-title: "XProf Memory Profile (docs)"
-type: source
-tags: [docs, profiler, xprof, memory-profile, hbm, tpu, gpu]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf Memory Profile (docs)"
+type: source
+tags: [docs, profiler, xprof, memory-profile, hbm, tpu, gpu]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 Memory Profile is the dynamic, time-series view of device memory use over the profiling interval. It is the sibling of Memory Viewer (static, per-module), and its main jobs are OOM debugging and fragmentation diagnosis.
 

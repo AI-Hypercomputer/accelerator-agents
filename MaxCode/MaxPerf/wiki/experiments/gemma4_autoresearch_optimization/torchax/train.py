@@ -1,5 +1,5 @@
-#!/usr/bin/env python
 # pylint: skip-file
+#!/usr/bin/env python
 # ==========================================================================
 # UNTESTED SCAFFOLD.
 #
@@ -221,7 +221,6 @@ def _load_yaml_defaults(path: str) -> dict:
 # Pytree registrations — keep close to HF's API and away from import time.
 # -----------------------------------------------------------------------------
 
-
 def _register_hf_pytrees():
   """Make HF output / cache classes crossable by jax.jit.
 
@@ -287,7 +286,6 @@ def _register_hf_pytrees():
 # -----------------------------------------------------------------------------
 # Main
 # -----------------------------------------------------------------------------
-
 
 def main(argv: Optional[list] = None) -> int:
   args = _build_argparser().parse_args(argv)

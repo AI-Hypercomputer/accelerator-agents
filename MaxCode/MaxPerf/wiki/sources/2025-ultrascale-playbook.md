@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "The Ultra-Scale Playbook: Training LLMs on GPU Clusters"
 type: source
@@ -11,15 +20,6 @@ source_url: https://huggingface.co/spaces/nanotron/ultrascale-playbook
 raw: raw/sources/2025-ultrascale-playbook.html
 assets_dir: raw/assets/ultrascale-playbook/
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Tazi et al.'s *Ultra-Scale Playbook* is an open long-form guide from Hugging Face that walks LLM training from one GPU to thousands, section by section across the five parallelism axes (data, tensor, pipeline, context, expert) plus kernel-level tricks (FlashAttention, fused kernels, mixed precision, FP8). Claims are backed by 4,000+ benchmark configurations run on GPU clusters with the Nanotron framework. **For this wiki the value is the technique taxonomy and the quantitative claims about compute/memory/communication tradeoffs; the delivery vehicle (CUDA/NCCL/PyTorch-FSDP) is not the TPU reality and must be translated.** This page records the playbook's claims alongside, for each technique, how the TPU + JAX + XLA implementation diverges and which of our ingested codebases is the correct surface to target.
 

@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 40 — JAX seq=2048 b=2 splash (ACCEPTED; dominated by b=3 s=1024 but long-seq capability unlocked)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: pending
 verdict: supported
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Seq=2048 batch=2 runs on the JAX stack. **Torchax exp 10 / 11 / 23 all compile-OOM'd at this config** (all hit the ~1.25 GiB XLA compile-time planner margin). JAX stack fits cleanly — capability unlocked. TPS 31,809 (MFU 21.18 %), −8.1 % vs exp 36's b=3 s=1024 best; **dominated** for the current optimization target but preserved as the long-seq reference for the JAX stack.
 

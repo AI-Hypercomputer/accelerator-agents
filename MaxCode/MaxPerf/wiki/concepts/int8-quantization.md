@@ -1,11 +1,3 @@
----
-title: "Int8 Quantization"
-type: concept
-tags: [stub, optimization, quantization]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 1
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 1
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Int8 Quantization"
+type: concept
+tags: [stub, optimization, quantization]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 1
+---
 
 AQT weight-only and full-int8 paths; shifts the critical batch on v5e from 240 to ~120.
 

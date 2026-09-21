@@ -1,11 +1,3 @@
----
-title: "StableHLO"
-type: codebase
-tags: [compiler, mlir, ir, hlo, reference]
-commit: ce5d23016461f3c47f92519aa79e27a18ceea4ab
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "StableHLO"
+type: codebase
+tags: [compiler, mlir, ir, hlo, reference]
+commit: ce5d23016461f3c47f92519aa79e27a18ceea4ab
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 StableHLO is the MLIR dialect and operation set that acts as a portability layer between ML frameworks (JAX, PyTorch, TensorFlow) and ML compilers (XLA, IREE). For this wiki it is primarily a **reference** for interpreting HLO op names, semantics, and compiler-pass vocabulary when reading XLA dumps and xprof traces — not an optimization target. We do not modify StableHLO.
 

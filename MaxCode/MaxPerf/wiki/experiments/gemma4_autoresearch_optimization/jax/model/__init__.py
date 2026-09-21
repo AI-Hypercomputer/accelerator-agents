@@ -1,6 +1,5 @@
 # pylint: skip-file
 """Gemma 4 native-JAX (Flax NNX) model package."""
-
 from .modeling_gemma4 import (
     Gemma4ForCausalLM,
     Gemma4RMSNorm,

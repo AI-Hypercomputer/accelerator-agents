@@ -1,11 +1,3 @@
----
-title: "Base-2 Softmax"
-type: concept
-tags: [stub, kernel, attention, optimization]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 1
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 1
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Base-2 Softmax"
+type: concept
+tags: [stub, kernel, attention, optimization]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 1
+---
 
 Rewrite `exp(x) = 2^(x·log2 e)` to map softmax onto TPU's native base-2 exp unit; opt-in via `use_base2_exp` in tokamax splash attention.
 

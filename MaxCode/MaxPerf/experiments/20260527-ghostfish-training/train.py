@@ -4,7 +4,6 @@ from absl import logging
 import jax
 import jax.numpy as jnp
 
-
 def main(_):
   logging.info("Starting Ghostfish Training Experiment")
 
@@ -23,7 +22,6 @@ def main(_):
   logging.info(f"Computation result sum: {jnp.sum(y)}")
 
   logging.info("Ghostfish Training Experiment Complete")
-
 
 if __name__ == "__main__":
   app.run(main)

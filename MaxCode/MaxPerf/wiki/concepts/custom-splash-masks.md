@@ -1,10 +1,3 @@
----
-title: "custom splash masks for non-LLM domains"
-type: concept
-tags: [pallas, splash-attention, block-sparse, graphcast, weather, stub]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "custom splash masks for non-LLM domains"
+type: concept
+tags: [pallas, splash-attention, block-sparse, graphcast, weather, stub]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Any structured adjacency pattern can become a banded / block-sparse splash-attention mask by subclassing `splash_attention_mask.Mask`. First-party non-LLM reference: GraphCast's `WeatherMeshMask` for graph-based weather forecasting. *Stub — expand when more sources are available.*
 

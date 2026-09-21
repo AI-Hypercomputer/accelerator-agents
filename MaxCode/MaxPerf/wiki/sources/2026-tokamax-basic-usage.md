@@ -1,10 +1,3 @@
----
-title: "tokamax docs — basic usage"
-type: source
-tags: [docs, kernels, pallas, api, jax, autotune, benchmark, export, tpu, gpu]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "tokamax docs — basic usage"
+type: source
+tags: [docs, kernels, pallas, api, jax, autotune, benchmark, export, tpu, gpu]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 Canonical "how do I call tokamax" doc. Shows the end-to-end flow: import, call a kernel with an optional `implementation=` argument, JIT + grad, autotune to get a portable result, serialize with `jax.export`, and benchmark without JAX Python dispatch overhead skewing the numbers. For the TPU performance loop this is the doc a hypothesis author reads before proposing "swap op X for `tokamax.X`".
 

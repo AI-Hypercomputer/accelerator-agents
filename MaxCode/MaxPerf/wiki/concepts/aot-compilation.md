@@ -1,11 +1,3 @@
----
-title: "AOT Compilation"
-type: concept
-tags: [compiler, workflow, analysis, jax]
-created: 2026-05-06
-updated: 2026-05-06
-sources: 3
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 3
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "AOT Compilation"
+type: concept
+tags: [compiler, workflow, analysis, jax]
+created: 2026-05-06
+updated: 2026-05-06
+sources: 3
+---
 
 Ahead-of-time (AOT) compilation in JAX lets you lower, inspect, and compile a function **without executing it on an accelerator**. The pattern — `jax.jit(fn).lower(*args).compile()` — produces the optimized HLO, cost-model estimates, and even the compiled executable, all on CPU. This is the foundation for two capabilities central to the autoresearch loop: **HLO pre-filtering** (rejecting kernel-replacement hypotheses that XLA already handles) and **pre-experiment screening** (catching compilation errors and predicting metric movement before burning TPU time).
 

@@ -1,11 +1,3 @@
----
-title: "MXU (Matrix Unit)"
-type: concept
-tags: [stub, hardware, compute]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 2
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 2
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "MXU (Matrix Unit)"
+type: concept
+tags: [stub, hardware, compute]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 2
+---
 
 Systolic array on each TensorCore that executes matrix multiply; 128×128 on v5e and earlier, 256×256 on v6e. Issues one instruction per 8 cycles.
 

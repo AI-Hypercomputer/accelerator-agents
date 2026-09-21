@@ -1,10 +1,3 @@
----
-title: "in-kernel dropout from prng_key + block indices"
-type: concept
-tags: [pallas, dropout, prng, attention, axlearn, stub]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "in-kernel dropout from prng_key + block indices"
+type: concept
+tags: [pallas, dropout, prng, attention, axlearn, stub]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Generating dropout masks inside a Pallas attention kernel directly from the caller's prng_key and the kernel's block indices, rather than host-materializing the mask tensor and passing it in. *Stub — expand when more sources are available.*
 

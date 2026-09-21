@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Pallas SwiGLU + down_proj fusion (Llama 3 8B JAX)"
 type: hypothesis
@@ -11,15 +20,6 @@ confidence: medium
 effort: L
 origin: jax-exp28b-profile-2026-04-26
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Custom Pallas TPU kernel that fuses **`silu(g) * u` (SwiGLU) into the `down_proj` matmul prologue** so the MLP intermediate `silu(g)*u` (4 × 8192 × 14336 bf16 ≈ 939 MiB/layer/chip × 32 layers = 30 GiB/step of HBM traffic) never round-trips through HBM. Targets the 9.2 % loop-fusion line in [exp 28b's profile](../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp27-28-sparsecore-rs-ag-offload-frontier.md#profile).
 

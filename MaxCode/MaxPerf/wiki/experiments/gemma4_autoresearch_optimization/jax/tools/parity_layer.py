@@ -1,5 +1,5 @@
-#!/usr/bin/env python
 # pylint: skip-file
+#!/usr/bin/env python
 """Per-layer forward parity: HF PyTorch vs native-JAX port.
 
 Creates small modules from both stacks, copies HF weights into the NNX
@@ -12,7 +12,6 @@ Checks (bf16 on CPU):
   3. Rotary embedding (cos/sin values)
   4. One full decoder layer (exercises attention + MLP + PLE branch)
 """
-
 from __future__ import annotations
 
 import os

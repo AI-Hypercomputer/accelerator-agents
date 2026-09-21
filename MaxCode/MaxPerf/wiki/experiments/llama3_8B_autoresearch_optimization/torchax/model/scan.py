@@ -1,4 +1,3 @@
-# pylint: skip-file
 """Scan-over-layers wrapper for HuggingFace LlamaForCausalLM.
 
 Pattern follows the canonical torchtitan example
@@ -16,7 +15,6 @@ Adapted to HF Llama: each LlamaDecoderLayer is wrapped in
 `(hidden, cos, sin)` (HF's forward has 7+ kwargs). attention_mask=None is
 passed because the splash-attention override builds its own causal mask.
 """
-
 from __future__ import annotations
 
 import torch

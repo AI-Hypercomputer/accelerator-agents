@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "JAX exp 27/28b — SparseCore offload of RS+AG (added to AR): 7,768 tok/s/chip 43.6% MFU at bs=4 (NEW frontier)"
 type: experiment
@@ -10,15 +19,6 @@ commit: "v6e8-llama3-8b-jax-20260426-exp28b-sc-rsag-bs4 (image jax-v4)"
 branched_from: jax-exp18 (bkv=2048, SC-AR-only)
 verdict: supported
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 🏆 **JAX Llama 3 8B trainer at 7,768 tok/s/chip, 43.6 % reported MFU
 (bs=4, seq=8192).** Adding `xla_tpu_enable_sparse_core_collective_offload_{reduce_scatter,all_gather}=true`

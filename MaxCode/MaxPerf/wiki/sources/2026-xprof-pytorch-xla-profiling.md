@@ -1,10 +1,3 @@
----
-title: "XProf docs: Profiling PyTorch/XLA workloads"
-type: source
-tags: [docs, profiler, pytorch-xla, tpu, profile-capture]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf docs: Profiling PyTorch/XLA workloads"
+type: source
+tags: [docs, profiler, pytorch-xla, tpu, profile-capture]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 PyTorch/XLA-specific XProf capture guide. Covers the `torch_xla.debug.profiler` module (aliased `xp`): `xp.start_server(port)` to start the in-process profiler gRPC server, `xp.start_trace(dir)` / `xp.stop_trace()` to bracket a programmatic capture, and `xp.Trace(name)` context manager to add human-readable labels to the trace. Ends with the standard `xprof --port=8791 <logdir>` launch. Doc is short and example-driven; it's the minimum an experiment-runner needs to instrument a PyTorch/XLA training script on TPU.
 

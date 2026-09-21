@@ -1,11 +1,3 @@
----
-title: "Gated Linear Unit"
-type: concept
-tags: [stub, kernel]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 1
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 1
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Gated Linear Unit"
+type: concept
+tags: [stub, kernel]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 1
+---
 
 Fused SwiGLU/GEGLU/REGLU computation. No TPU Pallas kernel in tokamax (falls back to XLA); GPU has Triton and Mosaic-GPU paths.
 

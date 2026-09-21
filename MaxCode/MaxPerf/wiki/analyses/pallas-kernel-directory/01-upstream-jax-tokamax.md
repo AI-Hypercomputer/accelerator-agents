@@ -1,10 +1,3 @@
----
-title: "Pallas kernel directory — §1 Upstream JAX + tokamax"
-type: analysis
-tags: [directory, pallas, kernels, jax, tokamax]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Pallas kernel directory — §1 Upstream JAX + tokamax"
+type: analysis
+tags: [directory, pallas, kernels, jax, tokamax]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Catalog of every Pallas kernel in the two ecosystem anchors: [jax-ml/jax](https://github.com/jax-ml/jax) (first-party reference kernels under `jax.experimental.pallas.ops.*`) and [openxla/tokamax](https://github.com/openxla/tokamax) (DeepMind kernel library). Everything downstream either vendors, extends, or dispatches to the kernels tabulated here. Part of [2026-04-23 Pallas kernel directory](../2026-04-23-pallas-kernel-directory.md).
 

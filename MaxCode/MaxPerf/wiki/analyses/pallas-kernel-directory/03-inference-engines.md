@@ -1,10 +1,3 @@
----
-title: "Pallas kernel directory — §3 Production LLM inference engines"
-type: analysis
-tags: [directory, pallas, kernels, vllm, sglang, aphrodite, inference]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Pallas kernel directory — §3 Production LLM inference engines"
+type: analysis
+tags: [directory, pallas, kernels, vllm, sglang, aphrodite, inference]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Catalog of Pallas kernels in three open-source LLM serving engines targeting TPU: vLLM's TPU backend, SGLang's JAX port, and Aphrodite (a vLLM fork). All three serve production traffic; kernels here sit on the critical token-generation path. **Dependency topology is sharp: [vllm-project/tpu-inference](https://github.com/vllm-project/tpu-inference) is the authoritative kernel author; [sgl-project/sglang-jax](https://github.com/sgl-project/sglang-jax) vendors most of its kernels with SGLang-specific extensions; [aphrodite-engine/aphrodite-engine](https://github.com/aphrodite-engine/aphrodite-engine) is effectively a consumer, not an author (one small KV-cache-update kernel).** Part of [2026-04-23 Pallas kernel directory](../2026-04-23-pallas-kernel-directory.md).
 

@@ -1,3 +1,12 @@
+<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
+<!-- disableFinding(LINE_OVER_80) -->
+<!-- disableFinding(LIST_NO_LINE) -->
+<!-- disableFinding(SNIPPET_EM_DASH) -->
+<!-- disableFinding(WHITESPACE_LINES) -->
+<!-- disableFinding(SPACES) -->
+<!-- disableFinding(HTML_OPEN) -->
+<!-- disableFinding(HTML_BROKEN) -->
+
 ---
 title: "Exp 1 — async-collective XLA flags (REFUTED)"
 type: experiment
@@ -9,15 +18,6 @@ updated: 2026-04-23
 commit: "wiki:HEAD (torchax submodule 8f957d1); train.py post-baseline fixes"
 verdict: refuted
 ---
-<!-- disableFinding(LINK_RELATIVE_G3DOC) -->
-<!-- disableFinding(LINE_OVER_80) -->
-<!-- disableFinding(LIST_NO_LINE) -->
-<!-- disableFinding(SNIPPET_EM_DASH) -->
-<!-- disableFinding(WHITESPACE_LINES) -->
-<!-- disableFinding(SPACES) -->
-<!-- disableFinding(HTML_OPEN) -->
-<!-- disableFinding(HTML_BROKEN) -->
-
 
 Tests the standard **async-collective-fusion + latency-hiding-scheduler** XLA flag bundle on the Gemma 4 E4B torchax FSDP baseline. The [2026-04-22 baseline](2026-04-22-baseline.md) showed ~10–15 % of step time in all-gather / all-reduce-scatter / all-reduce plus ~60 ms of `async-collective-done` wait. The hypothesis was that overlapping these with compute would shave 5–10 % off step time. **It regressed by 25 %.**
 

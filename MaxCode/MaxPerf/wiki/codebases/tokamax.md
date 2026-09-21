@@ -1,11 +1,3 @@
----
-title: "tokamax — custom accelerator kernel library (TPU + GPU)"
-type: codebase
-tags: [kernels, pallas, library, attention, glu, layer-norm, rms-norm, ragged-dot, moe, cross-entropy]
-commit: 54bdd955b439e8361fc1a1a2e20005ba2f1e8b37
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "tokamax — custom accelerator kernel library (TPU + GPU)"
+type: codebase
+tags: [kernels, pallas, library, attention, glu, layer-norm, rms-norm, ragged-dot, moe, cross-entropy]
+commit: 54bdd955b439e8361fc1a1a2e20005ba2f1e8b37
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 Tokamax is a DeepMind/OpenXLA library of custom Pallas kernels for JAX, targeting both NVIDIA GPUs (Triton / Mosaic GPU) and Google TPUs (Mosaic TPU). Each public entry point (`dot_product_attention`, `gated_linear_unit`, `layer_norm`, `ragged_dot`, `linear_softmax_cross_entropy_loss`, `triangle_multiplication`) is a drop-in replacement for an XLA-lowered op; the implementation is selected at call time via an `implementation=` argument and tuned via `tokamax.autotune`. Every such kernel is a direct optimization candidate for a TPU model that currently runs the XLA reference lowering.
 

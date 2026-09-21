@@ -1,10 +1,3 @@
----
-title: "XProf — Framework Op Stats Tool"
-type: source
-tags: [docs, profiler, xprof, framework-op, jax, tensorflow, host-device]
-created: 2026-04-22
-updated: 2026-04-22
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-22
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "XProf — Framework Op Stats Tool"
+type: source
+tags: [docs, profiler, xprof, framework-op, jax, tensorflow, host-device]
+created: 2026-04-22
+updated: 2026-04-22
+---
 
 XProf documentation for the **Framework Op Stats** tool: per-op statistics at the framework level (JAX, TensorFlow, etc.), split across host and accelerator. Where HLO Op Stats operates below the compiler, this tool answers "which framework-visible op is expensive?" — the right level when mapping cost back to user code, or diagnosing host-side bottlenecks.
 

@@ -1,10 +1,3 @@
----
-title: "multi-shard sequence-parallel correction for linear recurrences"
-type: concept
-tags: [pallas, sequence-parallelism, linear-recurrence, lru, mamba, recurrentgemma, stub]
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "multi-shard sequence-parallel correction for linear recurrences"
+type: concept
+tags: [pallas, sequence-parallelism, linear-recurrence, lru, mamba, recurrentgemma, stub]
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 Pattern for running a linear recurrence (LRU / Mamba / any `h_t = a_t · h_{t-1} + x_t`) under sequence parallelism: run the scan locally per shard, broadcast each shard's final `h` and `a_prod` across the sequence-axis group, then recompose the globally-correct `h_t` with one additional sweep. First-party reference: RecurrentGemma `pallas.py`. *Stub — expand when more sources are available.*
 

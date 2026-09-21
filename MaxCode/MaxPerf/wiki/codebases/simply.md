@@ -1,12 +1,3 @@
----
-title: "simply (google-deepmind/simply)"
-type: codebase
-tags: [simply, deepmind, serving, ragged-paged-attention, autotune-heuristic, dma-overhead, wrapper]
-repo: google-deepmind/simply
-commit: f40b81e
-created: 2026-04-23
-updated: 2026-04-23
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -16,6 +7,15 @@ updated: 2026-04-23
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "simply (google-deepmind/simply)"
+type: codebase
+tags: [simply, deepmind, serving, ragged-paged-attention, autotune-heuristic, dma-overhead, wrapper]
+repo: google-deepmind/simply
+commit: f40b81e
+created: 2026-04-23
+updated: 2026-04-23
+---
 
 DeepMind's experimental LLM serving framework. **Wrapper around upstream `ragged_paged_attention`** — not a kernel author. Ingested as the reference for [dma-overhead-heuristic](../concepts/dma-overhead-heuristic.md): the code explicitly documents a DMA-setup-cost-equivalent (`~0.5 MiB virtual bytes`) used in autotune block-size selection. Per-kernel detail in [§4.3 of the Pallas kernel directory](../analyses/pallas-kernel-directory/04-research-labs.md#43-google-deepmindsimply).
 

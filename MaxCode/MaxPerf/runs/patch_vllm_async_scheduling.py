@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
 # pylint: skip-file
+#!/usr/bin/env python3
 import os
 
 PATH = "/home/gvanica_google_com/vllm/vllm/config/vllm.py"

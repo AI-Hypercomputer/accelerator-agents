@@ -1,11 +1,3 @@
----
-title: "Splash Attention"
-type: concept
-tags: [stub, kernel, attention]
-created: 2026-04-22
-updated: 2026-04-22
-sources: 4
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -15,6 +7,14 @@ sources: 4
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "Splash Attention"
+type: concept
+tags: [stub, kernel, attention]
+created: 2026-04-22
+updated: 2026-04-22
+sources: 4
+---
 
 TPU-native flash-family attention kernel; sparse-mask aware, supports MHA/MQA/GQA, soft-cap, separate fwd/bwd tiling. Available in `jax.experimental.pallas.ops.tpu.splash_attention` and mirrored in tokamax.
 

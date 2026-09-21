@@ -1,10 +1,3 @@
----
-title: "MaxKernel Integration — Requirements for MaxKernel Changes"
-type: analysis
-tags: [integration, maxkernel, pallas, kernel-authoring]
-created: 2026-05-06
-updated: 2026-05-06
----
 <!-- disableFinding(LINK_RELATIVE_G3DOC) -->
 <!-- disableFinding(LINE_OVER_80) -->
 <!-- disableFinding(LIST_NO_LINE) -->
@@ -14,6 +7,13 @@ updated: 2026-05-06
 <!-- disableFinding(HTML_OPEN) -->
 <!-- disableFinding(HTML_BROKEN) -->
 
+---
+title: "MaxKernel Integration — Requirements for MaxKernel Changes"
+type: analysis
+tags: [integration, maxkernel, pallas, kernel-authoring]
+created: 2026-05-06
+updated: 2026-05-06
+---
 
 Requirements document for changes needed to [MaxKernel](https://github.com/AI-Hypercomputer/accelerator-agents/tree/main/MaxKernel) to enable programmatic invocation by the autoresearch optimization loop.
 

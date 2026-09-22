@@ -1,0 +1,50 @@
+task_id: 52p_DeepSeek_V4_MLA_SWA
+description: Kernel task for 52p_DeepSeek_V4_MLA_SWA
+input_gen_code: |-
+  def get_inputs():
+      import jax
+      import jax.numpy as jnp
+
+      CONFIGS = {'decode_small': {'name': 'decode_small', 'model': 'DeepSeek-V4', 'operator': 'mla_sliding_window_attention', 'batch_size': 16, 'q_len': 1, 'kv_len': 1024, 'num_q_heads': 128, 'head_dim': 512, 'page_size': 256, 'sliding_window': 128, 'sm_scale': 1.0}, 'dsv4_pro_decode_b64': {'name': 'dsv4_pro_decode_b64', 'model': 'DeepSeek-V4-Pro', 'operator': 'mla_sliding_window_attention', 'batch_size': 64, 'q_len': 1, 'kv_len': 8192, 'num_q_heads': 128, 'head_dim': 512, 'page_size': 1024, 'sliding_window': 128, 'sm_scale': 1.0}, 'dsv4_pro_decode_b256': {'name': 'dsv4_pro_decode_b256', 'model': 'DeepSeek-V4-Pro', 'operator': 'mla_sliding_window_attention', 'batch_size': 256, 'q_len': 1, 'kv_len': 9216, 'num_q_heads': 128, 'head_dim': 512, 'page_size': 1024, 'sliding_window': 128, 'sm_scale': 1.0}, 'dsv4_pro_prefill_short': {'name': 'dsv4_pro_prefill_short', 'model': 'DeepSeek-V4-Pro', 'operator': 'mla_sliding_window_attention', 'batch_size': 1, 'q_len': 1024, 'kv_len': 1024, 'num_q_heads': 128, 'head_dim': 512, 'page_size': 1024, 'sliding_window': 128, 'sm_scale': 1.0}, 'dsv4_pro_prefill_deep': {'name': 'dsv4_pro_prefill_deep', 'model': 'DeepSeek-V4-Pro', 'operator': 'mla_sliding_window_attention', 'batch_size': 1, 'q_len': 1024, 'kv_len': 8192, 'num_q_heads': 128, 'head_dim': 512, 'page_size': 1024, 'sliding_window': 128, 'sm_scale': 1.0}, 'dsv4_flash_decode': {'name': 'dsv4_flash_decode', 'model': 'DeepSeek-V4-Flash', 'operator': 'mla_sliding_window_attention', 'batch_size': 256, 'q_len': 1, 'kv_len': 9216, 'num_q_heads': 64, 'head_dim': 512, 'page_size': 1024, 'sliding_window': 128, 'sm_scale': 1.0}, 'dsv4_flash_prefill': {'name': 'dsv4_flash_prefill', 'model': 'DeepSeek-V4-Flash', 'operator': 'mla_sliding_window_attention', 'batch_size': 1, 'q_len': 1024, 'kv_len': 8192, 'num_q_heads': 64, 'head_dim': 512, 'page_size': 1024, 'sliding_window': 128, 'sm_scale': 1.0}}
+      CONFIG = CONFIGS['decode_small']
+
+      def create_inputs(dtype=jnp.bfloat16, config=None):
+          """Returns (q, new_kv, kernel_cache, kv_lens, page_indices, cu_q_lens, distribution, attention_sinks)."""
+          cfg = CONFIG if config is None else CONFIGS[config] if isinstance(config, str) else config
+          key = jax.random.key(42)
+          k1, k2, k3, k4 = jax.random.split(key, 4)
+          B = cfg['batch_size']
+          q_len = cfg['q_len']
+          kv_len = cfg['kv_len']
+          num_tokens = B * q_len
+          num_q_heads = cfg['num_q_heads']
+          head_dim = cfg['head_dim']
+          page_size = cfg['page_size']
+          logical_page_size = page_size // 2
+          pages_per_seq = (kv_len + logical_page_size - 1) // logical_page_size + 2
+          total_pages = B * pages_per_seq
+          q = jax.random.normal(k1, (num_tokens, num_q_heads, head_dim), dtype=dtype)
+          new_kv = jax.random.normal(k2, (num_tokens, head_dim), dtype=jnp.bfloat16)
+          total_tokens = total_pages * logical_page_size
+          cache_tokens = jax.random.normal(k3, (total_tokens, head_dim), dtype=jnp.bfloat16)
+          kv_u16 = jax.lax.bitcast_convert_type(cache_tokens, jnp.uint16)
+          kv_hi = ((kv_u16 >> 8) & 0xFF).astype(jnp.uint8).reshape(total_tokens, head_dim // 128, 128)
+          kv_lo = (kv_u16 & 0xFF).astype(jnp.uint8).reshape(total_tokens, head_dim // 128, 128)
+          kernel_cache = jnp.stack([kv_lo, kv_hi], axis=2).reshape(total_pages, page_size, 4, 128)
+          kv_lens = jnp.full((B,), kv_len, dtype=jnp.int32)
+          page_indices = jnp.arange(total_pages, dtype=jnp.int32)
+          cu_q_lens = jnp.arange(0, num_tokens + 1, q_len, dtype=jnp.int32)
+          num_decode_seqs = B if q_len == 1 else 0
+          distribution = jnp.array([num_decode_seqs, num_decode_seqs, B], dtype=jnp.int32)
+          attention_sinks = jax.random.uniform(k4, (num_q_heads,), dtype=jnp.float32)
+          return (q, new_kv, kernel_cache, kv_lens, page_indices, cu_q_lens, distribution, attention_sinks)
+
+      outputs = []
+      for cfg in CONFIGS.values():
+          dynamic_args = list(create_inputs(dtype=jnp.bfloat16, config=cfg))
+          static_args = []
+          outputs.append((dynamic_args, static_args))
+      return outputs
+
+rtol: 0.01
+atol: 0.01

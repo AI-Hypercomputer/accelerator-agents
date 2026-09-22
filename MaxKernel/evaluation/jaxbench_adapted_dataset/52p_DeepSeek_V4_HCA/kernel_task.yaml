@@ -1,0 +1,63 @@
+task_id: 59p_DeepSeek_V4_HCA
+description: Kernel task for 59p_DeepSeek_V4_HCA
+input_gen_code: |-
+  def get_inputs():
+      import jax
+      import jax.numpy as jnp
+      import functools
+
+      def cdiv(a, b):
+          return (a + b - 1) // b
+
+
+      CONFIGS = {'decode_small': {'name': 'decode_small', 'model': 'DeepSeek-V4', 'operator': 'heavily_compressed_attention', 'batch_size': 16, 'q_len': 1, 'kv_len_val': 1024, 'num_q_heads': 128, 'head_dim': 512, 'page_size': 256, 'compress_ratio': 128, 'sm_scale': 1.0, 'num_kv_pages_per_block': 1, 'num_queries_per_block': 1}, 'dsv4_pro_decode': {'name': 'dsv4_pro_decode', 'model': 'DeepSeek-V4-Pro', 'operator': 'heavily_compressed_attention', 'batch_size': 256, 'q_len': 1, 'kv_len_val': 9216, 'num_q_heads': 128, 'head_dim': 512, 'page_size': 1024, 'compress_ratio': 128, 'sm_scale': 1.0, 'num_kv_pages_per_block': 16, 'num_queries_per_block': 1}, 'dsv4_pro_prefill_chunk_first': {'name': 'dsv4_pro_prefill_chunk_first', 'model': 'DeepSeek-V4-Pro', 'operator': 'heavily_compressed_attention', 'batch_size': 1, 'q_len': 1024, 'kv_len_val': 1024, 'num_q_heads': 128, 'head_dim': 512, 'page_size': 1024, 'compress_ratio': 128, 'sm_scale': 1.0, 'num_kv_pages_per_block': 16, 'num_queries_per_block': 32}, 'dsv4_pro_prefill_chunk_last': {'name': 'dsv4_pro_prefill_chunk_last', 'model': 'DeepSeek-V4-Pro', 'operator': 'heavily_compressed_attention', 'batch_size': 1, 'q_len': 1024, 'kv_len_val': 8192, 'num_q_heads': 128, 'head_dim': 512, 'page_size': 1024, 'compress_ratio': 128, 'sm_scale': 1.0, 'num_kv_pages_per_block': 16, 'num_queries_per_block': 32}, 'dsv4_flash_decode': {'name': 'dsv4_flash_decode', 'model': 'DeepSeek-V4-Flash', 'operator': 'heavily_compressed_attention', 'batch_size': 256, 'q_len': 1, 'kv_len_val': 9216, 'num_q_heads': 64, 'head_dim': 512, 'page_size': 1024, 'compress_ratio': 128, 'sm_scale': 1.0, 'num_kv_pages_per_block': 16, 'num_queries_per_block': 1}, 'dsv4_flash_prefill_chunk_last': {'name': 'dsv4_flash_prefill_chunk_last', 'model': 'DeepSeek-V4-Flash', 'operator': 'heavily_compressed_attention', 'batch_size': 1, 'q_len': 1024, 'kv_len_val': 8192, 'num_q_heads': 64, 'head_dim': 512, 'page_size': 1024, 'compress_ratio': 128, 'sm_scale': 1.0, 'num_kv_pages_per_block': 16, 'num_queries_per_block': 32}}
+      CONFIG = CONFIGS['decode_small']
+
+      def create_inputs(dtype=jnp.bfloat16, config=None):
+          """Returns input tensors for DeepSeek V4 HCA."""
+          cfg = CONFIG if config is None else CONFIGS[config] if isinstance(config, str) else config
+          key = jax.random.key(42)
+          k1, k2, k3, k4, k5 = jax.random.split(key, 5)
+          B = cfg['batch_size']
+          q_len = cfg['q_len']
+          kv_len_val = cfg['kv_len_val']
+          num_heads = cfg['num_q_heads']
+          head_dim = cfg['head_dim']
+          raw_page_size = cfg['page_size']
+          compress_ratio = cfg.get('compress_ratio', 128)
+          page_size = max(1, raw_page_size // compress_ratio)
+          kv_len_val_after_compression = max(1, kv_len_val // compress_ratio)
+          num_tokens = B * q_len
+          pages_per_seq = cdiv(kv_len_val_after_compression, page_size) + 2
+          total_pages = B * pages_per_seq
+          q = jax.random.normal(k1, (num_tokens, num_heads, head_dim), dtype=dtype)
+          cache_kv_base = jax.random.normal(k2, (total_pages, page_size, head_dim), dtype=jnp.bfloat16)
+          k_cache = cache_kv_base.reshape(total_pages, page_size, 4, 128)
+          k_cache = jax.lax.bitcast_convert_type(k_cache, jnp.uint8)
+          k_cache = k_cache.transpose(0, 1, 2, 4, 3)
+          kernel_cache = k_cache.reshape(total_pages, page_size * 2, 4, 128)
+          kv_lens = jnp.full((B,), kv_len_val_after_compression, dtype=jnp.int32)
+          cu_q_lens = jnp.arange(0, num_tokens + 1, q_len, dtype=jnp.int32)
+          page_indices = jnp.arange(total_pages, dtype=jnp.int32)
+          num_decode_seqs = B if q_len == 1 else 0
+          distribution = jnp.array([num_decode_seqs, num_decode_seqs, B], dtype=jnp.int32)
+          attention_sinks = jax.random.uniform(k3, (num_heads,), dtype=jnp.float32)
+          swa_accumulation = jax.random.normal(k4, (num_tokens, num_heads, head_dim), dtype=dtype)
+          swa_l = jax.random.uniform(k5, (num_tokens, num_heads), dtype=jnp.float32)
+          swa_m = jax.random.uniform(k1, (num_tokens, num_heads), dtype=jnp.float32)
+          kv_lens_to_attend_list = []
+          for _ in range(B):
+              for i in range(q_len):
+                  kv_lens_to_attend_list.append(max(1, (kv_len_val - q_len + i + 1) // compress_ratio))
+          kv_lens_to_attend = jnp.array(kv_lens_to_attend_list, dtype=jnp.int32)
+          return (q, kernel_cache, kv_lens, kv_lens_to_attend, page_indices, cu_q_lens, distribution, attention_sinks, swa_accumulation, swa_l, swa_m)
+
+      outputs = []
+      for cfg in CONFIGS.values():
+          dynamic_args = list(create_inputs(dtype=jnp.bfloat16, config=cfg))
+          static_args = []
+          outputs.append((dynamic_args, static_args))
+      return outputs
+
+rtol: 0.01
+atol: 0.01

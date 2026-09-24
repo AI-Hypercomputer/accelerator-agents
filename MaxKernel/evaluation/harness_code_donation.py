@@ -1,0 +1,412 @@
+import string
+
+HARNESS_TEMPLATE = string.Template("""
+import time
+import json
+import jax
+import jax.numpy as jnp
+import numpy as np
+import importlib
+import importlib.util
+import os
+import sys
+import traceback
+import xprof_utils
+
+
+def load_module_from_path(module_name, file_path):
+  spec = importlib.util.spec_from_file_location(module_name, file_path)
+  if spec is None or spec.loader is None:
+    raise ImportError(f"Could not load {module_name} from {file_path}")
+  module = importlib.util.module_from_spec(spec)
+  # Register before exec_module: modules using `from __future__ import
+  # annotations` turn every annotation into a string, and dataclasses then
+  # resolves them via sys.modules[cls.__module__], which raises
+  # AttributeError on None if the module was never registered.
+  sys.modules[module_name] = module
+  try:
+    spec.loader.exec_module(module)
+  except BaseException:
+    sys.modules.pop(module_name, None)
+    raise
+  return module
+
+
+def benchmark(func, args, static_argnums, trace_dir=None, num_runs=20, num_warmups=5):
+  # 1. Identify dynamic args for the compiled function call.
+  dynamic_args = tuple(
+      arg for i, arg in enumerate(args) if i not in static_argnums)
+
+  # Check if func donates any dynamic arguments
+  donate_argnums = ()
+  if hasattr(func, "lower"):
+    try:
+      lowered_info = func.lower(*args)
+      donate_argnums = getattr(lowered_info, "donate_argnums", ())
+    except Exception:
+      donate_argnums = ()
+
+  # Map donated args to dynamic arg indices (if static_argnums exists)
+  if donate_argnums and static_argnums:
+    dynamic_donate_argnums = tuple(
+        sum(1 for s in range(d) if s not in static_argnums)
+        for d in donate_argnums if d not in static_argnums
+    )
+  else:
+    dynamic_donate_argnums = donate_argnums
+
+  # Helper to update dynamic_args after each step if donation is used
+  def update_donated_args(dyn_args_list, res):
+    if not dynamic_donate_argnums:
+      return dyn_args_list
+    for in_idx in dynamic_donate_argnums:
+      target_arg = dyn_args_list[in_idx]
+      if isinstance(res, (tuple, list)):
+        for out in res:
+          if hasattr(out, 'shape') and out.shape == target_arg.shape and out.dtype == target_arg.dtype:
+            dyn_args_list[in_idx] = out
+            break
+      else:
+        dyn_args_list[in_idx] = res
+    return dyn_args_list
+
+  # If arguments will be donated, copy them first so the original `args` tuple is preserved
+  dynamic_args_list = list(dynamic_args)
+  if dynamic_donate_argnums:
+    for idx in dynamic_donate_argnums:
+      if idx < len(dynamic_args_list) and isinstance(dynamic_args_list[idx], jax.Array):
+        dynamic_args_list[idx] = jnp.copy(dynamic_args_list[idx])
+
+  def benchmark_func(*f_args):
+    with jax.named_scope('benchmark_func'):
+      res = func(*f_args)
+      return jax.block_until_ready(res)
+
+  # 2. Compile the function to an executable to eliminate dispatch overhead.
+  # Attempt to use proper sharding if available
+  try:
+    from jax.experimental import layout as jax_layout
+    in_shardings = jax_layout.Format(jax_layout.Layout.AUTO)
+    out_shardings = jax_layout.Format(jax_layout.Layout.AUTO)
+    compiled_func = jax.jit(
+        benchmark_func,
+        static_argnums=static_argnums,
+        donate_argnums=dynamic_donate_argnums,
+        in_shardings=in_shardings,
+        out_shardings=out_shardings
+    ).lower(*args).compile()
+
+    # Layout Alignment Trick
+    if hasattr(compiled_func, 'input_formats'):
+      arg_formats, _ = compiled_func.input_formats
+      
+      @jax.jit
+      def enforce_layout(*xs):
+        return xs
+        
+      # Compile helper with desired output formats
+      enforce_layout_compiled = jax.jit(
+        enforce_layout,
+        out_shardings=arg_formats
+      ).lower(*dynamic_args_list).compile()
+      
+      # Apply alignment
+      dynamic_args_list = list(enforce_layout_compiled(*dynamic_args_list))
+  except Exception as e:
+    compiled_func = jax.jit(
+        benchmark_func,
+        static_argnums=static_argnums,
+        donate_argnums=dynamic_donate_argnums
+    ).lower(*args).compile()
+
+  # 3. Warm up
+  for _ in range(num_warmups):
+    res = compiled_func(*dynamic_args_list)
+    update_donated_args(dynamic_args_list, res)
+  jax.block_until_ready(res)
+
+  # 4. Benchmark
+  def run_wall_time():
+    start = time.perf_counter()
+    for _ in range(num_runs):
+      res = compiled_func(*dynamic_args_list)
+      update_donated_args(dynamic_args_list, res)
+    jax.block_until_ready(res)
+    end = time.perf_counter()
+    return (end - start) / num_runs
+  
+  def run_xprof():
+    with jax.profiler.trace(trace_dir):
+      for _ in range(num_runs):
+        res = compiled_func(*dynamic_args_list)
+        update_donated_args(dynamic_args_list, res)
+        jax.block_until_ready(res)
+        # Inject dummy op to separate trace events
+        jnp.sum(jax.random.normal(jax.random.key(0), (128, 128), jnp.float32)).block_until_ready()
+
+  avg_wall_time = run_wall_time()
+
+  xprof_time = 0.0
+  if trace_dir:
+    run_xprof()
+    try:
+      xprof_time = xprof_utils.extract_xprof_time(trace_dir, 'benchmark_func')
+    except Exception as e:
+      raise RuntimeError(f"Failed to extract xprof time: {e}")
+
+  return avg_wall_time, xprof_time
+
+
+def diff_metrics(b, o, chunk_elems=1 << 24):
+  \"\"\"Max absolute and max relative difference between two outputs.
+
+  Computed on the host in bounded-size chunks. `b` and `o` have already been
+  pulled off the device by `jax.device_get`, so the naive
+  `jnp.max(jnp.abs((b - o) / b))` ships them straight back: the true division
+  promotes to float, and for a large integer output (e.g. a 4 GiB uint8 paged
+  KV cache) that is a 16 GiB argument plus a 16 GiB result, which does not fit
+  in HBM. These are diagnostic metrics only -- `is_correct` comes from
+  `jnp.allclose` -- but raising here used to fail the whole case.
+
+  Chunking also fixes two latent issues with the old expression: the
+  subtraction no longer wraps around for unsigned dtypes, and a NaN in one
+  chunk no longer suppresses the maximum found in the others.
+  \"\"\"
+  fb = np.asarray(b).reshape(-1)
+  fo = np.asarray(o).reshape(-1)
+  max_abs = 0.0
+  max_rel = 0.0
+  for i in range(0, fb.size, chunk_elems):
+    x = fb[i:i + chunk_elems].astype(np.float64)
+    y = fo[i:i + chunk_elems].astype(np.float64)
+    d = np.abs(x - y)
+    # max() over an empty slice is undefined; size is never 0 here but guard
+    # anyway so a zero-sized output cannot take down the comparison.
+    if d.size == 0:
+      continue
+    max_abs = max(max_abs, float(np.max(d)))
+    with np.errstate(divide="ignore", invalid="ignore"):
+      r = d / np.abs(x)
+    # Matches the previous definition |(b - o) / b|: division by a zero
+    # reference stays +inf, and 0/0 stays NaN rather than being counted.
+    r = r[~np.isnan(r)]
+    if r.size:
+      max_rel = max(max_rel, float(np.max(r)))
+  return max_abs, max_rel
+
+
+def main():
+  try:
+    # Load task configuration from task.json
+    if not os.path.exists("task.json"):
+      raise FileNotFoundError(
+          "task.json not found. It should contain input_gen_code.")
+
+    with open("task.json", "r") as f:
+      task_data = json.load(f)
+
+    input_gen_code = task_data.get("input_gen_code")
+    task_atol = task_data.get("atol")
+    task_rtol = task_data.get("rtol")
+
+    if input_gen_code:
+      ldict = {}
+      try:
+        exec(input_gen_code, globals(), ldict)
+      except Exception as e:
+        raise RuntimeError(f"Failed to execute input_gen_code: {e}")
+
+      if "get_inputs" not in ldict:
+        raise RuntimeError("input_gen_code must define get_inputs()")
+
+      try:
+        raw_inputs = ldict["get_inputs"]()
+      except Exception as e:
+        raise RuntimeError(f"Error while running get_inputs(): {e}")
+
+      # Check if the input is a list of tuples or a single tuple
+      if isinstance(raw_inputs, list):
+        inputs_list = raw_inputs
+      elif isinstance(raw_inputs, tuple) and len(raw_inputs) == 2:
+        inputs_list = [raw_inputs]
+      else:
+        raise ValueError(
+            f"get_inputs() must return a list of tuples or a single (dynamic_args, static_args) tuple. Got: {type(raw_inputs)}"
+        )
+    else:
+      raise ValueError("input_gen_code must be provided.")
+
+    # Import the uploaded scripts as modules
+    base_mod = load_module_from_path("reference", "reference.py")
+    optimized_mod = load_module_from_path("optimized", "optimized.py")
+
+    harness_logs = []
+
+    result = {
+        "compiled_successfully": [],
+        "numerically_correct": [],
+        "max_abs_diff": [],
+        "max_rel_diff": [],
+        "reference_time_ms": [],
+        "optimized_time_ms": [],
+        "xprof_reference_time_ms": [],
+        "xprof_optimized_time_ms": [],
+        "error_trace": [],
+    }
+
+    # Iterate over all input configurations
+    for idx, inputs in enumerate(inputs_list):
+      if not isinstance(inputs, tuple) or len(inputs) != 2:
+        raise ValueError(
+            f"Each input config must return exactly 2 elements: (dynamic_args, static_args). Got: {type(inputs)}"
+        )
+
+      dynamic_args, static_args = inputs
+      if not isinstance(dynamic_args, (list, tuple)) or not isinstance(static_args, (list, tuple)):
+        raise TypeError("Both dynamic_args and static_args must be lists or tuples.")
+
+      args = tuple(dynamic_args) + tuple(static_args)
+      static_argnums = tuple(range(len(dynamic_args), len(args)))
+
+      if isinstance(task_atol, list):
+        if idx < len(task_atol):
+          curr_atol = task_atol[idx]
+        else:
+          curr_atol = task_atol[-1]
+          harness_logs.append(
+              f"atol list length ({len(task_atol)}) is shorter than input "
+              f"count ({len(inputs_list)}). Reusing last atol ({curr_atol}) "
+              f"for input {idx}."
+          )
+      else:
+        curr_atol = float(task_atol) if task_atol is not None else 1e-3
+
+      if isinstance(task_rtol, list):
+        if idx < len(task_rtol):
+          curr_rtol = task_rtol[idx]
+        else:
+          curr_rtol = task_rtol[-1]
+          harness_logs.append(
+              f"rtol list length ({len(task_rtol)}) is shorter than input "
+              f"count ({len(inputs_list)}). Reusing last rtol ({curr_rtol}) "
+              f"for input {idx}."
+          )
+      else:
+        curr_rtol = float(task_rtol) if task_rtol is not None else 1e-3
+
+      # 1. Correctness Check
+      try:
+        jit_base = jax.jit(base_mod.computation, static_argnums=static_argnums)
+        out_base = jax.block_until_ready(jit_base(*args))
+        out_base_cpu = jax.device_get(out_base)
+        del out_base
+      except Exception as e:
+        result["compiled_successfully"].append(False)
+        result["error_trace"].append(f"Reference model failed: {traceback.format_exc()}")
+        result["numerically_correct"].append(False)
+        result["max_abs_diff"].append(None)
+        result["max_rel_diff"].append(None)
+        result["reference_time_ms"].append(0.0)
+        result["optimized_time_ms"].append(0.0)
+        result["xprof_reference_time_ms"].append(0.0)
+        result["xprof_optimized_time_ms"].append(0.0)
+        continue
+
+      # Dirty all HBM memory leaves with NaN / Sentinel values to prevent cache reuse
+      try:
+        for leaf in jax.tree_util.tree_leaves(out_base_cpu):
+          if hasattr(leaf, "shape") and hasattr(leaf, "dtype"):
+            if jnp.issubdtype(leaf.dtype, jnp.floating) or jnp.issubdtype(leaf.dtype, jnp.complexfloating):
+              val = jnp.nan
+            elif jnp.issubdtype(leaf.dtype, jnp.bool_):
+              val = True
+            else:
+              val = 123  # Fits within int8/uint8 and all larger integer dtypes
+
+            dummy = jnp.full(leaf.shape, val, dtype=leaf.dtype)
+            dummy.block_until_ready()
+            del dummy
+      except Exception as e:
+        harness_logs.append(f"Failed to dirty HBM memory: {e}")
+
+      try:
+        jit_optimized = jax.jit(optimized_mod.computation, static_argnums=static_argnums)
+        out_optimized = jax.block_until_ready(jit_optimized(*args))
+        out_optimized_cpu = jax.device_get(out_optimized)
+        del out_optimized
+      except Exception as e:
+        result["compiled_successfully"].append(False)
+        result["error_trace"].append(traceback.format_exc())
+        result["numerically_correct"].append(False)
+        result["max_abs_diff"].append(None)
+        result["max_rel_diff"].append(None)
+        result["reference_time_ms"].append(0.0)
+        result["optimized_time_ms"].append(0.0)
+        result["xprof_reference_time_ms"].append(0.0)
+        result["xprof_optimized_time_ms"].append(0.0)
+        continue
+
+      result["compiled_successfully"].append(True)
+      result["error_trace"].append(None)
+
+      out_base_flat = jax.tree_util.tree_leaves(out_base_cpu)
+      out_optimized_flat = jax.tree_util.tree_leaves(out_optimized_cpu)
+
+      is_correct = True
+      max_abs_diff = 0.0
+      max_rel_diff = 0.0
+
+      try:
+        if len(out_base_flat) != len(out_optimized_flat):
+           raise ValueError(f"Output count mismatch: {len(out_base_flat)} vs {len(out_optimized_flat)}")
+        for b, o in zip(out_base_flat, out_optimized_flat):
+          if b.shape != o.shape:
+             raise ValueError(f"Shape mismatch: {b.shape} vs {o.shape}")
+          is_correct = is_correct and bool(jnp.allclose(b, o, atol=curr_atol, rtol=curr_rtol))
+          leaf_abs, leaf_rel = diff_metrics(b, o)
+          max_abs_diff = max(max_abs_diff, leaf_abs)
+          max_rel_diff = max(max_rel_diff, leaf_rel)
+      except Exception as e:
+        harness_logs.append(f"Correctness check failed for input {idx}: {e}")
+        is_correct = False
+
+      result["numerically_correct"].append(bool(is_correct))
+      result["max_abs_diff"].append(max_abs_diff)
+      result["max_rel_diff"].append(max_rel_diff)
+
+      if not is_correct:
+        result["reference_time_ms"].append(0.0)
+        result["optimized_time_ms"].append(0.0)
+        result["xprof_reference_time_ms"].append(0.0)
+        result["xprof_optimized_time_ms"].append(0.0)
+        continue
+
+      # Benchmark and collect timing results
+      try:
+        time_base, xprof_time_base = benchmark(base_mod.computation, args, static_argnums, trace_dir=f"trace_base_{idx}")
+        time_optimized, xprof_time_optimized = benchmark(optimized_mod.computation, args, static_argnums, trace_dir=f"trace_opt_{idx}")
+        result["reference_time_ms"].append(time_base * 1000)
+        result["optimized_time_ms"].append(time_optimized * 1000)
+        result["xprof_reference_time_ms"].append(xprof_time_base)
+        result["xprof_optimized_time_ms"].append(xprof_time_optimized)
+      except Exception as e:
+        harness_logs.append(f"Benchmarking failed for input {idx}: {e}")
+        result["reference_time_ms"].append(0.0)
+        result["optimized_time_ms"].append(0.0)
+        result["xprof_reference_time_ms"].append(0.0)
+        result["xprof_optimized_time_ms"].append(0.0)
+
+    if harness_logs:
+      result["logs"] = harness_logs
+    with open("result.json", "w", encoding="utf-8") as f:
+      json.dump(result, f)
+  except Exception as e:
+    with open("result.json", "w", encoding="utf-8") as f:
+      json.dump({
+          "error_trace": [traceback.format_exc()]
+      }, f)
+
+
+if __name__ == "__main__":
+  main()
+""")

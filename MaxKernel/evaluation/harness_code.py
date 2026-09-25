@@ -42,7 +42,9 @@ def benchmark(func, args, static_argnums, trace_dir=None, num_runs=20, num_warmu
   if hasattr(func, "lower"):
     try:
       lowered_info = func.lower(*args)
-      donate_argnums = getattr(lowered_info, "donate_argnums", ())
+      donate_argnums = getattr(lowered_info, "donate_argnums", None)
+      if donate_argnums is None:
+        donate_argnums = getattr(lowered_info, "_donate_argnums", ())
     except Exception:
       donate_argnums = ()
 

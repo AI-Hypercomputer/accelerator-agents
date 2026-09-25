@@ -1,0 +1,149 @@
+task_id: 51p_DeepSeek_V4_CSA
+description: |-
+  DeepSeek-V4 compressed sparse attention (CSA)
+input_gen_code: |-
+  def get_inputs():
+      import jax
+      import jax.numpy as jnp
+
+      configs = [
+          ("decode_large_batch", 256, 1, 9216, 1024, 1024),
+          ("decode_medium_batch", 128, 1, 9216, 1024, 1024),
+          ("decode_small_pages", 128, 1, 9216, 256, 1024),
+          ("decode_random_access", 256, 1, 9216, 64, 512),
+          ("prefill_full", 1, 1024, 1024, 1024, 1024),
+          ("prefill_short", 1, 256, 1024, 1024, 1024),
+          ("prefill_short_small_pages", 1, 256, 1024, 256, 1024),
+          ("prefill_mid_chunk_512", 1, 512, 4096, 1024, 1024),
+          ("prefill_mid_chunk_1024", 1, 1024, 8192, 1024, 1024),
+          ("prefill_mid_chunk_small_pages", 1, 1024, 8192, 64, 512),
+      ]
+
+      outputs = []
+      k_cfg = jax.random.PRNGKey(42)
+
+      # --- DSV4 CSA geometry -------------------------------------------------
+      NOPE_DIM = 448
+      NUM_SCALES = NOPE_DIM // 64  # 7
+      ROPE_DIM = 64
+      TOKEN_BYTES = 512  # (4, 128) uint8 per token in the nope cache
+      HEAD_DIM = NOPE_DIM + ROPE_DIM  # 512
+      NUM_Q_HEADS = 8
+      Q_DTYPE = jnp.bfloat16
+      SM_SCALE = float(HEAD_DIM ** -0.5)
+      ATTN_BATCH = 16
+      VMEM_LIMIT_BYTES = 100 * 1024 * 1024
+
+      # --- Cache contents ----------------------------------------------------
+      CACHE_TILE = 8192
+      k_nope, k_scale, k_rope, k_cfg = jax.random.split(k_cfg, 4)
+
+      nope_f8 = jax.random.normal(
+          k_nope, (CACHE_TILE, NOPE_DIM), jnp.float32
+      ).astype(jnp.float8_e4m3fn)
+      nope_bytes = jax.lax.bitcast_convert_type(nope_f8, jnp.uint8)
+
+      scale_bytes = jax.random.randint(
+          k_scale, (CACHE_TILE, NUM_SCALES), 125, 130, dtype=jnp.int32
+      ).astype(jnp.uint8)
+
+      pad_bytes = jnp.zeros(
+          (CACHE_TILE, TOKEN_BYTES - NOPE_DIM - NUM_SCALES), jnp.uint8
+      )
+
+      nope_tile = jnp.concatenate(
+          [nope_bytes, scale_bytes, pad_bytes], axis=1
+      )
+
+      rope_bits = jax.lax.bitcast_convert_type(
+          jax.random.normal(
+              k_rope, (CACHE_TILE, ROPE_DIM), jnp.float32
+          ).astype(jnp.bfloat16),
+          jnp.uint16,
+      ).astype(jnp.uint32)
+      rope_tile = jnp.concatenate(
+          [
+              (rope_bits >> 8).astype(jnp.uint8),
+              (rope_bits & 0xFF).astype(jnp.uint8),
+          ],
+          axis=1,
+      )
+
+      def fill(tile, num_slots):
+          reps = -(-num_slots // tile.shape[0])
+          return jnp.tile(tile, (reps, 1))[:num_slots]
+
+      keys = jax.random.split(k_cfg, len(configs))
+      for cfg, key in zip(configs, keys):
+          name, batch_size, q_len, kv_len, page_size, csa_topk = cfg
+          k_page, k_topk, k_q, k_sink, k_acc, k_l, k_m = jax.random.split(key, 7)
+
+          num_tokens = batch_size * q_len
+          pages_per_seq = -(-kv_len // page_size)
+          total_num_pages = batch_size * pages_per_seq
+          assert num_tokens % ATTN_BATCH == 0
+
+          q = jax.random.normal(
+              k_q, (num_tokens, NUM_Q_HEADS, HEAD_DIM), jnp.float32
+          ).astype(Q_DTYPE)
+
+          num_slots = total_num_pages * page_size
+          cache_kv_nope = fill(nope_tile, num_slots).reshape(
+              total_num_pages, page_size, 4, 128
+          )
+          cache_kv_rope = fill(rope_tile, num_slots).reshape(
+              total_num_pages, page_size // 4, 4, 128
+          )
+
+          page_indices = jax.random.permutation(
+              k_page, total_num_pages
+          ).astype(jnp.int32)
+
+          cu_q_lens = (jnp.arange(batch_size + 1, dtype=jnp.int32) * q_len)
+          num_decode = batch_size if q_len == 1 else 0
+          distribution = jnp.array(
+              [num_decode, batch_size, batch_size], jnp.int32
+          )
+
+          pos_in_seq = jnp.arange(num_tokens, dtype=jnp.int32) % q_len
+          causal_len = (kv_len - q_len + pos_in_seq + 1)[:, None]
+          slot = jnp.arange(csa_topk, dtype=jnp.int32)[None, :]
+          scattered = jax.random.randint(
+              k_topk, (num_tokens, csa_topk), 0, 1 << 30, dtype=jnp.int32
+          ) % causal_len
+          topk_indices = jnp.where(
+              slot < causal_len,
+              jnp.where(causal_len < csa_topk, slot, scattered),
+              -1,
+          ).astype(jnp.int32)
+
+          attention_sinks = jax.random.normal(
+              k_sink, (NUM_Q_HEADS,), jnp.float32
+          )
+          swa_accumution = jax.random.normal(
+              k_acc, (num_tokens, NUM_Q_HEADS, HEAD_DIM), jnp.float32
+          ).astype(Q_DTYPE)
+          swa_l = jax.random.uniform(
+              k_l, (num_tokens, NUM_Q_HEADS), jnp.float32, 1.0, 64.0
+          )
+          swa_m = jax.random.normal(k_m, (num_tokens, NUM_Q_HEADS), jnp.float32)
+
+          dynamic_args = [
+              q,
+              cache_kv_nope,
+              cache_kv_rope,
+              topk_indices,
+              page_indices,
+              cu_q_lens,
+              distribution,
+              attention_sinks,
+              swa_accumution,
+              swa_l,
+              swa_m,
+          ]
+          outputs.append((dynamic_args, []))
+
+      return outputs
+
+rtol: 0.02
+atol: 0.02

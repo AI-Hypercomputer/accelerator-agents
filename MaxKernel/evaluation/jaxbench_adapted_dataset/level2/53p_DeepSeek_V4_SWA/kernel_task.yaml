@@ -1,0 +1,74 @@
+task_id: 53p_DeepSeek_V4_SWA
+description: DeepSeek Sliding Window Attention (SWA)
+input_gen_code: |-
+  def get_inputs():
+      import jax
+      import jax.numpy as jnp
+
+      configs = [
+          ("decode_8k_1k", 256, 1, 9216, 1024, 8, 512, 128),
+          ("prefill_first_chunk", 1, 1024, 1024, 1024, 8, 512, 128),
+          ("prefill_last_chunk", 1, 1024, 8192, 1024, 8, 512, 128),
+          ("medium_batch_decode", 128, 1, 9216, 1024, 8, 512, 128),
+          ("prefill_256", 1, 256, 1024, 1024, 8, 512, 128),
+          ("prefill_512", 1, 512, 4096, 1024, 8, 512, 128),
+          ("alt_page_decode", 128, 1, 9216, 256, 8, 512, 128),
+          ("alt_page_prefill", 1, 256, 1024, 256, 8, 512, 128),
+      ]
+
+      outputs = []
+      key = jax.random.PRNGKey(42)
+
+      def cdiv_val(a, b):
+          assert b != 0
+          return (a + b - 1) // b
+
+      for (
+          name,
+          batch_size,
+          q_len,
+          kv_len_val,
+          page_size,
+          num_q_heads,
+          head_dim,
+          sliding_window,
+      ) in configs:
+          key, k1, k2, k3 = jax.random.split(key, 4)
+
+          num_tokens = batch_size * q_len
+          kv_lens = jnp.full((batch_size,), kv_len_val, dtype=jnp.int32)
+          cu_q_lens = jnp.arange(0, num_tokens + 1, q_len, dtype=jnp.int32)
+
+          pages_per_seq = cdiv_val(kv_len_val, page_size) + 2
+          total_pages = batch_size * pages_per_seq
+          page_indices = jnp.arange(total_pages, dtype=jnp.int32)
+
+          q = jax.random.normal(
+              k1, (num_tokens, num_q_heads, head_dim), dtype=jnp.bfloat16
+          )
+          new_kv = jax.random.normal(k2, (num_tokens, head_dim), dtype=jnp.bfloat16)
+          attention_sinks = jax.random.normal(k3, (num_q_heads,), dtype=jnp.float32)
+
+          num_decode_seqs = batch_size if q_len == 1 else 0
+          distribution = jnp.array(
+              [num_decode_seqs, num_decode_seqs, batch_size], dtype=jnp.int32
+          )
+          kernel_cache = jnp.zeros((total_pages, page_size * 2, 4, 128), dtype=jnp.uint8)
+
+          dynamic_args = [
+              q,
+              new_kv,
+              kernel_cache,
+              kv_lens,
+              page_indices,
+              cu_q_lens,
+              distribution,
+              attention_sinks,
+          ]
+          static_args = []
+          outputs.append((dynamic_args, static_args))
+
+      return outputs
+
+rtol: 0.01
+atol: 0.01

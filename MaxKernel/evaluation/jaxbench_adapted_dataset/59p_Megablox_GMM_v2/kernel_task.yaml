@@ -1,0 +1,40 @@
+task_id: 54p_Megablox_GMM_v2
+description: Kernel task for 54p_Megablox_GMM_v2
+input_gen_code: |-
+  def get_inputs():
+      import jax
+      import jax.numpy as jnp
+
+      CONFIGS = {'gmm_small': {'name': 'gmm_small', 'model': 'Megablox-GMM', 'operator': 'gmm_v2', 'num_tokens': 2048, 'hidden_size': 2048, 'intermediate_size': 1024, 'global_num_experts': 64, 'local_num_experts': 8, 'top_k': 4}, 'dsv4_pro_16k': {'name': 'dsv4_pro_16k', 'model': 'DeepSeek-V4-Pro', 'operator': 'gmm_v2', 'num_tokens': 16384, 'hidden_size': 7168, 'intermediate_size': 4096, 'global_num_experts': 256, 'local_num_experts': 16, 'top_k': 8}, 'dsv4_pro_8k': {'name': 'dsv4_pro_8k', 'model': 'DeepSeek-V4-Pro', 'operator': 'gmm_v2', 'num_tokens': 8192, 'hidden_size': 7168, 'intermediate_size': 4096, 'global_num_experts': 256, 'local_num_experts': 16, 'top_k': 8}, 'dsv4_flash_16k': {'name': 'dsv4_flash_16k', 'model': 'DeepSeek-V4-Flash', 'operator': 'gmm_v2', 'num_tokens': 16384, 'hidden_size': 4096, 'intermediate_size': 2048, 'global_num_experts': 256, 'local_num_experts': 16, 'top_k': 8}, 'dsv4_flash_8k': {'name': 'dsv4_flash_8k', 'model': 'DeepSeek-V4-Flash', 'operator': 'gmm_v2', 'num_tokens': 8192, 'hidden_size': 4096, 'intermediate_size': 2048, 'global_num_experts': 256, 'local_num_experts': 16, 'top_k': 8}}
+      CONFIG = CONFIGS['gmm_small']
+
+      def create_inputs(dtype=jnp.bfloat16, config=None):
+          """Returns (lhs, rhs, group_sizes, rhs_scale, rhs_bias, group_offset)."""
+          cfg = CONFIG if config is None else CONFIGS[config] if isinstance(config, str) else config
+          key = jax.random.key(42)
+          k1, k2, k3 = jax.random.split(key, 3)
+          M = cfg['num_tokens']
+          K = cfg['hidden_size']
+          N = cfg['intermediate_size']
+          G_local = cfg['local_num_experts']
+          G_global = cfg['global_num_experts']
+          lhs = (jax.random.uniform(k1, (M, K), dtype=dtype) - 0.5) * 0.2
+          rhs = jax.random.normal(k2, (G_local, K, N), dtype=dtype) * 0.02
+          tokens_per_expert = M // G_global
+          remainder = M % G_global
+          sizes = [tokens_per_expert + (1 if i < remainder else 0) for i in range(G_global)]
+          group_sizes = jnp.array(sizes, dtype=jnp.int32)
+          group_offset = jnp.array([0], dtype=jnp.int32)
+          rhs_scale = None
+          rhs_bias = None
+          return (lhs, rhs, group_sizes, rhs_scale, rhs_bias, group_offset)
+
+      outputs = []
+      for cfg in CONFIGS.values():
+          dynamic_args = list(create_inputs(dtype=jnp.bfloat16, config=cfg))
+          static_args = []
+          outputs.append((dynamic_args, static_args))
+      return outputs
+
+rtol: 0.01
+atol: 0.01

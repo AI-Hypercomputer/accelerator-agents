@@ -59,15 +59,17 @@ def benchmark(func, args, static_argnums, trace_dir=None, num_runs=20, num_warmu
   def update_donated_args(dyn_args_list, res):
     if not dynamic_donate_argnums:
       return dyn_args_list
+    leaves = jax.tree_util.tree_leaves(res)
+    matched_indices = set()
     for in_idx in dynamic_donate_argnums:
       target_arg = dyn_args_list[in_idx]
-      if isinstance(res, (tuple, list)):
-        for out in res:
-          if hasattr(out, 'shape') and out.shape == target_arg.shape and out.dtype == target_arg.dtype:
-            dyn_args_list[in_idx] = out
-            break
-      else:
-        dyn_args_list[in_idx] = res
+      for out_idx, out in enumerate(leaves):
+        if out_idx in matched_indices:
+          continue
+        if hasattr(out, 'shape') and out.shape == target_arg.shape and out.dtype == target_arg.dtype:
+          dyn_args_list[in_idx] = out
+          matched_indices.add(out_idx)
+          break
     return dyn_args_list
 
   # If arguments will be donated, copy them first so the original `args` tuple is preserved

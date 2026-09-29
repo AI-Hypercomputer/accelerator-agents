@@ -1,0 +1,100 @@
+---
+title: 'Module: easydel/modules/falcon_mamba/modeling_falcon_mamba.py'
+type: catalog
+provenance: extracted
+module: easydel/modules/falcon_mamba/modeling_falcon_mamba.py
+status: fresh
+symbol_base: scip-python python easydel 0.0.0 `easydel.modules.falcon_mamba.modeling_falcon_mamba`/
+symbols:
+  FalconMambaMixer.__call__: FalconMambaMixer#__call__().
+  Conv1D.__call__: Conv1D#__call__().
+  FalconMambaModel.__call__: FalconMambaModel#__call__().
+  FalconMambaMixer._body: FalconMambaMixer#_body().
+  FalconMambaBlock.norm: FalconMambaBlock#norm.
+  FalconMambaBlock.__call__: FalconMambaBlock#__call__().
+  FalconMambaForCausalLM.prepare_inputs_for_generation: FalconMambaForCausalLM#prepare_inputs_for_generation().
+  FalconMambaForCausalLM: FalconMambaForCausalLM#
+  FalconMambaModel: FalconMambaModel#
+  FalconMambaMixer.rms_eps: FalconMambaMixer#rms_eps.
+  FalconMambaMixer.precision: FalconMambaMixer#precision.
+  FalconMambaMixer.conv1d: FalconMambaMixer#conv1d.
+  FalconMambaForCausalLM.__call__: FalconMambaForCausalLM#__call__().
+  FalconMambaModel.embeddings: FalconMambaModel#embeddings.
+  FalconMambaMixer.init_bias_dt: FalconMambaMixer#init_bias_dt().
+  FalconMambaMixer.time_step_rank: FalconMambaMixer#time_step_rank.
+  FalconMambaModel.norm_f: FalconMambaModel#norm_f.
+  FalconMambaMixer.act: FalconMambaMixer#act.
+  FalconMambaMixer.__init__: FalconMambaMixer#__init__().
+  FalconMambaForCausalLM.__init__: FalconMambaForCausalLM#__init__().
+  Conv1D.kernel: Conv1D#kernel.
+  Conv1D.bias: Conv1D#bias.
+  FalconMambaMixer.A_log: FalconMambaMixer#A_log.
+  FalconMambaMixer.D: FalconMambaMixer#D.
+  FalconMambaModel.layers: FalconMambaModel#layers.
+  rms_forward: rms_forward().
+  FalconMambaMixer.conv_kernel_size: FalconMambaMixer#conv_kernel_size.
+  FalconMambaModel.__init__: FalconMambaModel#__init__().
+  FalconMambaForCausalLM._task_type: FalconMambaForCausalLM#_task_type.
+  FalconMambaOutput: FalconMambaOutput#
+  FalconMambaCausalLMOutput: FalconMambaCausalLMOutput#
+  FalconMambaMixer.dt_proj: FalconMambaMixer#dt_proj.
+  FalconMambaMixer.out_proj: FalconMambaMixer#out_proj.
+  FalconMambaMixer.ssm_state_size: FalconMambaMixer#ssm_state_size.
+  FalconMambaMixer.intermediate_size: FalconMambaMixer#intermediate_size.
+  FalconMambaMixer.activation: FalconMambaMixer#activation.
+  FalconMambaMixer.in_proj: FalconMambaMixer#in_proj.
+  FalconMambaMixer.ssm_op: FalconMambaMixer#ssm_op.
+  FalconMambaBlock.residual_in_fp32: FalconMambaBlock#residual_in_fp32.
+  Conv1D.dtype: Conv1D#dtype.
+  FalconMambaMixer.config: FalconMambaMixer#config.
+  FalconMambaOutput.past_key_values: FalconMambaOutput#past_key_values.
+  FalconMambaOutput.cache_params: FalconMambaOutput#cache_params.
+  FalconMambaCausalLMOutput.past_key_values: FalconMambaCausalLMOutput#past_key_values.
+  FalconMambaCausalLMOutput.cache_params: FalconMambaCausalLMOutput#cache_params.
+  FalconMambaBlock.__init__: FalconMambaBlock#__init__().
+  FalconMambaModel.get_embedding: FalconMambaModel#get_embedding().
+  FalconMambaForCausalLM._config_class: FalconMambaForCausalLM#_config_class.
+  Conv1D.padding: Conv1D#padding.
+  FalconMambaMixer.x_proj: FalconMambaMixer#x_proj.
+  Conv1D: Conv1D#
+  Conv1D.stride: Conv1D#stride.
+  Conv1D.dilation: Conv1D#dilation.
+  Conv1D.groups: Conv1D#groups.
+  Conv1D.use_bias: Conv1D#use_bias.
+  Conv1D.num_spatial_dims: Conv1D#num_spatial_dims.
+  Conv1D.precision: Conv1D#precision.
+  FalconMambaMixer: FalconMambaMixer#
+  FalconMambaBlock: FalconMambaBlock#
+  FalconMambaBlock.config: FalconMambaBlock#config.
+  FalconMambaBlock.mixer: FalconMambaBlock#mixer.
+  FalconMambaOutput.last_hidden_state: FalconMambaOutput#last_hidden_state.
+  FalconMambaOutput.hidden_states: FalconMambaOutput#hidden_states.
+  FalconMambaCausalLMOutput.last_hidden_state: FalconMambaCausalLMOutput#last_hidden_state.
+  FalconMambaCausalLMOutput.logits: FalconMambaCausalLMOutput#logits.
+  FalconMambaCausalLMOutput.hidden_states: FalconMambaCausalLMOutput#hidden_states.
+  Conv1D.__init__: Conv1D#__init__().
+  Conv1D.features: Conv1D#features.
+  Conv1D.kernel_size: Conv1D#kernel_size.
+  Conv1D.param_dtype: Conv1D#param_dtype.
+  Conv1D.craft_sharding: Conv1D#craft_sharding().
+  FalconMambaMixer.layer_idx: FalconMambaMixer#layer_idx.
+  FalconMambaMixer.dtype: FalconMambaMixer#dtype.
+  FalconMambaMixer.param_dtype: FalconMambaMixer#param_dtype.
+  FalconMambaMixer.craft_sharding: FalconMambaMixer#craft_sharding().
+  FalconMambaBlock.layer_idx: FalconMambaBlock#layer_idx.
+  FalconMambaBlock.dtype: FalconMambaBlock#dtype.
+  FalconMambaBlock.param_dtype: FalconMambaBlock#param_dtype.
+  FalconMambaBlock.precision: FalconMambaBlock#precision.
+  FalconMambaModel.get_encoder: FalconMambaModel#get_encoder().
+  FalconMambaModel.get_decoder: FalconMambaModel#get_decoder().
+  FalconMambaModel.get_lm_head: FalconMambaModel#get_lm_head().
+  FalconMambaForCausalLM._model_type: FalconMambaForCausalLM#_model_type.
+  FalconMambaForCausalLM.update_inputs_for_generation: FalconMambaForCausalLM#update_inputs_for_generation().
+  FalconMambaForCausalLM.get_encoder: FalconMambaForCausalLM#get_encoder().
+  FalconMambaForCausalLM.get_decoder: FalconMambaForCausalLM#get_decoder().
+  FalconMambaForCausalLM.get_lm_head: FalconMambaForCausalLM#get_lm_head().
+  FalconMambaForCausalLM.get_embedding: FalconMambaForCausalLM#get_embedding().
+---
+# Module: [`easydel/modules/falcon_mamba/modeling_falcon_mamba.py`](../../../../../../../raw/code/EasyDeL/easydel/modules/falcon_mamba/modeling_falcon_mamba.py)
+
+> **Collapsed catalog** (88 symbols) — anchors above resolve for citations; detailed member listing omitted (`coverage_collapse`). See the source link above, or the curated codebase page, for depth.

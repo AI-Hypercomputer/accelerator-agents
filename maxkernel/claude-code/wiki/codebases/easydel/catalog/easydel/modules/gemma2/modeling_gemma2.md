@@ -1,0 +1,91 @@
+---
+title: 'Module: easydel/modules/gemma2/modeling_gemma2.py'
+type: catalog
+provenance: extracted
+module: easydel/modules/gemma2/modeling_gemma2.py
+status: fresh
+symbol_base: scip-python python easydel 0.0.0 `easydel.modules.gemma2.modeling_gemma2`/
+symbols:
+  Gemma2DecoderLayer.__call__: Gemma2DecoderLayer#__call__().
+  Gemma2Model.__call__: Gemma2Model#__call__().
+  Gemma2ForCausalLM.__call__: Gemma2ForCausalLM#__call__().
+  Gemma2ForSequenceClassification.__call__: Gemma2ForSequenceClassification#__call__().
+  Gemma2Model.embed_tokens: Gemma2Model#embed_tokens.
+  Gemma2Model: Gemma2Model#
+  Gemma2ForCausalLM: Gemma2ForCausalLM#
+  Gemma2ForSequenceClassification: Gemma2ForSequenceClassification#
+  Gemma2MLP.__call__: Gemma2MLP#__call__().
+  Gemma2MLP.act: Gemma2MLP#act.
+  Gemma2RMSNorm.kernel: Gemma2RMSNorm#kernel.
+  Gemma2Attention._create_attention_performer: Gemma2Attention#_create_attention_performer().
+  Gemma2MLP.precision: Gemma2MLP#precision.
+  Gemma2DecoderLayer.self_attn: Gemma2DecoderLayer#self_attn.
+  Gemma2DecoderLayer.input_layernorm: Gemma2DecoderLayer#input_layernorm.
+  Gemma2DecoderLayer.post_attention_layernorm: Gemma2DecoderLayer#post_attention_layernorm.
+  Gemma2DecoderLayer.pre_feedforward_layernorm: Gemma2DecoderLayer#pre_feedforward_layernorm.
+  Gemma2DecoderLayer.post_feedforward_layernorm: Gemma2DecoderLayer#post_feedforward_layernorm.
+  Gemma2Model.norm: Gemma2Model#norm.
+  Gemma2DecoderLayer.config: Gemma2DecoderLayer#config.
+  Gemma2RMSNorm.__call__: Gemma2RMSNorm#__call__().
+  Gemma2Attention.is_cross_attention: Gemma2Attention#is_cross_attention.
+  Gemma2Attention._create_rotary: Gemma2Attention#_create_rotary().
+  Gemma2ForCausalLM.__init__: Gemma2ForCausalLM#__init__().
+  Gemma2ForCausalLM.make_lm_head_fn: Gemma2ForCausalLM#make_lm_head_fn().
+  Gemma2ForSequenceClassification.__init__: Gemma2ForSequenceClassification#__init__().
+  Gemma2RMSNorm.epsilon: Gemma2RMSNorm#epsilon.
+  Gemma2MLP.config: Gemma2MLP#config.
+  Gemma2ForCausalLM.compute_lm_logits: Gemma2ForCausalLM#compute_lm_logits().
+  Gemma2RMSNorm: Gemma2RMSNorm#
+  Gemma2Attention._merge_heads: Gemma2Attention#_merge_heads().
+  Gemma2Model.__init__: Gemma2Model#__init__().
+  Gemma2ForCausalLM._task_type: Gemma2ForCausalLM#_task_type.
+  Gemma2ForSequenceClassification._task_type: Gemma2ForSequenceClassification#_task_type.
+  Gemma2DecoderLayer.mlp: Gemma2DecoderLayer#mlp.
+  Gemma2Model.layers: Gemma2Model#layers.
+  Gemma2DecoderLayer.dtype: Gemma2DecoderLayer#dtype.
+  Gemma2Attention: Gemma2Attention#
+  Gemma2Model.hidden_size: Gemma2Model#hidden_size.
+  Gemma2RMSNorm.__init__: Gemma2RMSNorm#__init__().
+  Gemma2Attention.__init__: Gemma2Attention#__init__().
+  Gemma2Attention.attention_softmax_in_fp32: Gemma2Attention#attention_softmax_in_fp32.
+  Gemma2Attention._split_heads: Gemma2Attention#_split_heads().
+  Gemma2MLP.__init__: Gemma2MLP#__init__().
+  Gemma2DecoderLayer.__init__: Gemma2DecoderLayer#__init__().
+  Gemma2DecoderLayer.is_sliding: Gemma2DecoderLayer#is_sliding.
+  Gemma2Model.get_embedding: Gemma2Model#get_embedding().
+  Gemma2ForCausalLM._config_class: Gemma2ForCausalLM#_config_class.
+  Gemma2ForSequenceClassification._config_class: Gemma2ForSequenceClassification#_config_class.
+  Gemma2RMSNorm.config: Gemma2RMSNorm#config.
+  Gemma2RMSNorm.dtype: Gemma2RMSNorm#dtype.
+  Gemma2DecoderLayer.layer_idx: Gemma2DecoderLayer#layer_idx.
+  Gemma2MLP: Gemma2MLP#
+  Gemma2MLP.gate_proj: Gemma2MLP#gate_proj.
+  Gemma2MLP.down_proj: Gemma2MLP#down_proj.
+  Gemma2MLP.up_proj: Gemma2MLP#up_proj.
+  Gemma2DecoderLayer: Gemma2DecoderLayer#
+  Gemma2ForCausalLM._project: Gemma2ForCausalLM#_project().
+  logger: logger.
+  Gemma2RMSNorm.kernel_init: Gemma2RMSNorm#kernel_init.
+  Gemma2RMSNorm.craft_sharding: Gemma2RMSNorm#craft_sharding().
+  Gemma2MLP.dtype: Gemma2MLP#dtype.
+  Gemma2MLP.param_dtype: Gemma2MLP#param_dtype.
+  Gemma2DecoderLayer.param_dtype: Gemma2DecoderLayer#param_dtype.
+  Gemma2DecoderLayer.precision: Gemma2DecoderLayer#precision.
+  Gemma2Model.get_encoder: Gemma2Model#get_encoder().
+  Gemma2Model.get_decoder: Gemma2Model#get_decoder().
+  Gemma2Model.get_lm_head: Gemma2Model#get_lm_head().
+  Gemma2ForCausalLM._model_type: Gemma2ForCausalLM#_model_type.
+  Gemma2ForCausalLM.get_encoder: Gemma2ForCausalLM#get_encoder().
+  Gemma2ForCausalLM.get_decoder: Gemma2ForCausalLM#get_decoder().
+  Gemma2ForCausalLM.get_lm_head: Gemma2ForCausalLM#get_lm_head().
+  Gemma2ForCausalLM.get_embedding: Gemma2ForCausalLM#get_embedding().
+  Gemma2ForSequenceClassification._model_type: Gemma2ForSequenceClassification#_model_type.
+  Gemma2ForSequenceClassification.get_encoder: Gemma2ForSequenceClassification#get_encoder().
+  Gemma2ForSequenceClassification.get_decoder: Gemma2ForSequenceClassification#get_decoder().
+  Gemma2ForSequenceClassification.get_lm_head: Gemma2ForSequenceClassification#get_lm_head().
+  Gemma2ForSequenceClassification.get_embedding: Gemma2ForSequenceClassification#get_embedding().
+  Gemma2ForSequenceClassification.get_task_head: Gemma2ForSequenceClassification#get_task_head().
+---
+# Module: [`easydel/modules/gemma2/modeling_gemma2.py`](../../../../../../../raw/code/EasyDeL/easydel/modules/gemma2/modeling_gemma2.py)
+
+> **Collapsed catalog** (79 symbols) — anchors above resolve for citations; detailed member listing omitted (`coverage_collapse`). See the source link above, or the curated codebase page, for depth.

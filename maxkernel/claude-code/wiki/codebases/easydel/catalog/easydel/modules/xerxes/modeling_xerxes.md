@@ -1,0 +1,93 @@
+---
+title: 'Module: easydel/modules/xerxes/modeling_xerxes.py'
+type: catalog
+provenance: extracted
+module: easydel/modules/xerxes/modeling_xerxes.py
+status: fresh
+symbol_base: scip-python python easydel 0.0.0 `easydel.modules.xerxes.modeling_xerxes`/
+symbols:
+  XerxesDecoderLayer.__call__: XerxesDecoderLayer#__call__().
+  XerxesModel.__call__: XerxesModel#__call__().
+  XerxesSparseMoeBlock.__call__: XerxesSparseMoeBlock#__call__().
+  XerxesForCausalLM.__call__: XerxesForCausalLM#__call__().
+  XerxesDecoderLayer.mlp: XerxesDecoderLayer#mlp.
+  XerxesModel.embed_tokens: XerxesModel#embed_tokens.
+  XerxesForCausalLM: XerxesForCausalLM#
+  XerxesModel: XerxesModel#
+  XerxesMLP.__call__: XerxesMLP#__call__().
+  XerxesSparseMoeBlock.gate: XerxesSparseMoeBlock#gate.
+  XerxesAttention.is_local_attn: XerxesAttention#is_local_attn.
+  XerxesDecoderLayer.rngs: XerxesDecoderLayer#rngs.
+  XerxesForCausalLM.__init__: XerxesForCausalLM#__init__().
+  XerxesModel.default_frequencies: XerxesModel#default_frequencies().
+  XerxesSparseMoeBlock.experts: XerxesSparseMoeBlock#experts.
+  XerxesMLP.act: XerxesMLP#act.
+  XerxesMLP.gate_proj: XerxesMLP#gate_proj.
+  XerxesMLP.up_proj: XerxesMLP#up_proj.
+  XerxesMLP.down_proj: XerxesMLP#down_proj.
+  XerxesModel.embedding_scale: XerxesModel#embedding_scale.
+  XerxesMLP.config: XerxesMLP#config.
+  XerxesAttention.xe_kvnorm: XerxesAttention#xe_kvnorm.
+  XerxesSparseMoeBlock.config: XerxesSparseMoeBlock#config.
+  XerxesDecoderLayer.config: XerxesDecoderLayer#config.
+  XerxesAttention._create_q_norm: XerxesAttention#_create_q_norm().
+  XerxesAttention._create_k_norm: XerxesAttention#_create_k_norm().
+  XerxesAttention._postprocess_qkv: XerxesAttention#_postprocess_qkv().
+  XerxesDecoderLayer.self_attn: XerxesDecoderLayer#self_attn.
+  XerxesModel.norm: XerxesModel#norm.
+  XerxesForCausalLM.post_pross: XerxesForCausalLM#post_pross.
+  XerxesAttention._create_attention_performer: XerxesAttention#_create_attention_performer().
+  XerxesSparseMoeBlock.__init__: XerxesSparseMoeBlock#__init__().
+  XerxesModel.__init__: XerxesModel#__init__().
+  XerxesForCausalLM._task_type: XerxesForCausalLM#_task_type.
+  XerxesModel.layers: XerxesModel#layers.
+  XerxesAttention: XerxesAttention#
+  XerxesDecoderLayer.pre_feedforward_layernorm: XerxesDecoderLayer#pre_feedforward_layernorm.
+  XerxesDecoderLayer.post_feedforward_layernorm: XerxesDecoderLayer#post_feedforward_layernorm.
+  XerxesModel.hidden_size: XerxesModel#hidden_size.
+  Identity: Identity#
+  XerxesMLP.__init__: XerxesMLP#__init__().
+  XerxesMLP.rngs: XerxesMLP#rngs.
+  XerxesAttention.__init__: XerxesAttention#__init__().
+  XerxesAttention.attention_softmax_in_fp32: XerxesAttention#attention_softmax_in_fp32.
+  XerxesDecoderLayer.__init__: XerxesDecoderLayer#__init__().
+  XerxesModel.get_embedding: XerxesModel#get_embedding().
+  XerxesForCausalLM._config_class: XerxesForCausalLM#_config_class.
+  XerxesMLP: XerxesMLP#
+  XerxesSparseMoeBlock.dtype: XerxesSparseMoeBlock#dtype.
+  XerxesDecoderLayer.post_attention_layernorm: XerxesDecoderLayer#post_attention_layernorm.
+  PostCross: PostCross#
+  XerxesSparseMoeBlock: XerxesSparseMoeBlock#
+  XerxesDecoderLayer: XerxesDecoderLayer#
+  XerxesDecoderLayer.layer_idx: XerxesDecoderLayer#layer_idx.
+  XerxesDecoderLayer.identity: XerxesDecoderLayer#identity.
+  XerxesDecoderLayer.input_layernorm: XerxesDecoderLayer#input_layernorm.
+  logger: logger.
+  Identity.__init__: Identity#__init__().
+  Identity.__call__: Identity#__call__().
+  PostCross.__init__: PostCross#__init__().
+  PostCross.__call__: PostCross#__call__().
+  XerxesMLP.dtype: XerxesMLP#dtype.
+  XerxesMLP.param_dtype: XerxesMLP#param_dtype.
+  XerxesMLP.precision: XerxesMLP#precision.
+  XerxesAttention.layer_idx: XerxesAttention#layer_idx.
+  XerxesAttention.is_cross_attention: XerxesAttention#is_cross_attention.
+  XerxesAttention.causal: XerxesAttention#causal.
+  XerxesSparseMoeBlock.param_dtype: XerxesSparseMoeBlock#param_dtype.
+  XerxesSparseMoeBlock.precision: XerxesSparseMoeBlock#precision.
+  XerxesSparseMoeBlock.rngs: XerxesSparseMoeBlock#rngs.
+  XerxesDecoderLayer.dtype: XerxesDecoderLayer#dtype.
+  XerxesDecoderLayer.param_dtype: XerxesDecoderLayer#param_dtype.
+  XerxesDecoderLayer.precision: XerxesDecoderLayer#precision.
+  XerxesModel.get_encoder: XerxesModel#get_encoder().
+  XerxesModel.get_decoder: XerxesModel#get_decoder().
+  XerxesModel.get_lm_head: XerxesModel#get_lm_head().
+  XerxesForCausalLM._model_type: XerxesForCausalLM#_model_type.
+  XerxesForCausalLM.get_encoder: XerxesForCausalLM#get_encoder().
+  XerxesForCausalLM.get_decoder: XerxesForCausalLM#get_decoder().
+  XerxesForCausalLM.get_lm_head: XerxesForCausalLM#get_lm_head().
+  XerxesForCausalLM.get_embedding: XerxesForCausalLM#get_embedding().
+---
+# Module: [`easydel/modules/xerxes/modeling_xerxes.py`](../../../../../../../raw/code/EasyDeL/easydel/modules/xerxes/modeling_xerxes.py)
+
+> **Collapsed catalog** (81 symbols) — anchors above resolve for citations; detailed member listing omitted (`coverage_collapse`). See the source link above, or the curated codebase page, for depth.

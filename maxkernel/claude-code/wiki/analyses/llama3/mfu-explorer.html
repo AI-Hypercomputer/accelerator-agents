@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Llama3-8B v6e-8 — experiment explorer</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root{--bg:#fafafa;--panel:#fff;--text:#222;--muted:#666;--label:#888;--border:#e5e5e5;--subt:#999}
+  body.dark{--bg:#1b1b1b;--panel:#262626;--text:#e8e8e8;--muted:#9aa0a6;--label:#9aa0a6;--border:#3a3a3a;--subt:#888}
+  body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;background:var(--bg);color:var(--text)}
+  header{padding:14px 20px 6px}
+  h1{font-size:18px;margin:0 0 2px} .sub{color:var(--muted);font-size:12px}
+  #controls{display:flex;flex-wrap:wrap;gap:18px;padding:10px 20px;background:var(--panel);border-bottom:1px solid var(--border);align-items:center}
+  .group{display:flex;gap:10px;align-items:center;font-size:13px}
+  .group b{font-size:11px;color:var(--label);text-transform:uppercase;letter-spacing:.04em;margin-right:2px}
+  label{display:inline-flex;gap:4px;align-items:center;cursor:pointer;user-select:none}
+  .sw{width:11px;height:11px;border-radius:2px;display:inline-block}
+  #chart{width:100%;height:74vh}
+  .hint{font-size:11px;color:var(--subt);padding:4px 20px}
+  #theme{margin-left:auto;cursor:pointer;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:3px 11px;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Llama3-8B v6e-8 — MFU &amp; throughput per experiment</h1>
+  <div class="sub">Pick MFU or TPS · lane MFU is causal (÷2 attention) · line = running-best frontier · ○ 8k / △ 2k / ◇ 4k / □ 1k · dashed = MaxText 8k (MFU causal-adjusted to 39.6%; the tpu-recipes-v0.1.4 figure 44.6% is non-causal) · dotted = MaxText onset · click a point to open its experiment page · drag to zoom</div>
+</header>
+<div id="controls"></div>
+<div class="hint" id="count"></div>
+<div id="chart"></div>
+<script>
+const DATA = [{"lane": "jax", "slug": "2026-04-26-jax-exp1e-baseline-port-direct-accepted", "vnum": 1, "order": 1, "seq": 8192, "mfu": 36.6, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp1e-baseline-port-direct-accepted.md"}, {"lane": "jax", "slug": "2026-04-26-jax-exp3-profile-bs3-baseline-accepted", "vnum": 3, "order": 2, "seq": 8192, "mfu": null, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp3-profile-bs3-baseline-accepted.md"}, {"lane": "jax", "slug": "2026-04-26-jax-exp4-vmem-default-localtmp-accepted", "vnum": 4, "order": 3, "seq": 8192, "mfu": null, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp4-vmem-default-localtmp-accepted.md"}, {"lane": "jax", "slug": "2026-04-26-jax-exp5-bs2-density-accepted", "vnum": 5, "order": 4, "seq": 8192, "mfu": 35.4, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp5-bs2-density-accepted.md"}, {"lane": "jax", "slug": "2026-04-26-jax-exp6-bs4-density-accepted", "vnum": 6, "order": 5, "seq": 8192, "mfu": null, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp6-bs4-density-accepted.md"}, {"lane": "jax", "slug": "2026-04-26-jax-exp7-bs3-noscan-rejected", "vnum": 7, "order": 6, "seq": 8192, "mfu": null, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp7-bs3-noscan-rejected.md"}, {"lane": "jax", "slug": "2026-04-26-jax-exp8-bs3-remat-dotsnobatch-rejected", "vnum": 8, "order": 7, "seq": 8192, "mfu": null, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp8-bs3-remat-dotsnobatch-rejected.md"}, {"lane": "jax", "slug": "2026-04-26-jax-exp9-bs4-frontier-pre-maxtext-xla-potential", "vnum": 9, "order": 8, "seq": 8192, "mfu": null, "tps": null, "verdict": "inconclusive", "success": false, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp9-bs4-frontier-pre-maxtext-xla-potential.md"}, {"lane": "jax", "slug": "2026-04-26-jax-exp10-noop-default-stack-accepted", "vnum": 10, "order": 9, "seq": 8192, "mfu": null, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp10-noop-default-stack-accepted.md"}, {"lane": "jax", "slug": "2026-04-26-jax-exp11-scan-remat-everything-saveable-rejected", "vnum": 11, "order": 10, "seq": 8192, "mfu": null, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp11-scan-remat-everything-saveable-rejected.md"}, {"lane": "jax", "slug": "2026-04-26-jax-exp12-maxtext-xla-stack-bs3-accepted", "vnum": 12, "order": 11, "seq": 8192, "mfu": 40.7, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp12-maxtext-xla-stack-bs3-accepted.md"}, {"lane": "jax", "slug": "2026-04-26-jax-exp12b-maxtext-xla-stack-bs4-accepted", "vnum": 12, "order": 12, "seq": 8192, "mfu": 41.5, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp12b-maxtext-xla-stack-bs4-accepted.md"}, {"lane": "jax", "slug": "2026-04-26-jax-exp13-maxtext-xla-stack-bs5-accepted", "vnum": 13, "order": 13, "seq": 8192, "mfu": 41.6, "tps": 7471, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp13-maxtext-xla-stack-bs5-accepted.md"}, {"lane": "jax", "slug": "2026-04-26-jax-exp14-bs6-density-rejected", "vnum": 14, "order": 14, "seq": 8192, "mfu": 39.6, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp14-bs6-density-rejected.md"}, {"lane": "jax", "slug": "2026-04-26-jax-exp15-exp13-profile-bs5-accepted", "vnum": 15, "order": 15, "seq": 8192, "mfu": null, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp15-exp13-profile-bs5-accepted.md"}, {"lane": "jax", "slug": "2026-04-26-jax-exp16-bs7-attempt-rejected", "vnum": 16, "order": 16, "seq": 8192, "mfu": null, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp16-bs7-attempt-rejected.md"}, {"lane": "jax", "slug": "2026-04-26-jax-exp17-bs8-attempt-rejected", "vnum": 17, "order": 17, "seq": 8192, "mfu": null, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp17-bs8-attempt-rejected.md"}, {"lane": "jax", "slug": "2026-04-26-jax-exp27-28-sparsecore-rs-ag-offload-frontier", "vnum": 27, "order": 18, "seq": 8192, "mfu": 43.6, "tps": 7768, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-26-jax-exp27-28-sparsecore-rs-ag-offload-frontier.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp18-bkv2048-match-maxtext-bs5-accepted", "vnum": 18, "order": 19, "seq": 2048, "mfu": 41.9, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp18-bkv2048-match-maxtext-bs5-accepted.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp18b-bkv2048-bs3-accepted", "vnum": 18, "order": 20, "seq": 2048, "mfu": 41.3, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp18b-bkv2048-bs3-accepted.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp19-bkv2048-bs4-accepted", "vnum": 19, "order": 21, "seq": 2048, "mfu": 41.4, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp19-bkv2048-bs4-accepted.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp19b-bkv2048-bs6-rejected", "vnum": 19, "order": 22, "seq": 2048, "mfu": null, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp19b-bkv2048-bs6-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp20-jax-experimental-splash-accepted", "vnum": 20, "order": 23, "seq": 8192, "mfu": 40.0, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp20-jax-experimental-splash-accepted.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp23b-bq1k-bkv1k-bs5-rejected", "vnum": 23, "order": 24, "seq": 1024, "mfu": null, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp23b-bq1k-bkv1k-bs5-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp26-frontier-profile-bs5-maxtext-accepted", "vnum": 26, "order": 25, "seq": 8192, "mfu": null, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp26-frontier-profile-bs5-maxtext-accepted.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp29-vmem-131072-bs4-rejected", "vnum": 29, "order": 26, "seq": 8192, "mfu": 42.3, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp29-vmem-131072-bs4-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp30-bkv-2048-bs4-fullsc-rejected", "vnum": 30, "order": 27, "seq": 2048, "mfu": 43.5, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp30-bkv-2048-bs4-fullsc-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp31-bs3-fullsc-maxtext-shape-accepted", "vnum": 31, "order": 28, "seq": 8192, "mfu": 42.4, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp31-bs3-fullsc-maxtext-shape-accepted.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp32-splash-bq-4096-bs4-rejected", "vnum": 32, "order": 29, "seq": 4096, "mfu": 34.3, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp32-splash-bq-4096-bs4-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp35-save-qkv-proj-bs4-rejected", "vnum": 35, "order": 30, "seq": 8192, "mfu": null, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp35-save-qkv-proj-bs4-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp36-qkv-proj-offloaded-bs4-rejected", "vnum": 36, "order": 31, "seq": 8192, "mfu": 42.8, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp36-qkv-proj-offloaded-bs4-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp37-qkv-proj-offloaded-bs6-rejected", "vnum": 37, "order": 32, "seq": 8192, "mfu": null, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp37-qkv-proj-offloaded-bs6-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp38-qkv-proj-offloaded-bs5-rejected", "vnum": 38, "order": 33, "seq": 8192, "mfu": 42.8, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp38-qkv-proj-offloaded-bs5-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp39-save-out-proj-bs4-rejected", "vnum": 39, "order": 34, "seq": 8192, "mfu": null, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp39-save-out-proj-bs4-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp40-save-out-proj-bs3-potential", "vnum": 40, "order": 35, "seq": 8192, "mfu": 42.9, "tps": null, "verdict": "potential", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp40-save-out-proj-bs3-potential.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp41-scan-unroll-2-bs4-rejected", "vnum": 41, "order": 36, "seq": 8192, "mfu": 42.4, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp41-scan-unroll-2-bs4-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp42-no-bundle-aware-cost-model-rejected", "vnum": 42, "order": 37, "seq": 8192, "mfu": 42.4, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp42-no-bundle-aware-cost-model-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp43-enhanced-launch-barrier-rejected", "vnum": 43, "order": 38, "seq": 8192, "mfu": 42.7, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp43-enhanced-launch-barrier-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp44-async-collective-permute-potential", "vnum": 44, "order": 39, "seq": 8192, "mfu": 43.1, "tps": null, "verdict": "inconclusive", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp44-async-collective-permute-potential.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp45-no-megacore-fusion-allow-ags-potential", "vnum": 45, "order": 40, "seq": 8192, "mfu": 43.2, "tps": null, "verdict": "inconclusive", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp45-no-megacore-fusion-allow-ags-potential.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp46-combo-acpermute-nomegafuseag-rejected", "vnum": 46, "order": 41, "seq": 8192, "mfu": 42.7, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp46-combo-acpermute-nomegafuseag-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp47-vmem-65536-bs4-rejected", "vnum": 47, "order": 42, "seq": 8192, "mfu": 41.4, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp47-vmem-65536-bs4-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp48-vmem-81920-mxt-moe-level-rejected", "vnum": 48, "order": 43, "seq": 8192, "mfu": 42.5, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp48-vmem-81920-mxt-moe-level-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp49-splash-bkv-512-bs4-rejected", "vnum": 49, "order": 44, "seq": 8192, "mfu": 42.2, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp49-splash-bkv-512-bs4-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp50-validate-exp28b-rerun-accepted", "vnum": 50, "order": 45, "seq": 8192, "mfu": 43.1, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp50-validate-exp28b-rerun-accepted.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp51-enable-collective-matmul-rejected", "vnum": 51, "order": 46, "seq": 8192, "mfu": 36.8, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp51-enable-collective-matmul-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp52-splash-bkv-dkv-1024-rejected", "vnum": 52, "order": 47, "seq": 1024, "mfu": 41.7, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp52-splash-bkv-dkv-1024-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp53-tokamax-ce-mosaic-tpu-rejected", "vnum": 53, "order": 48, "seq": 8192, "mfu": 41.3, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp53-tokamax-ce-mosaic-tpu-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp54-precast-bf16-weights-bs4-rejected", "vnum": 54, "order": 49, "seq": 8192, "mfu": 42.7, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp54-precast-bf16-weights-bs4-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp55-precast-bf16-weights-bs5-rejected", "vnum": 55, "order": 50, "seq": 8192, "mfu": 43.0, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp55-precast-bf16-weights-bs5-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp56-validate-exp28b-rerun-2-accepted", "vnum": 56, "order": 51, "seq": 8192, "mfu": 43.2, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp56-validate-exp28b-rerun-2-accepted.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp57-no-overlap-compute-collective-rejected", "vnum": 57, "order": 52, "seq": 8192, "mfu": 42.7, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp57-no-overlap-compute-collective-rejected.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp58-no-aggressive-opt-barrier-potential", "vnum": 58, "order": 53, "seq": 8192, "mfu": 43.1, "tps": null, "verdict": "inconclusive", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp58-no-aggressive-opt-barrier-potential.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp59-lat-hiding-rerun-0-potential", "vnum": 59, "order": 54, "seq": 8192, "mfu": 43.2, "tps": null, "verdict": "inconclusive", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp59-lat-hiding-rerun-0-potential.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp60-loop-inv-chain-disabled-potential", "vnum": 60, "order": 55, "seq": 8192, "mfu": 42.9, "tps": null, "verdict": "inconclusive", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp60-loop-inv-chain-disabled-potential.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp61-val100opt-realdata-exhausted-potential", "vnum": 61, "order": 56, "seq": 8192, "mfu": null, "tps": null, "verdict": "inconclusive", "success": false, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp61-val100opt-realdata-exhausted-potential.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp62-val100base-realdata-exhausted-potential", "vnum": 62, "order": 57, "seq": 8192, "mfu": null, "tps": null, "verdict": "inconclusive", "success": false, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp62-val100base-realdata-exhausted-potential.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp64-val100ref-realdata-exhausted-potential", "vnum": 64, "order": 58, "seq": 8192, "mfu": null, "tps": null, "verdict": "inconclusive", "success": false, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp64-val100ref-realdata-exhausted-potential.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp65-67-loss-validation-100steps", "vnum": 65, "order": 59, "seq": 8192, "mfu": null, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp65-67-loss-validation-100steps.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp68-lr3e5-syn-bs4-accepted", "vnum": 68, "order": 60, "seq": 8192, "mfu": null, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp68-lr3e5-syn-bs4-accepted.md"}, {"lane": "jax", "slug": "2026-04-27-jax-exp69-lr3e5-bs3-syn-accepted", "vnum": 69, "order": 61, "seq": 8192, "mfu": 42.5, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/2026-04-27-jax-exp69-lr3e5-bs3-syn-accepted.md"}, {"lane": "jax", "slug": "README", "vnum": 0, "order": 62, "seq": 8192, "mfu": 43.6, "tps": 7700, "verdict": "", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/jax/experiments/README.md"}, {"lane": "torchax", "slug": "2026-04-25-baseline", "vnum": 0, "order": 1, "seq": 1024, "mfu": null, "tps": 5450, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/torchax/experiments/2026-04-25-baseline.md"}, {"lane": "torchax", "slug": "2026-04-25-exp2-splash-bs2-potential", "vnum": 2, "order": 2, "seq": 1024, "mfu": 22.9, "tps": null, "verdict": "potential", "success": false, "maxtext": false, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/torchax/experiments/2026-04-25-exp2-splash-bs2-potential.md"}, {"lane": "torchax", "slug": "2026-04-25-exp3-splash-bs4-accepted", "vnum": 3, "order": 3, "seq": 1024, "mfu": 35.7, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/torchax/experiments/2026-04-25-exp3-splash-bs4-accepted.md"}, {"lane": "torchax", "slug": "2026-04-25-exp7-splash-xla-bs4-rejected", "vnum": 7, "order": 4, "seq": 1024, "mfu": 35.7, "tps": null, "verdict": "refuted", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/torchax/experiments/2026-04-25-exp7-splash-xla-bs4-rejected.md"}, {"lane": "torchax", "slug": "2026-04-25-exp8-splash-kernel-autotune-potential", "vnum": 8, "order": 5, "seq": 1024, "mfu": 35.7, "tps": null, "verdict": "potential", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/torchax/experiments/2026-04-25-exp8-splash-kernel-autotune-potential.md"}, {"lane": "torchax", "slug": "2026-04-25-exp9-splash-autotuned-bs4-accepted", "vnum": 9, "order": 6, "seq": 1024, "mfu": null, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": false, "link": "../../experiments/llama3_8B_autoresearch_optimization/torchax/experiments/2026-04-25-exp9-splash-autotuned-bs4-accepted.md"}, {"lane": "torchax", "slug": "2026-04-25-exp13-per-layer-remat-accepted", "vnum": 13, "order": 7, "seq": 2048, "mfu": 35.2, "tps": null, "verdict": "supported", "success": true, "maxtext": false, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/torchax/experiments/2026-04-25-exp13-per-layer-remat-accepted.md"}, {"lane": "torchax", "slug": "2026-04-25-exp17-layer-remat-bs1-seq8k-accepted", "vnum": 17, "order": 8, "seq": 8192, "mfu": 32.2, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/torchax/experiments/2026-04-25-exp17-layer-remat-bs1-seq8k-accepted.md"}, {"lane": "torchax", "slug": "2026-04-25-exp20-amp-fp32-master-seq8k-accepted", "vnum": 20, "order": 9, "seq": 8192, "mfu": 31.6, "tps": null, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/torchax/experiments/2026-04-25-exp20-amp-fp32-master-seq8k-accepted.md"}, {"lane": "torchax", "slug": "2026-04-25-exp23-amp-bs2-seq4k-accepted", "vnum": 23, "order": 10, "seq": 4096, "mfu": 33.1, "tps": null, "verdict": "supported", "success": true, "maxtext": false, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/torchax/experiments/2026-04-25-exp23-amp-bs2-seq4k-accepted.md"}, {"lane": "torchax", "slug": "2026-04-26-exp55b-fp32-master-tokamax-ce-bs3-seq8k-accepted", "vnum": 55, "order": 11, "seq": 8192, "mfu": 34.8, "tps": 6206, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/torchax/experiments/2026-04-26-exp55b-fp32-master-tokamax-ce-bs3-seq8k-accepted.md"}, {"lane": "torchax", "slug": "2026-04-26-exp62b-chunkedxla-ce-bs3-seq8k-accepted", "vnum": 62, "order": 12, "seq": 8192, "mfu": 35.4, "tps": 6313, "verdict": "supported", "success": true, "maxtext": false, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/torchax/experiments/2026-04-26-exp62b-chunkedxla-ce-bs3-seq8k-accepted.md"}, {"lane": "torchax", "slug": "2026-04-26-exp72a-tokamax-splash-bs3-seq8k-accepted", "vnum": 72, "order": 13, "seq": 8192, "mfu": 35.8, "tps": 6559, "verdict": "supported", "success": true, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/torchax/experiments/2026-04-26-exp72a-tokamax-splash-bs3-seq8k-accepted.md"}, {"lane": "torchax", "slug": "README", "vnum": 0, "order": 14, "seq": 8192, "mfu": 36.8, "tps": 6559, "verdict": "", "success": false, "maxtext": true, "has_metric": true, "link": "../../experiments/llama3_8B_autoresearch_optimization/torchax/experiments/README.md"}];
+const COLORS = {"jax": "#1f77b4", "torchax": "#ff7f0e"};
+const MAXTEXT = {"mfu": {"8192": 39.6}, "tps": {"8192": 7069}};
+const LANE_NAME = {"jax": "JAX (Flax NNX)", "torchax": "torchax"};
+const LANES = ["jax", "torchax"];
+const SEQS = [{"key": "1024", "label": "1k", "sym": "square"}, {"key": "2048", "label": "2k", "sym": "triangle-up"}, {"key": "4096", "label": "4k", "sym": "diamond"}, {"key": "8192", "label": "8k", "sym": "circle"}];                                   // [{key,label,sym}]
+const SEQKEYS = SEQS.map(s=>s.key);
+const SYM = {"null":"square"}; SEQS.forEach(s=>SYM[s.key]=s.sym);
+const SEQLABEL = {}; SEQS.forEach(s=>SEQLABEL[s.key]=s.label);
+const MFURANGE = [8, 50], TPSRANGE = [1500, 9000];
+const MTNOTE = {"mfu": " (causal-adj.)", "tps": ""};   // per-metric suffix on the MaxText line label, e.g. {mfu:" (causal-adj.)"}
+const MTMARK = {};   // lane -> order of the first experiment that engaged MaxText
+for(const r of DATA){ if(r.maxtext && (!(r.lane in MTMARK) || r.order<MTMARK[r.lane])) MTMARK[r.lane]=r.order; }
+
+const state = {
+  lane: Object.fromEntries(LANES.map(L=>[L,true])),
+  seq:  Object.fromEntries(SEQKEYS.map(k=>[k,true])),
+  metric: "mfu",
+  showUnsuccessful: true,
+  showCrashed: false,
+  showMtMark: true,
+  dark: false,
+};
+
+// ---- controls ----
+const C = document.getElementById("controls");
+function chk(id, on, label, swatch){
+  const l=document.createElement("label");
+  const b=document.createElement("input"); b.type="checkbox"; b.checked=on; b.dataset.id=id;
+  l.appendChild(b);
+  if(swatch){const s=document.createElement("span"); s.className="sw"; s.style.background=swatch; l.appendChild(s);}
+  l.appendChild(document.createTextNode(label));
+  return {l,b};
+}
+function group(title){const g=document.createElement("div"); g.className="group"; const t=document.createElement("b"); t.textContent=title; g.appendChild(t); return g;}
+
+const gLane=group("Variation");
+LANES.forEach(L=>{const {l,b}=chk("lane:"+L,state.lane[L],LANE_NAME[L],COLORS[L]); b.onchange=()=>{state.lane[L]=b.checked;render();}; gLane.appendChild(l);});
+C.appendChild(gLane);
+
+const gSeq=group("Context");
+SEQS.forEach(s=>{const {l,b}=chk("seq:"+s.key,state.seq[s.key],s.label); b.onchange=()=>{state.seq[s.key]=b.checked;render();}; gSeq.appendChild(l);});
+C.appendChild(gSeq);
+
+const gMetric=group("Metric");
+[["mfu","MFU"],["tps","TPS"]].forEach(([k,lab])=>{
+  const l=document.createElement("label");
+  const b=document.createElement("input"); b.type="radio"; b.name="metric"; b.value=k; b.checked=(state.metric===k);
+  b.onchange=()=>{ if(b.checked){ state.metric=k; render(); } };
+  l.appendChild(b); l.appendChild(document.createTextNode(lab));
+  gMetric.appendChild(l);
+});
+C.appendChild(gMetric);
+
+const gShow=group("Show");
+{const {l,b}=chk("unsucc",state.showUnsuccessful,"unsuccessful (refuted/invalid/inconcl.)"); b.onchange=()=>{state.showUnsuccessful=b.checked;render();}; gShow.appendChild(l);}
+{const {l,b}=chk("crashed",state.showCrashed,"crashed / no-metric"); b.onchange=()=>{state.showCrashed=b.checked;render();}; gShow.appendChild(l);}
+{const {l,b}=chk("mtmark",state.showMtMark,"MaxText onset (dotted)"); b.onchange=()=>{state.showMtMark=b.checked;render();}; gShow.appendChild(l);}
+C.appendChild(gShow);
+
+const themeBtn=document.createElement("button");
+themeBtn.id="theme"; themeBtn.textContent="🌙 Dark";
+themeBtn.onclick=()=>{ state.dark=!state.dark; document.body.classList.toggle("dark",state.dark);
+  themeBtn.textContent=state.dark?"☀ Light":"🌙 Dark"; render(); };
+C.appendChild(themeBtn);
+
+// ---- filtering + trace building ----
+const METRIC = {
+  mfu: {field:"mfu", title:"MFU (%)", range:MFURANGE, floor:MFURANGE[0]+1,
+        fmt:v=>v+"%", ulabel:"", mt:MAXTEXT.mfu, unit:"MFU"},
+  tps: {field:"tps", title:"tok/s/chip", range:TPSRANGE, floor:TPSRANGE[0]+200,
+        fmt:v=>Number(v).toLocaleString(), ulabel:" tok/s/chip", mt:MAXTEXT.tps, unit:"TPS"},
+};
+const FAIL = {refuted:1, invalid:1, inconclusive:1};   // the "unsuccessful" verdicts
+function visible(d){
+  if(!state.lane[d.lane]) return false;
+  const sk = d.seq===null ? null : String(d.seq);
+  if(sk!==null && !state.seq[sk]) return false;
+  if(sk===null && !SEQKEYS.some(k=>state.seq[k])) return false;
+  if(!d.has_metric) return state.showCrashed;
+  if(FAIL[d.verdict] && !state.showUnsuccessful) return false;
+  return true;
+}
+function hover(d, label){
+  const seq = d.seq===null?"?":(SEQLABEL[String(d.seq)]||String(d.seq));
+  const v = d.verdict||"—";
+  return `<b>${d.slug}</b><br>${LANE_NAME[d.lane]} · seq ${seq} · ${v}`
+       + `<br>${label}<br><i>click → open page</i>`;
+}
+function frontierLine(L, s, F){
+  const rows = DATA.filter(d=>d.lane===L && d.seq===s && d[F]!==null && d.verdict!=="invalid")
+                   .sort((a,b)=>a.order-b.order);
+  let m=-1, xs=[], ys=[];
+  for(const d of rows){ if(d[F]>m) m=d[F]; xs.push(d.order); ys.push(m); }
+  return {xs,ys};
+}
+function buildTraces(){
+  const M=METRIC[state.metric], F=M.field, traces=[];
+  for(const L of LANES){
+    if(!state.lane[L]) continue;
+    const rows = DATA.filter(d=>d.lane===L && visible(d));
+    const pts = rows.filter(d=>d[F]!==null);
+    if(pts.length) traces.push({
+      x:pts.map(d=>d.order), y:pts.map(d=>d[F]), customdata:pts.map(d=>d.link),
+      text:pts.map(d=>hover(d, M.unit+": "+M.fmt(d[F])+M.ulabel)), hovertemplate:"%{text}<extra></extra>",
+      mode:"markers", name:LANE_NAME[L], legendgroup:L, yaxis:"y",
+      marker:{color:COLORS[L],size:7,symbol:pts.map(d=>SYM[String(d.seq)]),line:{width:0}},
+    });
+    for(const sq of SEQS){
+      if(!state.seq[sq.key]) continue;
+      const fr=frontierLine(L, Number(sq.key), F);
+      if(fr.xs.length>1) traces.push({
+        x:fr.xs, y:fr.ys, mode:"lines", yaxis:"y", legendgroup:L, showlegend:false,
+        line:{color:COLORS[L],width:2.4,shape:"hv"}, hoverinfo:"skip",
+      });
+    }
+    if(state.showCrashed){
+      const cpts = rows.filter(d=>!d.has_metric);
+      if(cpts.length) traces.push({
+        x:cpts.map(d=>d.order), y:cpts.map(()=>M.floor), customdata:cpts.map(d=>d.link),
+        text:cpts.map(d=>hover(d,"crashed / no metric")), hovertemplate:"%{text}<extra></extra>",
+        mode:"markers", name:LANE_NAME[L]+" · crashed", legendgroup:L, yaxis:"y",
+        marker:{color:COLORS[L],size:7,symbol:"x",opacity:0.5}, showlegend:false,
+      });
+    }
+  }
+  return traces;
+}
+function theme(){ return state.dark
+  ? {paper:"#262626",plot:"#202020",font:"#e8e8e8",grid:"#333",mt:"#aaa",line:"#888"}
+  : {paper:"#fff",plot:"#fff",font:"#222",grid:"#eee",mt:"#555",line:"#555"}; }
+function shapes(){
+  const M=METRIC[state.metric], T=theme(), s=[];
+  for(const sq of SEQS){
+    if(!state.seq[sq.key]) continue;
+    const y=M.mt[sq.key]; if(y==null) continue;
+    s.push({type:"line",xref:"paper",x0:0,x1:1,yref:"y",y0:y,y1:y,line:{color:T.line,width:1,dash:"dash"}});
+  }
+  if(state.showMtMark) for(const L of LANES){
+    if(!state.lane[L] || !(L in MTMARK)) continue;
+    s.push({type:"line",xref:"x",x0:MTMARK[L],x1:MTMARK[L],yref:"paper",y0:0,y1:1,
+            line:{color:COLORS[L],width:1.5,dash:"dot"},opacity:0.6});
+  }
+  return s;
+}
+function annotations(){
+  const M=METRIC[state.metric], T=theme(), a=[];
+  for(const sq of SEQS){
+    if(!state.seq[sq.key]) continue;
+    const y=M.mt[sq.key]; if(y==null) continue;
+    a.push({xref:"paper",x:0.005,yref:"y",y:y,yanchor:"bottom",showarrow:false,
+            text:`MaxText ${sq.label} ${M.fmt(y)}${M.ulabel}${MTNOTE[state.metric]||""}`,font:{size:10,color:T.mt}});
+  }
+  return a;
+}
+function xMax(){
+  let mx=10;
+  for(const L of LANES){
+    if(!state.lane[L]) continue;
+    for(const d of DATA) if(d.lane===L && d.order>mx) mx=d.order;
+  }
+  return mx;
+}
+function render(){
+  const M=METRIC[state.metric], T=theme();
+  const traces=buildTraces();
+  const layout={
+    margin:{l:62,r:20,t:10,b:45}, hovermode:"closest", showlegend:true, font:{color:T.font},
+    legend:{orientation:"h",y:-0.13,font:{size:11,color:T.font}},
+    xaxis:{title:"experiment (in order, per lane)",range:[0,xMax()+3],gridcolor:T.grid,zerolinecolor:T.grid},
+    yaxis:{title:M.title,range:M.range,gridcolor:T.grid,zerolinecolor:T.grid},
+    shapes:shapes(), annotations:annotations(), plot_bgcolor:T.plot, paper_bgcolor:T.paper,
+  };
+  Plotly.react("chart",traces,layout,{responsive:true,displaylogo:false});
+  const shown=DATA.filter(visible).length;
+  document.getElementById("count").textContent=`${shown} of ${DATA.length} experiments shown`;
+}
+// When served from GitHub Pages (*.github.io), .md links render as raw text.
+// Rewrite to github.com/<user>/<repo>/blob/main/... which renders the markdown.
+// Off github.io (local file://, Obsidian) keep the resolved relative link.
+function ghBlob(rel){
+  const u=new URL(rel,location.href);
+  if(!u.hostname.endsWith("github.io")) return u.href;
+  const parts=u.pathname.replace(/^\//,"").split("/");
+  const repo=parts.shift();
+  const user=u.hostname.split(".")[0];
+  return `https://github.com/${user}/${repo}/blob/main/${parts.join("/")}`;
+}
+document.getElementById("chart").on = null;
+Plotly.newPlot("chart",[],{}).then(()=>{
+  render();
+  document.getElementById("chart").on("plotly_click",ev=>{
+    const p=ev.points&&ev.points[0];
+    if(p&&p.customdata) window.open(ghBlob(p.customdata),"_blank");
+  });
+});
+</script>
+</body>
+</html>

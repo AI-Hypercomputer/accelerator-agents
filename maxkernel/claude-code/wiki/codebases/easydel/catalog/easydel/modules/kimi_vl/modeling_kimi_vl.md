@@ -1,0 +1,110 @@
+---
+title: 'Module: easydel/modules/kimi_vl/modeling_kimi_vl.py'
+type: catalog
+provenance: extracted
+module: easydel/modules/kimi_vl/modeling_kimi_vl.py
+status: fresh
+symbol_base: scip-python python easydel 0.0.0 `easydel.modules.kimi_vl.modeling_kimi_vl`/
+symbols:
+  MoonVitEncoderLayer._attention: MoonVitEncoderLayer#_attention().
+  KimiVLForConditionalGeneration: KimiVLForConditionalGeneration#
+  MoonVitPretrainedModel.patch_embed: MoonVitPretrainedModel#patch_embed.
+  MoonVitPretrainedModel.encoder: MoonVitPretrainedModel#encoder.
+  KimiVLForConditionalGeneration.compute_embedding: KimiVLForConditionalGeneration#compute_embedding().
+  Learnable2DInterpPosEmb.__call__: Learnable2DInterpPosEmb#__call__().
+  MoonVitEncoder.__init__: MoonVitEncoder#__init__().
+  KimiVLForConditionalGeneration.__init__: KimiVLForConditionalGeneration#__init__().
+  Rope2DPosEmb.freqs_cis: Rope2DPosEmb#freqs_cis().
+  Rope2DPosEmb.get_freqs_cis: Rope2DPosEmb#get_freqs_cis().
+  MoonVitEncoderLayer.__call__: MoonVitEncoderLayer#__call__().
+  MoonVitEncoder.__call__: MoonVitEncoder#__call__().
+  MoonVitPretrainedModel.__call__: MoonVitPretrainedModel#__call__().
+  KimiVLMultiModalProjector.__init__: KimiVLMultiModalProjector#__init__().
+  KimiVLMultiModalProjector.__call__: KimiVLMultiModalProjector#__call__().
+  KimiVLForConditionalGeneration.__call__: KimiVLForConditionalGeneration#__call__().
+  KimiVLMultiModalProjector.pre_norm: KimiVLMultiModalProjector#pre_norm.
+  KimiVLForConditionalGeneration._merge_with_image_features: KimiVLForConditionalGeneration#_merge_with_image_features().
+  KimiVLForConditionalGeneration.vision_tower: KimiVLForConditionalGeneration#vision_tower.
+  KimiVLForConditionalGeneration._extract_image_features: KimiVLForConditionalGeneration#_extract_image_features().
+  MoonVisionPatchEmbed.__call__: MoonVisionPatchEmbed#__call__().
+  MLP2.__call__: MLP2#__call__().
+  _apply_rope: _apply_rope().
+  Rope2DPosEmb.max_width: Rope2DPosEmb#max_width.
+  MoonVitEncoderLayer.attention_performer: MoonVitEncoderLayer#attention_performer.
+  KimiVLMultiModalProjector.linear_2: KimiVLMultiModalProjector#linear_2.
+  KimiVLForConditionalGeneration._task_type: KimiVLForConditionalGeneration#_task_type.
+  KimiVLForConditionalGeneration.get_image_features: KimiVLForConditionalGeneration#get_image_features().
+  KimiVLForConditionalGeneration.multi_modal_projector: KimiVLForConditionalGeneration#multi_modal_projector.
+  Rope2DPosEmb.dim: Rope2DPosEmb#dim.
+  Rope2DPosEmb.max_height: Rope2DPosEmb#max_height.
+  MoonVisionPatchEmbed.pos_emb: MoonVisionPatchEmbed#pos_emb.
+  MoonVitEncoderLayer.norm0: MoonVitEncoderLayer#norm0.
+  MoonVitEncoderLayer.norm1: MoonVitEncoderLayer#norm1.
+  MoonVitEncoderLayer.mlp: MoonVitEncoderLayer#mlp.
+  MoonVitEncoder.rope_2d: MoonVitEncoder#rope_2d.
+  MoonVitEncoder.blocks: MoonVitEncoder#blocks.
+  MoonVitEncoder.final_layernorm: MoonVitEncoder#final_layernorm.
+  MoonVitPretrainedModel.merge_kernel_size: MoonVitPretrainedModel#merge_kernel_size.
+  Learnable2DInterpPosEmb.dim: Learnable2DInterpPosEmb#dim.
+  MoonVitEncoderLayer.__init__: MoonVitEncoderLayer#__init__().
+  MoonVitPretrainedModel.__init__: MoonVitPretrainedModel#__init__().
+  MoonVitPretrainedModel.patch_size: MoonVitPretrainedModel#patch_size.
+  KimiVLForConditionalGeneration._config_class: KimiVLForConditionalGeneration#_config_class.
+  KimiVLForConditionalGeneration.get_encoder: KimiVLForConditionalGeneration#get_encoder().
+  KimiVLForConditionalGeneration.get_vision_tower: KimiVLForConditionalGeneration#get_vision_tower().
+  KimiVLForConditionalGeneration.get_projector: KimiVLForConditionalGeneration#get_projector().
+  _apply_rope._to_complex: _apply_rope()._to_complex().
+  _apply_rope._to_real: _apply_rope()._to_real().
+  MoonVitEncoderLayer.num_heads: MoonVitEncoderLayer#num_heads.
+  MoonVitEncoderLayer.head_dim: MoonVitEncoderLayer#head_dim.
+  _create_block_diagonal_bias: _create_block_diagonal_bias().
+  Learnable2DInterpPosEmb: Learnable2DInterpPosEmb#
+  Learnable2DInterpPosEmb.height: Learnable2DInterpPosEmb#height.
+  Learnable2DInterpPosEmb.width: Learnable2DInterpPosEmb#width.
+  Learnable2DInterpPosEmb.interpolation_mode: Learnable2DInterpPosEmb#interpolation_mode.
+  Learnable2DInterpPosEmb.kernel: Learnable2DInterpPosEmb#kernel.
+  MoonVisionPatchEmbed: MoonVisionPatchEmbed#
+  MoonVisionPatchEmbed.dtype: MoonVisionPatchEmbed#dtype.
+  MoonVisionPatchEmbed.proj: MoonVisionPatchEmbed#proj.
+  Rope2DPosEmb: Rope2DPosEmb#
+  Rope2DPosEmb.theta_base: Rope2DPosEmb#theta_base.
+  MLP2: MLP2#
+  MLP2.fc0: MLP2#fc0.
+  MLP2.fc1: MLP2#fc1.
+  MLP2.activation: MLP2#activation.
+  MoonVitEncoderLayer: MoonVitEncoderLayer#
+  MoonVitEncoderLayer.wqkv: MoonVitEncoderLayer#wqkv.
+  MoonVitEncoderLayer.wo: MoonVitEncoderLayer#wo.
+  MoonVitEncoder: MoonVitEncoder#
+  MoonVitEncoder.activation: MoonVitEncoder#activation().
+  patch_merger: patch_merger().
+  MoonVitPretrainedModel: MoonVitPretrainedModel#
+  KimiVLMultiModalProjector: KimiVLMultiModalProjector#
+  KimiVLMultiModalProjector.hidden_size: KimiVLMultiModalProjector#hidden_size.
+  KimiVLMultiModalProjector.linear_1: KimiVLMultiModalProjector#linear_1.
+  Learnable2DInterpPosEmb.__init__: Learnable2DInterpPosEmb#__init__().
+  Learnable2DInterpPosEmb.dtype: Learnable2DInterpPosEmb#dtype.
+  Learnable2DInterpPosEmb.craft_sharding: Learnable2DInterpPosEmb#craft_sharding().
+  MoonVisionPatchEmbed.__init__: MoonVisionPatchEmbed#__init__().
+  MoonVisionPatchEmbed.patch_size: MoonVisionPatchEmbed#patch_size.
+  MoonVisionPatchEmbed.in_dim: MoonVisionPatchEmbed#in_dim.
+  MoonVisionPatchEmbed.out_dim: MoonVisionPatchEmbed#out_dim.
+  Rope2DPosEmb.__init__: Rope2DPosEmb#__init__().
+  MLP2.__init__: MLP2#__init__().
+  MoonVitEncoderLayer.hidden_dim: MoonVitEncoderLayer#hidden_dim.
+  MoonVitEncoderLayer.dtype: MoonVitEncoderLayer#dtype.
+  KimiVLForConditionalGeneration._model_type: KimiVLForConditionalGeneration#_model_type.
+  KimiVLForConditionalGeneration._auto_register: KimiVLForConditionalGeneration#_auto_register.
+  KimiVLForConditionalGeneration.loss_type: KimiVLForConditionalGeneration#loss_type.
+  KimiVLForConditionalGeneration.init_cache: KimiVLForConditionalGeneration#init_cache().
+  KimiVLForConditionalGeneration.prepare_inputs_for_generation: KimiVLForConditionalGeneration#prepare_inputs_for_generation().
+  KimiVLForConditionalGeneration.update_inputs_for_generation: KimiVLForConditionalGeneration#update_inputs_for_generation().
+  KimiVLForConditionalGeneration.get_decoder: KimiVLForConditionalGeneration#get_decoder().
+  KimiVLForConditionalGeneration.get_lm_head: KimiVLForConditionalGeneration#get_lm_head().
+  KimiVLForConditionalGeneration.get_embedding: KimiVLForConditionalGeneration#get_embedding().
+  KimiVLForConditionalGeneration.get_language_model: KimiVLForConditionalGeneration#get_language_model().
+  __all__: __all__.
+---
+# Module: [`easydel/modules/kimi_vl/modeling_kimi_vl.py`](../../../../../../../raw/code/EasyDeL/easydel/modules/kimi_vl/modeling_kimi_vl.py)
+
+> **Collapsed catalog** (98 symbols) — anchors above resolve for citations; detailed member listing omitted (`coverage_collapse`). See the source link above, or the curated codebase page, for depth.

@@ -1,0 +1,102 @@
+---
+title: 'Module: easydel/modules/arctic/modeling_arctic.py'
+type: catalog
+provenance: extracted
+module: easydel/modules/arctic/modeling_arctic.py
+status: fresh
+symbol_base: scip-python python easydel 0.0.0 `easydel.modules.arctic.modeling_arctic`/Arctic
+symbols:
+  ArcticModel.__call__: Model#__call__().
+  ArcticDecoderLayer.__call__: DecoderLayer#__call__().
+  ArcticForSequenceClassification.__call__: ForSequenceClassification#__call__().
+  ArcticMoeBlock.__call__: MoeBlock#__call__().
+  ArcticMoeBlock.__init__: MoeBlock#__init__().
+  ArcticForCausalLM.__call__: ForCausalLM#__call__().
+  ArcticModel: Model#
+  ArcticMLPMoE.w1: MLPMoE#w1.
+  ArcticMLPMoE.w3: MLPMoE#w3.
+  ArcticMLPMoE.w2: MLPMoE#w2.
+  ArcticModel.embed_tokens: Model#embed_tokens.
+  ArcticForCausalLM: ForCausalLM#
+  ArcticForSequenceClassification: ForSequenceClassification#
+  ArcticMLPMoE.__call__: MLPMoE#__call__().
+  ArcticMLP.__call__: MLP#__call__().
+  ArcticDecoderLayer.parallel_attn_mlp_res: DecoderLayer#parallel_attn_mlp_res.
+  ArcticMLP.ffn_dim: MLP#ffn_dim.
+  ArcticMLPMoE.ffn_dim: MLPMoE#ffn_dim.
+  ArcticMLPMoE.act_fn: MLPMoE#act_fn.
+  ArcticDecoderLayer.post_attention_layernorm: DecoderLayer#post_attention_layernorm.
+  ArcticMLP.act_fn: MLP#act_fn.
+  ArcticMoeBlock.gate: MoeBlock#gate.
+  ArcticDecoderLayer.input_layernorm: DecoderLayer#input_layernorm.
+  ArcticDecoderLayer.residual_layernorm: DecoderLayer#residual_layernorm.
+  ArcticForCausalLM._compute_aux_loss: ForCausalLM#_compute_aux_loss().
+  ArcticMoeBlock.is_moe_layer: MoeBlock#is_moe_layer.
+  ArcticAttention.__init__: Attention#__init__().
+  ArcticAttention._create_rotary: Attention#_create_rotary().
+  ArcticAttention._create_attention_performer: Attention#_create_attention_performer().
+  ArcticMoeBlock.experts: MoeBlock#experts.
+  ArcticForCausalLM.__init__: ForCausalLM#__init__().
+  ArcticForSequenceClassification.__init__: ForSequenceClassification#__init__().
+  ArcticMLPMoE.hidden_dim: MLPMoE#hidden_dim.
+  ArcticMLP.hidden_dim: MLP#hidden_dim.
+  ArcticMLP.w1: MLP#w1.
+  ArcticMLP.w3: MLP#w3.
+  ArcticMLP.w2: MLP#w2.
+  ArcticModel.norm: Model#norm.
+  ArcticDecoderLayer.block_sparse_moe: DecoderLayer#block_sparse_moe.
+  ArcticAttention._create_q_proj: Attention#_create_q_proj().
+  ArcticAttention._create_k_proj: Attention#_create_k_proj().
+  ArcticAttention._create_v_proj: Attention#_create_v_proj().
+  ArcticAttention._create_o_proj: Attention#_create_o_proj().
+  ArcticModel.__init__: Model#__init__().
+  ArcticForCausalLM._task_type: ForCausalLM#_task_type.
+  ArcticForSequenceClassification._task_type: ForSequenceClassification#_task_type.
+  ArcticModel.layers: Model#layers.
+  ArcticDecoderLayer.config: DecoderLayer#config.
+  ArcticAttention: Attention#
+  ArcticMoeBlock: MoeBlock#
+  ArcticMoeBlock.mlp: MoeBlock#mlp.
+  ArcticDecoderLayer.self_attn: DecoderLayer#self_attn.
+  ArcticDecoderLayer.residual_mlp: DecoderLayer#residual_mlp.
+  ArcticMLPMoE.config: MLPMoE#config.
+  ArcticMLP.config: MLP#config.
+  ArcticMLPMoE.__init__: MLPMoE#__init__().
+  ArcticMLP.__init__: MLP#__init__().
+  ArcticMoeBlock.hidden_dim: MoeBlock#hidden_dim.
+  ArcticMoeBlock.num_experts: MoeBlock#num_experts.
+  ArcticMoeBlock.top_k: MoeBlock#top_k.
+  ArcticDecoderLayer.__init__: DecoderLayer#__init__().
+  ArcticModel.get_embedding: Model#get_embedding().
+  ArcticForCausalLM._config_class: ForCausalLM#_config_class.
+  ArcticForSequenceClassification._config_class: ForSequenceClassification#_config_class.
+  ArcticMLP: MLP#
+  ArcticMLPMoE: MLPMoE#
+  ArcticMLPMoE.is_residual_mlp: MLPMoE#is_residual_mlp.
+  ArcticMLP.is_residual_mlp: MLP#is_residual_mlp.
+  ArcticDecoderLayer: DecoderLayer#
+  ArcticMLPMoE.reform_param: MLPMoE#reform_param.
+  ArcticMLPMoE.dtype: MLPMoE#dtype.
+  ArcticMLPMoE.param_dtype: MLPMoE#param_dtype.
+  ArcticMLPMoE.precision: MLPMoE#precision.
+  ArcticMLP.dtype: MLP#dtype.
+  ArcticMLP.param_dtype: MLP#param_dtype.
+  ArcticMLP.precision: MLP#precision.
+  ArcticMoeBlock.config: MoeBlock#config.
+  ArcticMoeBlock.layer_idx: MoeBlock#layer_idx.
+  ArcticMoeBlock.dtype: MoeBlock#dtype.
+  ArcticMoeBlock.param_dtype: MoeBlock#param_dtype.
+  ArcticMoeBlock.rngs: MoeBlock#rngs.
+  ArcticDecoderLayer.layer_idx: DecoderLayer#layer_idx.
+  ArcticDecoderLayer.dtype: DecoderLayer#dtype.
+  ArcticDecoderLayer.param_dtype: DecoderLayer#param_dtype.
+  ArcticDecoderLayer.rngs: DecoderLayer#rngs.
+  ArcticModel.get_encoder: Model#get_encoder().
+  ArcticModel.get_decoder: Model#get_decoder().
+  ArcticModel.get_lm_head: Model#get_lm_head().
+  ArcticForCausalLM._model_type: ForCausalLM#_model_type.
+  ArcticForSequenceClassification._model_type: ForSequenceClassification#_model_type.
+---
+# Module: [`easydel/modules/arctic/modeling_arctic.py`](../../../../../../../raw/code/EasyDeL/easydel/modules/arctic/modeling_arctic.py)
+
+> **Collapsed catalog** (90 symbols) — anchors above resolve for citations; detailed member listing omitted (`coverage_collapse`). See the source link above, or the curated codebase page, for depth.

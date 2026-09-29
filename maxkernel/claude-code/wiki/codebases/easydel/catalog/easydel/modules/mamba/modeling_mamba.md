@@ -1,0 +1,102 @@
+---
+title: 'Module: easydel/modules/mamba/modeling_mamba.py'
+type: catalog
+provenance: extracted
+module: easydel/modules/mamba/modeling_mamba.py
+status: fresh
+symbol_base: scip-python python easydel 0.0.0 `easydel.modules.mamba.modeling_mamba`/
+symbols:
+  MambaMixer.__call__: MambaMixer#__call__().
+  MambaConv1D.__call__: MambaConv1D#__call__().
+  MambaModel.__call__: MambaModel#__call__().
+  MambaBlock.norm: MambaBlock#norm.
+  MambaForCausalLM.prepare_inputs_for_generation: MambaForCausalLM#prepare_inputs_for_generation().
+  MambaForCausalLM: MambaForCausalLM#
+  MambaModel: MambaModel#
+  MambaBlock.__call__: MambaBlock#__call__().
+  MambaMixer.act: MambaMixer#act.
+  MambaMixer.precision: MambaMixer#precision.
+  MambaMixer.conv1d: MambaMixer#conv1d.
+  MambaModel.embeddings: MambaModel#embeddings.
+  MambaMixer.init_bias_dt: MambaMixer#init_bias_dt().
+  MambaModel.norm_f: MambaModel#norm_f.
+  MambaForCausalLM.__init__: MambaForCausalLM#__init__().
+  MambaForCausalLM.__call__: MambaForCausalLM#__call__().
+  MambaConv1D.kernel: MambaConv1D#kernel.
+  MambaConv1D.bias: MambaConv1D#bias.
+  MambaModel.layers: MambaModel#layers.
+  _T: _T.
+  MambaMixer.A_log: MambaMixer#A_log.
+  MambaMixer.D: MambaMixer#D.
+  MambaOutput: MambaOutput#
+  create_tuple_parser: create_tuple_parser().
+  MambaMixer.__init__: MambaMixer#__init__().
+  MambaModel.__init__: MambaModel#__init__().
+  MambaForCausalLM._task_type: MambaForCausalLM#_task_type.
+  MambaCausalLMOutput: MambaCausalLMOutput#
+  MambaMixer.time_step_rank: MambaMixer#time_step_rank.
+  create_tuple_parser.parse: create_tuple_parser().parse().
+  MambaMixer.activation: MambaMixer#activation.
+  MambaMixer.in_proj: MambaMixer#in_proj.
+  MambaMixer.dt_proj: MambaMixer#dt_proj.
+  MambaMixer.out_proj: MambaMixer#out_proj.
+  MambaMixer.ssm_op: MambaMixer#ssm_op.
+  MambaBlock.residual_in_fp32: MambaBlock#residual_in_fp32.
+  MambaConv1D.dtype: MambaConv1D#dtype.
+  MambaMixer.conv_kernel_size: MambaMixer#conv_kernel_size.
+  MambaOutput.cache: MambaOutput#cache.
+  MambaCausalLMOutput.cache: MambaCausalLMOutput#cache.
+  Lambda.__call__: Lambda#__call__().
+  MambaBlock.__init__: MambaBlock#__init__().
+  MambaModel.get_embedding: MambaModel#get_embedding().
+  MambaForCausalLM._config_class: MambaForCausalLM#_config_class.
+  MambaForCausalLM.update_inputs_for_generation: MambaForCausalLM#update_inputs_for_generation().
+  MambaConv1D.padding: MambaConv1D#padding.
+  MambaConv1D.use_bias: MambaConv1D#use_bias.
+  MambaMixer.config: MambaMixer#config.
+  MambaMixer.ssm_state_size: MambaMixer#ssm_state_size.
+  Lambda.fn: Lambda#fn.
+  MambaConv1D: MambaConv1D#
+  MambaConv1D.stride: MambaConv1D#stride.
+  MambaConv1D.dilation: MambaConv1D#dilation.
+  MambaConv1D.groups: MambaConv1D#groups.
+  MambaConv1D.num_spatial_dims: MambaConv1D#num_spatial_dims.
+  MambaMixer: MambaMixer#
+  MambaMixer.x_proj: MambaMixer#x_proj.
+  MambaMixer.intermediate_size: MambaMixer#intermediate_size.
+  MambaBlock: MambaBlock#
+  MambaBlock.config: MambaBlock#config.
+  MambaBlock.mixer: MambaBlock#mixer.
+  init_to_value: init_to_value().
+  MambaOutput.last_hidden_state: MambaOutput#last_hidden_state.
+  MambaOutput.hidden_states: MambaOutput#hidden_states.
+  MambaCausalLMOutput.logits: MambaCausalLMOutput#logits.
+  MambaCausalLMOutput.hidden_states: MambaCausalLMOutput#hidden_states.
+  MambaCausalLMOutput.last_hidden_state: MambaCausalLMOutput#last_hidden_state.
+  Lambda: Lambda#
+  MambaConv1D.__init__: MambaConv1D#__init__().
+  MambaConv1D.features: MambaConv1D#features.
+  MambaConv1D.kernel_size: MambaConv1D#kernel_size.
+  MambaConv1D.param_dtype: MambaConv1D#param_dtype.
+  MambaConv1D.precision: MambaConv1D#precision.
+  MambaConv1D.craft_sharding: MambaConv1D#craft_sharding().
+  MambaMixer.layer_idx: MambaMixer#layer_idx.
+  MambaMixer.dtype: MambaMixer#dtype.
+  MambaMixer.param_dtype: MambaMixer#param_dtype.
+  MambaMixer.craft_sharding: MambaMixer#craft_sharding().
+  MambaBlock.layer_idx: MambaBlock#layer_idx.
+  MambaBlock.dtype: MambaBlock#dtype.
+  MambaBlock.param_dtype: MambaBlock#param_dtype.
+  MambaBlock.precision: MambaBlock#precision.
+  MambaModel.get_encoder: MambaModel#get_encoder().
+  MambaModel.get_decoder: MambaModel#get_decoder().
+  MambaModel.get_lm_head: MambaModel#get_lm_head().
+  MambaForCausalLM._model_type: MambaForCausalLM#_model_type.
+  MambaForCausalLM.get_encoder: MambaForCausalLM#get_encoder().
+  MambaForCausalLM.get_decoder: MambaForCausalLM#get_decoder().
+  MambaForCausalLM.get_lm_head: MambaForCausalLM#get_lm_head().
+  MambaForCausalLM.get_embedding: MambaForCausalLM#get_embedding().
+---
+# Module: [`easydel/modules/mamba/modeling_mamba.py`](../../../../../../../raw/code/EasyDeL/easydel/modules/mamba/modeling_mamba.py)
+
+> **Collapsed catalog** (90 symbols) — anchors above resolve for citations; detailed member listing omitted (`coverage_collapse`). See the source link above, or the curated codebase page, for depth.

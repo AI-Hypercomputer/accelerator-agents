@@ -1,0 +1,9 @@
+torch
+google-cloud-bigquery
+langchain-google-community
+tensorflow
+transformers
+jax[tpu]
+matplotlib
+pandas
+protobuf

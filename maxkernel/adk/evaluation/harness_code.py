@@ -37,6 +37,50 @@ def benchmark(func, args, static_argnums, trace_dir=None, num_runs=20, num_warmu
   dynamic_args = tuple(
       arg for i, arg in enumerate(args) if i not in static_argnums)
 
+  # Check if func donates any dynamic arguments
+  donate_argnums = ()
+  if hasattr(func, "lower"):
+    try:
+      lowered_info = func.lower(*args)
+      donate_argnums = getattr(lowered_info, "donate_argnums", None)
+      if donate_argnums is None:
+        donate_argnums = getattr(lowered_info, "_donate_argnums", ())
+    except Exception:
+      donate_argnums = ()
+
+  # Map donated args to dynamic arg indices (if static_argnums exists)
+  if donate_argnums and static_argnums:
+    dynamic_donate_argnums = tuple(
+        sum(1 for s in range(d) if s not in static_argnums)
+        for d in donate_argnums if d not in static_argnums
+    )
+  else:
+    dynamic_donate_argnums = donate_argnums
+
+  # Helper to update dynamic_args after each step if donation is used
+  def update_donated_args(dyn_args_list, res):
+    if not dynamic_donate_argnums:
+      return dyn_args_list
+    leaves = jax.tree_util.tree_leaves(res)
+    matched_indices = set()
+    for in_idx in dynamic_donate_argnums:
+      target_arg = dyn_args_list[in_idx]
+      for out_idx, out in enumerate(leaves):
+        if out_idx in matched_indices:
+          continue
+        if hasattr(out, 'shape') and out.shape == target_arg.shape and out.dtype == target_arg.dtype:
+          dyn_args_list[in_idx] = out
+          matched_indices.add(out_idx)
+          break
+    return dyn_args_list
+
+  # If arguments will be donated, copy them first so the original `args` tuple is preserved
+  dynamic_args_list = list(dynamic_args)
+  if dynamic_donate_argnums:
+    for idx in dynamic_donate_argnums:
+      if idx < len(dynamic_args_list) and isinstance(dynamic_args_list[idx], jax.Array):
+        dynamic_args_list[idx] = jnp.copy(dynamic_args_list[idx])
+
   def benchmark_func(*f_args):
     with jax.named_scope('benchmark_func'):
       res = func(*f_args)
@@ -51,6 +95,7 @@ def benchmark(func, args, static_argnums, trace_dir=None, num_runs=20, num_warmu
     compiled_func = jax.jit(
         benchmark_func,
         static_argnums=static_argnums,
+        donate_argnums=dynamic_donate_argnums,
         in_shardings=in_shardings,
         out_shardings=out_shardings
     ).lower(*args).compile()
@@ -67,23 +112,29 @@ def benchmark(func, args, static_argnums, trace_dir=None, num_runs=20, num_warmu
       enforce_layout_compiled = jax.jit(
         enforce_layout,
         out_shardings=arg_formats
-      ).lower(*dynamic_args).compile()
+      ).lower(*dynamic_args_list).compile()
       
       # Apply alignment
-      dynamic_args = enforce_layout_compiled(*dynamic_args)
+      dynamic_args_list = list(enforce_layout_compiled(*dynamic_args_list))
   except Exception as e:
-    compiled_func = jax.jit(benchmark_func, static_argnums=static_argnums).lower(*args).compile()
+    compiled_func = jax.jit(
+        benchmark_func,
+        static_argnums=static_argnums,
+        donate_argnums=dynamic_donate_argnums
+    ).lower(*args).compile()
 
   # 3. Warm up
   for _ in range(num_warmups):
-    res = compiled_func(*dynamic_args)
+    res = compiled_func(*dynamic_args_list)
+    update_donated_args(dynamic_args_list, res)
   jax.block_until_ready(res)
 
   # 4. Benchmark
   def run_wall_time():
     start = time.perf_counter()
     for _ in range(num_runs):
-      res = compiled_func(*dynamic_args)
+      res = compiled_func(*dynamic_args_list)
+      update_donated_args(dynamic_args_list, res)
     jax.block_until_ready(res)
     end = time.perf_counter()
     return (end - start) / num_runs
@@ -91,7 +142,8 @@ def benchmark(func, args, static_argnums, trace_dir=None, num_runs=20, num_warmu
   def run_xprof():
     with jax.profiler.trace(trace_dir):
       for _ in range(num_runs):
-        res = compiled_func(*dynamic_args)
+        res = compiled_func(*dynamic_args_list)
+        update_donated_args(dynamic_args_list, res)
         jax.block_until_ready(res)
         # Inject dummy op to separate trace events
         jnp.sum(jax.random.normal(jax.random.key(0), (128, 128), jnp.float32)).block_until_ready()

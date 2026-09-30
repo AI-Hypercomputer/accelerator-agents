@@ -148,6 +148,10 @@ def update_kv_cache(
 
     return cache_kv
 
+@partial(
+    jax.jit,
+    donate_argnames=("cache_kv",),
+)
 def computation(
     ql_nope: jax.Array,
     q_pe: jax.Array,

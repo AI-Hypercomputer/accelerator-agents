@@ -25,10 +25,10 @@ jobs:
 
       - name: Verify Formatting (Fails if format is required)
         run: |
-          cd MaxKernel
+          cd maxkernel
           ruff format --check . 
           
       - name: Verify Linting (Fails if lint issues exist)
         run: |
-          cd MaxKernel
+          cd maxkernel
           ruff check .

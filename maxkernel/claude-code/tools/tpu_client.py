@@ -340,7 +340,7 @@ def start_server_for_tpu(config, mode=None):
                     if [ -f requirements.txt ]; then
                         python3 -m pip install -r requirements.txt --quiet
                     else
-                        python3 -m pip install jax[tpu]==0.11.0 -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+                        python3 -m pip install jax==0.11.0 jaxlib==0.11.0 libtpu==0.0.47 -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
                     fi
                 fi
                 source ~/maxkernel_venv/bin/activate

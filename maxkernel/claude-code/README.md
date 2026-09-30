@@ -182,7 +182,7 @@ stops if it is not.
 
 ```bash
 git clone https://github.com/AI-Hypercomputer/accelerator-agents.git
-cd ~/maxkernel
+cd ~/maxkernel/claude-code
 ```
 
 **This checkout is the project root.** There is no second directory to create:
@@ -209,7 +209,7 @@ Check it:
 # 0.11.0 [TpuDevice(id=0, ...), ...]      (on a TPU VM)
 ```
 
-This pins `jax[tpu]==0.11.0`. In remote mode the TPU VM builds its own venv at
+This pins `jax==0.11.0` with `libtpu==0.0.47`. In remote mode the TPU VM builds its own venv at
 `~/maxkernel_venv` on first contact, so this is only the machine you run Claude
 Code on. When `requirements.txt` changes after a `git pull`, re-run the
 `pip install -r` line.

@@ -1,9 +1,14 @@
 -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
 
 # --- Core: JAX / Pallas on TPU -------------------------------------------
-# jax[tpu]==0.11.0 hard-pins libtpu==0.0.44.*; that pin is the anchor every
-# other version below is chosen against. Do not let anything move it.
-jax[tpu]==0.11.0
+# jax 0.11.0 + libtpu 0.0.47 is the anchor every other version below is
+# chosen against. Do not let anything move it. The `[tpu]` extra is not used
+# because jax[tpu]==0.11.0 hard-pins libtpu==0.0.44.* (and no jax release
+# pins 0.0.47: 0.11.1 -> 0.0.46.*, 0.11.2 -> 0.0.48.*), so jaxlib and libtpu
+# are pinned explicitly instead.
+jax==0.11.0
+jaxlib==0.11.0
+libtpu==0.0.47
 
 # --- Array plumbing ------------------------------------------------------
 # Both arrive transitively with jax, but four tools import them by name
@@ -95,18 +100,18 @@ flax==0.12.8
 #
 # INSTALLED WITHOUT THE `[tpu]` EXTRA, AND IT CANNOT EXECUTE ON TPU HERE.
 # torch_xla[tpu]==2.9.0 pins libtpu==0.0.21 and torch_xla[pallas] pins
-# jax==0.7.1; either extra would tear down the jax 0.11.0 / libtpu 0.0.44.1
+# jax==0.7.1; either extra would tear down the jax 0.11.0 / libtpu 0.0.47
 # stack this repo is built on. Bare torch_xla declares no libtpu at all, so
-# it coexists -- but at runtime it then loads libtpu 0.0.44.1, whose PJRT C
-# API (0.113) is a year newer than torch_xla 2.9.0's framework side:
+# it coexists -- but at runtime it then loads libtpu 0.0.47, whose PJRT C
+# API is a year newer than torch_xla 2.9.0's framework side:
 #
 #   RuntimeError: Unexpected PJRT_ExecuteOptions size: expected 112, got 80.
 #
 # So `import torch_xla` and `make_kernel_from_pallas` work, and the CPU PJRT
 # backend (PJRT_DEVICE=CPU) runs, but TPU execution raises the above. There
 # is no fix by version choice today: torch_xla has shipped nothing since
-# 2.9.0 (Nov 2025), and libtpu 0.0.44.1 is from Jul 2026. Revisit when a
-# torch_xla built against libtpu 0.0.44+ ships; until then evaluation/ needs
+# 2.9.0 (Nov 2025), and libtpu 0.0.47 is far newer. Revisit when a
+# torch_xla built against libtpu 0.0.47+ ships; until then evaluation/ needs
 # its own venv with the matching libtpu.
 torch_xla==2.9.0
 google-cloud-bigquery

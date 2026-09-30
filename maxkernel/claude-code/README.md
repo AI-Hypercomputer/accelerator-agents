@@ -282,8 +282,8 @@ The skill also triggers on any request to write, autotune, or profile a
 Pallas/JAX TPU kernel, and you can invoke it explicitly with `/maxkernel`.
 
 Results land in `workspace/<run_id>/`: a plan, an implementation, a profile
-summary and an autotune summary per iteration, with the winner at
-`state.best_code_path`.
+summary and an autotune summary per iteration. When the loop finishes, the
+best kernel across all iterations is copied to `workspace/<run_id>/optimized.py`.
 
 ---
 

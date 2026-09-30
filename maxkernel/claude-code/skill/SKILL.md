@@ -164,6 +164,9 @@ Every run walks the same path. Knowing its shape is what lets you read
                             │
                             ▼
                     state.best_code_path
+                            │  Finish: copied up
+                            ▼
+                <run_dir>/optimized.py
 ```
 
 Three things about this shape are worth holding onto.
@@ -557,14 +560,31 @@ If an iteration fails 3 consecutive times due to crashes, timeouts, or stuck sub
     `{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/tpu_client.py --cancel_job`
 2.  Log the failure and final attempt status to `<run_dir>/maxkernel_debug_history.md`.
 3.  Re-read `<run_dir>/state.json` one final time.
-4.  Report an emergency stop summary to the user detailing the reason for failure, alongside a table of all successful history entries accumulated in `state.json` so far, pointing to `state.best_code_path`.
+4.  Publish the best kernel so far to `<run_dir>/optimized.py` exactly as in
+    Finish step 2 below.
+5.  Report an emergency stop summary to the user detailing the reason for failure, alongside a table of all successful history entries accumulated in `state.json` so far, pointing to `<run_dir>/optimized.py` (or saying none was published).
 
 ## Finish
 
 Once `state.iteration == 5`:
 
 1.  Read `<run_dir>/state.json` one last time.
-2.  **Open by saying what the baseline actually is.** Name
+2.  **Publish the winner to `<run_dir>/optimized.py`** so the result sits at
+    the top of the run directory instead of inside an `iter<n>/` folder:
+    -   If `state.best_code_path` is an `iter<n>/optimized.py` (i.e. at least
+        one iteration compiled and passed correctness), copy it:
+        ```bash
+        cp <state.best_code_path> <run_dir>/optimized.py
+        ```
+        Then set `state.final_code_path` to the ABSOLUTE PATH
+        `<run_dir>/optimized.py` and write `state.json` back. The copy is
+        self-contained — each iteration's `optimized.py` imports only
+        jax/pallas — so it runs as-is.
+    -   If `state.best_code_path` is still `<run_dir>/base.py`, no iteration
+        produced a correct kernel. Do **not** create `<run_dir>/optimized.py`
+        (a copy of the baseline under that name would read as a result); set
+        `state.final_code_path` to `null` and say so in the report.
+3.  **Open by saying what the baseline actually is.** Name
     `state.primary.language` and `state.reference_mode`. For `pytorch` or
     `cuda`, say explicitly that every number below is measured against the JAX
     reference at `<run_dir>/base.py` — not against the original on its original
@@ -597,11 +617,12 @@ Once `state.iteration == 5`:
     failure or a torch/torchax version conflict — say that too, and give the
     reason from `<run_dir>/maxkernel_debug_history.md`. It changes how much the
     denominator is worth.
-3.  Report a short table to the user with one row per `state.history` entry:
+4.  Report a short table to the user with one row per `state.history` entry:
     iteration, `compile_ok`, `test_ok`, `base_time_ms`, `optimized_time_ms`,
-    `speedup`, `base_choice`. Below the table, state `state.best_speedup` and
-    `state.best_code_path`.
-4.  **When `state.ideas_ledger_path` is set, report what the reference
+    `speedup`, `base_choice`. Below the table, state `state.best_speedup`,
+    which iteration won (`state.best_code_path`), and that the winning kernel
+    is at `<run_dir>/optimized.py`.
+5.  **When `state.ideas_ledger_path` is set, report what the reference
     actually contributed:**
     ```bash
     {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/ledger.py report <run_dir>/ideas_ledger.json
@@ -616,7 +637,7 @@ Once `state.iteration == 5`:
     verdicts is only worth anything if refuted ones would have been printed
     too. Never describe the reference as having helped without a confirmed
     entry to point at.
-5.  **Offer the measurement this loop structurally cannot make.** Everything
+6.  **Offer the measurement this loop structurally cannot make.** Everything
     above is measured against `base.py` — idiomatic JAX. The user's actual
     question is usually "will this make my PyTorch faster", and that needs the
     kernel timed against their real PyTorch on the TPU, through `torch_xla`.
@@ -625,7 +646,7 @@ Once `state.iteration == 5`:
     ```bash
     # MaxKernel emits a JAX computation(); the harness needs a torch ModelNew
     {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/evaluation/adapt_maxkernel.py \
-      --optimized <state.best_code_path> \
+      --optimized <run_dir>/optimized.py \
       --golden    <state.primary.golden_meta_path> \
       --ref       <state.primary.source_path> \
       --out       <run_dir>/model_new.py
@@ -645,8 +666,9 @@ Once `state.iteration == 5`:
     Do not run this yourself — it needs a TPU and its own dependencies. Offer
     it, with the commands, and say what it would tell them.
 
-6.  Point to the final code file (`<run_dir>/iter5/optimized.py`) and to
-    `state.best_code_path` as the result of the loop. When `reference_mode` is
+7.  Point to `<run_dir>/optimized.py` as the result of the loop — it is the
+    best kernel across all iterations, not necessarily the last one
+    (`iter5/optimized.py` is only the final attempt). When `reference_mode` is
     `"torchax"`, also point to `<run_dir>/ref.jaxpr.txt` and
     `<run_dir>/ref.hlo.txt` — they are the record of what the kernel was
     derived from, and the HLO's fusion count is what a later run would start

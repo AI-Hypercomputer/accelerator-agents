@@ -1,4 +1,5 @@
 -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+--extra-index-url https://download.pytorch.org/whl/cpu
 
 # --- Core: JAX / Pallas on TPU -------------------------------------------
 # jax 0.11.0 + libtpu 0.0.47 is the anchor every other version below is
@@ -80,12 +81,13 @@ transformers
 # module matches eager torch to 1.0e-3 (TPU default bf16 matmul precision;
 # see the tolerance note in tools/torchax_oracle.py).
 #
-# These are CUDA-tagged wheels (torch 2.9.0+cu128) pulling ~3.5 GB of unused
-# nvidia-*-cu12 deps onto a TPU VM. To drop that, install with
-#   --index-url https://download.pytorch.org/whl/cpu
-# and pin torch==2.9.0+cpu. Not done here: that index shadows every other
-# package in this file, so it is a build-wide change, not a per-line one.
-torch==2.9.0
+# CPU-only build: the default PyPI torch 2.9.0 wheel is CUDA-tagged and pulls
+# ~3.5 GB of unused nvidia-*-cu12 deps onto a TPU VM. The `+cpu` local version
+# only exists on the PyTorch CPU index (added via --extra-index-url at the top
+# of this file, so every other package still resolves from PyPI). Neither
+# torchax nor torch_xla declares a torch dependency, so nothing pulls the CUDA
+# build back in.
+torch==2.9.0+cpu
 torchax==0.0.13
 
 # torchax 0.0.13 imports flax but does not declare it -- without this,

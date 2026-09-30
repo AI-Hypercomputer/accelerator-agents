@@ -181,7 +181,7 @@ stops if it is not.
 ### 2. Clone
 
 ```bash
-git clone https://github.com/cccathygao/maxkernel.git ~/maxkernel
+git clone https://github.com/AI-Hypercomputer/accelerator-agents.git
 cd ~/maxkernel
 ```
 

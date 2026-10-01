@@ -111,9 +111,18 @@ def extract_xprof_time(
     logging.warning(f"No events matching {event_name} found in trace.")
     return 0.0
 
-  # Convert picoseconds to milliseconds and divide by num_runs
-  avg_duration_ms = (total_duration_ps / num_runs) / 1e9
+  # Each execution produces exactly one XLA Modules event, so average over the
+  # events actually captured; the profiler may drop or add runs.
+  divisor = count if target_events is xla_module_events else num_runs
+  if count != num_runs:
+    logging.warning(
+      f"Expected {num_runs} events for {event_name} but found {count}; "
+      f"averaging over {divisor}."
+    )
+
+  # Convert picoseconds to milliseconds
+  avg_duration_ms = (total_duration_ps / divisor) / 1e9
   logging.info(
-    f"Extracted xprof time: {avg_duration_ms} ms (based on {count} events, averaged over {num_runs} runs)"
+    f"Extracted xprof time: {avg_duration_ms} ms (based on {count} events, averaged over {divisor})"
   )
   return avg_duration_ms

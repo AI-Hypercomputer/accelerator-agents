@@ -1,0 +1,66 @@
+task_id: 7p_Ragged_Paged_Attention
+description: Kernel task for 7p_Ragged_Paged_Attention
+input_gen_code: |-
+  def get_inputs():
+      CONFIG = {
+          'name': 'ragged_paged_attention_llama70b',
+          'model': 'Llama-3.1-70B',
+          'operator': 'ragged_paged_attention',
+          'max_num_batched_tokens': 4096,
+          'max_num_seqs': 64,
+          'num_q_heads': 64,
+          'num_kv_heads': 8,
+          'head_dim': 128,
+          'page_size': 16,
+          'pages_per_seq': 256,
+      }
+
+      ACTIVE_Q_LENS = (1,) * 48 + (512,) * 7 + (464,)
+      ACTIVE_KV_LENS = tuple(
+          257 + ((i * 73) % 240) * 16 for i in range(48)
+      ) + (1023, 1535, 2047, 2559, 3071, 3583, 4095, 4095)
+      NUM_ACTIVE_SEQS = len(ACTIVE_Q_LENS)
+
+      dtype = jnp.bfloat16
+      key = jax.random.key(42)
+      k1, k2, k3 = jax.random.split(key, 3)
+      max_tokens = CONFIG['max_num_batched_tokens']
+      max_seqs = CONFIG['max_num_seqs']
+      H_q = CONFIG['num_q_heads']
+      H_kv = CONFIG['num_kv_heads']
+      D = CONFIG['head_dim']
+      page_size = CONFIG['page_size']
+      pages_per_seq = CONFIG['pages_per_seq']
+      num_combined_kv_heads = 2 * H_kv
+      total_num_pages = max_seqs * pages_per_seq
+      
+      q = jax.random.normal(k1, (max_tokens, H_q, D), dtype=dtype)
+      kv_pages = jax.random.normal(
+          k2, (total_num_pages, page_size, num_combined_kv_heads, D), dtype=dtype
+      )
+      q_lens = jnp.array(ACTIVE_Q_LENS, dtype=jnp.int32)
+      kv_lens = jnp.pad(
+          jnp.array(ACTIVE_KV_LENS, dtype=jnp.int32),
+          (0, max_seqs - NUM_ACTIVE_SEQS),
+      )
+      active_cu_q_lens = jnp.concatenate(
+          (jnp.zeros((1,), dtype=jnp.int32), jnp.cumsum(q_lens))
+      )
+      cu_q_lens = jnp.pad(
+          active_cu_q_lens,
+          (0, max_seqs + 1 - active_cu_q_lens.shape[0]),
+          constant_values=active_cu_q_lens[-1],
+      )
+
+      page_indices = jax.random.permutation(
+          k3, total_num_pages, independent=True
+      ).astype(jnp.int32).reshape(max_seqs, pages_per_seq)
+      
+      num_seqs = jnp.array([NUM_ACTIVE_SEQS], dtype=jnp.int32)
+
+      dynamic_args = [q, kv_pages, kv_lens, page_indices, cu_q_lens, num_seqs]
+      static_args = [D, max_tokens]
+      return dynamic_args, static_args
+
+rtol: 0.01
+atol: 0.01

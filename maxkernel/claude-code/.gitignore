@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Environment / secrets
+.env
+
+# Local TPU config, seeded by install.py from tpu_config.example.json
+tpu_config.json
+
+# Run outputs (large, per-user)
+workspace/

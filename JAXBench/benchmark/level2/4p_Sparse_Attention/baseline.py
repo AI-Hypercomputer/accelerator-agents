@@ -518,7 +518,6 @@ class BlockSizes:
 
   @classmethod
   def get_default(cls):
-    # TODO(apaszke,sharadmv): Select better parameters based on a heuristic.
     return BlockSizes(
         block_q=128,
         block_kv=128,
@@ -1059,7 +1058,6 @@ def _splash_attention_forward(
       jax.ShapeDtypeStruct((num_q_heads, q_seq_len, head_dim_v), q.dtype),
   ]
   out_specs = [
-      # TODO(sharadmv): convert m/l to be scratch
       pl.BlockSpec((bq, NUM_LANES), lambda h, i, j, *_: (0, 0)),
       pl.BlockSpec((bq, NUM_LANES), lambda h, i, j, *_: (0, 0)),
       pl.BlockSpec((bq, head_dim_v), lambda h, i, j, *_: (0, 0)),
@@ -1407,9 +1405,6 @@ def _splash_attention_bwd_dq(
 
   if bkv % NUM_LANES:
     raise ValueError(f"{bkv=} must be a multiple of {NUM_LANES}.")
-
-  # TODO(amagni/sharadmv): when adding block_compute, make sure that is a
-  # multiple of NUM_LANES.
 
   q_heads_per_kv_head = num_q_heads // num_kv_heads
 
@@ -2031,13 +2026,11 @@ def _splash_attention_bwd_dkv(
     return head_index, 0, next_i
 
   assert logsumexp.shape == di.shape == (num_q_heads, q_seq_len)
-  # TODO(apaszke): Remove the sublane expansion once Mosaic has all retilings
   logsumexp_shape = (num_q_heads, NUM_SUBLANES, q_seq_len)
   logsumexp = jnp.broadcast_to(jnp.expand_dims(logsumexp, -2), logsumexp_shape)
   logsumexp_spec = pl.BlockSpec((None, NUM_SUBLANES, bq), logsumexp_index_map)
   assert logsumexp.ndim == len(logsumexp_spec.block_shape)
 
-  # TODO(apaszke): Remove the sublane expansion once Mosaic has all retilings
   di = jnp.broadcast_to(jnp.expand_dims(di, -2), logsumexp_shape)
   di_spec = pl.BlockSpec((None, NUM_SUBLANES, bq), logsumexp_index_map)
   assert di.ndim == len(di_spec.block_shape)

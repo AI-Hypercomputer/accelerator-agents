@@ -112,7 +112,6 @@ class BlockSizes:
 
   @classmethod
   def get_default(cls, batch_size, num_heads, q_seq_len, kv_len, d_model):
-    # TODO(apaszke,sharadmv): Select better parameters based on a heuristic.
     del batch_size, num_heads, q_seq_len, kv_len, d_model  # Unused.
     return BlockSizes(
         block_q=128,
@@ -398,8 +397,6 @@ def _flash_attention_kernel_single_batch(
       )  # [block_q, block_k]
 
       # Add attention bias if needed.
-      # TODO(tanburn) Should the attention bias be added before or after
-      # multiplication by sm_scale?
       if ab_tile_ref is not None:
         ab = ab_tile_ref[
             (*batch_idx, pl.dslice(None), pl.dslice(start_k, block_k))
@@ -609,7 +606,6 @@ def _flash_attention_impl(
   _verify_block("block_k", "kv_seq_len", block_k, kv_seq_len)
   _verify_block("block_b", "batch", block_b, batch_size, should_divide=False)
 
-  # TODO(apaszke): Tile over heads as well.
   grid = (
       pl.cdiv(batch_size, block_b),
       num_heads,

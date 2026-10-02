@@ -75,6 +75,7 @@ that work inline yourself. Dispatch it with the `Agent` tool:
 Agent(
   subagent_type="<the maxkernel-* agent name given below>",
   description="<3-5 words>",
+  run_in_background=False,
   prompt="Run task for run_dir = <run_dir>, iteration = <n> (state file: <run_dir>/state.json)."
 )
 ```
@@ -84,9 +85,10 @@ Notes specific to this harness:
 1.  The subagent's system prompt is already registered under
     `{{CLAUDE_DIR}}/agents/<name>.md` — you do NOT need to read the prompt file or
     define the subagent type first. Just pass `subagent_type`.
-2.  The `Agent` call returns only when the subagent finishes, and its final
-    report comes back to you as the tool result. There is no polling, no
-    timer, and no `manage_subagents`. Do not invent one.
+2.  Never end your turn while a subagent is still running. If the `Agent`
+    call says the agent was launched in the background, keep running
+    `sleep 180` with `Bash` until its task notification (completed or failed)
+    arrives. A `failed` notification falls under the retry policy below.
 3.  **Verify on disk, not on the report.** After each Agent call returns,
     check that the phase's expected artifact exists in `<run_dir>` and is
     non-empty (`test -s <path>`). A subagent's prose summary is not evidence.

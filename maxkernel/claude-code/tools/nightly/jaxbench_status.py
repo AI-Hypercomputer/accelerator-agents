@@ -30,7 +30,7 @@ TPU_PORT = 8000
 
 def ops() -> list[str]:
   return sorted(
-      d.name for d in BENCH.iterdir() if (d / "kernel_task.yaml").is_file()
+    d.name for d in BENCH.iterdir() if (d / "kernel_task.yaml").is_file()
   )
 
 
@@ -67,13 +67,13 @@ def fmt_num(v, spec="{:.3f}") -> str:
 def tpu_queue() -> str:
   try:
     with urllib.request.urlopen(
-        f"http://127.0.0.1:{TPU_PORT}/queue", timeout=5
+      f"http://127.0.0.1:{TPU_PORT}/queue", timeout=5
     ) as r:
       q = json.loads(r.read().decode())
     return (
-        f"reachable — {q.get('running_count', '?')} running, "
-        f"{q.get('queued_count', '?')} queued, "
-        f"{q.get('total_jobs', '?')} total"
+      f"reachable — {q.get('running_count', '?')} running, "
+      f"{q.get('queued_count', '?')} queued, "
+      f"{q.get('total_jobs', '?')} total"
     )
   except Exception:  # pylint: disable=broad-exception-caught
     return "**UNREACHABLE** — run `tools/nightly/gke_tpu_forward.sh ensure`"
@@ -104,29 +104,29 @@ def row_for(op: str, now: float) -> dict:
       status = "orphaned"
 
   return {
-      "op": op,
-      "status": status,
-      "configs": n_configs(op),
-      "iter": state.get("iteration", 0) if state else "-",
-      "base_ms": state.get("base_time_ms") if state else None,
-      "best_ms": state.get("best_optimized_time") if state else None,
-      "speedup": state.get("best_speedup") if state else None,
-      "elapsed": elapsed,
-      "rc": marker.get("exit_code"),
-      "run_id": marker.get("run_id", "-"),
-      "log": marker.get("log", ""),
+    "op": op,
+    "status": status,
+    "configs": n_configs(op),
+    "iter": state.get("iteration", 0) if state else "-",
+    "base_ms": state.get("base_time_ms") if state else None,
+    "best_ms": state.get("best_optimized_time") if state else None,
+    "speedup": state.get("best_speedup") if state else None,
+    "elapsed": elapsed,
+    "rc": marker.get("exit_code"),
+    "run_id": marker.get("run_id", "-"),
+    "log": marker.get("log", ""),
   }
 
 
 ICON = {
-    "done": "done",
-    "running": "RUNNING",
-    "failed": "FAILED",
-    "timeout": "TIMEOUT",
-    "orphaned": "ORPHANED",
-    "incomplete": "INCOMPLETE",
-    "stopped": "stopped",
-    "pending": "pending",
+  "done": "done",
+  "running": "RUNNING",
+  "failed": "FAILED",
+  "timeout": "TIMEOUT",
+  "orphaned": "ORPHANED",
+  "incomplete": "INCOMPLETE",
+  "stopped": "stopped",
+  "pending": "pending",
 }
 
 # Statuses that need a human to look, even though some exited with rc=0.
@@ -143,68 +143,76 @@ def render() -> str:
   counts: dict[str, int] = {}
   for r in rows:
     counts[r["status"]] = counts.get(r["status"], 0) + 1
-  order = ["done", "running", "pending", "stopped", "incomplete",
-           "failed", "timeout", "orphaned"]
-  tally = "  ".join(
-      f"{k}: {counts[k]}" for k in order if counts.get(k)
-  )
+  order = [
+    "done",
+    "running",
+    "pending",
+    "stopped",
+    "incomplete",
+    "failed",
+    "timeout",
+    "orphaned",
+  ]
+  tally = "  ".join(f"{k}: {counts[k]}" for k in order if counts.get(k))
 
   done = [r for r in rows if r["status"] == "done" and r["speedup"]]
   wins = [r for r in done if _f(r["speedup"]) and _f(r["speedup"]) > 1.05]
 
   out = [
-      "# jaxbench_level2 sweep status",
-      "",
-      f"_Updated {dt.datetime.now().astimezone().strftime('%Y-%m-%d %H:%M:%S %Z')}_",
-      "",
-      f"**{len(rows)} ops** — {tally or 'nothing started'}",
-      "",
-      f"- TPU backend: GKE `maxkernel-v6e-cluster` (us-east5-b) via "
-      f"127.0.0.1:{TPU_PORT} — {tpu_queue()}",
-      "- Each cluster job sees **1 v6e chip** "
-      "(`TPU_VISIBLE_CHIPS=2`, `TPU_CHIPS_PER_PROCESS_BOUNDS=1,1,1`), "
-      "not the local VM's 8.",
-      "- Baselines are already-optimized Pallas kernels, so a speedup near "
-      "1.00x is a legitimate result, not a failure.",
-      "",
-      "| op | status | iter | cfgs | base ms | best ms | speedup | elapsed | run |",
-      "|---|---|---|---|---|---|---|---|---|",
+    "# jaxbench_level2 sweep status",
+    "",
+    f"_Updated {dt.datetime.now().astimezone().strftime('%Y-%m-%d %H:%M:%S %Z')}_",
+    "",
+    f"**{len(rows)} ops** — {tally or 'nothing started'}",
+    "",
+    f"- TPU backend: GKE `maxkernel-v6e-cluster` (us-east5-b) via "
+    f"127.0.0.1:{TPU_PORT} — {tpu_queue()}",
+    "- Each cluster job sees **1 v6e chip** "
+    "(`TPU_VISIBLE_CHIPS=2`, `TPU_CHIPS_PER_PROCESS_BOUNDS=1,1,1`), "
+    "not the local VM's 8.",
+    "- Baselines are already-optimized Pallas kernels, so a speedup near "
+    "1.00x is a legitimate result, not a failure.",
+    "",
+    "| op | status | iter | cfgs | base ms | best ms | speedup | elapsed | run |",
+    "|---|---|---|---|---|---|---|---|---|",
   ]
   for r in rows:
     out.append(
-        f"| {r['op']} | {ICON.get(r['status'], r['status'])} | {r['iter']} |"
-        f" {r['configs']} | {fmt_num(r['base_ms'])} | {fmt_num(r['best_ms'])} |"
-        f" {fmt_num(r['speedup'], '{:.4f}x')} | {fmt_dur(r['elapsed'])} |"
-        f" {r['run_id']} |"
+      f"| {r['op']} | {ICON.get(r['status'], r['status'])} | {r['iter']} |"
+      f" {r['configs']} | {fmt_num(r['base_ms'])} | {fmt_num(r['best_ms'])} |"
+      f" {fmt_num(r['speedup'], '{:.4f}x')} | {fmt_dur(r['elapsed'])} |"
+      f" {r['run_id']} |"
     )
 
   if done:
     best = sorted(done, key=lambda r: -(_f(r["speedup"]) or 0))
     out += [
-        "",
-        f"## Finished ({len(done)}) — {len(wins)} above 1.05x",
-        "",
+      "",
+      f"## Finished ({len(done)}) — {len(wins)} above 1.05x",
+      "",
     ]
     for r in best:
-      out.append(f"- **{r['op']}** {fmt_num(r['speedup'], '{:.4f}x')} "
-                 f"({fmt_num(r['base_ms'])} ms -> {fmt_num(r['best_ms'])} ms)")
+      out.append(
+        f"- **{r['op']}** {fmt_num(r['speedup'], '{:.4f}x')} "
+        f"({fmt_num(r['base_ms'])} ms -> {fmt_num(r['best_ms'])} ms)"
+      )
 
   failed = [r for r in rows if r["status"] in NEEDS_ATTENTION]
   if failed:
     out += ["", "## Needs attention", ""]
     for r in failed:
       out.append(
-          f"- **{r['op']}** — {r['status']} (rc={r['rc']}), log: `{r['log']}`"
+        f"- **{r['op']}** — {r['status']} (rc={r['rc']}), log: `{r['log']}`"
       )
 
   out += [
-      "",
-      "---",
-      "",
-      f"Results CSV: `{NIGHTLY / 'jaxbench_level2_results.csv'}`  ",
-      f"Logs: `{NIGHTLY / 'logs' / 'jaxbench_level2'}`  ",
-      f"Forward log: `{NIGHTLY / f'gke_forward.{TPU_PORT}.log'}`",
-      "",
+    "",
+    "---",
+    "",
+    f"Results CSV: `{NIGHTLY / 'jaxbench_level2_results.csv'}`  ",
+    f"Logs: `{NIGHTLY / 'logs' / 'jaxbench_level2'}`  ",
+    f"Forward log: `{NIGHTLY / f'gke_forward.{TPU_PORT}.log'}`",
+    "",
   ]
   return "\n".join(out)
 
@@ -219,11 +227,11 @@ def _f(v):
 def main() -> int:
   ap = argparse.ArgumentParser()
   ap.add_argument(
-      "--watch",
-      type=int,
-      default=0,
-      metavar="SECONDS",
-      help="rewrite the status file on this interval instead of once",
+    "--watch",
+    type=int,
+    default=0,
+    metavar="SECONDS",
+    help="rewrite the status file on this interval instead of once",
   )
   args = ap.parse_args()
 

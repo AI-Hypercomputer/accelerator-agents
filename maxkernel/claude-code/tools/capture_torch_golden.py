@@ -57,9 +57,9 @@ Exit codes:
 import argparse
 import json
 import os
-from pathlib import Path
 import sys
 import traceback
+from pathlib import Path
 
 # Force CPU before torch is imported. A module that would otherwise grab a GPU
 # must not: the golden values have to be reproducible on the machine running
@@ -69,10 +69,9 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 # `--device xla` runs the reference on the TPU through torch_xla instead of in
 # eager CPU. Detected before torch is imported, because torch_xla has to come
 # in alongside torch rather than after it.
-_WANT_XLA = (
-    "--device" in sys.argv
-    and sys.argv[sys.argv.index("--device") + 1:sys.argv.index("--device") + 2] == ["xla"]
-)
+_WANT_XLA = "--device" in sys.argv and sys.argv[
+  sys.argv.index("--device") + 1 : sys.argv.index("--device") + 2
+] == ["xla"]
 
 try:
   import numpy as np
@@ -92,12 +91,16 @@ if _WANT_XLA:
   try:
     import torch_xla
     import torch_xla.core.xla_model as xm
+
     _XLA = (torch_xla, xm)
   except ImportError as e:
-    print(f"DEGRADED: --device xla needs torch_xla, which is not installed "
-          f"({e}). requirements.txt pins torch==2.9.0 for it -- torch_xla's "
-          "release must match the torch minor version. Install a build "
-          "matching your libtpu, or use --device cpu.", file=sys.stderr)
+    print(
+      f"DEGRADED: --device xla needs torch_xla, which is not installed "
+      f"({e}). requirements.txt pins torch==2.9.0 for it -- torch_xla's "
+      "release must match the torch minor version. Install a build "
+      "matching your libtpu, or use --device cpu.",
+      file=sys.stderr,
+    )
     sys.exit(2)
 
 
@@ -118,9 +121,9 @@ def _sync():
 # an integer view; the manifest carries the real dtype so the reader can
 # reinterpret through ml_dtypes.
 BIT_VIEW = {
-    torch.bfloat16: ("bfloat16", torch.uint16),
-    getattr(torch, "float8_e4m3fn", None): ("float8_e4m3fn", torch.uint8),
-    getattr(torch, "float8_e5m2", None): ("float8_e5m2", torch.uint8),
+  torch.bfloat16: ("bfloat16", torch.uint16),
+  getattr(torch, "float8_e4m3fn", None): ("float8_e4m3fn", torch.uint8),
+  getattr(torch, "float8_e5m2", None): ("float8_e5m2", torch.uint8),
 }
 BIT_VIEW.pop(None, None)
 
@@ -147,6 +150,7 @@ def to_float64(t):
 # Source loading and entry-point discovery
 # ---------------------------------------------------------------------------
 
+
 def load_source(source_path):
   """Executes the user's file in its OWN namespace, never into globals().
 
@@ -168,8 +172,15 @@ def load_source(source_path):
 class EntryPoint:
   """A normalized handle on whatever shape the user's file happens to be."""
 
-  def __init__(self, kind, name, model_cls=None, fn=None,
-               init_inputs_fn=None, inputs_fn=None):
+  def __init__(
+    self,
+    kind,
+    name,
+    model_cls=None,
+    fn=None,
+    init_inputs_fn=None,
+    inputs_fn=None,
+  ):
     self.kind = kind
     self.name = name
     self.model_cls = model_cls
@@ -189,29 +200,46 @@ def discover_entry_point(ns):
   get_init = ns.get("get_init_inputs")
 
   modules = {
-      name: obj
-      for name, obj in ns.items()
-      if isinstance(obj, type) and issubclass(obj, nn.Module) and obj is not nn.Module
-      and obj.__module__ == "__maxkernel_source__"
+    name: obj
+    for name, obj in ns.items()
+    if isinstance(obj, type)
+    and issubclass(obj, nn.Module)
+    and obj is not nn.Module
+    and obj.__module__ == "__maxkernel_source__"
   }
 
   # KernelBench layout: a Model class plus the two input factories.
   if "Model" in modules and callable(get_inputs):
-    return EntryPoint("kernelbench", "Model.forward", model_cls=modules["Model"],
-                      init_inputs_fn=get_init, inputs_fn=get_inputs)
+    return EntryPoint(
+      "kernelbench",
+      "Model.forward",
+      model_cls=modules["Model"],
+      init_inputs_fn=get_init,
+      inputs_fn=get_inputs,
+    )
 
   if len(modules) == 1:
     name, cls = next(iter(modules.items()))
-    return EntryPoint("module", f"{name}.forward", model_cls=cls,
-                      init_inputs_fn=get_init, inputs_fn=get_inputs)
+    return EntryPoint(
+      "module",
+      f"{name}.forward",
+      model_cls=cls,
+      init_inputs_fn=get_init,
+      inputs_fn=get_inputs,
+    )
 
   if len(modules) > 1:
     if "Model" in modules:
-      return EntryPoint("module", "Model.forward", model_cls=modules["Model"],
-                        init_inputs_fn=get_init, inputs_fn=get_inputs)
+      return EntryPoint(
+        "module",
+        "Model.forward",
+        model_cls=modules["Model"],
+        init_inputs_fn=get_init,
+        inputs_fn=get_inputs,
+      )
     raise LookupError(
-        f"{len(modules)} nn.Module subclasses defined ({', '.join(sorted(modules))}) "
-        "and none is named `Model`. Ask the user which one is being converted."
+      f"{len(modules)} nn.Module subclasses defined ({', '.join(sorted(modules))}) "
+      "and none is named `Model`. Ask the user which one is being converted."
     )
 
   for candidate in ("computation", "forward", "main_computation", "run"):
@@ -220,8 +248,8 @@ def discover_entry_point(ns):
       return EntryPoint("function", candidate, fn=fn, inputs_fn=get_inputs)
 
   raise LookupError(
-      "No nn.Module subclass and no module-level `computation`/`forward` "
-      "function found."
+    "No nn.Module subclass and no module-level `computation`/`forward` "
+    "function found."
   )
 
 
@@ -296,6 +324,7 @@ def collect_module_scalars(model):
 # Input configs
 # ---------------------------------------------------------------------------
 
+
 def is_tensor(x):
   return isinstance(x, torch.Tensor)
 
@@ -322,9 +351,9 @@ def build_configs(entry, seed, num_configs):
   """
   if not callable(entry.inputs_fn):
     raise LookupError(
-        "The source defines no `get_inputs()`, so there are no canonical input "
-        "shapes to capture. Ask the user for representative inputs rather than "
-        "inventing dimensions (general_rules #6)."
+      "The source defines no `get_inputs()`, so there are no canonical input "
+      "shapes to capture. Ask the user for representative inputs rather than "
+      "inventing dimensions (general_rules #6)."
     )
 
   configs = []
@@ -335,8 +364,8 @@ def build_configs(entry, seed, num_configs):
       raw = [raw]
     if not isinstance(raw, (list, tuple)):
       raise TypeError(
-          f"get_inputs() returned {type(raw).__name__}; expected a list or "
-          "tuple of forward arguments."
+        f"get_inputs() returned {type(raw).__name__}; expected a list or "
+        "tuple of forward arguments."
       )
     configs.append(list(raw))
   return configs
@@ -345,6 +374,7 @@ def build_configs(entry, seed, num_configs):
 # ---------------------------------------------------------------------------
 # Execution
 # ---------------------------------------------------------------------------
+
 
 def flatten_outputs(out):
   """Flattens the forward() result to match jax.tree_util.tree_leaves ordering."""
@@ -389,8 +419,10 @@ def probe_determinism(callee, args):
   for i, (a, b) in enumerate(zip(first, second)):
     if a.shape != b.shape:
       return False, f"output {i} changed shape between two identical calls"
-    if not torch.equal(a.detach().cpu().view(torch.int8 if a.dtype in BIT_VIEW else a.dtype),
-                       b.detach().cpu().view(torch.int8 if b.dtype in BIT_VIEW else b.dtype)):
+    if not torch.equal(
+      a.detach().cpu().view(torch.int8 if a.dtype in BIT_VIEW else a.dtype),
+      b.detach().cpu().view(torch.int8 if b.dtype in BIT_VIEW else b.dtype),
+    ):
       return False, f"output {i} differs bitwise between two identical calls"
   return True, None
 
@@ -481,14 +513,16 @@ def recommend_tolerances(native, f64):
 
     worst_abs = max(worst_abs, abs_max)
     worst_rel = max(worst_rel, rel_p999)
-    per_output.append({
+    per_output.append(
+      {
         "index": i,
         "max_abs_diff": abs_max,
         "max_rel_diff": rel_max,
         "p999_rel_diff": rel_p999,
         "tensor_scale": scale,
         "fraction_below_rel_floor": excluded,
-    })
+      }
+    )
 
   # Headroom over the reference's own error: the port is allowed to be about
   # an order of magnitude looser than the source's fp32-vs-fp64 spread before
@@ -501,20 +535,19 @@ def recommend_tolerances(native, f64):
   rtol = float(min(max(raw_rtol, FLOOR), CEILING))
   clamped = raw_atol > CEILING or raw_rtol > CEILING
   return {
-      "atol": atol,
-      "rtol": rtol,
-      "clamped": clamped,
-      "basis": (
-          f"fp32-vs-fp64 divergence of the reference itself: max abs="
-          f"{worst_abs:.3e}, p99.9 rel={worst_rel:.3e} (relative error over "
-          f"elements >= {REL_FLOOR:g} of each tensor's scale; the p99.9 rather "
-          "than the max, so one cancellation element cannot drive it). "
-          "Recommendation is 10x each. jnp.allclose tests "
-          "|a-b| <= atol + rtol*|b|, so these are a pair, not two independent "
-          "thresholds"
-          + (f"; clamped to {CEILING}" if clamped else "")
-      ),
-      "per_output": per_output,
+    "atol": atol,
+    "rtol": rtol,
+    "clamped": clamped,
+    "basis": (
+      f"fp32-vs-fp64 divergence of the reference itself: max abs="
+      f"{worst_abs:.3e}, p99.9 rel={worst_rel:.3e} (relative error over "
+      f"elements >= {REL_FLOOR:g} of each tensor's scale; the p99.9 rather "
+      "than the max, so one cancellation element cannot drive it). "
+      "Recommendation is 10x each. jnp.allclose tests "
+      "|a-b| <= atol + rtol*|b|, so these are a pair, not two independent "
+      "thresholds" + (f"; clamped to {CEILING}" if clamped else "")
+    ),
+    "per_output": per_output,
   }
 
 
@@ -522,18 +555,21 @@ def recommend_tolerances(native, f64):
 # Serialization
 # ---------------------------------------------------------------------------
 
+
 def describe(key, tensor):
   array, tag, encoding = encode_tensor(tensor)
   return array, {
-      "key": key,
-      "shape": list(tensor.shape),
-      "dtype": tag,
-      "encoding": encoding,
-      "bytes": int(array.nbytes),
+    "key": key,
+    "shape": list(tensor.shape),
+    "dtype": tag,
+    "encoding": encoding,
+    "bytes": int(array.nbytes),
   }
 
 
-def capture(source_path, seed, num_configs, dtype_policy, max_bytes, fp64_probe):
+def capture(
+  source_path, seed, num_configs, dtype_policy, max_bytes, fp64_probe
+):
   ns = load_source(source_path)
   entry = discover_entry_point(ns)
   model, params = materialize(entry, seed)
@@ -542,12 +578,15 @@ def capture(source_path, seed, num_configs, dtype_policy, max_bytes, fp64_probe)
 
   if dtype_policy == "fp32":
     configs = [
-        [a.float() if is_tensor(a) and a.is_floating_point() else a for a in cfg]
-        for cfg in configs
+      [a.float() if is_tensor(a) and a.is_floating_point() else a for a in cfg]
+      for cfg in configs
     ]
     if entry.kind != "function":
       model = model.float()
-      params = {k: (v.float() if v.is_floating_point() else v) for k, v in params.items()}
+      params = {
+        k: (v.float() if v.is_floating_point() else v)
+        for k, v in params.items()
+      }
 
   arrays = {}
   manifest_configs = []
@@ -559,9 +598,9 @@ def capture(source_path, seed, num_configs, dtype_policy, max_bytes, fp64_probe)
     ok, reason = probe_determinism(model, args)
     if not ok:
       raise RuntimeError(
-          f"forward() is not deterministic: {reason}. There is no golden value "
-          "to capture. Put the module in eval mode, seed any RNG it uses, or "
-          "tell the loop to fall back to self-comparison."
+        f"forward() is not deterministic: {reason}. There is no golden value "
+        "to capture. Put the module in eval mode, seed any RNG it uses, or "
+        "tell the loop to fall back to self-comparison."
       )
 
     outputs = run_forward(model, args)
@@ -596,22 +635,28 @@ def capture(source_path, seed, num_configs, dtype_policy, max_bytes, fp64_probe)
     static_offset = len(dynamic) + len(params)
     cursor = static_offset
     for value in static:
-      static_meta.append({
+      static_meta.append(
+        {
           "argnum": cursor,
           "name": None,
           "origin": "forward_argument",
-          "value": value if isinstance(value, (int, float, bool, str, type(None))) else repr(value),
+          "value": value
+          if isinstance(value, (int, float, bool, str, type(None)))
+          else repr(value),
           "python_type": type(value).__name__,
-      })
+        }
+      )
       cursor += 1
     for name, value in module_scalars.items():
-      static_meta.append({
+      static_meta.append(
+        {
           "argnum": cursor,
           "name": name,
           "origin": "module_attribute",
           "value": value,
           "python_type": type(value).__name__,
-      })
+        }
+      )
       cursor += 1
 
     out_meta = []
@@ -627,76 +672,89 @@ def capture(source_path, seed, num_configs, dtype_policy, max_bytes, fp64_probe)
         arrays[meta["key"]] = array
         total_bytes += meta["bytes"]
 
-    manifest_configs.append({
+    manifest_configs.append(
+      {
         "index": idx,
         "dynamic": dyn_meta,
         "static": static_meta,
         "static_argnums": [m["argnum"] for m in static_meta],
         "outputs": out_meta,
         "tolerance_recommendation": tolerance,
-    })
+      }
+    )
 
     if total_bytes > max_bytes:
       raise MemoryError(
-          f"capture would need {total_bytes / 1e6:.1f} MB, over the "
-          f"{max_bytes / 1e6:.1f} MB cap. Re-run with a larger --max-bytes or "
-          "fewer --num-configs."
+        f"capture would need {total_bytes / 1e6:.1f} MB, over the "
+        f"{max_bytes / 1e6:.1f} MB cap. Re-run with a larger --max-bytes or "
+        "fewer --num-configs."
       )
 
   manifest = {
-      "source_path": str(Path(source_path).resolve()),
-      "entry_point": {
-          "kind": entry.kind,
-          "name": entry.name,
-          "parameter_order": list(params.keys()),
-          "module_scalars": module_scalars,
-      },
-      "argument_contract": (
-          "computation(*forward_tensors, *parameters_and_buffers, *static_scalars) "
-          "-- dynamic arguments first, static last, as "
-          "tools/test_harness_template.py requires"
-      ),
-      "seed": seed,
-      "dtype_policy": dtype_policy,
-      "torch_version": torch.__version__,
-      "device": "xla" if _XLA else "cpu",
-      "numpy_version": np.__version__,
-      "deterministic": True,
-      "total_bytes": total_bytes,
-      "configs": manifest_configs,
-      "degraded": None,
+    "source_path": str(Path(source_path).resolve()),
+    "entry_point": {
+      "kind": entry.kind,
+      "name": entry.name,
+      "parameter_order": list(params.keys()),
+      "module_scalars": module_scalars,
+    },
+    "argument_contract": (
+      "computation(*forward_tensors, *parameters_and_buffers, *static_scalars) "
+      "-- dynamic arguments first, static last, as "
+      "tools/test_harness_template.py requires"
+    ),
+    "seed": seed,
+    "dtype_policy": dtype_policy,
+    "torch_version": torch.__version__,
+    "device": "xla" if _XLA else "cpu",
+    "numpy_version": np.__version__,
+    "deterministic": True,
+    "total_bytes": total_bytes,
+    "configs": manifest_configs,
+    "degraded": None,
   }
   return arrays, manifest
 
 
 def main():
   parser = argparse.ArgumentParser(
-      description="Capture golden inputs/outputs from a PyTorch reference on CPU."
+    description="Capture golden inputs/outputs from a PyTorch reference on CPU."
   )
   parser.add_argument("source_path")
   parser.add_argument("--out", required=True, help="path for the .npz")
-  parser.add_argument("--meta", required=True, help="path for the .json manifest")
-  parser.add_argument("--device", default="cpu", choices=["cpu", "xla"],
-                      help="cpu (eager PyTorch -- the default, and the better "
-                           "semantic check) or xla (run the reference on the "
-                           "TPU through torch_xla). Never cuda: the loop runs "
-                           "on a TPU host.")
-  parser.add_argument("--dtype-policy", default="preserve", choices=["preserve", "fp32"])
+  parser.add_argument(
+    "--meta", required=True, help="path for the .json manifest"
+  )
+  parser.add_argument(
+    "--device",
+    default="cpu",
+    choices=["cpu", "xla"],
+    help="cpu (eager PyTorch -- the default, and the better "
+    "semantic check) or xla (run the reference on the "
+    "TPU through torch_xla). Never cuda: the loop runs "
+    "on a TPU host.",
+  )
+  parser.add_argument(
+    "--dtype-policy", default="preserve", choices=["preserve", "fp32"]
+  )
   parser.add_argument("--seed", type=int, default=0)
   parser.add_argument("--num-configs", type=int, default=1)
   parser.add_argument("--max-bytes", type=int, default=256_000_000)
-  parser.add_argument("--no-fp64-probe", action="store_true",
-                      help="skip the float64 recomputation and tolerance advice")
+  parser.add_argument(
+    "--no-fp64-probe",
+    action="store_true",
+    help="skip the float64 recomputation and tolerance advice",
+  )
   args = parser.parse_args()
 
   try:
     arrays, manifest = capture(
-        args.source_path,
-        seed=args.seed,
-        num_configs=args.num_configs,
-        dtype_policy=args.dtype_policy,
-        max_bytes=args.max_bytes,
-        fp64_probe=not args.no_fp64_probe,
+      args.source_path,
+      seed=args.seed,
+      num_configs=args.num_configs,
+      dtype_policy=args.dtype_policy,
+      max_bytes=args.max_bytes,
+      fp64_probe=not args.no_fp64_probe,
     )
   except LookupError as e:
     print(f"NO_ENTRY_POINT: {e}", file=sys.stderr)
@@ -721,8 +779,10 @@ def main():
 
   entry = manifest["entry_point"]
   cfg0 = manifest["configs"][0]
-  print(f"GOLDEN_OK entry={entry['name']} kind={entry['kind']} "
-        f"device={manifest['device']}")
+  print(
+    f"GOLDEN_OK entry={entry['name']} kind={entry['kind']} "
+    f"device={manifest['device']}"
+  )
   print(f"  params captured : {len(entry['parameter_order'])}")
   print(f"  dynamic args    : {len(cfg0['dynamic'])}")
   print(f"  static_argnums  : {cfg0['static_argnums']}")

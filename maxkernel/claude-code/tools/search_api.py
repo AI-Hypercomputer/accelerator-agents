@@ -38,9 +38,9 @@ def resolve_api(api_str: str):
       matches = difflib.get_close_matches(attr, available_attrs)
       if matches:
         raise ImportError(
-            f"Could not resolve attribute '{attr}' in"
-            f" '{getattr(obj, '__name__', obj)}'. Did you mean one of these:"
-            f" {matches}? Original error: {e}"
+          f"Could not resolve attribute '{attr}' in"
+          f" '{getattr(obj, '__name__', obj)}'. Did you mean one of these:"
+          f" {matches}? Original error: {e}"
         )
       raise ImportError(f"Could not resolve attribute '{attr}' in '{obj}': {e}")
 
@@ -63,10 +63,10 @@ def get_methods(obj):
 def get_attributes(obj):
   if inspect.isclass(obj):
     return [
-        name
-        for name, _ in inspect.getmembers(obj)
-        if not name.startswith("_")
-        and not inspect.isroutine(getattr(obj, name, None))
+      name
+      for name, _ in inspect.getmembers(obj)
+      if not name.startswith("_")
+      and not inspect.isroutine(getattr(obj, name, None))
     ]
   return []
 
@@ -82,15 +82,15 @@ def format_docstring_sections(doc):
   examples = parsed.examples
 
   param_strs = (
-      [f"  - **{p.arg_name}**: {p.description}" for p in parameters]
-      if parameters
-      else []
+    [f"  - **{p.arg_name}**: {p.description}" for p in parameters]
+    if parameters
+    else []
   )
   return_str = f"{returns.description}" if returns else ""
   example_str = (
-      "\n".join(ex.description for ex in examples if ex.description is not None)
-      if examples
-      else ""
+    "\n".join(ex.description for ex in examples if ex.description is not None)
+    if examples
+    else ""
   )
   return description, param_strs, return_str, example_str
 
@@ -143,8 +143,8 @@ def generate_definition(api_str: str) -> str:
       if trunc_point == -1:
         trunc_point = 2000
       source_code = (
-          source_code[:trunc_point]
-          + "\n... [Source code truncated due to length] ..."
+        source_code[:trunc_point]
+        + "\n... [Source code truncated due to length] ..."
       )
     add_line(f"\n**Source Code**:\n```python\n{source_code}\n```")
   except (TypeError, OSError) as e:
@@ -156,14 +156,14 @@ def generate_definition(api_str: str) -> str:
 
 def main():
   parser = argparse.ArgumentParser(
-      description="Look up a Python API's signature, docstring, and source."
+    description="Look up a Python API's signature, docstring, and source."
   )
   parser.add_argument(
-      "api_name",
-      help=(
-          "Fully-qualified dotted API name, e.g."
-          " jax.experimental.pallas.pallas_call"
-      ),
+    "api_name",
+    help=(
+      "Fully-qualified dotted API name, e.g."
+      " jax.experimental.pallas.pallas_call"
+    ),
   )
   args = parser.parse_args()
 

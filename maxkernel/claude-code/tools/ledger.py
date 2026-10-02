@@ -33,16 +33,30 @@ Exit codes:
 
 import argparse
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 VALID_CLASSES = {"ALGORITHMIC", "STRUCTURAL", "NON_PORTABLE"}
-VALID_STATUSES = {"proposed", "adopted", "confirmed", "refuted", "inconclusive", "dropped"}
+VALID_STATUSES = {
+  "proposed",
+  "adopted",
+  "confirmed",
+  "refuted",
+  "inconclusive",
+  "dropped",
+}
 VALID_VERDICTS = {"confirmed", "refuted", "inconclusive"}
 VALID_TRUST = {"aligned", "partial", "divergent", "rejected"}
 
-REQUIRED_FIELDS = ("id", "claim", "evidence", "class", "tpu_translation",
-                   "mechanism", "falsifiable_as")
+REQUIRED_FIELDS = (
+  "id",
+  "claim",
+  "evidence",
+  "class",
+  "tpu_translation",
+  "mechanism",
+  "falsifiable_as",
+)
 
 
 class LedgerError(Exception):
@@ -78,7 +92,9 @@ def validate(data):
   problems = []
   trust = data.get("reference_trust")
   if trust not in VALID_TRUST:
-    problems.append(f"reference_trust must be one of {sorted(VALID_TRUST)}, got {trust!r}")
+    problems.append(
+      f"reference_trust must be one of {sorted(VALID_TRUST)}, got {trust!r}"
+    )
 
   seen = set()
   for i, idea in enumerate(data.get("ideas", [])):
@@ -94,13 +110,18 @@ def validate(data):
       problems.append(f"{where}: class must be one of {sorted(VALID_CLASSES)}")
     status = idea.get("status", "proposed")
     if status not in VALID_STATUSES:
-      problems.append(f"{where}: status must be one of {sorted(VALID_STATUSES)}")
-
-    if idea.get("class") == "NON_PORTABLE" and status not in ("proposed", "dropped"):
       problems.append(
-          f"{where}: NON_PORTABLE ideas can never be adopted or adjudicated "
-          f"(status={status!r}). They are recorded so the planner can see the "
-          "mechanism was considered and discarded."
+        f"{where}: status must be one of {sorted(VALID_STATUSES)}"
+      )
+
+    if idea.get("class") == "NON_PORTABLE" and status not in (
+      "proposed",
+      "dropped",
+    ):
+      problems.append(
+        f"{where}: NON_PORTABLE ideas can never be adopted or adjudicated "
+        f"(status={status!r}). They are recorded so the planner can see the "
+        "mechanism was considered and discarded."
       )
     if status in VALID_VERDICTS and idea.get("adopted_in") is None:
       problems.append(f"{where}: has verdict {status!r} but was never adopted")
@@ -132,9 +153,9 @@ def cmd_init(args):
     return 0
 
   data = {
-      "reference_trust": args.trust,
-      "alignment_path": args.alignment,
-      "ideas": [],
+    "reference_trust": args.trust,
+    "alignment_path": args.alignment,
+    "ideas": [],
   }
   save(path, data)
   print(f"Initialized empty ledger at {path} (trust={args.trust})")
@@ -150,13 +171,18 @@ def cmd_list(args):
     ideas = [i for i in ideas if i.get("class") == args.klass]
   if args.adoptable:
     ideas = [
-        i for i in ideas
-        if i.get("class") != "NON_PORTABLE"
-        and i.get("status", "proposed") == "proposed"
+      i
+      for i in ideas
+      if i.get("class") != "NON_PORTABLE"
+      and i.get("status", "proposed") == "proposed"
     ]
 
   if args.json:
-    print(json.dumps({"reference_trust": data["reference_trust"], "ideas": ideas}, indent=2))
+    print(
+      json.dumps(
+        {"reference_trust": data["reference_trust"], "ideas": ideas}, indent=2
+      )
+    )
     return 0
 
   print(f"reference_trust: {data['reference_trust']}")
@@ -180,28 +206,28 @@ def cmd_adopt(args):
 
   if idea.get("class") == "NON_PORTABLE":
     raise LedgerError(
-        f"{args.id} is NON_PORTABLE and can never be adopted. It is in the "
-        "ledger so the plan can show the mechanism was considered and "
-        "discarded, not so it can be ported."
+      f"{args.id} is NON_PORTABLE and can never be adopted. It is in the "
+      "ledger so the plan can show the mechanism was considered and "
+      "discarded, not so it can be ported."
     )
   if status == "refuted":
     raise LedgerError(
-        f"{args.id} was refuted by the profile in iteration "
-        f"{idea.get('adopted_in')}; it must not be re-proposed. Evidence: "
-        f"{idea.get('verdict_evidence')}"
+      f"{args.id} was refuted by the profile in iteration "
+      f"{idea.get('adopted_in')}; it must not be re-proposed. Evidence: "
+      f"{idea.get('verdict_evidence')}"
     )
   if status not in ("proposed", "inconclusive"):
     raise LedgerError(f"{args.id} cannot move from {status!r} to 'adopted'")
   if data["reference_trust"] == "rejected":
     raise LedgerError(
-        "reference_trust is 'rejected' -- the reference implements a "
-        "different operation and no idea from it may be adopted."
+      "reference_trust is 'rejected' -- the reference implements a "
+      "different operation and no idea from it may be adopted."
     )
 
   idea["status"] = "adopted"
   idea["adopted_in"] = args.iteration
   idea.setdefault("history", []).append(
-      {"event": "adopted", "iteration": args.iteration, "note": args.note}
+    {"event": "adopted", "iteration": args.iteration, "note": args.note}
   )
   save(args.path, data)
   print(f"{args.id} -> adopted @iter{args.iteration}")
@@ -214,25 +240,27 @@ def cmd_verdict(args):
   status = idea.get("status", "proposed")
   if status != "adopted":
     raise LedgerError(
-        f"{args.id} is {status!r}; only an adopted idea can be adjudicated. "
-        "A claim that was never put into a kernel has nothing to check "
-        "against the trace."
+      f"{args.id} is {status!r}; only an adopted idea can be adjudicated. "
+      "A claim that was never put into a kernel has nothing to check "
+      "against the trace."
     )
   if args.result not in VALID_VERDICTS:
     raise LedgerError(f"result must be one of {sorted(VALID_VERDICTS)}")
   if not args.evidence:
     raise LedgerError(
-        "a verdict needs evidence from the trace -- the falsifiable claim is "
-        "the whole point of the entry"
+      "a verdict needs evidence from the trace -- the falsifiable claim is "
+      "the whole point of the entry"
     )
 
   idea["status"] = args.result
   idea["verdict_evidence"] = args.evidence
-  idea.setdefault("history", []).append({
+  idea.setdefault("history", []).append(
+    {
       "event": args.result,
       "iteration": idea.get("adopted_in"),
       "evidence": args.evidence,
-  })
+    }
+  )
   save(args.path, data)
   print(f"{args.id} -> {args.result}")
   return 0
@@ -266,17 +294,23 @@ def cmd_report(args):
       outcome = f"not adopted (depends on {idea['depends_on_difference']})"
     else:
       outcome = "not adopted"
-    rows.append({
+    rows.append(
+      {
         "id": idea["id"],
         "class": idea["class"],
         "summary": idea["claim"].strip().splitlines()[0][:60],
         "adopted_in": idea.get("adopted_in"),
         "outcome": outcome,
         "evidence": idea.get("verdict_evidence"),
-    })
+      }
+    )
 
   if args.json:
-    print(json.dumps({"reference_trust": data["reference_trust"], "rows": rows}, indent=2))
+    print(
+      json.dumps(
+        {"reference_trust": data["reference_trust"], "rows": rows}, indent=2
+      )
+    )
     return 0
 
   print(f"Reference contribution (reference_trust = {data['reference_trust']})")
@@ -298,27 +332,38 @@ def cmd_validate(args):
     for p in problems:
       print(f"INVALID: {p}", file=sys.stderr)
     return 2
-  print(f"Ledger valid: {len(data['ideas'])} ideas, trust={data['reference_trust']}")
+  print(
+    f"Ledger valid: {len(data['ideas'])} ideas, trust={data['reference_trust']}"
+  )
   return 0
 
 
 def main():
-  parser = argparse.ArgumentParser(description="Read and transition the ideas ledger.")
+  parser = argparse.ArgumentParser(
+    description="Read and transition the ideas ledger."
+  )
   sub = parser.add_subparsers(dest="command", required=True)
 
-  p = sub.add_parser("init", help="create an empty ledger, or validate one in place")
+  p = sub.add_parser(
+    "init", help="create an empty ledger, or validate one in place"
+  )
   p.add_argument("path")
   p.add_argument("--trust", default="rejected", choices=sorted(VALID_TRUST))
-  p.add_argument("--alignment", default=None, help="path to reference_alignment.md")
-  p.add_argument("--force", action="store_true", help="overwrite an existing ledger")
+  p.add_argument(
+    "--alignment", default=None, help="path to reference_alignment.md"
+  )
+  p.add_argument(
+    "--force", action="store_true", help="overwrite an existing ledger"
+  )
   p.set_defaults(func=cmd_init)
 
   p = sub.add_parser("list", help="list ideas, optionally filtered")
   p.add_argument("path")
   p.add_argument("--status", choices=sorted(VALID_STATUSES))
   p.add_argument("--class", dest="klass", choices=sorted(VALID_CLASSES))
-  p.add_argument("--adoptable", action="store_true",
-                 help="only ideas a plan may still adopt")
+  p.add_argument(
+    "--adoptable", action="store_true", help="only ideas a plan may still adopt"
+  )
   p.add_argument("--json", action="store_true")
   p.set_defaults(func=cmd_list)
 
@@ -329,7 +374,9 @@ def main():
   p.add_argument("--note", default=None)
   p.set_defaults(func=cmd_adopt)
 
-  p = sub.add_parser("verdict", help="adjudicate an adopted idea against the trace")
+  p = sub.add_parser(
+    "verdict", help="adjudicate an adopted idea against the trace"
+  )
   p.add_argument("path")
   p.add_argument("--id", required=True)
   p.add_argument("--result", required=True, choices=sorted(VALID_VERDICTS))
@@ -347,7 +394,9 @@ def main():
   p.add_argument("--json", action="store_true")
   p.set_defaults(func=cmd_report)
 
-  p = sub.add_parser("validate", help="check the whole ledger against the schema")
+  p = sub.add_parser(
+    "validate", help="check the whole ledger against the schema"
+  )
   p.add_argument("path")
   p.set_defaults(func=cmd_validate)
 

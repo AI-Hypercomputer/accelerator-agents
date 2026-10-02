@@ -9,12 +9,11 @@ import os
 import re
 import shutil
 import subprocess
-import sys
-from typing import List, Optional
+from typing import Optional
 
 # Resolve WIKI_DIR dynamically inside Google3 or standalone environment
 DEFAULT_WIKI_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "wiki"
+  os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "wiki"
 )
 WIKI_DIR = os.environ.get("WIKI_DIR", DEFAULT_WIKI_DIR)
 DEFAULT_MODE = os.environ.get("WIKI_MODE", "full")
@@ -36,7 +35,7 @@ def _sanitize_path(relative_path: str) -> Optional[str]:
 
 
 def _python_wiki_search(
-    query: str, search_dir: str, mode: str = DEFAULT_MODE, max_matches: int = 5
+  query: str, search_dir: str, mode: str = DEFAULT_MODE, max_matches: int = 5
 ) -> str:
   terms = [t.lower() for t in query.split() if len(t) > 1]
   if not terms:
@@ -72,12 +71,12 @@ def _python_wiki_search(
 
       if matched_blocks:
         formatted = (
-            "### ["
-            + rel_path
-            + "](wiki/"
-            + rel_path
-            + ")\n"
-            + "\n".join(matched_blocks)
+          "### ["
+          + rel_path
+          + "](wiki/"
+          + rel_path
+          + ")\n"
+          + "\n".join(matched_blocks)
         )
         results.append(formatted)
         if len(results) >= max_matches:
@@ -90,16 +89,16 @@ def _python_wiki_search(
 
 
 def query_wiki(
-    query: str, category: str = "all", mode: str = DEFAULT_MODE
+  query: str, category: str = "all", mode: str = DEFAULT_MODE
 ) -> dict:
   if not os.path.exists(WIKI_DIR):
     return {
-        "status": "error",
-        "message": "Wiki directory not found at: " + str(WIKI_DIR),
+      "status": "error",
+      "message": "Wiki directory not found at: " + str(WIKI_DIR),
     }
 
   search_dir = (
-      WIKI_DIR if category == "all" else os.path.join(WIKI_DIR, category)
+    WIKI_DIR if category == "all" else os.path.join(WIKI_DIR, category)
   )
   if not os.path.exists(search_dir):
     search_dir = WIKI_DIR
@@ -107,13 +106,13 @@ def query_wiki(
   # 1. Tier 1: Ripgrep with strict suppression glob filtering
   if shutil.which("rg"):
     cmd = [
-        "rg",
-        "-i",
-        "-C",
-        "2",
-        "--max-count",
-        "3",
-        "--heading",
+      "rg",
+      "-i",
+      "-C",
+      "2",
+      "--max-count",
+      "3",
+      "--heading",
     ]
     if mode == "suppressed":
       for p in SUPPRESSED_PATTERNS:
@@ -125,10 +124,10 @@ def query_wiki(
       if res.returncode == 0 and res.stdout.strip():
         output = res.stdout.replace(WIKI_DIR.rstrip("/") + "/", "")
         return {
-            "status": "success",
-            "tier": "Tier 1 (Ripgrep Exact Match)",
-            "results": output[:4000],
-            "message": "Found direct matches in wiki for " + str(query),
+          "status": "success",
+          "tier": "Tier 1 (Ripgrep Exact Match)",
+          "results": output[:4000],
+          "message": "Found direct matches in wiki for " + str(query),
         }
     except Exception as e:
       logging.debug(f"Ripgrep execution skipped: {e}")
@@ -137,10 +136,10 @@ def query_wiki(
   py_results = _python_wiki_search(query, search_dir, mode=mode)
   if py_results.strip():
     return {
-        "status": "success",
-        "tier": "Tier 2 (Lexical Token Matcher)",
-        "results": py_results[:4000],
-        "message": "Found direct matches in wiki for " + str(query),
+      "status": "success",
+      "tier": "Tier 2 (Lexical Token Matcher)",
+      "results": py_results[:4000],
+      "message": "Found direct matches in wiki for " + str(query),
     }
 
   # 3. Tier 3: Index fallback
@@ -152,66 +151,66 @@ def query_wiki(
 
       paragraphs = index_content.split("## ")
       matched = [
-          "## " + p
-          for p in paragraphs
-          if any(t in p.lower() for t in query.lower().split())
+        "## " + p
+        for p in paragraphs
+        if any(t in p.lower() for t in query.lower().split())
       ]
       if matched:
         return {
-            "status": "success",
-            "tier": "Tier 3 (Master Index Fallback)",
-            "results": "\n\n".join(matched[:3])[:4000],
-            "message": "Matched index sections for " + str(query),
+          "status": "success",
+          "tier": "Tier 3 (Master Index Fallback)",
+          "results": "\n\n".join(matched[:3])[:4000],
+          "message": "Matched index sections for " + str(query),
         }
 
       return {
-          "status": "success",
-          "tier": "Tier 3 (Root Index Fallback)",
-          "results": index_content[:2500],
-          "message": (
-              "No direct match for "
-              + str(query)
-              + ". Provided root kernel optimization index."
-          ),
+        "status": "success",
+        "tier": "Tier 3 (Root Index Fallback)",
+        "results": index_content[:2500],
+        "message": (
+          "No direct match for "
+          + str(query)
+          + ". Provided root kernel optimization index."
+        ),
       }
     except Exception as e:
       logging.debug(f"Index read error: {e}")
 
   return {
-      "status": "error",
-      "message": "No matches found for " + str(query) + " in wiki.",
+    "status": "error",
+    "message": "No matches found for " + str(query) + " in wiki.",
   }
 
 
 def read_wiki_page(
-    file_path: str, max_chars: int = 8000, mode: str = DEFAULT_MODE
+  file_path: str, max_chars: int = 8000, mode: str = DEFAULT_MODE
 ) -> dict:
   if mode == "suppressed" and _is_suppressed(file_path):
     return {
-        "status": "error",
-        "message": (
-            f"Access to distilled / tokamax page suppressed in mode: {mode}"
-        ),
+      "status": "error",
+      "message": (
+        f"Access to distilled / tokamax page suppressed in mode: {mode}"
+      ),
     }
 
   full_path = _sanitize_path(file_path)
   if not full_path or not os.path.exists(full_path):
     matches = glob.glob(
-        WIKI_DIR + "/**/" + os.path.basename(file_path), recursive=True
+      WIKI_DIR + "/**/" + os.path.basename(file_path), recursive=True
     )
     if matches:
       full_path = matches[0]
       if mode == "suppressed" and _is_suppressed(full_path):
         return {
-            "status": "error",
-            "message": (
-                f"Access to distilled / tokamax page suppressed in mode: {mode}"
-            ),
+          "status": "error",
+          "message": (
+            f"Access to distilled / tokamax page suppressed in mode: {mode}"
+          ),
         }
     else:
       return {
-          "status": "error",
-          "message": "Wiki file not found: " + str(file_path),
+        "status": "error",
+        "message": "Wiki file not found: " + str(file_path),
       }
 
   try:
@@ -219,10 +218,10 @@ def read_wiki_page(
       content = fp.read()
     rel_path = os.path.relpath(full_path, WIKI_DIR)
     return {
-        "status": "success",
-        "file_path": rel_path,
-        "content": content[:max_chars],
-        "truncated": len(content) > max_chars,
+      "status": "success",
+      "file_path": rel_path,
+      "content": content[:max_chars],
+      "truncated": len(content) > max_chars,
     }
   except Exception as e:
     return {"status": "error", "message": "Failed to read wiki file: " + str(e)}
@@ -243,7 +242,7 @@ def get_wiki_index() -> dict:
 
 
 def record_wiki_observation(
-    title: str, content: str, author: str = "MaxKernel"
+  title: str, content: str, author: str = "MaxKernel"
 ) -> dict:
   obs_dir = os.path.join(WIKI_DIR, "observations")
   os.makedirs(obs_dir, exist_ok=True)
@@ -253,17 +252,17 @@ def record_wiki_observation(
   fpath = os.path.join(obs_dir, fname)
 
   doc = (
-      "---\ntitle: "
-      + title
-      + "\nauthor: "
-      + author
-      + "\ndate: "
-      + datetime.datetime.now().strftime("%Y-%m-%d")
-      + "\n---\n\n# "
-      + title
-      + "\n\n"
-      + content
-      + "\n"
+    "---\ntitle: "
+    + title
+    + "\nauthor: "
+    + author
+    + "\ndate: "
+    + datetime.datetime.now().strftime("%Y-%m-%d")
+    + "\n---\n\n# "
+    + title
+    + "\n\n"
+    + content
+    + "\n"
   )
   try:
     with open(fpath, "w", encoding="utf-8") as fp:
@@ -271,44 +270,44 @@ def record_wiki_observation(
     return {"status": "success", "file_path": "observations/" + fname}
   except Exception as e:
     return {
-        "status": "error",
-        "message": "Failed to write observation: " + str(e),
+      "status": "error",
+      "message": "Failed to write observation: " + str(e),
     }
 
 
 def main():
   parser = argparse.ArgumentParser(
-      description="Query the MaxKernel LLMWiki knowledge base."
+    description="Query the MaxKernel LLMWiki knowledge base."
   )
   subparsers = parser.add_subparsers(
-      dest="command", help="Commands: query, read, index, record"
+    dest="command", help="Commands: query, read, index, record"
   )
 
   q_parser = subparsers.add_parser(
-      "query", help="Search the wiki for concepts or formulas"
+    "query", help="Search the wiki for concepts or formulas"
   )
   q_parser.add_argument("query", help="The search query")
   q_parser.add_argument(
-      "--category", default="all", help="Subdirectory to search in"
+    "--category", default="all", help="Subdirectory to search in"
   )
   q_parser.add_argument(
-      "--mode",
-      default=DEFAULT_MODE,
-      choices=["full", "suppressed"],
-      help="Wiki mode",
+    "--mode",
+    default=DEFAULT_MODE,
+    choices=["full", "suppressed"],
+    help="Wiki mode",
   )
 
   r_parser = subparsers.add_parser("read", help="Read a specific wiki document")
   r_parser.add_argument("file_path", help="Relative path to the markdown file")
   r_parser.add_argument(
-      "--mode",
-      default=DEFAULT_MODE,
-      choices=["full", "suppressed"],
-      help="Wiki mode",
+    "--mode",
+    default=DEFAULT_MODE,
+    choices=["full", "suppressed"],
+    help="Wiki mode",
   )
 
   subparsers.add_parser(
-      "index", help="Print the master kernel optimization index"
+    "index", help="Print the master kernel optimization index"
   )
 
   rec_parser = subparsers.add_parser("record", help="Record a new observation")

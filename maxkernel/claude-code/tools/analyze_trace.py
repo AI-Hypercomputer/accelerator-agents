@@ -12,7 +12,7 @@ def analyze_trace(path: str):
   """Computes DMA/sync-wait ratio vs compute ratio from xplane.pb trace."""
   try:
     tool_data_result, _ = raw_to_tool_data.xspace_to_tool_data(
-        [path], "trace_viewer", {}
+      [path], "trace_viewer", {}
     )
     trace_data = json.loads(tool_data_result)
   except Exception as e:
@@ -34,17 +34,17 @@ def analyze_trace(path: str):
 
   if len(jit_computation_events) < 2:
     print(
-        f"Error: Found {len(jit_computation_events)} 'jit_computation' events on TPU:0 "
-        "(requires at least 2). Trace may be a single-step or short trace.",
-        file=sys.stderr,
+      f"Error: Found {len(jit_computation_events)} 'jit_computation' events on TPU:0 "
+      "(requires at least 2). Trace may be a single-step or short trace.",
+      file=sys.stderr,
     )
     return None
 
   start_last = (
-      jit_computation_events[-2]["ts"] + jit_computation_events[-2]["dur"]
+    jit_computation_events[-2]["ts"] + jit_computation_events[-2]["dur"]
   )
   end_last = (
-      jit_computation_events[-1]["ts"] + jit_computation_events[-1]["dur"]
+    jit_computation_events[-1]["ts"] + jit_computation_events[-1]["dur"]
   )
 
   sync_wait_total = 0
@@ -58,8 +58,8 @@ def analyze_trace(path: str):
   if total_computation_time > 0:
     ratio = sync_wait_total / total_computation_time
     print(
-        f"We see that kernel spends {ratio * 100:.4f}% waiting for"
-        f" synchronization and {(1 - ratio) * 100:.4f}% computing."
+      f"We see that kernel spends {ratio * 100:.4f}% waiting for"
+      f" synchronization and {(1 - ratio) * 100:.4f}% computing."
     )
     print(f"DMA_AND_MEMORY_TRANSFERS_RATIO: {ratio:.6f}")
     print(f"COMPUTE_RATIO: {1 - ratio:.6f}")
@@ -71,14 +71,14 @@ def analyze_trace(path: str):
 
 def main():
   parser = argparse.ArgumentParser(
-      description=(
-          "Analyze a .xplane.pb trace and report the fraction of the last"
-          " computation's time spent in SyncWait vs. compute."
-      )
+    description=(
+      "Analyze a .xplane.pb trace and report the fraction of the last"
+      " computation's time spent in SyncWait vs. compute."
+    )
   )
   parser.add_argument(
-      "xplane_path",
-      help="Path to the .xplane.pb file to analyze.",
+    "xplane_path",
+    help="Path to the .xplane.pb file to analyze.",
   )
 
   argv = sys.argv[1:]

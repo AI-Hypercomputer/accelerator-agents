@@ -71,21 +71,21 @@ def find_undefined_all_caps_names(code: str) -> set[str]:
       if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
         args = node.args
         for a in (
-            list(args.posonlyargs)
-            + list(args.args)
-            + list(args.kwonlyargs)
-            + ([args.vararg] if args.vararg else [])
-            + ([args.kwarg] if args.kwarg else [])
-        ):
-          bound.add(a.arg)
-    elif isinstance(node, ast.Lambda):
-      args = node.args
-      for a in (
           list(args.posonlyargs)
           + list(args.args)
           + list(args.kwonlyargs)
           + ([args.vararg] if args.vararg else [])
           + ([args.kwarg] if args.kwarg else [])
+        ):
+          bound.add(a.arg)
+    elif isinstance(node, ast.Lambda):
+      args = node.args
+      for a in (
+        list(args.posonlyargs)
+        + list(args.args)
+        + list(args.kwonlyargs)
+        + ([args.vararg] if args.vararg else [])
+        + ([args.kwarg] if args.kwarg else [])
       ):
         bound.add(a.arg)
     elif isinstance(node, (ast.Assign,)):
@@ -120,7 +120,7 @@ def find_undefined_all_caps_names(code: str) -> set[str]:
 
 
 def apply_best_config(
-    spec_path: str, results_path: str, output_path: str
+  spec_path: str, results_path: str, output_path: str
 ) -> None:
   with open(spec_path, "r") as f:
     spec = json.load(f)
@@ -146,14 +146,14 @@ def apply_best_config(
       with open(results_path, "w") as f:
         json.dump(results, f, indent=2)
       print(
-          f"Selected best_config {best_config} at "
-          f"{results.get('best_time_ms')} ms from raw autotune results "
-          f"(reduced results written back to {results_path})."
+        f"Selected best_config {best_config} at "
+        f"{results.get('best_time_ms')} ms from raw autotune results "
+        f"(reduced results written back to {results_path})."
       )
   if not best_config:
     raise ValueError(
-        f"No 'best_config' found in {results_path}, and no 'all_results' "
-        "array to derive one from."
+      f"No 'best_config' found in {results_path}, and no 'all_results' "
+      "array to derive one from."
     )
 
   # Placeholder names as they existed in the ORIGINAL template, before
@@ -175,9 +175,9 @@ def apply_best_config(
   remaining = sorted(p for p in uncovered if "{" + p + "}" in final_code)
   if remaining:
     raise ValueError(
-        f"Placeholders {remaining} appear in code_template but have no "
-        f"matching key in best_config {sorted(best_config)} -- they were "
-        "left as literal text in the output, which will fail to compile."
+      f"Placeholders {remaining} appear in code_template but have no "
+      f"matching key in best_config {sorted(best_config)} -- they were "
+      "left as literal text in the output, which will fail to compile."
     )
 
   # Belt-and-suspenders check independent of curly-brace syntax: after
@@ -190,13 +190,13 @@ def apply_best_config(
   undefined = sorted(find_undefined_all_caps_names(final_code))
   if undefined:
     raise ValueError(
-        f"{output_path} would reference undefined name(s) {undefined} -- "
-        "these look like unresolved autotune placeholders that were "
-        "written as bare identifiers instead of the required "
-        "`{PLACEHOLDER}` curly-brace syntax (so they never matched "
-        "PLACEHOLDER_RE and silently survived substitution untouched). "
-        "Fix code_template in the autotune spec to wrap them in curly "
-        f"braces, e.g. `{{{undefined[0]}}}`, and re-run."
+      f"{output_path} would reference undefined name(s) {undefined} -- "
+      "these look like unresolved autotune placeholders that were "
+      "written as bare identifiers instead of the required "
+      "`{PLACEHOLDER}` curly-brace syntax (so they never matched "
+      "PLACEHOLDER_RE and silently survived substitution untouched). "
+      "Fix code_template in the autotune spec to wrap them in curly "
+      f"braces, e.g. `{{{undefined[0]}}}`, and re-run."
     )
 
   with open(output_path, "w") as f:
@@ -207,16 +207,16 @@ def apply_best_config(
 
 def main():
   parser = argparse.ArgumentParser(
-      description="Apply an autotuning best_config to a kernel file."
+    description="Apply an autotuning best_config to a kernel file."
   )
   parser.add_argument(
-      "spec_path", help="Path to the autotune spec JSON (code_template)."
+    "spec_path", help="Path to the autotune spec JSON (code_template)."
   )
   parser.add_argument(
-      "results_path", help="Path to the autotune results JSON (best_config)."
+    "results_path", help="Path to the autotune results JSON (best_config)."
   )
   parser.add_argument(
-      "output_path", help="Path to write the resulting kernel file to."
+    "output_path", help="Path to write the resulting kernel file to."
   )
   args = parser.parse_args()
 

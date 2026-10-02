@@ -112,19 +112,20 @@ Proceed to read it with `Read` (to learn its signature and shapes -- not to copy
         import jax
         import jax.numpy as jnp
 
+
         def get_inputs():
-            key = jax.random.PRNGKey(0)
-            cases = []
+          key = jax.random.PRNGKey(0)
+          cases = []
 
-            x1 = jax.random.normal(key, (1024, 1024), dtype=jnp.float32)
-            y1 = jax.random.normal(key, (1024, 1024), dtype=jnp.float32)
-            cases.append(([x1, y1], []))
+          x1 = jax.random.normal(key, (1024, 1024), dtype=jnp.float32)
+          y1 = jax.random.normal(key, (1024, 1024), dtype=jnp.float32)
+          cases.append(([x1, y1], []))
 
-            x2 = jnp.zeros((256, 256), dtype=jnp.float32)
-            y2 = jnp.zeros((256, 256), dtype=jnp.float32)
-            cases.append(([x2, y2], []))
+          x2 = jnp.zeros((256, 256), dtype=jnp.float32)
+          y2 = jnp.zeros((256, 256), dtype=jnp.float32)
+          cases.append(([x2, y2], []))
 
-            return cases
+          return cases
         ```
     -   Your output must contain ONLY imports and this one function -- no
         base-kernel code, no harness code, no `opt_computation` stub.

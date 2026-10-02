@@ -8,7 +8,6 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import pandas as pd
-
 import xplane_loader
 
 
@@ -46,7 +45,7 @@ def load_xplane_and_query(xplane_path: str, sql_query: str) -> str:
 
 def main():
   parser = argparse.ArgumentParser(
-      description="Query an XProf xplane.pb file using SQL."
+    description="Query an XProf xplane.pb file using SQL."
   )
   parser.add_argument("xplane_path", help="Path to the .xplane.pb file.")
   parser.add_argument("sql_query", help="SQL query to execute.")

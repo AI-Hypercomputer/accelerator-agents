@@ -69,13 +69,15 @@ import functools
 # Initialization
 # ...
 
+
 # Computation
 @jax.jit
 def computation(A: jnp.ndarray, B: jnp.ndarray) -> jnp.ndarray:
-    # Kernel definition
-    # ...
-    # Pallas kernel invocation
-    return pl.pallas_call(...)(A, B)
+  # Kernel definition
+  # ...
+  # Pallas kernel invocation
+  return pl.pallas_call(...)(A, B)
+
 
 # Profile options
 options = jax.profiler.ProfileOptions()
@@ -84,8 +86,8 @@ options.host_tracer_level = 2
 options.advanced_configuration = {"tpu_trace_mode": "TRACE_COMPUTE_AND_SYNC"}
 
 # Profile execution
-jax.profiler.start_trace('profile', profiler_options=options)
+jax.profiler.start_trace("profile", profiler_options=options)
 for i in range(3):
-    C = jax.block_until_ready(computation(A, B))
+  C = jax.block_until_ready(computation(A, B))
 jax.profiler.stop_trace()
 ```

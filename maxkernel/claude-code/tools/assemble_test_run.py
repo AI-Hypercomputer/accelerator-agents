@@ -15,23 +15,23 @@ same name, which a naive text-paste would risk.
 """
 
 import argparse
-from pathlib import Path
 import re
 import sys
+from pathlib import Path
 
 
 def assemble(
-    harness_path: str, optimized_kernel_path: str, output_path: str
+  harness_path: str, optimized_kernel_path: str, output_path: str
 ) -> None:
   harness_src = Path(harness_path).read_text()
   if "def main" not in harness_src:
     raise ValueError(
-        f"{harness_path} does not look like an assembled harness (no main())."
+      f"{harness_path} does not look like an assembled harness (no main())."
     )
   if "opt_computation = " in harness_src:
     raise ValueError(
-        f"{harness_path} already binds opt_computation -- pass the harness "
-        "output from assemble_test_harness.py, not an already-assembled run."
+      f"{harness_path} already binds opt_computation -- pass the harness "
+      "output from assemble_test_harness.py, not an already-assembled run."
     )
 
   opt_kernel_src = Path(optimized_kernel_path).read_text()
@@ -40,33 +40,32 @@ def assemble(
   # `computation` for the exec'd namespace below, so accept either; only a
   # source with neither can fail to bind. Mirrors assemble_test_harness.py.
   if not re.search(
-      r"^(?:def\s+computation\b|computation\s*=)", opt_kernel_src, re.M
+    r"^(?:def\s+computation\b|computation\s*=)", opt_kernel_src, re.M
   ):
     raise ValueError(
-        f"{optimized_kernel_path} has no module-level `computation` function --"
-        " cannot bind it as opt_computation."
+      f"{optimized_kernel_path} has no module-level `computation` function --"
+      " cannot bind it as opt_computation."
     )
 
   parts = [
-      harness_src,
-      "",
-      "# =====================================================================",
-      f"# Optimized kernel, embedded verbatim from {optimized_kernel_path}.",
-      (
-          "# Executed into its own namespace -- see this script's module"
-          " docstring."
-      ),
-      "# =====================================================================",
-      f"_OPT_KERNEL_SRC = {opt_kernel_src!r}",
-      "_opt_ns = {}",
-      "exec(compile(_OPT_KERNEL_SRC, "
-      + repr(str(optimized_kernel_path))
-      + ", 'exec'), _opt_ns)",
-      "opt_computation = _opt_ns['computation']",
-      "",
-      'if __name__ == "__main__":',
-      "    main()",
-      "",
+    harness_src,
+    "",
+    "# =====================================================================",
+    f"# Optimized kernel, embedded verbatim from {optimized_kernel_path}.",
+    (
+      "# Executed into its own namespace -- see this script's module docstring."
+    ),
+    "# =====================================================================",
+    f"_OPT_KERNEL_SRC = {opt_kernel_src!r}",
+    "_opt_ns = {}",
+    "exec(compile(_OPT_KERNEL_SRC, "
+    + repr(str(optimized_kernel_path))
+    + ", 'exec'), _opt_ns)",
+    "opt_computation = _opt_ns['computation']",
+    "",
+    'if __name__ == "__main__":',
+    "    main()",
+    "",
   ]
 
   Path(output_path).write_text("\n".join(parts))
@@ -75,16 +74,16 @@ def assemble(
 
 def main():
   parser = argparse.ArgumentParser(
-      description="Bind an optimized kernel into the shared test harness."
+    description="Bind an optimized kernel into the shared test harness."
   )
   parser.add_argument(
-      "harness_path", help="Path to the shared harness (test_file_path)."
+    "harness_path", help="Path to the shared harness (test_file_path)."
   )
   parser.add_argument(
-      "optimized_kernel_path", help="Path to the current candidate kernel."
+    "optimized_kernel_path", help="Path to the current candidate kernel."
   )
   parser.add_argument(
-      "output_path", help="Path to write the runnable script to."
+    "output_path", help="Path to write the runnable script to."
   )
   args = parser.parse_args()
 

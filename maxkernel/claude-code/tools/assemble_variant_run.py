@@ -45,9 +45,9 @@ failure is itself a hard bound worth recording.
 """
 
 import argparse
-from pathlib import Path
 import re
 import sys
+from pathlib import Path
 
 TOOLS_DIR = Path(__file__).parent
 TEMPLATE_PATH = TOOLS_DIR / "test_harness_template.py"
@@ -79,7 +79,7 @@ import jax
 import jax.numpy as jnp
 '''
 
-_MAIN = '''
+_MAIN = """
 
 def main():
   try:
@@ -134,7 +134,7 @@ def main():
 
 if __name__ == "__main__":
   main()
-'''
+"""
 
 
 def extract_benchmark(template_src: str) -> str:
@@ -142,19 +142,19 @@ def extract_benchmark(template_src: str) -> str:
   match = _BENCH_RE.search(template_src)
   if not match:
     raise ValueError(
-        f"{TEMPLATE_PATH} has no top-level `def benchmark(` -- the variant "
-        "harness cannot be assembled without reusing the run's own timing "
-        "protocol, and copying a second one here would make floors and "
-        "measured times non-comparable."
+      f"{TEMPLATE_PATH} has no top-level `def benchmark(` -- the variant "
+      "harness cannot be assembled without reusing the run's own timing "
+      "protocol, and copying a second one here would make floors and "
+      "measured times non-comparable."
     )
   return match.group(0).rstrip() + "\n"
 
 
 def assemble(
-    variant_kernel_path: str,
-    get_inputs_path: str,
-    output_path: str,
-    label: str,
+  variant_kernel_path: str,
+  get_inputs_path: str,
+  output_path: str,
+  label: str,
 ) -> None:
   variant_src = Path(variant_kernel_path).read_text()
   # `computation` may be defined (`def computation(...)`) or bound to an
@@ -162,12 +162,12 @@ def assemble(
   # `computation` for the exec'd namespace below, so accept either; only a
   # source with neither can fail to bind. Mirrors assemble_test_harness.py.
   if not re.search(
-      r"^(?:def\s+computation\b|computation\s*=)", variant_src, re.M
+    r"^(?:def\s+computation\b|computation\s*=)", variant_src, re.M
   ):
     raise ValueError(
-        f"{variant_kernel_path} has no module-level `computation` function -- "
-        "cannot bind it as variant_computation. Analysis variants keep the "
-        "same entry point name as the kernel they were cut from."
+      f"{variant_kernel_path} has no module-level `computation` function -- "
+      "cannot bind it as variant_computation. Analysis variants keep the "
+      "same entry point name as the kernel they were cut from."
     )
 
   get_inputs_src = Path(get_inputs_path).read_text()
@@ -177,33 +177,33 @@ def assemble(
   benchmark_src = extract_benchmark(TEMPLATE_PATH.read_text())
 
   parts = [
-      _PREAMBLE,
-      f"VARIANT_LABEL = {label!r}",
-      "",
-      "# =====================================================================",
-      f"# benchmark(), lifted verbatim from {TEMPLATE_PATH}.",
-      "# Same warmup count, same run count, same layout handling as the",
-      "# correctness harness -- so times measured here are subtractable from",
-      "# times measured there.",
-      "# =====================================================================",
-      benchmark_src,
-      "# =====================================================================",
-      f"# get_inputs(), from {get_inputs_path} -- the run's own cases,",
-      "# unchanged, so every variant is timed on what the kernel is scored on.",
-      "# =====================================================================",
-      get_inputs_src,
-      "",
-      "# =====================================================================",
-      f"# Analysis variant, embedded verbatim from {variant_kernel_path}.",
-      "# Executed into its own namespace -- see this script's module docstring.",
-      "# =====================================================================",
-      f"_VARIANT_SRC = {variant_src!r}",
-      "_variant_ns = {}",
-      "exec(compile(_VARIANT_SRC, "
-      + repr(str(variant_kernel_path))
-      + ", 'exec'), _variant_ns)",
-      "variant_computation = _variant_ns['computation']",
-      _MAIN,
+    _PREAMBLE,
+    f"VARIANT_LABEL = {label!r}",
+    "",
+    "# =====================================================================",
+    f"# benchmark(), lifted verbatim from {TEMPLATE_PATH}.",
+    "# Same warmup count, same run count, same layout handling as the",
+    "# correctness harness -- so times measured here are subtractable from",
+    "# times measured there.",
+    "# =====================================================================",
+    benchmark_src,
+    "# =====================================================================",
+    f"# get_inputs(), from {get_inputs_path} -- the run's own cases,",
+    "# unchanged, so every variant is timed on what the kernel is scored on.",
+    "# =====================================================================",
+    get_inputs_src,
+    "",
+    "# =====================================================================",
+    f"# Analysis variant, embedded verbatim from {variant_kernel_path}.",
+    "# Executed into its own namespace -- see this script's module docstring.",
+    "# =====================================================================",
+    f"_VARIANT_SRC = {variant_src!r}",
+    "_variant_ns = {}",
+    "exec(compile(_VARIANT_SRC, "
+    + repr(str(variant_kernel_path))
+    + ", 'exec'), _variant_ns)",
+    "variant_computation = _variant_ns['computation']",
+    _MAIN,
   ]
 
   Path(output_path).write_text("\n".join(parts))
@@ -212,28 +212,28 @@ def assemble(
 
 def main():
   parser = argparse.ArgumentParser(
-      description=(
-          "Bind an analysis variant kernel into a timing-only harness "
-          "(no correctness check, by design)."
-      )
+    description=(
+      "Bind an analysis variant kernel into a timing-only harness "
+      "(no correctness check, by design)."
+    )
   )
   parser.add_argument(
-      "variant_kernel_path",
-      help="Path to the variant kernel (must define `computation`).",
+    "variant_kernel_path",
+    help="Path to the variant kernel (must define `computation`).",
   )
   parser.add_argument(
-      "get_inputs_path", help="Path to the run's get_inputs.py."
+    "get_inputs_path", help="Path to the run's get_inputs.py."
   )
   parser.add_argument("output_path", help="Path to write the runnable script.")
   parser.add_argument(
-      "--label",
-      default=None,
-      help=(
-          "Short name for this variant, echoed as `VARIANT:` on STDOUT "
-          "(defaults to the variant file's stem). Name what was REMOVED, and "
-          "be consistent: 'no-transfer' and 'transfer-only' are opposite "
-          "conventions and mixing them guarantees a misread later."
-      ),
+    "--label",
+    default=None,
+    help=(
+      "Short name for this variant, echoed as `VARIANT:` on STDOUT "
+      "(defaults to the variant file's stem). Name what was REMOVED, and "
+      "be consistent: 'no-transfer' and 'transfer-only' are opposite "
+      "conventions and mixing them guarantees a misread later."
+    ),
   )
   args = parser.parse_args()
 
@@ -241,10 +241,10 @@ def main():
 
   try:
     assemble(
-        args.variant_kernel_path,
-        args.get_inputs_path,
-        args.output_path,
-        label,
+      args.variant_kernel_path,
+      args.get_inputs_path,
+      args.output_path,
+      label,
     )
   except Exception as e:  # pylint: disable=broad-except
     print(f"Failed to assemble variant run: {e}", file=sys.stderr)

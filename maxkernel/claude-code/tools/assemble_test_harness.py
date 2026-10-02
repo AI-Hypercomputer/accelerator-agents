@@ -28,20 +28,20 @@ This script avoids both by:
 """
 
 import argparse
-from pathlib import Path
 import re
 import sys
+from pathlib import Path
 
 TOOLS_DIR = Path(__file__).parent
 TEMPLATE_PATH = TOOLS_DIR / "test_harness_template.py"
 
 
 def assemble(
-    base_kernel_path: str,
-    get_inputs_path: str,
-    output_path: str,
-    atol: float = 1e-2,
-    rtol: float = 1e-2,
+  base_kernel_path: str,
+  get_inputs_path: str,
+  output_path: str,
+  atol: float = 1e-2,
+  rtol: float = 1e-2,
 ) -> None:
   base_kernel_src = Path(base_kernel_path).read_text()
   # `computation` may be defined (`def computation(...)`) or bound to an
@@ -49,11 +49,11 @@ def assemble(
   # `computation` for the exec'd namespace below, so accept either; only a
   # source with neither can fail to bind.
   if not re.search(
-      r"^(?:def\s+computation\b|computation\s*=)", base_kernel_src, re.M
+    r"^(?:def\s+computation\b|computation\s*=)", base_kernel_src, re.M
   ):
     raise ValueError(
-        f"{base_kernel_path} has no module-level `computation` function -- "
-        "cannot bind it as base_computation."
+      f"{base_kernel_path} has no module-level `computation` function -- "
+      "cannot bind it as base_computation."
     )
 
   get_inputs_src = Path(get_inputs_path).read_text()
@@ -62,44 +62,43 @@ def assemble(
 
   template_src = TEMPLATE_PATH.read_text()
   template_src = re.sub(
-      r"^ATOL = .*$", f"ATOL = {atol!r}", template_src, count=1, flags=re.M
+    r"^ATOL = .*$", f"ATOL = {atol!r}", template_src, count=1, flags=re.M
   )
   template_src = re.sub(
-      r"^RTOL = .*$", f"RTOL = {rtol!r}", template_src, count=1, flags=re.M
+    r"^RTOL = .*$", f"RTOL = {rtol!r}", template_src, count=1, flags=re.M
   )
 
   base_kernel_literal = repr(base_kernel_src)
 
   parts = [
-      template_src,
-      "",
-      "# =====================================================================",
-      f"# Base kernel, embedded verbatim from {base_kernel_path}.",
-      (
-          "# Executed into its own namespace (like a separate module import)"
-          " so its"
-      ),
-      "# internal helpers (e.g. `kernel`) can never collide with the optimized",
-      (
-          "# kernel's helpers of the same name -- see this script's module"
-          " docstring."
-      ),
-      "# =====================================================================",
-      f"_BASE_KERNEL_SRC = {base_kernel_literal}",
-      "_base_ns = {}",
-      "exec(compile(_BASE_KERNEL_SRC, "
-      + repr(str(base_kernel_path))
-      + ", 'exec'), _base_ns)",
-      "base_computation = _base_ns['computation']",
-      "",
-      "# =====================================================================",
-      (
-          "# get_inputs(), authored by generate_test_file_agent from"
-          f" {get_inputs_path}."
-      ),
-      "# This is the only LLM-authored part of this file.",
-      "# =====================================================================",
-      get_inputs_src,
+    template_src,
+    "",
+    "# =====================================================================",
+    f"# Base kernel, embedded verbatim from {base_kernel_path}.",
+    (
+      "# Executed into its own namespace (like a separate module import) so its"
+    ),
+    "# internal helpers (e.g. `kernel`) can never collide with the optimized",
+    (
+      "# kernel's helpers of the same name -- see this script's module"
+      " docstring."
+    ),
+    "# =====================================================================",
+    f"_BASE_KERNEL_SRC = {base_kernel_literal}",
+    "_base_ns = {}",
+    "exec(compile(_BASE_KERNEL_SRC, "
+    + repr(str(base_kernel_path))
+    + ", 'exec'), _base_ns)",
+    "base_computation = _base_ns['computation']",
+    "",
+    "# =====================================================================",
+    (
+      "# get_inputs(), authored by generate_test_file_agent from"
+      f" {get_inputs_path}."
+    ),
+    "# This is the only LLM-authored part of this file.",
+    "# =====================================================================",
+    get_inputs_src,
   ]
 
   Path(output_path).write_text("\n".join(parts))
@@ -108,7 +107,7 @@ def assemble(
 
 def main():
   parser = argparse.ArgumentParser(
-      description="Assemble the shared test harness (run once per run)."
+    description="Assemble the shared test harness (run once per run)."
   )
   parser.add_argument("base_kernel_path")
   parser.add_argument("get_inputs_path")
@@ -119,11 +118,11 @@ def main():
 
   try:
     assemble(
-        args.base_kernel_path,
-        args.get_inputs_path,
-        args.output_path,
-        atol=args.atol,
-        rtol=args.rtol,
+      args.base_kernel_path,
+      args.get_inputs_path,
+      args.output_path,
+      atol=args.atol,
+      rtol=args.rtol,
     )
   except Exception as e:  # pylint: disable=broad-except
     print(f"Failed to assemble test harness: {e}", file=sys.stderr)

@@ -206,34 +206,34 @@ Your implementation MUST include comprehensive inline documentation:
 
 ```python
 def kernel(a_ref, b_ref, c_ref):
-    '''Matrix multiplication kernel for blocks.
+  """Matrix multiplication kernel for blocks.
 
-    Args:
-        a_ref: Input A block  # Shape: (bM, bK), Memory: VMEM
-        b_ref: Input B block  # Shape: (bK, bN), Memory: VMEM
-        c_ref: Output C block  # Shape: (bM, bN), Memory: VMEM (accumulator)
-    '''
-    # Get block indices in the grid
-    i = pl.program_id(0)  # M dimension block index
-    j = pl.program_id(1)  # N dimension block index
-    k = pl.program_id(2)  # K dimension iteration index
+  Args:
+      a_ref: Input A block  # Shape: (bM, bK), Memory: VMEM
+      b_ref: Input B block  # Shape: (bK, bN), Memory: VMEM
+      c_ref: Output C block  # Shape: (bM, bN), Memory: VMEM (accumulator)
+  """
+  # Get block indices in the grid
+  i = pl.program_id(0)  # M dimension block index
+  j = pl.program_id(1)  # N dimension block index
+  k = pl.program_id(2)  # K dimension iteration index
 
-    # Initialize output block to zero on first K iteration
-    # This is necessary because we accumulate across K dimension
-    @pl.when(k == 0)
-    def _init():
-        c_ref[...] = jnp.zeros_like(c_ref)  # Shape: (bM, bN)
+  # Initialize output block to zero on first K iteration
+  # This is necessary because we accumulate across K dimension
+  @pl.when(k == 0)
+  def _init():
+    c_ref[...] = jnp.zeros_like(c_ref)  # Shape: (bM, bN)
 
-    # Load blocks from VMEM to registers
-    a_block = a_ref[...]  # Shape: (bM, bK), Load: VMEM → Registers
-    b_block = b_ref[...]  # Shape: (bK, bN), Load: VMEM → Registers
+  # Load blocks from VMEM to registers
+  a_block = a_ref[...]  # Shape: (bM, bK), Load: VMEM → Registers
+  b_block = b_ref[...]  # Shape: (bK, bN), Load: VMEM → Registers
 
-    # Compute matrix multiplication for this block
-    # This uses the TPU MXU (Matrix Multiply Unit) for efficiency
-    partial_result = a_block @ b_block  # Shape: (bM, bN), Compute in Registers
+  # Compute matrix multiplication for this block
+  # This uses the TPU MXU (Matrix Multiply Unit) for efficiency
+  partial_result = a_block @ b_block  # Shape: (bM, bN), Compute in Registers
 
-    # Accumulate result into output block
-    c_ref[...] += partial_result  # Shape: (bM, bN), Store: Registers → VMEM
+  # Accumulate result into output block
+  c_ref[...] += partial_result  # Shape: (bM, bN), Store: Registers → VMEM
 ```
 
 ### Output Requirement

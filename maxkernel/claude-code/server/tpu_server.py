@@ -18,26 +18,26 @@ import sys
 import tarfile
 import tempfile
 import time
-from typing import Any, Dict, List, Optional
 import uuid
+from typing import Any, Dict, List, Optional
 
 import fastapi
 import pydantic
 import uvicorn
 
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+  level=logging.INFO,
+  format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+  datefmt="%Y-%m-%d %H:%M:%S",
 )
 
 MAX_RUNNING_TIMEOUT_MARGIN = (
-    180  # 3 mins margin past specified timeout before force kill
+  180  # 3 mins margin past specified timeout before force kill
 )
 DEFAULT_MAX_JOB_RUNTIME = 1800  # 30 mins hard max runtime if unspecified
 MAX_QUEUE_WAIT_TIME = 7200  # 2 hours max waiting in queue before auto cancel
 MAX_FINISHED_RETENTION_TIME = (
-    3600  # keep finished jobs for 1 hr before memory pruning
+  3600  # keep finished jobs for 1 hr before memory pruning
 )
 
 
@@ -78,10 +78,8 @@ def _collect_trace_artifacts(temp_dir: str) -> Optional[str]:
     for root, _, files in os.walk(temp_dir):
       for f in files:
         if (
-            f.endswith(
-                (".xplane.pb", ".trace.json.gz", "perfetto_trace.json.gz")
-            )
-            or "plugins/profile" in root
+          f.endswith((".xplane.pb", ".trace.json.gz", "perfetto_trace.json.gz"))
+          or "plugins/profile" in root
         ):
           trace_files.append(os.path.join(root, f))
 
@@ -90,9 +88,9 @@ def _collect_trace_artifacts(temp_dir: str) -> Optional[str]:
       for entry in os.listdir("/tmp"):
         entry_path = os.path.join("/tmp", entry)
         if os.path.isdir(entry_path) and (
-            "trace" in entry.lower()
-            or "tensorboard" in entry.lower()
-            or "profile" in entry.lower()
+          "trace" in entry.lower()
+          or "tensorboard" in entry.lower()
+          or "profile" in entry.lower()
         ):
           try:
             mtime = os.path.getmtime(entry_path)
@@ -100,11 +98,13 @@ def _collect_trace_artifacts(temp_dir: str) -> Optional[str]:
               tmp_dirs_to_clean.append(entry_path)
               for root, _, files in os.walk(entry_path):
                 for f in files:
-                  if f.endswith((
+                  if f.endswith(
+                    (
                       ".xplane.pb",
                       ".trace.json.gz",
                       "perfetto_trace.json.gz",
-                  )):
+                    )
+                  ):
                     trace_files.append(os.path.join(root, f))
           except OSError:
             pass
@@ -120,7 +120,7 @@ def _collect_trace_artifacts(temp_dir: str) -> Optional[str]:
         trace_files = filtered
 
     trace_files.sort(
-        key=lambda f: os.path.getsize(f) if os.path.exists(f) else 0
+      key=lambda f: os.path.getsize(f) if os.path.exists(f) else 0
     )
 
     buf = io.BytesIO()
@@ -134,18 +134,18 @@ def _collect_trace_artifacts(temp_dir: str) -> Optional[str]:
         fsize = os.path.getsize(fpath)
         if current_bytes + fsize > max_tar_bytes and current_bytes > 0:
           logging.warning(
-              "Skipping trace file %s (%d bytes) to stay within %d MB limit.",
-              fpath,
-              fsize,
-              max_tar_bytes // (1024 * 1024),
+            "Skipping trace file %s (%d bytes) to stay within %d MB limit.",
+            fpath,
+            fsize,
+            max_tar_bytes // (1024 * 1024),
           )
           continue
         arcname = os.path.relpath(fpath, temp_dir)
         if arcname.startswith(".."):
           arcname = (
-              os.path.basename(os.path.dirname(fpath))
-              + "/"
-              + os.path.basename(fpath)
+            os.path.basename(os.path.dirname(fpath))
+            + "/"
+            + os.path.basename(fpath)
           )
         tar.add(fpath, arcname=arcname)
         current_bytes += fsize
@@ -154,10 +154,10 @@ def _collect_trace_artifacts(temp_dir: str) -> Optional[str]:
     raw_tar = buf.read()
     b64_str = base64.b64encode(raw_tar).decode("utf-8")
     logging.info(
-        "Collected %d trace artifacts (%d compressed bytes, %d base64 bytes).",
-        len(trace_files),
-        len(raw_tar),
-        len(b64_str),
+      "Collected %d trace artifacts (%d compressed bytes, %d base64 bytes).",
+      len(trace_files),
+      len(raw_tar),
+      len(b64_str),
     )
 
     for dpath in tmp_dirs_to_clean:
@@ -253,9 +253,9 @@ def _get_queue_position(target_job_id: str) -> int:
   """Calculates the 0-based position of a job in the queue."""
   target_job = jobs.get(target_job_id)
   if not target_job or target_job.status in (
-      JobStatus.COMPLETED,
-      JobStatus.FAILED,
-      JobStatus.CANCELLED,
+    JobStatus.COMPLETED,
+    JobStatus.FAILED,
+    JobStatus.CANCELLED,
   ):
     return 0
   if target_job.status == JobStatus.RUNNING:
@@ -265,7 +265,7 @@ def _get_queue_position(target_job_id: str) -> int:
   for j_id, j in jobs.items():
     if j.status in (JobStatus.QUEUED, JobStatus.RUNNING):
       if j.created_at < target_job.created_at or (
-          j.created_at == target_job.created_at and j_id < target_job_id
+        j.created_at == target_job.created_at and j_id < target_job_id
       ):
         pos += 1
   return pos
@@ -274,17 +274,17 @@ def _get_queue_position(target_job_id: str) -> int:
 def _sanitize_code(code: str) -> str:
   """Validates that code does not contain forbidden dangerous operations."""
   dangerous_patterns = [
-      r"os\.system\s*\(",
-      r"subprocess\.",
-      r"os\.popen\s*\(",
+    r"os\.system\s*\(",
+    r"subprocess\.",
+    r"os\.popen\s*\(",
   ]
   for pattern in dangerous_patterns:
     if re.search(pattern, code):
       raise fastapi.HTTPException(
-          status_code=400,
-          detail=(
-              f"Security violation: Code contains forbidden pattern '{pattern}'"
-          ),
+        status_code=400,
+        detail=(
+          f"Security violation: Code contains forbidden pattern '{pattern}'"
+        ),
       )
   return code
 
@@ -297,13 +297,13 @@ def _save_dependencies(dependencies: Optional[Dict[str, str]], temp_dir: str):
   for filename, content in dependencies.items():
     if not filename:
       raise fastapi.HTTPException(
-          status_code=400, detail="Invalid dependency filename"
+        status_code=400, detail="Invalid dependency filename"
       )
     normalized_filename = filename.replace("\\", "/")
     target_path = (base_dir / normalized_filename).resolve()
     if not target_path.is_relative_to(base_dir) or target_path == base_dir:
       raise fastapi.HTTPException(
-          status_code=400, detail="Path traversal detected"
+        status_code=400, detail="Path traversal detected"
       )
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_text(content)
@@ -313,17 +313,17 @@ def _handle_execution_result(output: str, error: Optional[str], exit_code: int):
   """Processes stdout/stderr to detect OOM and lock conflicts."""
   if error and "Out of memory" in error:
     error = (
-        "CRITICAL: Out of Memory (OOM) encountered during execution.\n" + error
+      "CRITICAL: Out of Memory (OOM) encountered during execution.\n" + error
     )
 
   busy_match = None
   if error:
     busy_match = re.search(
-        r"already in use by process with pid (\d+)", error, re.IGNORECASE
+      r"already in use by process with pid (\d+)", error, re.IGNORECASE
     )
   if not busy_match and output:
     busy_match = re.search(
-        r"already in use by process with pid (\d+)", output, re.IGNORECASE
+      r"already in use by process with pid (\d+)", output, re.IGNORECASE
     )
 
   if busy_match:
@@ -332,12 +332,12 @@ def _handle_execution_result(output: str, error: Optional[str], exit_code: int):
     ps_out = ""
     try:
       ps_out = (
-          subprocess.check_output(
-              ["ps", "-o", "user,state,cmd", "-p", str(pid)],
-              stderr=subprocess.STDOUT,
-          )
-          .decode()
-          .strip()
+        subprocess.check_output(
+          ["ps", "-o", "user,state,cmd", "-p", str(pid)],
+          stderr=subprocess.STDOUT,
+        )
+        .decode()
+        .strip()
       )
       lines = ps_out.split("\n")
       if len(lines) > 1:
@@ -349,25 +349,25 @@ def _handle_execution_result(output: str, error: Optional[str], exit_code: int):
 
     if is_active:
       error = (
-          "HUMAN INTERVENTION REQUIRED: Conflict! The TPU is currently locked"
-          f" by active external process {pid}.\nDetails:\n{ps_out}\nAGENT"
-          " INSTRUCTION: Halt execution and ask the human user to resolve this"
-          " conflict. DO NOT attempt to kill the process yourself."
+        "HUMAN INTERVENTION REQUIRED: Conflict! The TPU is currently locked"
+        f" by active external process {pid}.\nDetails:\n{ps_out}\nAGENT"
+        " INSTRUCTION: Halt execution and ask the human user to resolve this"
+        " conflict. DO NOT attempt to kill the process yourself."
       )
       exit_code = 409
     else:
       logging.warning(
-          "Detected STALE TPU lock by dead/zombie PID %d. Cleaning up"
-          " lockfiles...",
-          pid,
+        "Detected STALE TPU lock by dead/zombie PID %d. Cleaning up"
+        " lockfiles...",
+        pid,
       )
       subprocess.call(
-          "sudo rm -f /tmp/libtpu_lockfile /tmp/tpu_logs/*lock*", shell=True
+        "sudo rm -f /tmp/libtpu_lockfile /tmp/tpu_logs/*lock*", shell=True
       )
       error = (
-          "STALE LOCK RECOVERED: The TPU was locked by a crashed/zombie"
-          f" process (PID {pid}). The server has automatically cleaned the"
-          " stale lock files. Please retry this request!"
+        "STALE LOCK RECOVERED: The TPU was locked by a crashed/zombie"
+        f" process (PID {pid}). The server has automatically cleaned the"
+        " stale lock files. Please retry this request!"
       )
       exit_code = 503
 
@@ -375,7 +375,7 @@ def _handle_execution_result(output: str, error: Optional[str], exit_code: int):
 
 
 async def _execute_code_internal(
-    request: CodeRequest, test_name: str, job: Optional[JobRecord] = None
+  request: CodeRequest, test_name: str, job: Optional[JobRecord] = None
 ) -> CodeResponse:
   """Executes Python code snippet in an isolated subprocess with retries."""
   logging.info("Starting %s", test_name)
@@ -396,12 +396,12 @@ async def _execute_code_internal(
         f.write(safe_code)
 
       process = await asyncio.create_subprocess_exec(
-          sys.executable,
-          temp_file_path,
-          stdout=asyncio.subprocess.PIPE,
-          stderr=asyncio.subprocess.PIPE,
-          cwd=temp_dir,
-          preexec_fn=os.setsid,
+        sys.executable,
+        temp_file_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=temp_dir,
+        preexec_fn=os.setsid,
       )
       try:
         pgid = os.getpgid(process.pid)
@@ -414,21 +414,21 @@ async def _execute_code_internal(
 
       try:
         stdout, stderr = await asyncio.wait_for(
-            process.communicate(), timeout=request.timeout
+          process.communicate(), timeout=request.timeout
         )
         output = stdout.decode("utf-8") if stdout else ""
         error = stderr.decode("utf-8") if stderr else None
         exit_code = process.returncode
 
         output, error, exit_code = _handle_execution_result(
-            output, error, exit_code
+          output, error, exit_code
         )
 
         if exit_code == 409 and attempt < max_retries - 1:
           logging.info(
-              "TPU busy (attempt %d/%d). Waiting 5s for TPU to free up...",
-              attempt + 1,
-              max_retries,
+            "TPU busy (attempt %d/%d). Waiting 5s for TPU to free up...",
+            attempt + 1,
+            max_retries,
           )
           await asyncio.sleep(5)
           continue
@@ -438,24 +438,24 @@ async def _execute_code_internal(
 
         trace_b64 = _collect_trace_artifacts(temp_dir)
         return CodeResponse(
-            output=output,
-            error=error,
-            exit_code=exit_code,
-            trace_tar_b64=trace_b64,
+          output=output,
+          error=error,
+          exit_code=exit_code,
+          trace_tar_b64=trace_b64,
         )
 
       except asyncio.TimeoutError:
         logging.error("%s timed out after %ds", test_name, request.timeout)
         return CodeResponse(
-            output="",
-            error=f"Code execution timed out after {request.timeout}s",
-            exit_code=1,
+          output="",
+          error=f"Code execution timed out after {request.timeout}s",
+          exit_code=1,
         )
     except fastapi.HTTPException as e:
       return CodeResponse(output="", error=e.detail, exit_code=1)
     except OSError as e:
       return CodeResponse(
-          output="", error=f"Execution error: {str(e)}", exit_code=1
+        output="", error=f"Execution error: {str(e)}", exit_code=1
       )
     finally:
       if job:
@@ -478,15 +478,15 @@ async def _execute_code_internal(
         except OSError:
           pass
   return CodeResponse(
-      output=output,
-      error=error,
-      exit_code=exit_code,
-      trace_tar_b64=_collect_trace_artifacts(temp_dir) if temp_dir else None,
+    output=output,
+    error=error,
+    exit_code=exit_code,
+    trace_tar_b64=_collect_trace_artifacts(temp_dir) if temp_dir else None,
   )
 
 
 async def _execute_autotune_internal(
-    request: AutotuneRequest, job: Optional[JobRecord] = None
+  request: AutotuneRequest, job: Optional[JobRecord] = None
 ) -> CodeResponse:
   """Executes autotune parameter sweep over search space."""
   logging.info("Starting autotune execution")
@@ -503,12 +503,12 @@ async def _execute_autotune_internal(
     start_time = time.time()
     for combo in combinations:
       if (
-          request.total_timeout
-          and (time.time() - start_time) > request.total_timeout
+        request.total_timeout
+        and (time.time() - start_time) > request.total_timeout
       ):
         logging.info(
-            "Autotune total timeout reached (%ds). Stopping sweep...",
-            request.total_timeout,
+          "Autotune total timeout reached (%ds). Stopping sweep...",
+          request.total_timeout,
         )
         break
       cfg = dict(zip(keys, combo))
@@ -526,12 +526,12 @@ async def _execute_autotune_internal(
         temp_file.write(code_content)
 
       process = await asyncio.create_subprocess_exec(
-          sys.executable,
-          temp_file_path,
-          stdout=asyncio.subprocess.PIPE,
-          stderr=asyncio.subprocess.PIPE,
-          cwd=temp_dir,
-          preexec_fn=os.setsid,
+        sys.executable,
+        temp_file_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=temp_dir,
+        preexec_fn=os.setsid,
       )
       try:
         pgid = os.getpgid(process.pid)
@@ -544,22 +544,24 @@ async def _execute_autotune_internal(
 
       try:
         stdout, stderr = await asyncio.wait_for(
-            process.communicate(), timeout=request.timeout
+          process.communicate(), timeout=request.timeout
         )
         output = stdout.decode("utf-8") if stdout else ""
         error = stderr.decode("utf-8") if stderr else None
         exit_code = process.returncode
 
         output, error, exit_code = _handle_execution_result(
-            output, error, exit_code
+          output, error, exit_code
         )
 
-        all_results.append({
+        all_results.append(
+          {
             "cfg": cfg,
             "exit_code": exit_code,
             "output": output,
             "error": error,
-        })
+          }
+        )
       except asyncio.TimeoutError:
         if pgid is not None:
           try:
@@ -580,7 +582,7 @@ async def _execute_autotune_internal(
       await asyncio.sleep(0.5)
 
     return CodeResponse(
-        output=json.dumps({"all_results": all_results}), exit_code=0
+      output=json.dumps({"all_results": all_results}), exit_code=0
     )
   finally:
     if job:
@@ -623,7 +625,7 @@ async def _process_job_queue():
       job.status = JobStatus.RUNNING
       job.started_at = time.time()
       logging.info(
-          "Worker processing job '%s' (action: %s)", job.job_id, job.action
+        "Worker processing job '%s' (action: %s)", job.job_id, job.action
       )
 
       try:
@@ -633,20 +635,20 @@ async def _process_job_queue():
           if job.action == "autotune":
             if job.submission.autotune_request:
               job.result = await _execute_autotune_internal(
-                  job.submission.autotune_request, job=job
+                job.submission.autotune_request, job=job
               )
             else:
               job.result = CodeResponse(
-                  output="", error="Missing autotune_request", exit_code=1
+                output="", error="Missing autotune_request", exit_code=1
               )
           else:
             if job.submission.code_request:
               job.result = await _execute_code_internal(
-                  job.submission.code_request, job.action, job=job
+                job.submission.code_request, job.action, job=job
               )
             else:
               job.result = CodeResponse(
-                  output="", error="Missing code_request", exit_code=1
+                output="", error="Missing code_request", exit_code=1
               )
 
           if job.status != JobStatus.CANCELLED:
@@ -665,7 +667,7 @@ async def _process_job_queue():
         job.done_event.set()
         q.task_done()
         logging.info(
-            "Finished job '%s' with status '%s'", job.job_id, job.status.value
+          "Finished job '%s' with status '%s'", job.job_id, job.status.value
         )
 
     except asyncio.CancelledError:
@@ -689,30 +691,29 @@ async def _cleanup_stale_jobs():
         if job.status == JobStatus.RUNNING and job.started_at:
           req_timeout = DEFAULT_MAX_JOB_RUNTIME
           if (
-              job.submission.code_request
-              and job.submission.code_request.timeout
+            job.submission.code_request and job.submission.code_request.timeout
           ):
             req_timeout = job.submission.code_request.timeout
           elif (
-              job.submission.autotune_request
-              and job.submission.autotune_request.total_timeout
+            job.submission.autotune_request
+            and job.submission.autotune_request.total_timeout
           ):
             req_timeout = job.submission.autotune_request.total_timeout
 
           max_allowed = req_timeout + MAX_RUNNING_TIMEOUT_MARGIN
           if (now - job.started_at) > max_allowed:
             logging.error(
-                "AUTO-CLEANUP: Job '%s' exceeded max runtime (%.1fs > %ds)."
-                " Force killing!",
-                job_id,
-                now - job.started_at,
-                max_allowed,
+              "AUTO-CLEANUP: Job '%s' exceeded max runtime (%.1fs > %ds)."
+              " Force killing!",
+              job_id,
+              now - job.started_at,
+              max_allowed,
             )
             job.kill_process()
             job.status = JobStatus.FAILED
             job.error = (
-                "AUTO CLEANUP: Job exceeded max allowed execution time"
-                f" ({max_allowed}s) and was forcibly terminated."
+              "AUTO CLEANUP: Job exceeded max allowed execution time"
+              f" ({max_allowed}s) and was forcibly terminated."
             )
             job.result = CodeResponse(output="", error=job.error, exit_code=137)
             job.completed_at = now
@@ -722,24 +723,24 @@ async def _cleanup_stale_jobs():
         elif job.status == JobStatus.QUEUED:
           if (now - job.created_at) > MAX_QUEUE_WAIT_TIME:
             logging.warning(
-                "AUTO-CLEANUP: Job '%s' expired in queue after %.1fs."
-                " Cancelling...",
-                job_id,
-                now - job.created_at,
+              "AUTO-CLEANUP: Job '%s' expired in queue after %.1fs."
+              " Cancelling...",
+              job_id,
+              now - job.created_at,
             )
             job.status = JobStatus.CANCELLED
             job.error = (
-                "QUEUE EXPIRED: Job waited too long in queue and was"
-                " automatically cancelled."
+              "QUEUE EXPIRED: Job waited too long in queue and was"
+              " automatically cancelled."
             )
             job.completed_at = now
             job.done_event.set()
 
         # 3. Prune old finished job records from memory
         elif (
-            job.status
-            in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED)
-            and job.completed_at
+          job.status
+          in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED)
+          and job.completed_at
         ):
           if (now - job.completed_at) > MAX_FINISHED_RETENTION_TIME:
             jobs_to_delete.append(job_id)
@@ -761,11 +762,11 @@ async def lifespan(app_instance: fastapi.FastAPI):
   """Lifecycle context manager replacing deprecated on_event handlers."""
   del app_instance
   logging.info(
-      "Cleaning up orphan execution processes and stale lockfiles on startup..."
+    "Cleaning up orphan execution processes and stale lockfiles on startup..."
   )
   subprocess.call("pkill -9 -f run_cod[e].py || true", shell=True)
   subprocess.call(
-      "sudo rm -f /tmp/libtpu_lockfile /tmp/tpu_logs/*lock*", shell=True
+    "sudo rm -f /tmp/libtpu_lockfile /tmp/tpu_logs/*lock*", shell=True
   )
   queue_task = asyncio.create_task(_process_job_queue())
   cleanup_task = asyncio.create_task(_cleanup_stale_jobs())
@@ -789,36 +790,36 @@ async def health_check():
 async def submit_job(submission: JobSubmission):
   """Submits a new job to the TPU execution queue."""
   valid_actions = [
-      "compilation_test",
-      "correctness_test",
-      "performance_test",
-      "profile",
-      "autotune",
+    "compilation_test",
+    "correctness_test",
+    "performance_test",
+    "profile",
+    "autotune",
   ]
   if submission.action not in valid_actions:
     raise fastapi.HTTPException(
-        status_code=400,
-        detail=f"Invalid action '{submission.action}'. Valid: {valid_actions}",
+      status_code=400,
+      detail=f"Invalid action '{submission.action}'. Valid: {valid_actions}",
     )
 
-  job_id = f"job_{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}"
+  job_id = f"job_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}"
   record = JobRecord(job_id, submission.action, submission)
   jobs[job_id] = record
   await get_job_queue().put(job_id)
   pos = _get_queue_position(job_id)
   logging.info(
-      "Job '%s' submitted for action '%s'. Queue position: %d",
-      job_id,
-      submission.action,
-      pos,
+    "Job '%s' submitted for action '%s'. Queue position: %d",
+    job_id,
+    submission.action,
+    pos,
   )
 
   return JobResponse(
-      job_id=job_id,
-      status=record.status,
-      action=record.action,
-      queue_position=pos,
-      created_at=record.created_at,
+    job_id=job_id,
+    status=record.status,
+    action=record.action,
+    queue_position=pos,
+    created_at=record.created_at,
   )
 
 
@@ -827,19 +828,19 @@ async def get_job(job_id: str):
   """Retrieves status and results for a specific job."""
   if job_id not in jobs:
     raise fastapi.HTTPException(
-        status_code=404, detail=f"Job '{job_id}' not found"
+      status_code=404, detail=f"Job '{job_id}' not found"
     )
   record = jobs[job_id]
   return JobResponse(
-      job_id=record.job_id,
-      status=record.status,
-      action=record.action,
-      queue_position=_get_queue_position(job_id),
-      created_at=record.created_at,
-      started_at=record.started_at,
-      completed_at=record.completed_at,
-      result=record.result,
-      error=record.error,
+    job_id=record.job_id,
+    status=record.status,
+    action=record.action,
+    queue_position=_get_queue_position(job_id),
+    created_at=record.created_at,
+    started_at=record.started_at,
+    completed_at=record.completed_at,
+    result=record.result,
+    error=record.error,
   )
 
 
@@ -849,20 +850,20 @@ async def get_queue():
   queued_jobs = [j for j in jobs.values() if j.status == JobStatus.QUEUED]
   running_jobs = [j for j in jobs.values() if j.status == JobStatus.RUNNING]
   return {
-      "total_jobs": len(jobs),
-      "queued_count": len(queued_jobs),
-      "running_count": len(running_jobs),
-      "queued_jobs": [
-          {
-              "job_id": j.job_id,
-              "action": j.action,
-              "position": _get_queue_position(j.job_id),
-          }
-          for j in queued_jobs
-      ],
-      "running_jobs": [
-          {"job_id": j.job_id, "action": j.action} for j in running_jobs
-      ],
+    "total_jobs": len(jobs),
+    "queued_count": len(queued_jobs),
+    "running_count": len(running_jobs),
+    "queued_jobs": [
+      {
+        "job_id": j.job_id,
+        "action": j.action,
+        "position": _get_queue_position(j.job_id),
+      }
+      for j in queued_jobs
+    ],
+    "running_jobs": [
+      {"job_id": j.job_id, "action": j.action} for j in running_jobs
+    ],
   }
 
 
@@ -887,26 +888,26 @@ async def cancel_jobs(job_id: Optional[str] = None):
   """
   if job_id is not None and job_id not in jobs:
     raise fastapi.HTTPException(
-        status_code=404, detail=f"Job '{job_id}' not found"
+      status_code=404, detail=f"Job '{job_id}' not found"
     )
 
   targets = (
-      [jobs[job_id]]
-      if job_id is not None
-      else [
-          j
-          for j in jobs.values()
-          if j.status in (JobStatus.QUEUED, JobStatus.RUNNING)
-      ]
+    [jobs[job_id]]
+    if job_id is not None
+    else [
+      j
+      for j in jobs.values()
+      if j.status in (JobStatus.QUEUED, JobStatus.RUNNING)
+    ]
   )
 
   cancelled = []
   skipped = []
   for job in targets:
     if job.status in (
-        JobStatus.COMPLETED,
-        JobStatus.FAILED,
-        JobStatus.CANCELLED,
+      JobStatus.COMPLETED,
+      JobStatus.FAILED,
+      JobStatus.CANCELLED,
     ):
       skipped.append({"job_id": job.job_id, "status": job.status})
       continue
@@ -920,22 +921,22 @@ async def cancel_jobs(job_id: Optional[str] = None):
     logging.warning("Job '%s' cancelled by client request.", job.job_id)
 
   return {
-      "cancelled_count": len(cancelled),
-      "cancelled": cancelled,
-      "skipped": skipped,
+    "cancelled_count": len(cancelled),
+    "cancelled": cancelled,
+    "skipped": skipped,
   }
 
 
 async def _submit_and_wait(
-    action: str,
-    code_req: Optional[CodeRequest] = None,
-    autotune_req: Optional[AutotuneRequest] = None,
+  action: str,
+  code_req: Optional[CodeRequest] = None,
+  autotune_req: Optional[AutotuneRequest] = None,
 ) -> CodeResponse:
   """Helper to submit job and await completion synchronously."""
   submission = JobSubmission(
-      action=action, code_request=code_req, autotune_request=autotune_req
+    action=action, code_request=code_req, autotune_request=autotune_req
   )
-  job_id = f"job_{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}"
+  job_id = f"job_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}"
   record = JobRecord(job_id, action, submission)
   jobs[job_id] = record
   await get_job_queue().put(job_id)
@@ -943,9 +944,9 @@ async def _submit_and_wait(
   if record.result:
     return record.result
   return CodeResponse(
-      output="",
-      error=record.error or "Execution failed without result",
-      exit_code=1,
+    output="",
+    error=record.error or "Execution failed without result",
+    exit_code=1,
   )
 
 

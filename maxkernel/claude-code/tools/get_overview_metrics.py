@@ -20,9 +20,10 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from xprof.convert import raw_to_tool_data  # pylint: disable=g-import-not-at-top
-
 import xplane_loader  # pylint: disable=g-import-not-at-top
+from xprof.convert import (
+  raw_to_tool_data,  # pylint: disable=g-import-not-at-top
+)
 
 # Substrings identifying a device (accelerator) plane. Host planes are
 # everything else. Matches the naming XPlane uses: "/device:TPU:0" etc.
@@ -32,7 +33,7 @@ _DEVICE_PLANE_MARKERS = ("device", "tpu", "gpu")
 def _overview_page_metrics(xplane_path: str) -> dict:
   """Returns xprof's own overview-page metrics, or {} if unavailable."""
   data, _ = raw_to_tool_data.xspace_to_tool_data(
-      [xplane_path], "overview_page", {}
+    [xplane_path], "overview_page", {}
   )
   if isinstance(data, bytes):
     data = data.decode("utf-8")
@@ -116,7 +117,7 @@ def get_overview_page_metrics(xplane_path: str) -> str:
 
 def main():
   parser = argparse.ArgumentParser(
-      description="Extract overview metrics from an XProf xplane.pb file."
+    description="Extract overview metrics from an XProf xplane.pb file."
   )
   parser.add_argument("xplane_path", help="Path to the .xplane.pb file.")
 

@@ -20,9 +20,10 @@ from typing import Optional
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from xprof.convert import raw_to_tool_data  # pylint: disable=g-import-not-at-top
-
 import xplane_loader  # pylint: disable=g-import-not-at-top
+from xprof.convert import (
+  raw_to_tool_data,  # pylint: disable=g-import-not-at-top
+)
 
 _HLO_PROTO_SUFFIX = ".hlo_proto.pb"
 
@@ -37,16 +38,16 @@ def list_hlo_modules(xplane_path: str) -> list[str]:
   raw_to_tool_data.xspace_to_tool_names([resolved])
   trace_dir = pathlib.Path(resolved).parent
   return sorted(
-      f.name.removesuffix(_HLO_PROTO_SUFFIX)
-      for f in trace_dir.glob(f"*{_HLO_PROTO_SUFFIX}")
+    f.name.removesuffix(_HLO_PROTO_SUFFIX)
+    for f in trace_dir.glob(f"*{_HLO_PROTO_SUFFIX}")
   )
 
 
 def get_hlo_dump(
-    xplane_path: str,
-    hlo_module_name: Optional[str] = None,
-    print_metadata: bool = False,
-    output_path: Optional[str] = None,
+  xplane_path: str,
+  hlo_module_name: Optional[str] = None,
+  print_metadata: bool = False,
+  output_path: Optional[str] = None,
 ) -> str:
   """Extracts HLO module text from an xplane.pb trace.
 
@@ -66,8 +67,8 @@ def get_hlo_dump(
     modules = list_hlo_modules(resolved)
     if not modules:
       return (
-          f"No HLO modules found in {resolved}. The trace may not contain XLA"
-          " program data (e.g. a host-only or metadata-only capture)."
+        f"No HLO modules found in {resolved}. The trace may not contain XLA"
+        " program data (e.g. a host-only or metadata-only capture)."
       )
 
     if hlo_module_name:
@@ -80,27 +81,27 @@ def get_hlo_dump(
         matches = [m for m in modules if hlo_module_name in m]
         if not matches:
           return (
-              f"Module {hlo_module_name!r} not found. Available modules:"
-              f" {', '.join(modules)}"
+            f"Module {hlo_module_name!r} not found. Available modules:"
+            f" {', '.join(modules)}"
           )
         if len(matches) > 1:
           return (
-              f"Module {hlo_module_name!r} is ambiguous, matching:"
-              f" {', '.join(matches)}. Pass a full module name."
+            f"Module {hlo_module_name!r} is ambiguous, matching:"
+            f" {', '.join(matches)}. Pass a full module name."
           )
         target = matches[0]
     else:
       target = modules[0]
 
     data, _ = raw_to_tool_data.xspace_to_tool_data(
-        [resolved],
-        "graph_viewer",
-        {
-            "graph_viewer_options": {
-                "type": "long_txt" if print_metadata else "short_txt",
-                "module_name": target,
-            }
-        },
+      [resolved],
+      "graph_viewer",
+      {
+        "graph_viewer_options": {
+          "type": "long_txt" if print_metadata else "short_txt",
+          "module_name": target,
+        }
+      },
     )
     text = data.decode("utf-8") if isinstance(data, bytes) else data
 
@@ -108,7 +109,9 @@ def get_hlo_dump(
       pathlib.Path(output_path).write_text(text)
       return f"HLO for module {target!r} saved to {output_path}"
 
-    header = f"# HLO module: {target}\n# Available modules: {', '.join(modules)}\n"
+    header = (
+      f"# HLO module: {target}\n# Available modules: {', '.join(modules)}\n"
+    )
     return header + text
 
   except Exception as e:  # pylint: disable=broad-except
@@ -117,35 +120,35 @@ def get_hlo_dump(
 
 def main():
   parser = argparse.ArgumentParser(
-      description="Extract HLO module text from an XProf xplane.pb file."
+    description="Extract HLO module text from an XProf xplane.pb file."
   )
   parser.add_argument("xplane_path", help="Path to the .xplane.pb file.")
   parser.add_argument(
-      "--module-name",
-      "--module_name",
-      dest="module_name",
-      default=None,
-      help="HLO module name (exact or unambiguous substring).",
+    "--module-name",
+    "--module_name",
+    dest="module_name",
+    default=None,
+    help="HLO module name (exact or unambiguous substring).",
   )
   parser.add_argument(
-      "--list",
-      action="store_true",
-      help="List available HLO module names and exit.",
+    "--list",
+    action="store_true",
+    help="List available HLO module names and exit.",
   )
   parser.add_argument(
-      "--print-metadata",
-      "--print_metadata",
-      dest="print_metadata",
-      action="store_true",
-      help="Emit the long form, including instruction metadata.",
+    "--print-metadata",
+    "--print_metadata",
+    dest="print_metadata",
+    action="store_true",
+    help="Emit the long form, including instruction metadata.",
   )
   parser.add_argument(
-      "--output-path",
-      "--output_path",
-      "-o",
-      dest="output_path",
-      default=None,
-      help="Write the HLO text to this file instead of stdout.",
+    "--output-path",
+    "--output_path",
+    "-o",
+    dest="output_path",
+    default=None,
+    help="Write the HLO text to this file instead of stdout.",
   )
 
   argv = sys.argv[1:]
@@ -163,12 +166,12 @@ def main():
     return
 
   print(
-      get_hlo_dump(
-          args.xplane_path,
-          args.module_name,
-          print_metadata=args.print_metadata,
-          output_path=args.output_path,
-      )
+    get_hlo_dump(
+      args.xplane_path,
+      args.module_name,
+      print_metadata=args.print_metadata,
+      output_path=args.output_path,
+    )
   )
 
 

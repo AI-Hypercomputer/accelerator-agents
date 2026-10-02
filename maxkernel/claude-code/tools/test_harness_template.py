@@ -47,7 +47,7 @@ RTOL = 1e-2
 def benchmark(func, args, static_argnums, num_runs=20, num_warmups=5):
   """JIT-compiles `func` (with layout alignment where possible) and times it."""
   dynamic_args = tuple(
-      arg for i, arg in enumerate(args) if i not in static_argnums
+    arg for i, arg in enumerate(args) if i not in static_argnums
   )
 
   def benchmark_func(*f_args):
@@ -68,14 +68,14 @@ def benchmark(func, args, static_argnums, num_runs=20, num_warmups=5):
     in_shardings = jax_layout.Format(jax_layout.Layout.AUTO)
     out_shardings = jax_layout.Format(jax_layout.Layout.AUTO)
     compiled_func = (
-        jax.jit(
-            benchmark_func,
-            static_argnums=static_argnums,
-            in_shardings=in_shardings,
-            out_shardings=out_shardings,
-        )
-        .lower(*args)
-        .compile()
+      jax.jit(
+        benchmark_func,
+        static_argnums=static_argnums,
+        in_shardings=in_shardings,
+        out_shardings=out_shardings,
+      )
+      .lower(*args)
+      .compile()
     )
 
     if hasattr(compiled_func, "input_formats"):
@@ -86,16 +86,16 @@ def benchmark(func, args, static_argnums, num_runs=20, num_warmups=5):
         return xs
 
       enforce_layout_compiled = (
-          jax.jit(enforce_layout, out_shardings=arg_formats)
-          .lower(*dynamic_args)
-          .compile()
+        jax.jit(enforce_layout, out_shardings=arg_formats)
+        .lower(*dynamic_args)
+        .compile()
       )
       dynamic_args = enforce_layout_compiled(*dynamic_args)
   except Exception:  # pylint: disable=broad-except
     compiled_func = (
-        jax.jit(benchmark_func, static_argnums=static_argnums)
-        .lower(*args)
-        .compile()
+      jax.jit(benchmark_func, static_argnums=static_argnums)
+      .lower(*args)
+      .compile()
     )
 
   res = None
@@ -124,8 +124,8 @@ def main():
       inputs_list = [raw_inputs]
     else:
       raise ValueError(
-          "get_inputs() must return a list of tuples or a single "
-          "(dynamic_args, static_args) tuple."
+        "get_inputs() must return a list of tuples or a single "
+        "(dynamic_args, static_args) tuple."
       )
 
     all_correct = True
@@ -136,8 +136,8 @@ def main():
     for idx, inputs in enumerate(inputs_list):
       if not isinstance(inputs, tuple) or len(inputs) != 2:
         raise ValueError(
-            "Each input config must return exactly 2 elements: "
-            f"(dynamic_args, static_args). Got: {type(inputs)}"
+          "Each input config must return exactly 2 elements: "
+          f"(dynamic_args, static_args). Got: {type(inputs)}"
         )
 
       dynamic_args, static_args = inputs
@@ -157,16 +157,16 @@ def main():
       if len(base_leaves) != len(opt_leaves):
         is_correct = False
         print(
-            f"Output count mismatch for input config {idx}: expected "
-            f"{len(base_leaves)}, got {len(opt_leaves)}"
+          f"Output count mismatch for input config {idx}: expected "
+          f"{len(base_leaves)}, got {len(opt_leaves)}"
         )
       else:
         for i, (b, o) in enumerate(zip(base_leaves, opt_leaves)):
           if b.shape != o.shape:
             is_correct = False
             print(
-                f"Mismatch in output tensor {i} for input config {idx}: "
-                f"expected shape {b.shape}, got shape {o.shape}"
+              f"Mismatch in output tensor {i} for input config {idx}: "
+              f"expected shape {b.shape}, got shape {o.shape}"
             )
             continue
           match = bool(jnp.allclose(b, o, atol=ATOL, rtol=RTOL))
@@ -174,8 +174,8 @@ def main():
             is_correct = False
             max_diff = jnp.max(jnp.abs(b - o))
             print(
-                f"Mismatch in output tensor {i} for input config {idx}: "
-                f"max absolute difference {max_diff}"
+              f"Mismatch in output tensor {i} for input config {idx}: "
+              f"max absolute difference {max_diff}"
             )
 
       if not is_correct:
@@ -200,12 +200,12 @@ def main():
     valid_speedups = [s for s in speedups if s > 0]
     if valid_base:
       geo_mean_time_base = math.exp(
-          sum(math.log(t) for t in valid_base) / len(valid_base)
+        sum(math.log(t) for t in valid_base) / len(valid_base)
       )
       print(f"BASE_TIME: {geo_mean_time_base * 1000:.6f} ms")
     if valid_opt:
       geo_mean_time_opt = math.exp(
-          sum(math.log(t) for t in valid_opt) / len(valid_opt)
+        sum(math.log(t) for t in valid_opt) / len(valid_opt)
       )
       # RESULT_TIME/PERF_METRICS report absolute optimized-kernel latency --
       # not speedup. SPEEDUP is reported
@@ -214,7 +214,7 @@ def main():
       print(f"PERF_METRICS: {geo_mean_time_opt * 1000:.6f}")
     if valid_speedups:
       geo_mean_speedup = math.exp(
-          sum(math.log(s) for s in valid_speedups) / len(valid_speedups)
+        sum(math.log(s) for s in valid_speedups) / len(valid_speedups)
       )
       print(f"SPEEDUP: {geo_mean_speedup:.4f}")
 

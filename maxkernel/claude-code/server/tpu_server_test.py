@@ -1,30 +1,30 @@
-import asyncio
-from pathlib import Path
 import sys
-import time
 import unittest
+from pathlib import Path
 
 server_dir = Path(__file__).parent
 sys.path.insert(0, str(server_dir))
 
 from fastapi.testclient import TestClient
-import tpu_server
-from tpu_server import _cleanup_stale_jobs, _process_job_queue, app, get_job_queue, jobs
+from tpu_server import (
+  app,
+)
 
 client = TestClient(app)
 
 
 class TestTPUServer(unittest.TestCase):
-
   def test_health(self):
     response = client.get("/health")
     self.assertEqual(response.status_code, 200)
-    self.assertEqual(response.json(), {"status": "healthy", "service": "maxkernel-tpu-server"})
+    self.assertEqual(
+      response.json(), {"status": "healthy", "service": "maxkernel-tpu-server"}
+    )
 
   def test_job_submission_and_polling(self):
     payload = {
-        "action": "compilation_test",
-        "code_request": {"code": "print('hello world')", "timeout": 10},
+      "action": "compilation_test",
+      "code_request": {"code": "print('hello world')", "timeout": 10},
     }
     sub_resp = client.post("/submit", json=payload)
     self.assertEqual(sub_resp.status_code, 200)

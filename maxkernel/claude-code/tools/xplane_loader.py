@@ -42,7 +42,6 @@ Event times follow xprof's own convention in `xplane_tools.py`:
 """
 
 import gzip
-import os
 import pathlib
 import sqlite3
 
@@ -78,7 +77,9 @@ def resolve_xplane_path(path: str) -> str:
   """
   p = pathlib.Path(path)
   if p.is_dir():
-    matches = sorted(p.glob("**/*.xplane.pb")) + sorted(p.glob("**/*.xspace.pb"))
+    matches = sorted(p.glob("**/*.xplane.pb")) + sorted(
+      p.glob("**/*.xspace.pb")
+    )
     if not matches:
       raise FileNotFoundError(f"No .xplane.pb/.xspace.pb found under {path!r}")
     return str(matches[0])
@@ -102,14 +103,15 @@ def load_into_sqlite(path: str) -> sqlite3.Connection:
     c.execute("INSERT INTO planes VALUES (?, ?)", (plane_id, plane.name))
     for line_id, line in enumerate(plane.lines):
       c.execute(
-          "INSERT INTO lines VALUES (?, ?, ?, ?, ?)",
-          (line_id, plane_id, line_id, line.name, 0),
+        "INSERT INTO lines VALUES (?, ?, ?, ?, ?)",
+        (line_id, plane_id, line_id, line.name, 0),
       )
       rows = []
       for event in line.events:
         start_ps = int(event.start_ns * 1000)
         duration_ps = int(event.duration_ns * 1000)
-        rows.append((
+        rows.append(
+          (
             plane_id,
             line_id,
             event.name,
@@ -117,7 +119,8 @@ def load_into_sqlite(path: str) -> sqlite3.Connection:
             duration_ps,
             start_ps,
             start_ps + duration_ps,
-        ))
+          )
+        )
       if rows:
         c.executemany("INSERT INTO events VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
 

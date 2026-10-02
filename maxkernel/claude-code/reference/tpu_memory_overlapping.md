@@ -46,17 +46,19 @@ Use JAX's internal Pallas cost estimator to calculate theoretical FLOPs and byte
 ```python
 from jax.experimental.pallas import cost_estimate as pl_cost
 
+
 # Define your kernel reference function
 def matmul_ref(a, b):
   return a @ b
 
+
 cost = pl_cost.estimate_cost(
-    matmul_ref,
-    jax.ShapeDtypeStruct((4000, 8000), jnp.bfloat16),
-    jax.ShapeDtypeStruct((8000, 9000), jnp.bfloat16)
+  matmul_ref,
+  jax.ShapeDtypeStruct((4000, 8000), jnp.bfloat16),
+  jax.ShapeDtypeStruct((8000, 9000), jnp.bfloat16),
 )
-print('FLOPs:', cost.flops)
-print('Memory Access (Bytes):', cost.bytes_accessed)
+print("FLOPs:", cost.flops)
+print("Memory Access (Bytes):", cost.bytes_accessed)
 ```
 
 ### C. Empirical Trace Analysis

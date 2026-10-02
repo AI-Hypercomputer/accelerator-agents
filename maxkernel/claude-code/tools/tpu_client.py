@@ -14,14 +14,14 @@ import subprocess
 import sys
 import tarfile
 import time
-from typing import Any
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from typing import Any
 
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+  level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 SERVER_URL = "http://127.0.0.1:8000"
@@ -90,7 +90,7 @@ def get_tpu_config(config_path_override=None, run_dir=None):
 
   if not config_path:
     default_path = os.path.join(
-        os.path.dirname(__file__), "..", "tpu_config.json"
+      os.path.dirname(__file__), "..", "tpu_config.json"
     )
     if os.path.exists(default_path):
       config_path = default_path
@@ -102,7 +102,7 @@ def get_tpu_config(config_path_override=None, run_dir=None):
         raw_data = json.load(f) or {}
     except Exception as e:  # pylint: disable=broad-exception-caught
       logging.error(
-          "Failed to read tpu_config.json from %s: %s", config_path, e
+        "Failed to read tpu_config.json from %s: %s", config_path, e
       )
 
   tpu_list = []
@@ -142,25 +142,25 @@ def check_health(port=8000, timeout=5):
 def ssh_cmd(config, cmd, bg=False):
   """Run an SSH command on the TPU VM."""
   base = [
-      "/usr/bin/gcloud",
-      "compute",
-      "tpus",
-      "tpu-vm",
-      "ssh",
-      config["tpu_name"],
-      "--zone",
-      config["zone"],
-      "--project",
-      config["project"],
-      "--command",
-      cmd,
+    "/usr/bin/gcloud",
+    "compute",
+    "tpus",
+    "tpu-vm",
+    "ssh",
+    config["tpu_name"],
+    "--zone",
+    config["zone"],
+    "--project",
+    config["project"],
+    "--command",
+    cmd,
   ]
   if bg:
     return subprocess.Popen(
-        base,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
+      base,
+      stdout=subprocess.DEVNULL,
+      stderr=subprocess.DEVNULL,
+      start_new_session=True,
     )
   return subprocess.run(base, capture_output=True, text=True, check=False)
 
@@ -168,17 +168,17 @@ def ssh_cmd(config, cmd, bg=False):
 def scp_cmd(config, local_path, remote_path):
   """SCP a file to the TPU VM."""
   base = [
-      "/usr/bin/gcloud",
-      "compute",
-      "tpus",
-      "tpu-vm",
-      "scp",
-      local_path,
-      f"{config['tpu_name']}:{remote_path}",
-      "--zone",
-      config["zone"],
-      "--project",
-      config["project"],
+    "/usr/bin/gcloud",
+    "compute",
+    "tpus",
+    "tpu-vm",
+    "scp",
+    local_path,
+    f"{config['tpu_name']}:{remote_path}",
+    "--zone",
+    config["zone"],
+    "--project",
+    config["project"],
   ]
   return subprocess.run(base, capture_output=True, text=True, check=False)
 
@@ -190,45 +190,45 @@ def ensure_ssh_tunnel(config):
 
   port = config.get("local_port", 8000)
   logging.info(
-      "Establishing/restoring SSH tunnel for %s on local port %s...",
-      config["tpu_name"],
-      port,
+    "Establishing/restoring SSH tunnel for %s on local port %s...",
+    config["tpu_name"],
+    port,
   )
   tunnel_cmd = [
-      "/usr/bin/gcloud",
-      "compute",
-      "tpus",
-      "tpu-vm",
-      "ssh",
-      config["tpu_name"],
-      "--zone",
-      config["zone"],
-      "--project",
-      config["project"],
-      "--",
-      "-N",
-      "-L",
-      f"{port}:localhost:8000",
-      "-o",
-      "ServerAliveInterval=15",
-      "-o",
-      "ServerAliveCountMax=3",
-      "-o",
-      "ExitOnForwardFailure=yes",
+    "/usr/bin/gcloud",
+    "compute",
+    "tpus",
+    "tpu-vm",
+    "ssh",
+    config["tpu_name"],
+    "--zone",
+    config["zone"],
+    "--project",
+    config["project"],
+    "--",
+    "-N",
+    "-L",
+    f"{port}:localhost:8000",
+    "-o",
+    "ServerAliveInterval=15",
+    "-o",
+    "ServerAliveCountMax=3",
+    "-o",
+    "ExitOnForwardFailure=yes",
   ]
   subprocess.Popen(
-      tunnel_cmd,
-      stdout=subprocess.DEVNULL,
-      stderr=subprocess.DEVNULL,
-      start_new_session=True,
+    tunnel_cmd,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+    start_new_session=True,
   )
 
   for _ in range(15):
     if check_health(port=port, timeout=3):
       logging.info(
-          "SSH tunnel for %s connected successfully on port %s.",
-          config["tpu_name"],
-          port,
+        "SSH tunnel for %s connected successfully on port %s.",
+        config["tpu_name"],
+        port,
       )
       return True
     time.sleep(1)
@@ -253,7 +253,7 @@ def start_server_for_tpu(config, mode=None):
 
   if target_mode not in ("local", "remote"):
     logging.error(
-        "Invalid mode '%s' for TPU server on port %s.", target_mode, port
+      "Invalid mode '%s' for TPU server on port %s.", target_mode, port
     )
     return False
 
@@ -265,26 +265,26 @@ def start_server_for_tpu(config, mode=None):
     if not check_health(port=port, timeout=5):
       if target_mode == "local":
         logging.info(
-            "TPU Server on port %s is down. Initiating local lazy start...",
-            port,
+          "TPU Server on port %s is down. Initiating local lazy start...",
+          port,
         )
         server_path = os.path.abspath(
-            os.path.join(
-                os.path.dirname(__file__), "..", "server", "tpu_server.py"
-            )
+          os.path.join(
+            os.path.dirname(__file__), "..", "server", "tpu_server.py"
+          )
         )
         log_file_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", f"server_{port}.log")
+          os.path.join(os.path.dirname(__file__), "..", f"server_{port}.log")
         )
         logging.info(
-            "Booting local server daemon on port %s: %s", port, server_path
+          "Booting local server daemon on port %s: %s", port, server_path
         )
         with open(log_file_path, "a") as log_f:
           subprocess.Popen(
-              [sys.executable, server_path],
-              stdout=log_f,
-              stderr=log_f,
-              start_new_session=True,
+            [sys.executable, server_path],
+            stdout=log_f,
+            stderr=log_f,
+            start_new_session=True,
           )
         for _ in range(15):
           if check_health(port=port, timeout=5):
@@ -297,31 +297,31 @@ def start_server_for_tpu(config, mode=None):
       else:
         if not all(k in config for k in ("tpu_name", "zone", "project")):
           logging.error(
-              "Remote TPU config missing required keys for %s.", config
+            "Remote TPU config missing required keys for %s.", config
           )
           return False
 
         logging.info(
-            "Testing remote SSH tunnel for %s on port %s...",
-            config["tpu_name"],
-            port,
+          "Testing remote SSH tunnel for %s on port %s...",
+          config["tpu_name"],
+          port,
         )
         if ensure_ssh_tunnel(config):
           if check_health(port=port, timeout=5):
             logging.info(
-                "Remote server on port %s restored via SSH tunnel!", port
+              "Remote server on port %s restored via SSH tunnel!", port
             )
             return True
 
         logging.info(
-            "Remote TPU Server for %s is down. Initiating remote start...",
-            config["tpu_name"],
+          "Remote TPU Server for %s is down. Initiating remote start...",
+          config["tpu_name"],
         )
         req_path = os.path.join(
-            os.path.dirname(__file__), "..", "requirements.txt"
+          os.path.dirname(__file__), "..", "requirements.txt"
         )
         server_path = os.path.join(
-            os.path.dirname(__file__), "..", "server", "tpu_server.py"
+          os.path.dirname(__file__), "..", "server", "tpu_server.py"
         )
 
         ssh_cmd(config, "mkdir -p ~/maxkernel_deploy")
@@ -350,7 +350,7 @@ def start_server_for_tpu(config, mode=None):
                 nohup python3 tpu_server.py > server.log 2>&1 < /dev/null &
                 """
         logging.info(
-            "Executing setup on remote TPU VM %s...", config["tpu_name"]
+          "Executing setup on remote TPU VM %s...", config["tpu_name"]
         )
         res = ssh_cmd(config, setup_script)
         if res.returncode != 0:
@@ -359,7 +359,7 @@ def start_server_for_tpu(config, mode=None):
 
         if not ensure_ssh_tunnel(config):
           logging.error(
-              "Server on port %s failed to boot or tunnel failed.", port
+            "Server on port %s failed to boot or tunnel failed.", port
           )
           return False
         logging.info("Remote Server on port %s is up and connected!", port)
@@ -383,10 +383,10 @@ def start_server_for_tpu(config, mode=None):
 def fetch_tpu_spec(port=8000):
   """Fetch device_kind and device_count from TPU server running on specified port."""
   spec_code = (
-      "import jax\n"
-      "devs = jax.devices()\n"
-      "print(f'DEVICE_KIND:{devs[0].device_kind}')\n"
-      "print(f'DEVICE_COUNT:{len(devs)}')\n"
+    "import jax\n"
+    "devs = jax.devices()\n"
+    "print(f'DEVICE_KIND:{devs[0].device_kind}')\n"
+    "print(f'DEVICE_COUNT:{len(devs)}')\n"
   )
   res = submit_job("correctness_test", spec_code, timeout=60, port=port)
   if not res or "job_id" not in res:
@@ -396,8 +396,8 @@ def fetch_tpu_spec(port=8000):
   while time.time() - start_t < 90:
     j_info = check_job_status(job_id)
     if isinstance(j_info, dict) and j_info.get("status") in (
-        "completed",
-        "failed",
+      "completed",
+      "failed",
     ):
       r = j_info.get("result") or {}
       out = r.get("output", "")
@@ -405,8 +405,8 @@ def fetch_tpu_spec(port=8000):
       count_match = re.search(r"DEVICE_COUNT:(\d+)", out)
       if kind_match and count_match:
         return {
-            "device_kind": kind_match.group(1).strip(),
-            "device_count": int(count_match.group(1).strip()),
+          "device_kind": kind_match.group(1).strip(),
+          "device_count": int(count_match.group(1).strip()),
         }
       break
     time.sleep(2)
@@ -462,7 +462,7 @@ def ensure_tpu_specs_cached(config_path_override=None, run_dir=None):
 
   if not config_path:
     default_path = os.path.join(
-        os.path.dirname(__file__), "..", "tpu_config.json"
+      os.path.dirname(__file__), "..", "tpu_config.json"
     )
     if os.path.exists(default_path):
       config_path = default_path
@@ -476,9 +476,7 @@ def ensure_tpu_specs_cached(config_path_override=None, run_dir=None):
 
     tpu_list = []
     if (
-        isinstance(raw, dict)
-        and "tpus" in raw
-        and isinstance(raw["tpus"], list)
+      isinstance(raw, dict) and "tpus" in raw and isinstance(raw["tpus"], list)
     ):
       tpu_list = raw["tpus"]
     elif isinstance(raw, dict) and raw:
@@ -504,7 +502,9 @@ def ensure_tpu_specs_cached(config_path_override=None, run_dir=None):
     if updated:
       with open(config_path, "w") as f:
         json.dump(raw, f, indent=2)
-      logging.info("Updated %s with auto-cached tpu_spec/tpu_version.", config_path)
+      logging.info(
+        "Updated %s with auto-cached tpu_spec/tpu_version.", config_path
+      )
   except Exception as e:  # pylint: disable=broad-exception-caught
     logging.warning("Could not auto-update tpu_spec in config: %s", e)
 
@@ -543,10 +543,10 @@ def add_tpu_to_config(new_tpu_input, config_path_override=None, run_dir=None):
     return False
 
   if not isinstance(new_tpu, dict) or (
-      "tpu_name" not in new_tpu and new_tpu.get("mode") != "local"
+    "tpu_name" not in new_tpu and new_tpu.get("mode") != "local"
   ):
     logging.error(
-        "TPU entry must be a dict containing 'tpu_name' or 'mode': 'local'."
+      "TPU entry must be a dict containing 'tpu_name' or 'mode': 'local'."
     )
     return False
 
@@ -558,7 +558,7 @@ def add_tpu_to_config(new_tpu_input, config_path_override=None, run_dir=None):
 
   if not config_path:
     config_path = os.path.join(
-        os.path.dirname(__file__), "..", "tpu_config.json"
+      os.path.dirname(__file__), "..", "tpu_config.json"
     )
 
   lock_file = "/tmp/maxkernel_tpu_config_update.lock"
@@ -573,13 +573,13 @@ def add_tpu_to_config(new_tpu_input, config_path_override=None, run_dir=None):
           raw_data = json.load(f) or {}
       except Exception as e:  # pylint: disable=broad-exception-caught
         logging.warning(
-            "Could not read existing config at %s: %s", config_path, e
+          "Could not read existing config at %s: %s", config_path, e
         )
 
     if (
-        isinstance(raw_data, dict)
-        and "tpus" in raw_data
-        and isinstance(raw_data["tpus"], list)
+      isinstance(raw_data, dict)
+      and "tpus" in raw_data
+      and isinstance(raw_data["tpus"], list)
     ):
       tpu_list = raw_data["tpus"]
     elif isinstance(raw_data, dict) and raw_data:
@@ -592,30 +592,29 @@ def add_tpu_to_config(new_tpu_input, config_path_override=None, run_dir=None):
     if new_tpu.get("mode") == "local":
       tpu_identifier = "local"
       existing = next(
-          (
-              item
-              for item in tpu_list
-              if isinstance(item, dict) and item.get("mode") == "local"
-          ),
-          None,
+        (
+          item
+          for item in tpu_list
+          if isinstance(item, dict) and item.get("mode") == "local"
+        ),
+        None,
       )
     else:
       tpu_identifier = new_tpu.get("tpu_name", "unknown")
       existing = next(
-          (
-              item
-              for item in tpu_list
-              if isinstance(item, dict)
-              and item.get("tpu_name") == tpu_identifier
-          ),
-          None,
+        (
+          item
+          for item in tpu_list
+          if isinstance(item, dict) and item.get("tpu_name") == tpu_identifier
+        ),
+        None,
       )
 
     if existing:
       logging.info(
-          "TPU '%s' is already present in %s. No duplicate added.",
-          tpu_identifier,
-          config_path,
+        "TPU '%s' is already present in %s. No duplicate added.",
+        tpu_identifier,
+        config_path,
       )
       target_entry = existing
     else:
@@ -629,8 +628,8 @@ def add_tpu_to_config(new_tpu_input, config_path_override=None, run_dir=None):
     os.makedirs(dir_name, exist_ok=True)
     cleanup_stale_temp_files(dir_name)
     tmp_file = os.path.join(
-        dir_name,
-        f".tpu_config.json.tmp.{os.getpid()}_{uuid.uuid4().hex[:6]}",
+      dir_name,
+      f".tpu_config.json.tmp.{os.getpid()}_{uuid.uuid4().hex[:6]}",
     )
     with open(tmp_file, "w") as f:
       json.dump(new_config_structure, f, indent=2)
@@ -646,21 +645,23 @@ def add_tpu_to_config(new_tpu_input, config_path_override=None, run_dir=None):
     if check_health(port=port, timeout=5):
       if "tpu_spec" not in target_entry:
         logging.info(
-            "Fetching tpu_spec for newly added TPU '%s'...", tpu_identifier
+          "Fetching tpu_spec for newly added TPU '%s'...", tpu_identifier
         )
         spec = fetch_tpu_spec(port=port)
         if spec:
           target_entry["tpu_spec"] = spec
           target_entry["tpu_version"] = infer_tpu_version(target_entry)
           tmp_file2 = os.path.join(
-              dir_name,
-              f".tpu_config.json.tmp.{os.getpid()}_{uuid.uuid4().hex[:6]}",
+            dir_name,
+            f".tpu_config.json.tmp.{os.getpid()}_{uuid.uuid4().hex[:6]}",
           )
           with open(tmp_file2, "w") as f:
             json.dump(new_config_structure, f, indent=2)
           os.replace(tmp_file2, config_path)
           logging.info(
-              "Updated %s with tpu_spec/tpu_version in %s.", tpu_identifier, config_path
+            "Updated %s with tpu_spec/tpu_version in %s.",
+            tpu_identifier,
+            config_path,
           )
 
     return True
@@ -673,14 +674,14 @@ def add_tpu_to_config(new_tpu_input, config_path_override=None, run_dir=None):
 
 
 def start_server_idempotent(
-    mode=None, tpu_configs=None, config_path_override=None, run_dir=None
+  mode=None, tpu_configs=None, config_path_override=None, run_dir=None
 ):
   """Lazily start TPU servers for all configured TPUs and auto-cache specs."""
   if tpu_configs is not None:
     configs = tpu_configs
   else:
     configs = get_tpu_config(
-        config_path_override=config_path_override, run_dir=run_dir
+      config_path_override=config_path_override, run_dir=run_dir
     )
   if not configs and mode == "local":
     configs = [{"mode": "local", "local_port": 8000, "tpu_version": "TPU v6e"}]
@@ -695,7 +696,7 @@ def start_server_idempotent(
 
   if success_count > 0:
     ensure_tpu_specs_cached(
-        config_path_override=config_path_override, run_dir=run_dir
+      config_path_override=config_path_override, run_dir=run_dir
     )
 
   return success_count > 0
@@ -711,10 +712,10 @@ def get_queue_info(port=8000):
   except Exception as e:  # pylint: disable=broad-exception-caught
     logging.error("Error checking queue on port %s: %s", port, e)
     return {
-        "error": f"Error checking queue: {str(e)}",
-        "total_jobs": 0,
-        "queued_count": 0,
-        "running_count": 0,
+      "error": f"Error checking queue: {str(e)}",
+      "total_jobs": 0,
+      "queued_count": 0,
+      "running_count": 0,
     }
 
 
@@ -795,10 +796,10 @@ def submit_job(action: str, code: str, timeout: int, port=8000):
       autotune_req = payload_dict
     except json.JSONDecodeError:
       autotune_req = {
-          "code_template": code,
-          "search_space": {},
-          "timeout": 120,
-          "total_timeout": max(timeout, 1800),
+        "code_template": code,
+        "search_space": {},
+        "timeout": 120,
+        "total_timeout": max(timeout, 1800),
       }
     submission = {"action": action, "autotune_request": autotune_req}
   else:
@@ -807,10 +808,10 @@ def submit_job(action: str, code: str, timeout: int, port=8000):
 
   payload = json.dumps(submission).encode("utf-8")
   req = urllib.request.Request(
-      endpoint,
-      data=payload,
-      headers={"Content-Type": "application/json"},
-      method="POST",
+    endpoint,
+    data=payload,
+    headers={"Content-Type": "application/json"},
+    method="POST",
   )
 
   try:
@@ -867,36 +868,36 @@ def check_job_status(job_id: str, tpu_configs=None):
         except Exception:  # pylint: disable=broad-exception-caught
           pass
         last_error = {
-            "job_id": job_id,
-            "status": "not_found",
-            "error": (
-                f"Job '{job_id}' not found on server port {port} (HTTP 404)"
-            ),
-            "http_code": 404,
+          "job_id": job_id,
+          "status": "not_found",
+          "error": (
+            f"Job '{job_id}' not found on server port {port} (HTTP 404)"
+          ),
+          "http_code": 404,
         }
       else:
         last_error = {
-            "job_id": job_id,
-            "status": "http_error",
-            "error": f"HTTP Error {e.code}",
-            "http_code": e.code,
+          "job_id": job_id,
+          "status": "http_error",
+          "error": f"HTTP Error {e.code}",
+          "http_code": e.code,
         }
     except Exception as e:  # pylint: disable=broad-exception-caught
       last_error = {
-          "job_id": job_id,
-          "status": "network_error",
-          "error": f"Network error: {str(e)}",
+        "job_id": job_id,
+        "status": "network_error",
+        "error": f"Network error: {str(e)}",
       }
 
   return last_error or {
-      "job_id": job_id,
-      "status": "not_found",
-      "error": "Job not found",
+    "job_id": job_id,
+    "status": "not_found",
+    "error": "Job not found",
   }
 
 
 def shard_search_space(
-    search_space: dict[str, Any], num_shards: int
+  search_space: dict[str, Any], num_shards: int
 ) -> list[dict[str, Any]]:
   """Recursively split search_space into up to num_shards non-overlapping sub-search-spaces."""
   if num_shards <= 1 or not search_space:
@@ -919,11 +920,11 @@ def shard_search_space(
       c = count_combos(ss)
       if c > 1 and c > best_combos:
         splittable_keys = [
-            k for k, v in ss.items() if isinstance(v, list) and len(v) > 1
+          k for k, v in ss.items() if isinstance(v, list) and len(v) > 1
         ]
         if splittable_keys:
           key_to_split = max(
-              splittable_keys, key=lambda k, current_ss=ss: len(current_ss[k])
+            splittable_keys, key=lambda k, current_ss=ss: len(current_ss[k])
           )
           best_idx = idx
           best_combos = c
@@ -949,90 +950,90 @@ def shard_search_space(
 
 def main():
   parser = argparse.ArgumentParser(
-      description="TPU Execution Client wrapper with Async Job Queue support."
+    description="TPU Execution Client wrapper with Async Job Queue support."
   )
   parser.add_argument(
-      "--mode",
-      choices=["local", "remote"],
-      default=None,
-      help=(
-          "Target execution environment: 'local' (agent running on TPU VM) or"
-          " 'remote' (agent accessing TPU VM remotely). Defaults to mode in"
-          " tpu_config.json."
-      ),
+    "--mode",
+    choices=["local", "remote"],
+    default=None,
+    help=(
+      "Target execution environment: 'local' (agent running on TPU VM) or"
+      " 'remote' (agent accessing TPU VM remotely). Defaults to mode in"
+      " tpu_config.json."
+    ),
   )
   parser.add_argument(
-      "--tpu_config",
-      default=None,
-      help="Path to tpu_config.json file.",
+    "--tpu_config",
+    default=None,
+    help="Path to tpu_config.json file.",
   )
   parser.add_argument(
-      "--run_dir",
-      default=None,
-      help="Run directory containing state.json / tpu_config.json.",
+    "--run_dir",
+    default=None,
+    help="Run directory containing state.json / tpu_config.json.",
   )
   parser.add_argument(
-      "--action",
-      choices=[
-          "compilation_test",
-          "correctness_test",
-          "performance_test",
-          "profile",
-          "autotune",
-      ],
-      help="Endpoint to call on server.",
+    "--action",
+    choices=[
+      "compilation_test",
+      "correctness_test",
+      "performance_test",
+      "profile",
+      "autotune",
+    ],
+    help="Endpoint to call on server.",
   )
   parser.add_argument(
-      "--code_file", help="Path to Python code or JSON payload to execute."
+    "--code_file", help="Path to Python code or JSON payload to execute."
   )
   parser.add_argument(
-      "--timeout",
-      type=int,
-      default=600,
-      help="Timeout in seconds for execution (default 600s).",
+    "--timeout",
+    type=int,
+    default=600,
+    help="Timeout in seconds for execution (default 600s).",
   )
   parser.add_argument(
-      "--poll_interval",
-      type=float,
-      default=2.0,
-      help="Interval in seconds to poll job status when queued.",
+    "--poll_interval",
+    type=float,
+    default=2.0,
+    help="Interval in seconds to poll job status when queued.",
   )
   parser.add_argument(
-      "--submit_only",
-      action="store_true",
-      help="Submit job to queue and exit immediately with job_id.",
+    "--submit_only",
+    action="store_true",
+    help="Submit job to queue and exit immediately with job_id.",
   )
   parser.add_argument("--check_job", help="Check status of a specific job_id.")
   parser.add_argument(
-      "--queue",
-      action="store_true",
-      help="Show current queue status of TPU server.",
+    "--queue",
+    action="store_true",
+    help="Show current queue status of TPU server.",
   )
   parser.add_argument(
-      "--cancel_job",
-      nargs="?",
-      const="__ALL__",
-      default=None,
-      help=(
-          "Cancel a hanging TPU job. Pass a job_id to cancel one job, or use"
-          " the bare flag to cancel every queued/running job on all"
-          " configured servers."
-      ),
+    "--cancel_job",
+    nargs="?",
+    const="__ALL__",
+    default=None,
+    help=(
+      "Cancel a hanging TPU job. Pass a job_id to cancel one job, or use"
+      " the bare flag to cancel every queued/running job on all"
+      " configured servers."
+    ),
   )
   parser.add_argument(
-      "--add_tpu",
-      help=(
-          "JSON string or file path containing TPU entry (tpu_name, zone,"
-          " project) to safely add to tpu_config.json."
-      ),
+    "--add_tpu",
+    help=(
+      "JSON string or file path containing TPU entry (tpu_name, zone,"
+      " project) to safely add to tpu_config.json."
+    ),
   )
   parser.add_argument(
-      "--output_dir",
-      default=None,
-      help=(
-          "Directory to save extracted trace artifacts (defaults to directory"
-          " of code_file or run_dir)."
-      ),
+    "--output_dir",
+    default=None,
+    help=(
+      "Directory to save extracted trace artifacts (defaults to directory"
+      " of code_file or run_dir)."
+    ),
   )
   args = parser.parse_args()
 
@@ -1042,7 +1043,7 @@ def main():
       with open(args.add_tpu, "r") as f:
         tpu_input = f.read()
     if add_tpu_to_config(
-        tpu_input, config_path_override=args.tpu_config, run_dir=args.run_dir
+      tpu_input, config_path_override=args.tpu_config, run_dir=args.run_dir
     ):
       print("TPU machine successfully added and configured.")
       sys.exit(0)
@@ -1051,7 +1052,7 @@ def main():
       sys.exit(1)
 
   tpu_configs = get_tpu_config(
-      config_path_override=args.tpu_config, run_dir=args.run_dir
+    config_path_override=args.tpu_config, run_dir=args.run_dir
   )
 
   if not start_server_idempotent(mode=args.mode, tpu_configs=tpu_configs):
@@ -1108,14 +1109,12 @@ def main():
   if args.check_job:
     job_info = check_job_status(args.check_job, tpu_configs=tpu_configs)
     if not job_info or job_info.get("status") in (
-        "not_found",
-        "http_error",
-        "network_error",
+      "not_found",
+      "http_error",
+      "network_error",
     ):
       err = (
-          job_info.get("error")
-          if isinstance(job_info, dict)
-          else "Unknown error"
+        job_info.get("error") if isinstance(job_info, dict) else "Unknown error"
       )
       logging.error("Job '%s' query failed: %s", args.check_job, err)
       sys.exit(1)
@@ -1151,27 +1150,27 @@ def main():
         err_str = res["error"]
         if len(err_str) > 100000:
           err_str = (
-              err_str[:100000]
-              + f"\n... [STDERR truncated from {len(res['error'])} chars]"
+            err_str[:100000]
+            + f"\n... [STDERR truncated from {len(res['error'])} chars]"
           )
         print(f"\nSTDERR:\n{err_str}")
       if res.get("output"):
         out_str = res["output"]
         if len(out_str) > 100000:
           out_str = (
-              out_str[:100000]
-              + f"\n... [STDOUT truncated from {len(res['output'])} chars]"
+            out_str[:100000]
+            + f"\n... [STDOUT truncated from {len(res['output'])} chars]"
           )
         print(f"\nSTDOUT:\n{out_str}")
       extract_trace_artifacts(
-          res, output_dir=args.output_dir, run_dir=args.run_dir
+        res, output_dir=args.output_dir, run_dir=args.run_dir
       )
     sys.exit(0 if (status == "completed" and res.get("exit_code") == 0) else 1)
 
   if not args.action or not args.code_file:
     parser.error(
-        "Both --action and --code_file are required unless using --check_job or"
-        " --queue."
+      "Both --action and --code_file are required unless using --check_job or"
+      " --queue."
     )
 
   if not os.path.exists(args.code_file):
@@ -1182,20 +1181,18 @@ def main():
     code = strip_markdown(f.read())
 
   effective_timeout = (
-      max(args.timeout, 1800) if args.action == "autotune" else args.timeout
+    max(args.timeout, 1800) if args.action == "autotune" else args.timeout
   )
 
   # Check if autotune sharding across multiple healthy TPUs is applicable
   healthy_configs = [
-      cfg
-      for cfg in tpu_configs
-      if check_health(port=cfg.get("local_port", 8000))
+    cfg for cfg in tpu_configs if check_health(port=cfg.get("local_port", 8000))
   ]
 
   if (
-      args.action == "autotune"
-      and len(healthy_configs) > 1
-      and not args.submit_only
+    args.action == "autotune"
+    and len(healthy_configs) > 1
+    and not args.submit_only
   ):
     try:
       payload_dict = json.loads(code)
@@ -1203,8 +1200,8 @@ def main():
       shards = shard_search_space(search_space, len(healthy_configs))
       if len(shards) > 1:
         logging.info(
-            "Sharding autotune sweep across %d healthy TPU servers...",
-            len(shards),
+          "Sharding autotune sweep across %d healthy TPU servers...",
+          len(shards),
         )
         sharded_jobs = []
         for i, shard in enumerate(shards):
@@ -1212,19 +1209,18 @@ def main():
           shard_payload["search_space"] = shard
           target_port = healthy_configs[i]["local_port"]
           sub_res = submit_job(
-              "autotune",
-              json.dumps(shard_payload),
-              effective_timeout,
-              port=target_port,
+            "autotune",
+            json.dumps(shard_payload),
+            effective_timeout,
+            port=target_port,
           )
           if sub_res and "job_id" in sub_res:
             sharded_jobs.append((sub_res["job_id"], target_port))
 
         if sharded_jobs:
           logging.info(
-              "Submitted %d sharded autotune sub-jobs. Polling for"
-              " completion...",
-              len(sharded_jobs),
+            "Submitted %d sharded autotune sub-jobs. Polling for completion...",
+            len(sharded_jobs),
           )
           all_shard_results = []
           success = True
@@ -1234,29 +1230,29 @@ def main():
             while True:
               j_info = check_job_status(sub_job_id, tpu_configs=tpu_configs)
               cur_status = (
-                  j_info.get("status") if isinstance(j_info, dict) else None
+                j_info.get("status") if isinstance(j_info, dict) else None
               )
 
               if cur_status == "network_error":
                 net_err_count += 1
                 err_detail = (
-                    j_info.get("error", "") if isinstance(j_info, dict) else ""
+                  j_info.get("error", "") if isinstance(j_info, dict) else ""
                 )
                 if net_err_count < 3:
                   logging.info(
-                      "Transient status check timeout on port %s (%s). TPU"
-                      " server busy or tunnel latency; retrying (%d/5)...",
-                      target_port,
-                      err_detail,
-                      net_err_count,
+                    "Transient status check timeout on port %s (%s). TPU"
+                    " server busy or tunnel latency; retrying (%d/5)...",
+                    target_port,
+                    err_detail,
+                    net_err_count,
                   )
                 else:
                   logging.warning(
-                      "Persistent status check delay on port %s (%s) (retry"
-                      " %d/5)...",
-                      target_port,
-                      err_detail,
-                      net_err_count,
+                    "Persistent status check delay on port %s (%s) (retry"
+                    " %d/5)...",
+                    target_port,
+                    err_detail,
+                    net_err_count,
                   )
                 if net_err_count >= 3:
                   for cfg in healthy_configs:
@@ -1270,9 +1266,9 @@ def main():
               else:
                 if net_err_count > 0:
                   logging.info(
-                      "Status check connection restored on port %s. Continuing"
-                      " autotune polling...",
-                      target_port,
+                    "Status check connection restored on port %s. Continuing"
+                    " autotune polling...",
+                    target_port,
                   )
                 net_err_count = 0
 
@@ -1281,9 +1277,7 @@ def main():
                 if cur_status == "completed" and r.get("exit_code") == 0:
                   try:
                     shard_data = json.loads(r.get("output", "{}"))
-                    all_shard_results.extend(
-                        shard_data.get("all_results", [])
-                    )
+                    all_shard_results.extend(shard_data.get("all_results", []))
                   except Exception:  # pylint: disable=broad-exception-caught
                     pass
                 else:
@@ -1298,20 +1292,18 @@ def main():
           print("Execution Result (Multi-TPU Sharded Autotune):")
           print("=" * 40)
           print(
-              f"Total Evaluated Configurations Across Shards:"
-              f" {len(all_shard_results)}"
+            f"Total Evaluated Configurations Across Shards:"
+            f" {len(all_shard_results)}"
           )
           print(f"Status: {'completed' if success else 'failed'}")
           print(f"Exit Code: {0 if success else 1}")
-          print(
-              f"\nSTDOUT:\n{json.dumps({'all_results': all_shard_results})}"
-          )
+          print(f"\nSTDOUT:\n{json.dumps({'all_results': all_shard_results})}")
           sys.exit(0 if success else 1)
     except Exception as e:  # pylint: disable=broad-exception-caught
       logging.warning(
-          "Failed to setup sharded autotune: %s. Falling back to single server"
-          " routing.",
-          e,
+        "Failed to setup sharded autotune: %s. Falling back to single server"
+        " routing.",
+        e,
       )
 
   # Select best TPU server by queue length
@@ -1320,22 +1312,22 @@ def main():
     best_port = 8000
 
   logging.info(
-      "Submitting '%s' request to TPU server on port %s (timeout=%ds)...",
-      args.action,
-      best_port,
-      effective_timeout,
+    "Submitting '%s' request to TPU server on port %s (timeout=%ds)...",
+    args.action,
+    best_port,
+    effective_timeout,
   )
   submit_res = submit_job(args.action, code, effective_timeout, port=best_port)
 
   if (
-      not submit_res
-      or "job_id" not in submit_res
-      or submit_res.get("status") == "failed"
+    not submit_res
+    or "job_id" not in submit_res
+    or submit_res.get("status") == "failed"
   ):
     err = (
-        submit_res.get("error")
-        if isinstance(submit_res, dict)
-        else "Submission failed"
+      submit_res.get("error")
+      if isinstance(submit_res, dict)
+      else "Submission failed"
     )
     logging.error("Failed to submit job to TPU server: %s", err)
     sys.exit(1)
@@ -1352,21 +1344,21 @@ def main():
     print(f"Status: {status}")
     print(f"Queue Position: {pos}")
     print(
-        "AGENT INSTRUCTION: Your request is enqueued. Use '--check_job"
-        f" {job_id}' to poll results later."
+      "AGENT INSTRUCTION: Your request is enqueued. Use '--check_job"
+      f" {job_id}' to poll results later."
     )
     sys.exit(0)
 
   logging.info(
-      "Job '%s' submitted. Status: %s (Queue position: %s)",
-      job_id,
-      status,
-      pos,
+    "Job '%s' submitted. Status: %s (Queue position: %s)",
+    job_id,
+    status,
+    pos,
   )
   if status == "queued":
     logging.info(
-        "TPU is currently busy. Job is waiting in queue. Polling for"
-        " completion..."
+      "TPU is currently busy. Job is waiting in queue. Polling for"
+      " completion..."
     )
 
   start_time = time.time()
@@ -1382,40 +1374,39 @@ def main():
 
       if current_status == "not_found":
         logging.error(
-            "ABORTING: Job '%s' record was lost (TPU server likely restarted)."
-            " Ending polling to prevent infinite 404 loop.",
-            job_id,
+          "ABORTING: Job '%s' record was lost (TPU server likely restarted)."
+          " Ending polling to prevent infinite 404 loop.",
+          job_id,
         )
         sys.exit(1)
 
       if current_status == "network_error":
         net_error_count += 1
         err_detail = (
-            job_info.get("error", "") if isinstance(job_info, dict) else ""
+          job_info.get("error", "") if isinstance(job_info, dict) else ""
         )
         if net_error_count < 3:
           logging.info(
-              "Transient status check timeout for job '%s' (%s). TPU server"
-              " may be busy compiling or experiencing transient SSH latency;"
-              " retrying in background (attempt %d/5)...",
-              job_id,
-              err_detail,
-              net_error_count,
+            "Transient status check timeout for job '%s' (%s). TPU server"
+            " may be busy compiling or experiencing transient SSH latency;"
+            " retrying in background (attempt %d/5)...",
+            job_id,
+            err_detail,
+            net_error_count,
           )
         else:
           logging.warning(
-              "Persistent status check delay for job '%s' (%s) (attempt"
-              " %d/5)...",
-              job_id,
-              err_detail,
-              net_error_count,
+            "Persistent status check delay for job '%s' (%s) (attempt %d/5)...",
+            job_id,
+            err_detail,
+            net_error_count,
           )
         if net_error_count >= 3 and selected_config:
           logging.info("Attempting auto-recovery of SSH tunnel...")
           ensure_ssh_tunnel(selected_config)
         if net_error_count >= 5:
           logging.error(
-              "Unrecoverable network failure while polling TPU server."
+            "Unrecoverable network failure while polling TPU server."
           )
           sys.exit(1)
         time.sleep(args.poll_interval)
@@ -1423,9 +1414,9 @@ def main():
       else:
         if net_error_count > 0:
           logging.info(
-              "Status polling connection re-established for job '%s'."
-              " Continuing...",
-              job_id,
+            "Status polling connection re-established for job '%s'."
+            " Continuing...",
+            job_id,
           )
         net_error_count = 0
 
@@ -1434,9 +1425,9 @@ def main():
       if current_status != last_status or current_pos != last_pos:
         if current_status == "queued":
           logging.info(
-              "Job '%s' is WAITING in queue (Position: %s)...",
-              job_id,
-              current_pos,
+            "Job '%s' is WAITING in queue (Position: %s)...",
+            job_id,
+            current_pos,
           )
         elif current_status == "running":
           logging.info("Job '%s' is now RUNNING on TPU...", job_id)
@@ -1461,36 +1452,36 @@ def main():
           err_str = res["error"]
           if len(err_str) > 100000:
             err_str = (
-                err_str[:100000]
-                + f"\n... [STDERR truncated from {len(res['error'])} chars]"
+              err_str[:100000]
+              + f"\n... [STDERR truncated from {len(res['error'])} chars]"
             )
           print(f"\nSTDERR:\n{err_str}")
         if res.get("output"):
           out_str = res["output"]
           if len(out_str) > 100000:
             out_str = (
-                out_str[:100000]
-                + f"\n... [STDOUT truncated from {len(res['output'])} chars]"
+              out_str[:100000]
+              + f"\n... [STDOUT truncated from {len(res['output'])} chars]"
             )
           print(f"\nSTDOUT:\n{out_str}")
 
         extract_trace_artifacts(
-            res,
-            output_dir=args.output_dir,
-            code_file=args.code_file,
-            run_dir=args.run_dir,
+          res,
+          output_dir=args.output_dir,
+          code_file=args.code_file,
+          run_dir=args.run_dir,
         )
 
         sys.exit(
-            0
-            if (current_status == "completed" and res.get("exit_code") == 0)
-            else 1
+          0
+          if (current_status == "completed" and res.get("exit_code") == 0)
+          else 1
         )
 
     if time.time() - start_time > max_wait:
       logging.error(
-          "Client timed out after waiting for job '%s' to complete in queue.",
-          job_id,
+        "Client timed out after waiting for job '%s' to complete in queue.",
+        job_id,
       )
       sys.exit(1)
 

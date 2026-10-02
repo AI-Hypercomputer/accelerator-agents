@@ -13,18 +13,17 @@ import matplotlib
 matplotlib.use("Agg")  # Headless: TPU VMs/agents have no display.
 import matplotlib.pyplot as plt  # pylint: disable=g-import-not-at-top
 import pandas as pd  # pylint: disable=g-import-not-at-top
-
 import xplane_loader  # pylint: disable=g-import-not-at-top
 
 
 def create_chart_from_xplane(
-    xplane_path: str,
-    sql_query: str,
-    chart_type: str = "bar",
-    x_col: str = "name",
-    y_col: str = "value",
-    title: str = "",
-    output_path: Optional[str] = None,
+  xplane_path: str,
+  sql_query: str,
+  chart_type: str = "bar",
+  x_col: str = "name",
+  y_col: str = "value",
+  title: str = "",
+  output_path: Optional[str] = None,
 ) -> str:
   """Generates a chart from xplane data using SQL query.
 
@@ -53,15 +52,15 @@ def create_chart_from_xplane(
     missing = [c for c in (x_col, y_col) if c not in df.columns]
     if missing:
       return (
-          f"Column(s) {missing} not in query result. Available columns:"
-          f" {list(df.columns)}. Pass --x-col/--y-col to match your SELECT"
-          " aliases."
+        f"Column(s) {missing} not in query result. Available columns:"
+        f" {list(df.columns)}. Pass --x-col/--y-col to match your SELECT"
+        " aliases."
       )
 
     # Op names in a trace are routinely 100+ chars; untruncated they make
     # tight_layout fail to fit the axes and emit a warning.
-    labels = df[x_col].astype(str).map(
-        lambda s: s if len(s) <= 40 else s[:37] + "..."
+    labels = (
+      df[x_col].astype(str).map(lambda s: s if len(s) <= 40 else s[:37] + "...")
     )
 
     plt.figure(figsize=(10, 6))
@@ -89,40 +88,40 @@ def create_chart_from_xplane(
 
 def main():
   parser = argparse.ArgumentParser(
-      description="Generate charts from an XProf xplane.pb file using SQL."
+    description="Generate charts from an XProf xplane.pb file using SQL."
   )
   parser.add_argument("xplane_path", help="Path to the .xplane.pb file.")
   parser.add_argument("sql_query", help="SQL query to retrieve chart data.")
   parser.add_argument(
-      "--chart-type",
-      "--chart_type",
-      dest="chart_type",
-      default="bar",
-      choices=["bar", "pie"],
-      help="Chart type (bar or pie).",
+    "--chart-type",
+    "--chart_type",
+    dest="chart_type",
+    default="bar",
+    choices=["bar", "pie"],
+    help="Chart type (bar or pie).",
   )
   parser.add_argument(
-      "--x-col",
-      "--x_col",
-      dest="x_col",
-      default="name",
-      help="Column for X axis.",
+    "--x-col",
+    "--x_col",
+    dest="x_col",
+    default="name",
+    help="Column for X axis.",
   )
   parser.add_argument(
-      "--y-col",
-      "--y_col",
-      dest="y_col",
-      default="value",
-      help="Column for Y axis.",
+    "--y-col",
+    "--y_col",
+    dest="y_col",
+    default="value",
+    help="Column for Y axis.",
   )
   parser.add_argument("--title", default="", help="Chart title.")
   parser.add_argument(
-      "--output-path",
-      "--output_path",
-      "-o",
-      dest="output_path",
-      default=None,
-      help="Output file path for the chart PNG (defaults to <xplane_path>.png).",
+    "--output-path",
+    "--output_path",
+    "-o",
+    dest="output_path",
+    default=None,
+    help="Output file path for the chart PNG (defaults to <xplane_path>.png).",
   )
 
   argv = sys.argv[1:]
@@ -131,13 +130,13 @@ def main():
   args = parser.parse_args(argv)
 
   result = create_chart_from_xplane(
-      args.xplane_path,
-      args.sql_query,
-      chart_type=args.chart_type,
-      x_col=args.x_col,
-      y_col=args.y_col,
-      title=args.title,
-      output_path=args.output_path,
+    args.xplane_path,
+    args.sql_query,
+    chart_type=args.chart_type,
+    x_col=args.x_col,
+    y_col=args.y_col,
+    title=args.title,
+    output_path=args.output_path,
   )
   print(result)
 

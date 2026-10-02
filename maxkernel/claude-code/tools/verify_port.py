@@ -47,14 +47,15 @@ Exit codes:
 
 import argparse
 import json
-from pathlib import Path
-import sys
-import traceback
 
 # This process runs the CPU check itself; the --device tpu path submits a
 # generated script through tpu_client.py instead and never needs a local
 # accelerator. Set before jax is imported either way.
 import os
+import sys
+import traceback
+from pathlib import Path
+
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
 import numpy as np
@@ -77,9 +78,9 @@ except ImportError:
 # Sub-fp16 dtypes were stored as raw bit patterns because numpy has no native
 # representation for them. Reconstitute through ml_dtypes, which JAX ships.
 RAW_BIT_DTYPES = {
-    "bfloat16": "bfloat16",
-    "float8_e4m3fn": "float8_e4m3fn",
-    "float8_e5m2": "float8_e5m2",
+  "bfloat16": "bfloat16",
+  "float8_e4m3fn": "float8_e4m3fn",
+  "float8_e5m2": "float8_e5m2",
 }
 
 
@@ -90,8 +91,8 @@ def decode(array, meta):
   tag = meta["dtype"]
   if ml_dtypes is None:
     raise RuntimeError(
-        f"{meta['key']} is stored as raw {tag} bits but ml_dtypes is not "
-        "importable, so it cannot be reconstituted."
+      f"{meta['key']} is stored as raw {tag} bits but ml_dtypes is not "
+      "importable, so it cannot be reconstituted."
     )
   target = getattr(ml_dtypes, RAW_BIT_DTYPES[tag])
   return array.view(target)
@@ -102,14 +103,19 @@ def load_computation(base_path):
   src = Path(base_path).read_text()
   if "def computation" not in src:
     raise LookupError(
-        f"{base_path} has no module-level `computation` -- the harness binds "
-        "that name and refuses the file without it."
+      f"{base_path} has no module-level `computation` -- the harness binds "
+      "that name and refuses the file without it."
     )
-  ns = {"__name__": "__maxkernel_base__", "__file__": str(Path(base_path).resolve())}
+  ns = {
+    "__name__": "__maxkernel_base__",
+    "__file__": str(Path(base_path).resolve()),
+  }
   exec(compile(src, str(base_path), "exec"), ns)  # pylint: disable=exec-used
   fn = ns.get("computation")
   if not callable(fn):
-    raise LookupError(f"{base_path} defines `computation` but it is not callable.")
+    raise LookupError(
+      f"{base_path} defines `computation` but it is not callable."
+    )
   return fn
 
 
@@ -130,15 +136,21 @@ def build_args(npz, config):
 
 def compare(expected, actual, atol, rtol):
   """Elementwise comparison with the worst offender located, not just counted."""
-  exp = np.asarray(expected, dtype=np.float64) if np.issubdtype(
-      np.asarray(expected).dtype, np.number) else np.asarray(expected)
-  act = np.asarray(actual, dtype=np.float64) if np.issubdtype(
-      np.asarray(actual).dtype, np.number) else np.asarray(actual)
+  exp = (
+    np.asarray(expected, dtype=np.float64)
+    if np.issubdtype(np.asarray(expected).dtype, np.number)
+    else np.asarray(expected)
+  )
+  act = (
+    np.asarray(actual, dtype=np.float64)
+    if np.issubdtype(np.asarray(actual).dtype, np.number)
+    else np.asarray(actual)
+  )
 
   if exp.shape != act.shape:
     return {
-        "ok": False,
-        "reason": f"shape mismatch: expected {list(exp.shape)}, got {list(act.shape)}",
+      "ok": False,
+      "reason": f"shape mismatch: expected {list(exp.shape)}, got {list(act.shape)}",
     }
 
   diff = np.abs(exp - act)
@@ -146,17 +158,21 @@ def compare(expected, actual, atol, rtol):
   bad = diff > tol
   n_bad = int(bad.sum())
   worst_flat = int(np.argmax(diff - tol)) if diff.size else 0
-  worst_index = list(map(int, np.unravel_index(worst_flat, diff.shape))) if diff.size else []
+  worst_index = (
+    list(map(int, np.unravel_index(worst_flat, diff.shape)))
+    if diff.size
+    else []
+  )
 
   return {
-      "ok": n_bad == 0,
-      "elements": int(diff.size),
-      "failing_elements": n_bad,
-      "failing_fraction": float(n_bad / diff.size) if diff.size else 0.0,
-      "max_abs_diff": float(diff.max()) if diff.size else 0.0,
-      "worst_index": worst_index,
-      "expected_at_worst": float(exp.flat[worst_flat]) if diff.size else 0.0,
-      "actual_at_worst": float(act.flat[worst_flat]) if diff.size else 0.0,
+    "ok": n_bad == 0,
+    "elements": int(diff.size),
+    "failing_elements": n_bad,
+    "failing_fraction": float(n_bad / diff.size) if diff.size else 0.0,
+    "max_abs_diff": float(diff.max()) if diff.size else 0.0,
+    "worst_index": worst_index,
+    "expected_at_worst": float(exp.flat[worst_flat]) if diff.size else 0.0,
+    "actual_at_worst": float(act.flat[worst_flat]) if diff.size else 0.0,
   }
 
 
@@ -173,30 +189,30 @@ def diagnose(results):
       continue
     if "reason" in r:
       hints.append(
-          f"output {r['index']}: {r['reason']} -- the port's output structure "
-          "does not match the source's. Check the return signature and whether "
-          "an output was transposed, split or merged."
+        f"output {r['index']}: {r['reason']} -- the port's output structure "
+        "does not match the source's. Check the return signature and whether "
+        "an output was transposed, split or merged."
       )
       continue
     frac = r["failing_fraction"]
     if frac > 0.95:
       hints.append(
-          f"output {r['index']}: {frac:.0%} of elements disagree -- this is a "
-          "wholesale semantic difference (wrong operation, wrong axis, missing "
-          "scale factor), not accumulated rounding."
+        f"output {r['index']}: {frac:.0%} of elements disagree -- this is a "
+        "wholesale semantic difference (wrong operation, wrong axis, missing "
+        "scale factor), not accumulated rounding."
       )
     elif frac < 0.02:
       hints.append(
-          f"output {r['index']}: only {frac:.2%} of elements disagree, worst at "
-          f"index {r['worst_index']} -- look at boundary handling: masking, a "
-          "ragged tail, an off-by-one in a window, or non-divisible tiling."
+        f"output {r['index']}: only {frac:.2%} of elements disagree, worst at "
+        f"index {r['worst_index']} -- look at boundary handling: masking, a "
+        "ragged tail, an off-by-one in a window, or non-divisible tiling."
       )
     else:
       hints.append(
-          f"output {r['index']}: {frac:.0%} of elements disagree (max abs diff "
-          f"{r['max_abs_diff']:.3e}, expected {r['expected_at_worst']:.6g} vs "
-          f"got {r['actual_at_worst']:.6g}) -- check accumulator dtype and "
-          "reduction order before suspecting the algorithm."
+        f"output {r['index']}: {frac:.0%} of elements disagree (max abs diff "
+        f"{r['max_abs_diff']:.3e}, expected {r['expected_at_worst']:.6g} vs "
+        f"got {r['actual_at_worst']:.6g}) -- check accumulator dtype and "
+        "reduction order before suspecting the algorithm."
       )
   return hints
 
@@ -216,7 +232,7 @@ def verify(base_path, golden_npz, golden_meta, atol, rtol):
       raw = jax.jit(computation, static_argnums=static_argnums)(*args)
     except Exception as e:  # pylint: disable=broad-except
       raise RuntimeError(
-          f"config {config['index']}: base.py's computation raised {type(e).__name__}: {e}"
+        f"config {config['index']}: base.py's computation raised {type(e).__name__}: {e}"
       ) from e
 
     actual = [np.asarray(x) for x in jax.tree_util.tree_leaves(raw)]
@@ -224,18 +240,22 @@ def verify(base_path, golden_npz, golden_meta, atol, rtol):
 
     if len(actual) != len(expected_meta):
       all_ok = False
-      config_reports.append({
+      config_reports.append(
+        {
           "index": config["index"],
           "ok": False,
-          "outputs": [{
+          "outputs": [
+            {
               "index": 0,
               "ok": False,
               "reason": (
-                  f"output count mismatch: source produced {len(expected_meta)} "
-                  f"tensors, port produced {len(actual)}"
+                f"output count mismatch: source produced {len(expected_meta)} "
+                f"tensors, port produced {len(actual)}"
               ),
-          }],
-      })
+            }
+          ],
+        }
+      )
       continue
 
     results = []
@@ -249,7 +269,9 @@ def verify(base_path, golden_npz, golden_meta, atol, rtol):
 
     ok = all(r.get("ok") for r in results)
     all_ok = all_ok and ok
-    config_reports.append({"index": config["index"], "ok": ok, "outputs": results})
+    config_reports.append(
+      {"index": config["index"], "ok": ok, "outputs": results}
+    )
 
   hints = []
   for cr in config_reports:
@@ -257,14 +279,14 @@ def verify(base_path, golden_npz, golden_meta, atol, rtol):
       hints.extend(diagnose(cr["outputs"]))
 
   return {
-      "port_verified": all_ok,
-      "base_path": str(Path(base_path).resolve()),
-      "golden_npz": str(Path(golden_npz).resolve()),
-      "atol": atol,
-      "rtol": rtol,
-      "backend": jax.default_backend(),
-      "configs": config_reports,
-      "diagnosis": hints,
+    "port_verified": all_ok,
+    "base_path": str(Path(base_path).resolve()),
+    "golden_npz": str(Path(golden_npz).resolve()),
+    "atol": atol,
+    "rtol": rtol,
+    "backend": jax.default_backend(),
+    "configs": config_reports,
+    "diagnosis": hints,
   }
 
 
@@ -333,51 +355,63 @@ def build_tpu_script(base_path, golden_npz, golden_meta, atol, rtol):
   """Renders a self-contained verification script with the golden data inlined."""
   import base64
   import zlib
+
   blob = base64.b64encode(
-      zlib.compress(Path(golden_npz).read_bytes(), 6)
+    zlib.compress(Path(golden_npz).read_bytes(), 6)
   ).decode("ascii")
   script = TPU_SCRIPT_TEMPLATE.format(
-      manifest=Path(golden_meta).read_text(),
-      blob=blob,
-      atol=atol,
-      rtol=rtol,
-      base_src=Path(base_path).read_text(),
+    manifest=Path(golden_meta).read_text(),
+    blob=blob,
+    atol=atol,
+    rtol=rtol,
+    base_src=Path(base_path).read_text(),
   )
   return script, len(blob)
 
 
-def verify_on_tpu(base_path, golden_npz, golden_meta, atol, rtol,
-                  max_embed_bytes, script_out):
+def verify_on_tpu(
+  base_path, golden_npz, golden_meta, atol, rtol, max_embed_bytes, script_out
+):
   """Submits the verification to the TPU through the sanctioned client."""
   import subprocess
 
-  script, blob_len = build_tpu_script(base_path, golden_npz, golden_meta,
-                                      atol, rtol)
+  script, blob_len = build_tpu_script(
+    base_path, golden_npz, golden_meta, atol, rtol
+  )
   if blob_len > max_embed_bytes:
     raise MemoryError(
-        f"golden data is {blob_len / 1e6:.1f} MB once base64-encoded, over the "
-        f"{max_embed_bytes / 1e6:.1f} MB embed cap. tpu_client.py submits "
-        "source text only, so there is no way to ship it without inlining. Use "
-        "--device cpu -- the check is just as valid there for a pure-JAX "
-        "base.py -- or raise --max-embed-bytes."
+      f"golden data is {blob_len / 1e6:.1f} MB once base64-encoded, over the "
+      f"{max_embed_bytes / 1e6:.1f} MB embed cap. tpu_client.py submits "
+      "source text only, so there is no way to ship it without inlining. Use "
+      "--device cpu -- the check is just as valid there for a pure-JAX "
+      "base.py -- or raise --max-embed-bytes."
     )
 
   path = Path(script_out or (Path(base_path).parent / "verify_port_tpu.py"))
   path.write_text(script, encoding="utf-8")
 
   proc = subprocess.run(
-      [sys.executable, str(ROOT / "tools" / "tpu_client.py"),
-       "--action", "correctness_test", "--code_file", str(path)],
-      capture_output=True, text=True, timeout=1800, check=False,
+    [
+      sys.executable,
+      str(ROOT / "tools" / "tpu_client.py"),
+      "--action",
+      "correctness_test",
+      "--code_file",
+      str(path),
+    ],
+    capture_output=True,
+    text=True,
+    timeout=1800,
+    check=False,
   )
   stdout = proc.stdout or ""
   return ("PORT_CORRECTNESS: True" in stdout), {
-      "device": "tpu",
-      "script": str(path),
-      "embedded_bytes": blob_len,
-      "client_returncode": proc.returncode,
-      "stdout": stdout[-4000:],
-      "stderr": (proc.stderr or "")[-2000:],
+    "device": "tpu",
+    "script": str(path),
+    "embedded_bytes": blob_len,
+    "client_returncode": proc.returncode,
+    "stdout": stdout[-4000:],
+    "stderr": (proc.stderr or "")[-2000:],
   }
 
 
@@ -395,7 +429,9 @@ def device_mismatch(golden_meta_path, ran_on):
   Returns a warning string, or None when the two sides agree.
   """
   try:
-    golden_on = json.loads(Path(golden_meta_path).read_text()).get("device", "cpu")
+    golden_on = json.loads(Path(golden_meta_path).read_text()).get(
+      "device", "cpu"
+    )
   except Exception:  # pylint: disable=broad-except
     return None
   if golden_on == ran_on:
@@ -404,39 +440,54 @@ def device_mismatch(golden_meta_path, ran_on):
   # moving this check -- rather than one, since which is cheaper depends on
   # what has already been computed.
   if ran_on == "cpu":
-    fixes = ("re-capture on CPU with `capture_torch_golden.py --device cpu`, "
-             "or re-run this check on the accelerator with `--device tpu`")
+    fixes = (
+      "re-capture on CPU with `capture_torch_golden.py --device cpu`, "
+      "or re-run this check on the accelerator with `--device tpu`"
+    )
   else:
-    fixes = ("re-capture on the accelerator with "
-             "`capture_torch_golden.py --device xla`, or re-run this check on "
-             "the host with `--device cpu`")
+    fixes = (
+      "re-capture on the accelerator with "
+      "`capture_torch_golden.py --device xla`, or re-run this check on "
+      "the host with `--device cpu`"
+    )
   return (
-      f"device mismatch: the golden values were captured on {golden_on!r} and "
-      f"base.py ran on {ran_on!r}. A failure here mixes a possible port error "
-      f"with the numeric difference between two devices. To compare like with "
-      f"like, {fixes}."
+    f"device mismatch: the golden values were captured on {golden_on!r} and "
+    f"base.py ran on {ran_on!r}. A failure here mixes a possible port error "
+    f"with the numeric difference between two devices. To compare like with "
+    f"like, {fixes}."
   )
 
 
 def main():
   parser = argparse.ArgumentParser(
-      description="Verify base.py against golden values captured from the source."
+    description="Verify base.py against golden values captured from the source."
   )
   parser.add_argument("base_path")
   parser.add_argument("golden_npz")
   parser.add_argument("golden_meta")
   parser.add_argument("--atol", type=float, default=1e-2)
   parser.add_argument("--rtol", type=float, default=1e-2)
-  parser.add_argument("--device", default="cpu", choices=["cpu", "tpu", "auto"],
-                      help="cpu (default) runs base.py on the local JAX CPU "
-                           "backend; tpu submits a self-contained script "
-                           "through tpu_client.py; auto uses tpu when the "
-                           "golden data fits under --max-embed-bytes")
-  parser.add_argument("--max-embed-bytes", type=int, default=8_000_000,
-                      help="ceiling on the base64-inlined golden payload for "
-                           "--device tpu (tpu_client.py submits source text only)")
-  parser.add_argument("--emit-tpu-script", metavar="PATH",
-                      help="where to write the generated TPU script")
+  parser.add_argument(
+    "--device",
+    default="cpu",
+    choices=["cpu", "tpu", "auto"],
+    help="cpu (default) runs base.py on the local JAX CPU "
+    "backend; tpu submits a self-contained script "
+    "through tpu_client.py; auto uses tpu when the "
+    "golden data fits under --max-embed-bytes",
+  )
+  parser.add_argument(
+    "--max-embed-bytes",
+    type=int,
+    default=8_000_000,
+    help="ceiling on the base64-inlined golden payload for "
+    "--device tpu (tpu_client.py submits source text only)",
+  )
+  parser.add_argument(
+    "--emit-tpu-script",
+    metavar="PATH",
+    help="where to write the generated TPU script",
+  )
   parser.add_argument("--out", help="write the verification report JSON here")
   args = parser.parse_args()
 
@@ -448,8 +499,14 @@ def main():
   if args.device in ("tpu", "auto"):
     try:
       passed, info = verify_on_tpu(
-          args.base_path, args.golden_npz, args.golden_meta,
-          args.atol, args.rtol, args.max_embed_bytes, args.emit_tpu_script)
+        args.base_path,
+        args.golden_npz,
+        args.golden_meta,
+        args.atol,
+        args.rtol,
+        args.max_embed_bytes,
+        args.emit_tpu_script,
+      )
     except MemoryError as e:
       if args.device == "tpu":
         print(f"TOO_LARGE_TO_EMBED: {e}", file=sys.stderr)
@@ -458,22 +515,31 @@ def main():
       print(f"NOTE: falling back to CPU -- {e}", file=sys.stderr)
     else:
       warning = device_mismatch(args.golden_meta, "tpu")
-      report = {"port_verified": passed, "atol": args.atol, "rtol": args.rtol,
-                "base_path": str(Path(args.base_path).resolve()),
-                "device": "tpu", "device_warning": warning, **info}
+      report = {
+        "port_verified": passed,
+        "atol": args.atol,
+        "rtol": args.rtol,
+        "base_path": str(Path(args.base_path).resolve()),
+        "device": "tpu",
+        "device_warning": warning,
+        **info,
+      }
       if args.out:
         Path(args.out).write_text(json.dumps(report, indent=2) + "\n")
       if warning:
         print(f"WARNING: {warning}\n", file=sys.stderr)
-      print(f"PORT_VERIFIED: {passed}  (device=tpu, "
-            f"{info['embedded_bytes'] / 1e6:.1f} MB embedded)")
+      print(
+        f"PORT_VERIFIED: {passed}  (device=tpu, "
+        f"{info['embedded_bytes'] / 1e6:.1f} MB embedded)"
+      )
       if not passed:
         print(info["stdout"])
       sys.exit(0 if passed else 1)
 
   try:
-    report = verify(args.base_path, args.golden_npz, args.golden_meta,
-                    args.atol, args.rtol)
+    report = verify(
+      args.base_path, args.golden_npz, args.golden_meta, args.atol, args.rtol
+    )
   except LookupError as e:
     print(f"MALFORMED: {e}", file=sys.stderr)
     sys.exit(3)
@@ -481,14 +547,20 @@ def main():
     print(f"PORT_UNRUNNABLE: {e}", file=sys.stderr)
     traceback.print_exc()
     if args.out:
-      Path(args.out).write_text(json.dumps({
-          "port_verified": False,
-          "error": str(e),
-          "diagnosis": [
+      Path(args.out).write_text(
+        json.dumps(
+          {
+            "port_verified": False,
+            "error": str(e),
+            "diagnosis": [
               "base.py could not be executed against the recorded inputs. This "
               "is a signature or shape error in the port, not a numerical one."
-          ],
-      }, indent=2) + "\n")
+            ],
+          },
+          indent=2,
+        )
+        + "\n"
+      )
     sys.exit(2)
 
   warning = device_mismatch(args.golden_meta, "cpu")
@@ -501,8 +573,10 @@ def main():
 
   if report["port_verified"]:
     n = sum(len(c["outputs"]) for c in report["configs"])
-    print(f"PORT_VERIFIED: True  ({len(report['configs'])} configs, {n} outputs, "
-          f"atol={args.atol:g} rtol={args.rtol:g}, backend={report['backend']})")
+    print(
+      f"PORT_VERIFIED: True  ({len(report['configs'])} configs, {n} outputs, "
+      f"atol={args.atol:g} rtol={args.rtol:g}, backend={report['backend']})"
+    )
     sys.exit(0)
 
   print("PORT_VERIFIED: False")
@@ -513,10 +587,12 @@ def main():
       if "reason" in r:
         print(f"  config {cr['index']} output {r['index']}: {r['reason']}")
       else:
-        print(f"  config {cr['index']} output {r['index']}: "
-              f"{r['failing_elements']}/{r['elements']} elements outside tolerance, "
-              f"max abs diff {r['max_abs_diff']:.3e} at {r['worst_index']} "
-              f"(expected {r['expected_at_worst']:.6g}, got {r['actual_at_worst']:.6g})")
+        print(
+          f"  config {cr['index']} output {r['index']}: "
+          f"{r['failing_elements']}/{r['elements']} elements outside tolerance, "
+          f"max abs diff {r['max_abs_diff']:.3e} at {r['worst_index']} "
+          f"(expected {r['expected_at_worst']:.6g}, got {r['actual_at_worst']:.6g})"
+        )
   print("\nDiagnosis:")
   for h in report["diagnosis"]:
     print(f"  - {h}")

@@ -29,13 +29,18 @@ Exit codes:
 
 import argparse
 import json
-from pathlib import Path
 import re
 import sys
+from pathlib import Path
 
 # Directories and files that are never user source.
 SKIP_DIRS = {
-    "__pycache__", ".git", ".ipynb_checkpoints", "build", "dist", ".mypy_cache"
+  "__pycache__",
+  ".git",
+  ".ipynb_checkpoints",
+  "build",
+  "dist",
+  ".mypy_cache",
 }
 SOURCE_SUFFIXES = {".py", ".cu", ".cuh", ".cc", ".cpp", ".h", ".hpp"}
 
@@ -46,57 +51,75 @@ SOURCE_SUFFIXES = {".py", ".cu", ".cuh", ".cc", ".cpp", ".h", ".hpp"}
 # ---------------------------------------------------------------------------
 
 CUDA_MARKERS = [
-    (re.compile(r"\b__global__\b"), "__global__ kernel entry point"),
-    (re.compile(r"\b__device__\b"), "__device__ function"),
-    (re.compile(r"\b(?:threadIdx|blockIdx|blockDim|gridDim)\b"), "SIMT index arithmetic"),
-    (re.compile(r"\b__syncthreads\s*\("), "__syncthreads barrier"),
-    (re.compile(r"\b__shared__\b"), "__shared__ memory declaration"),
-    (re.compile(r"\bcuda(?:Malloc|Memcpy|Free|DeviceSynchronize)\b"), "CUDA runtime API call"),
-    (re.compile(r"<<<[^>]*>>>"), "kernel launch configuration"),
-    (re.compile(r"\b__shfl(?:_down|_up|_xor)?_sync\b"), "warp shuffle"),
-    (re.compile(r"\bwmma\s*::"), "tensor-core wmma fragment"),
+  (re.compile(r"\b__global__\b"), "__global__ kernel entry point"),
+  (re.compile(r"\b__device__\b"), "__device__ function"),
+  (
+    re.compile(r"\b(?:threadIdx|blockIdx|blockDim|gridDim)\b"),
+    "SIMT index arithmetic",
+  ),
+  (re.compile(r"\b__syncthreads\s*\("), "__syncthreads barrier"),
+  (re.compile(r"\b__shared__\b"), "__shared__ memory declaration"),
+  (
+    re.compile(r"\bcuda(?:Malloc|Memcpy|Free|DeviceSynchronize)\b"),
+    "CUDA runtime API call",
+  ),
+  (re.compile(r"<<<[^>]*>>>"), "kernel launch configuration"),
+  (re.compile(r"\b__shfl(?:_down|_up|_xor)?_sync\b"), "warp shuffle"),
+  (re.compile(r"\bwmma\s*::"), "tensor-core wmma fragment"),
 ]
 
 # CUDA carried inside a Python file for torch.utils.cpp_extension.load_inline
 # -- the KernelBench layout.
 INLINE_CUDA_MARKERS = [
-    (re.compile(r"\bload_inline\s*\("), "torch.utils.cpp_extension.load_inline"),
-    (re.compile(r"\bcuda_sources\s*="), "cuda_sources string"),
-    (re.compile(r"\bCUDAExtension\b"), "CUDAExtension build"),
+  (re.compile(r"\bload_inline\s*\("), "torch.utils.cpp_extension.load_inline"),
+  (re.compile(r"\bcuda_sources\s*="), "cuda_sources string"),
+  (re.compile(r"\bCUDAExtension\b"), "CUDAExtension build"),
 ]
 
 TORCH_MARKERS = [
-    (re.compile(r"^\s*import\s+torch\b", re.M), "import torch"),
-    (re.compile(r"^\s*from\s+torch\b", re.M), "from torch import ..."),
-    (re.compile(r"\bnn\.Module\b"), "nn.Module subclass"),
-    (re.compile(r"\btorch\.(?:nn|Tensor|randn|zeros|empty|cat|matmul)\b"), "torch API call"),
+  (re.compile(r"^\s*import\s+torch\b", re.M), "import torch"),
+  (re.compile(r"^\s*from\s+torch\b", re.M), "from torch import ..."),
+  (re.compile(r"\bnn\.Module\b"), "nn.Module subclass"),
+  (
+    re.compile(r"\btorch\.(?:nn|Tensor|randn|zeros|empty|cat|matmul)\b"),
+    "torch API call",
+  ),
 ]
 
 JAX_MARKERS = [
-    (re.compile(r"^\s*import\s+jax\b", re.M), "import jax"),
-    (re.compile(r"^\s*from\s+jax\b", re.M), "from jax import ..."),
-    (re.compile(r"\bjax\.numpy\b|\bjnp\."), "jax.numpy usage"),
-    (re.compile(r"\bjax\.lax\b|\blax\."), "jax.lax usage"),
+  (re.compile(r"^\s*import\s+jax\b", re.M), "import jax"),
+  (re.compile(r"^\s*from\s+jax\b", re.M), "from jax import ..."),
+  (re.compile(r"\bjax\.numpy\b|\bjnp\."), "jax.numpy usage"),
+  (re.compile(r"\bjax\.lax\b|\blax\."), "jax.lax usage"),
 ]
 
 PALLAS_MARKERS = [
-    (re.compile(r"\bpallas_call\b"), "pl.pallas_call"),
-    (re.compile(r"from\s+jax\.experimental\s+import\s+pallas"), "pallas import"),
-    (re.compile(r"\bpltpu\."), "pallas TPU primitives"),
+  (re.compile(r"\bpallas_call\b"), "pl.pallas_call"),
+  (re.compile(r"from\s+jax\.experimental\s+import\s+pallas"), "pallas import"),
+  (re.compile(r"\bpltpu\."), "pallas TPU primitives"),
 ]
 
 # A file is a plausible *primary* only if it exposes something callable that
 # the loop can bind. Ordered most- to least-specific.
 PY_ENTRY_MARKERS = [
-    (re.compile(r"^\s*def\s+computation\s*\(", re.M), "def computation(...)"),
-    (re.compile(r"^\s*class\s+Model\s*\(", re.M), "class Model(...)  [KernelBench]"),
-    (re.compile(r"^\s*def\s+get_inputs\s*\(", re.M), "def get_inputs()  [KernelBench]"),
-    (re.compile(r"^\s*(?:class\s+\w+\s*\(\s*(?:nn\.)?Module)", re.M), "nn.Module subclass"),
-    (re.compile(r"^\s{0,4}def\s+forward\s*\(", re.M), "def forward(...)"),
+  (re.compile(r"^\s*def\s+computation\s*\(", re.M), "def computation(...)"),
+  (
+    re.compile(r"^\s*class\s+Model\s*\(", re.M),
+    "class Model(...)  [KernelBench]",
+  ),
+  (
+    re.compile(r"^\s*def\s+get_inputs\s*\(", re.M),
+    "def get_inputs()  [KernelBench]",
+  ),
+  (
+    re.compile(r"^\s*(?:class\s+\w+\s*\(\s*(?:nn\.)?Module)", re.M),
+    "nn.Module subclass",
+  ),
+  (re.compile(r"^\s{0,4}def\s+forward\s*\(", re.M), "def forward(...)"),
 ]
 
 CUDA_ENTRY_MARKERS = [
-    (re.compile(r"\b__global__\b"), "__global__ kernel"),
+  (re.compile(r"\b__global__\b"), "__global__ kernel"),
 ]
 
 
@@ -132,11 +155,11 @@ def classify_text(text, suffix):
   pallas_hits = _scan(text, PALLAS_MARKERS)
 
   evidence = {
-      "cuda": cuda_hits,
-      "inline_cuda": inline_hits,
-      "torch": torch_hits,
-      "jax": jax_hits,
-      "pallas": pallas_hits,
+    "cuda": cuda_hits,
+    "inline_cuda": inline_hits,
+    "torch": torch_hits,
+    "jax": jax_hits,
+    "pallas": pallas_hits,
   }
 
   # A .cu/.cuh file is CUDA by extension even if it is mostly host code.
@@ -228,19 +251,22 @@ def classify_paths(paths):
     try:
       text = path.read_text(errors="replace")
     except OSError as e:
-      records.append({
+      records.append(
+        {
           "path": str(path.resolve()),
           "language": "unreadable",
           "error": str(e),
           "has_entry_point": False,
           "slot_candidacy": [],
           "evidence": {},
-      })
+        }
+      )
       continue
 
     language, evidence = classify_text(text, path.suffix)
     entry_ok, entry_evidence = find_entry_point(text, language)
-    records.append({
+    records.append(
+      {
         "path": str(path.resolve()),
         "language": language,
         "has_pallas": has_pallas(evidence),
@@ -249,7 +275,8 @@ def classify_paths(paths):
         "slot_candidacy": slot_candidacy(language, entry_ok),
         "evidence": {k: v for k, v in evidence.items() if v},
         "bytes": len(text),
-    })
+      }
+    )
 
   return records
 
@@ -272,16 +299,16 @@ def propose_slots(records):
     primary = primaries[0]
   elif not primaries:
     ambiguity = (
-        "No file exposes an entry point the loop can bind. Expected a JAX or "
-        "PyTorch module with a `computation`, `forward`, `Model` or "
-        "`get_inputs` definition, or a CUDA file with a `__global__` kernel."
+      "No file exposes an entry point the loop can bind. Expected a JAX or "
+      "PyTorch module with a `computation`, `forward`, `Model` or "
+      "`get_inputs` definition, or a CUDA file with a `__global__` kernel."
     )
   else:
     names = ", ".join(Path(r["path"]).name for r in primaries)
     ambiguity = (
-        f"{len(primaries)} files could each be the primary source ({names}). "
-        "Ask the user which one is being converted -- guessing here silently "
-        "benchmarks the wrong computation for the entire run."
+      f"{len(primaries)} files could each be the primary source ({names}). "
+      "Ask the user which one is being converted -- guessing here silently "
+      "benchmarks the wrong computation for the entire run."
     )
 
   references = []
@@ -290,26 +317,32 @@ def propose_slots(records):
       # The KernelBench layout is its own reference: the same file holds the
       # torch module (primary) and the CUDA it was written against.
       if r["language"] == "pytorch_with_inline_cuda":
-        references.append({
+        references.append(
+          {
             "kind": "cuda",
             "path": r["path"],
             "embedded": True,
             "note": "CUDA extracted from the primary file's inline sources",
-        })
+          }
+        )
       continue
     if "reference" in r["slot_candidacy"]:
-      references.append({
-          "kind": "cuda" if r["language"] in ("cuda", "pytorch_with_inline_cuda") else r["language"],
+      references.append(
+        {
+          "kind": "cuda"
+          if r["language"] in ("cuda", "pytorch_with_inline_cuda")
+          else r["language"],
           "path": r["path"],
           "embedded": r["language"] == "pytorch_with_inline_cuda",
-      })
+        }
+      )
 
   return primary, references, ambiguity
 
 
 def main():
   parser = argparse.ArgumentParser(
-      description="Classify MaxKernel input files and propose slot assignments."
+    description="Classify MaxKernel input files and propose slot assignments."
   )
   parser.add_argument("paths", nargs="+", help="files and/or directories")
   parser.add_argument("--json", help="write the full report to this path")
@@ -323,10 +356,10 @@ def main():
   primary, references, ambiguity = propose_slots(records)
 
   report = {
-      "files": records,
-      "primary": primary,
-      "references": references,
-      "ambiguity": ambiguity,
+    "files": records,
+    "primary": primary,
+    "references": references,
+    "ambiguity": ambiguity,
   }
 
   text = json.dumps(report, indent=2)
@@ -339,9 +372,9 @@ def main():
     sys.exit(3)
 
   print(
-      f"\nPRIMARY: {primary['language']} {primary['path']}\n"
-      f"REFERENCES: {len(references)}",
-      file=sys.stderr,
+    f"\nPRIMARY: {primary['language']} {primary['path']}\n"
+    f"REFERENCES: {len(references)}",
+    file=sys.stderr,
   )
   sys.exit(0)
 

@@ -69,8 +69,8 @@ def select_best(results: dict) -> dict:
   trials = results.get("all_results")
   if not trials:
     raise ValueError(
-        "No 'all_results' array found. Expected the autotune output of "
-        "`tpu_client.py --action autotune`."
+      "No 'all_results' array found. Expected the autotune output of "
+      "`tpu_client.py --action autotune`."
     )
 
   ranked = []
@@ -87,33 +87,33 @@ def select_best(results: dict) -> dict:
 
   if not ranked:
     raise ValueError(
-        "No autotune trial produced a correct, timed result. Rejected: "
-        + json.dumps(rejected)
+      "No autotune trial produced a correct, timed result. Rejected: "
+      + json.dumps(rejected)
     )
 
   return {
-      "best_config": ranked[0]["cfg"],
-      "best_time_ms": ranked[0]["time_ms"],
-      "ranked_results": ranked,
-      "rejected_results": rejected,
-      "all_results": trials,
+    "best_config": ranked[0]["cfg"],
+    "best_time_ms": ranked[0]["time_ms"],
+    "ranked_results": ranked,
+    "rejected_results": rejected,
+    "all_results": trials,
   }
 
 
 def main():
   parser = argparse.ArgumentParser(
-      description=(
-          "Select the best autotune configuration from a raw sweep result."
-      )
+    description=(
+      "Select the best autotune configuration from a raw sweep result."
+    )
   )
   parser.add_argument(
-      "results_path", help="Raw autotune results JSON (with 'all_results')."
+    "results_path", help="Raw autotune results JSON (with 'all_results')."
   )
   parser.add_argument(
-      "output_path",
-      nargs="?",
-      default=None,
-      help="Where to write the reduced result (defaults to results_path).",
+    "output_path",
+    nargs="?",
+    default=None,
+    help="Where to write the reduced result (defaults to results_path).",
   )
   args = parser.parse_args()
 
@@ -125,8 +125,8 @@ def main():
     with open(out, "w") as f:
       json.dump(reduced, f, indent=2)
     print(
-        f"Best config {reduced['best_config']} at"
-        f" {reduced['best_time_ms']} ms -> {out}"
+      f"Best config {reduced['best_config']} at"
+      f" {reduced['best_time_ms']} ms -> {out}"
     )
     if reduced.get("rejected_results"):
       print(f"Rejected {len(reduced['rejected_results'])} trial(s):")

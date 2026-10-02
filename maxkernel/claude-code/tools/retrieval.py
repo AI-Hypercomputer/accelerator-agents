@@ -12,18 +12,24 @@ if tools_dir not in sys.path:
   sys.path.insert(0, tools_dir)
 
 try:
-  from wiki_tool import query_wiki, read_wiki_page, get_wiki_index, DEFAULT_MODE
+  from wiki_tool import DEFAULT_MODE, query_wiki
 except ImportError:
   try:
-    from experimental.MaxKernel.tools.wiki_tool import query_wiki, read_wiki_page, get_wiki_index, DEFAULT_MODE
+    from experimental.MaxKernel.tools.wiki_tool import (
+      DEFAULT_MODE,
+      query_wiki,
+    )
   except ImportError:
-    from third_party.py.accelerator_agents.MaxKernel.tools.wiki_tool import query_wiki, read_wiki_page, get_wiki_index, DEFAULT_MODE
+    from third_party.py.accelerator_agents.MaxKernel.tools.wiki_tool import (
+      DEFAULT_MODE,
+      query_wiki,
+    )
 
 
 def retrieve(
-    query: str,
-    category: str = "all",
-    mode: str = DEFAULT_MODE,
+  query: str,
+  category: str = "all",
+  mode: str = DEFAULT_MODE,
 ):
   """Runs a 3-tiered retrieval query against the LLMWiki knowledge base."""
   return query_wiki(query=query, category=category, mode=mode)
@@ -31,19 +37,19 @@ def retrieve(
 
 def main():
   parser = argparse.ArgumentParser(
-      description="Query the MaxKernel LLMWiki knowledge base."
+    description="Query the MaxKernel LLMWiki knowledge base."
   )
   parser.add_argument(
-      "query", help="Text query to retrieve relevant context for."
+    "query", help="Text query to retrieve relevant context for."
   )
   parser.add_argument(
-      "--category", default="all", help="Subfolder category to search in."
+    "--category", default="all", help="Subfolder category to search in."
   )
   parser.add_argument(
-      "--mode",
-      default=DEFAULT_MODE,
-      choices=["full", "suppressed"],
-      help="LLMWiki mode.",
+    "--mode",
+    default=DEFAULT_MODE,
+    choices=["full", "suppressed"],
+    help="LLMWiki mode.",
   )
 
   args = parser.parse_args()
@@ -58,4 +64,3 @@ def main():
 
 if __name__ == "__main__":
   main()
-

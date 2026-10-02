@@ -1,5 +1,5 @@
-task_id: 55p_DeepSeek_V4_Masked_Dense_MLA
-description: Kernel task for 55p_DeepSeek_V4_Masked_Dense_MLA
+task_id: 54p_DeepSeek_V4_Masked_Dense_MLA
+description: Kernel task for DeepSeek V4 Masked-Dense MLA & Dequant
 input_gen_code: |-
   def get_inputs():
       import jax
@@ -34,7 +34,8 @@ input_gen_code: |-
           topk_indices = jax.random.randint(k4, (num_tokens, topk), 0, kv_len, dtype=jnp.int32)
           page_indices = jnp.arange(total_pages, dtype=jnp.int32)
           cu_q_lens = jnp.arange(0, num_tokens + 1, q_len, dtype=jnp.int32)
-          distribution = jnp.array([B, B, B], dtype=jnp.int32)
+          num_decode_seqs = B if q_len == 1 else 0
+          distribution = jnp.array([num_decode_seqs, num_decode_seqs, B], dtype=jnp.int32)
           attention_sinks = jax.random.uniform(k5, (num_heads,), dtype=jnp.float32)
           swa_accumulation = jax.random.normal(k6, (num_tokens, num_heads, head_dim), dtype=dtype)
           swa_l = jax.random.uniform(k7, (num_tokens, num_heads), dtype=jnp.float32)

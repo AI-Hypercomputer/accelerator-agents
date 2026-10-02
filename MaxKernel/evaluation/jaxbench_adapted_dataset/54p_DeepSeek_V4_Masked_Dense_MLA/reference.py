@@ -7,18 +7,15 @@ import types
 import jax
 import jax.numpy as jnp
 import numpy as np
-
-# ==============================================================================
-# Inlined dequant_util.py
-# ==============================================================================
-"""TODO: gxd - DO NOT SUBMIT without one-line documentation for dequant_util.
-
-TODO: gxd - DO NOT SUBMIT without a detailed description of dequant_util.
-"""
-
-import jax
+import functools
+try:
+  from jax.experimental.pallas import tpu_sc as plsc
+except ImportError:
+  plsc = None
+from enum import Enum
+from jax import lax
+from jax.experimental import pallas as pl
 from jax.experimental.pallas import tpu as pltpu
-import jax.numpy as jnp
 
 
 def dequant_dsv4_fp8(bkv: jax.Array):
@@ -32,20 +29,6 @@ def dequant_dsv4_fp8(bkv: jax.Array):
   nope = (nope_fp8 * nope_scales).astype(jnp.bfloat16)
   rope = pltpu.bitcast(bkv[:, 448:576].T, jnp.bfloat16).T
   return jnp.concatenate([nope, rope], axis=-1)
-
-
-# ==============================================================================
-# Inlined csa_mask.py
-# ==============================================================================
-import functools
-import jax
-from jax.experimental import pallas as pl
-from jax.experimental.pallas import tpu as pltpu
-try:
-  from jax.experimental.pallas import tpu_sc as plsc
-except ImportError:
-  plsc = None
-import jax.numpy as jnp
 
 
 @functools.partial(jax.jit, static_argnames=("max_kv_len",))
@@ -168,22 +151,6 @@ csa_mask = types.SimpleNamespace(
     generate_mask_sc=generate_mask_sc,
 )
 
-# ==============================================================================
-# Inlined masked_dense_mla.py
-# ==============================================================================
-"""TPU-Friendly Masked-Dense Context Sparse Attention (CSA) MLA kernel."""
-
-from enum import Enum
-import functools
-
-import jax
-from jax import lax
-from jax.experimental import pallas as pl
-from jax.experimental.pallas import tpu as pltpu
-import jax.numpy as jnp
-
-# inlined csa_mask
-# inlined dequant_util
 
 DEFAULT_MASK_VALUE = -0.7 * float(jnp.finfo(jnp.dtype("float32")).max)
 
@@ -1067,7 +1034,7 @@ def masked_dense_ragged_paged_attention(
                 vmem_limit_bytes=vmem_limit_bytes,
                 disable_bounds_checks=True,
             ),
-            out_shape=jax.ShapeDtypeStruct(shape=q.shape, dtype=q.dtype),
+            out_shape=pltpu.HBM(shape=q.shape, dtype=q.dtype),
             input_output_aliases={
                 7: 0,  # Alias output activation with q
             },
@@ -1077,13 +1044,13 @@ def masked_dense_ragged_paged_attention(
     return kernel(
         *scalar_prefetches,
         attention_sinks,
-        q,
-        cache_kv_nope,
-        cache_kv_rope,
-        swa_accumution,
-        swa_l,
-        swa_m,
-        mask_hbm_reshaped,
+        pltpu.with_memory_space_constraint(q, pltpu.HBM),
+        pltpu.with_memory_space_constraint(cache_kv_nope, pltpu.HBM),
+        pltpu.with_memory_space_constraint(cache_kv_rope, pltpu.HBM),
+        pltpu.with_memory_space_constraint(swa_accumution, pltpu.HBM),
+        pltpu.with_memory_space_constraint(swa_l, pltpu.HBM),
+        pltpu.with_memory_space_constraint(swa_m, pltpu.HBM),
+        pltpu.with_memory_space_constraint(mask_hbm_reshaped, pltpu.HBM),
     )
 
   # Decode-only
@@ -1274,7 +1241,10 @@ def create_inputs(dtype=jnp.bfloat16, config=None):
   )
   page_indices = jnp.arange(total_pages, dtype=jnp.int32)
   cu_q_lens = jnp.arange(0, num_tokens + 1, q_len, dtype=jnp.int32)
-  distribution = jnp.array([B, B, B], dtype=jnp.int32)
+  num_decode_seqs = B if q_len == 1 else 0
+  distribution = jnp.array(
+      [num_decode_seqs, num_decode_seqs, B], dtype=jnp.int32
+  )
 
   attention_sinks = jax.random.uniform(k5, (num_heads,), dtype=jnp.float32)
   swa_accumulation = jax.random.normal(

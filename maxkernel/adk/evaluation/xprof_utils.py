@@ -113,7 +113,7 @@ def extract_xprof_time(
 
   # Each execution produces exactly one XLA Modules event, so average over the
   # events actually captured; the profiler may drop or add runs.
-  divisor = count if target_events is xla_module_events else num_runs
+  divisor = count
   if count != num_runs:
     logging.warning(
       f"Expected {num_runs} events for {event_name} but found {count}; "

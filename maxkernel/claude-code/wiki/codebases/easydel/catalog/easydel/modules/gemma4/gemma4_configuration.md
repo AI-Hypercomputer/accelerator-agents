@@ -1,0 +1,94 @@
+---
+title: 'Module: easydel/modules/gemma4/gemma4_configuration.py'
+type: catalog
+provenance: extracted
+module: easydel/modules/gemma4/gemma4_configuration.py
+status: fresh
+symbol_base: scip-python python easydel 0.0.0 `easydel.modules.gemma4.gemma4_configuration`/Gemma4
+symbols:
+  Gemma4TextConfig: TextConfig#
+  Gemma4VisionConfig: VisionConfig#
+  Gemma4TextConfig.hidden_size: TextConfig#hidden_size.
+  Gemma4TextConfig.get_mask_details: TextConfig#get_mask_details().
+  Gemma4VisionConfig.hidden_size: VisionConfig#hidden_size.
+  Gemma4Config: Config#
+  Gemma4TextConfig.layer_types: TextConfig#layer_types.
+  Gemma4TextConfig.num_hidden_layers: TextConfig#num_hidden_layers.
+  Gemma4TextConfig.float32_gate_logits: TextConfig#float32_gate_logits.
+  Gemma4Config.vision_config: Config#vision_config.
+  Gemma4TextConfig.__init__: TextConfig#__init__().
+  Gemma4TextConfig.hidden_size_per_layer_input: TextConfig#hidden_size_per_layer_input.
+  Gemma4TextConfig.num_experts: TextConfig#num_experts.
+  Gemma4TextConfig.get_kv_shared_layer_mapping: TextConfig#get_kv_shared_layer_mapping().
+  Gemma4VisionConfig.__init__: VisionConfig#__init__().
+  Gemma4Config.sub_configs: Config#sub_configs.
+  Gemma4Config.__init__: Config#__init__().
+  Gemma4TextConfig.initializer_range: TextConfig#initializer_range.
+  Gemma4TextConfig.sliding_window: TextConfig#sliding_window.
+  Gemma4VisionConfig.rms_norm_eps: VisionConfig#rms_norm_eps.
+  Gemma4VisionConfig.attention_bias: VisionConfig#attention_bias.
+  Gemma4TextConfig.hidden_activation: TextConfig#hidden_activation.
+  Gemma4TextConfig.moe_intermediate_size: TextConfig#moe_intermediate_size.
+  Gemma4VisionConfig.intermediate_size: VisionConfig#intermediate_size.
+  Gemma4Config.text_config: Config#text_config.
+  Gemma4TextConfig.scan_layers: TextConfig#scan_layers.
+  Gemma4VisionConfig.bits: VisionConfig#bits.
+  Gemma4Config.tie_word_embeddings: Config#tie_word_embeddings.
+  Gemma4TextConfig.num_global_key_value_heads: TextConfig#num_global_key_value_heads.
+  Gemma4TextConfig.global_head_dim: TextConfig#global_head_dim.
+  Gemma4TextConfig.activations_in_float32: TextConfig#activations_in_float32.
+  Gemma4VisionConfig.model_type: VisionConfig#model_type.
+  Gemma4VisionConfig.head_dim: VisionConfig#head_dim.
+  Gemma4VisionConfig.patch_size: VisionConfig#patch_size.
+  Gemma4VisionConfig.position_embedding_size: VisionConfig#position_embedding_size.
+  Gemma4VisionConfig.initializer_range: VisionConfig#initializer_range.
+  Gemma4TextConfig.gradient_checkpointing: TextConfig#gradient_checkpointing.
+  Gemma4TextConfig.vocab_size: TextConfig#vocab_size.
+  Gemma4TextConfig.intermediate_size: TextConfig#intermediate_size.
+  Gemma4TextConfig.head_dim: TextConfig#head_dim.
+  Gemma4TextConfig.num_key_value_heads: TextConfig#num_key_value_heads.
+  Gemma4TextConfig.rms_norm_eps: TextConfig#rms_norm_eps.
+  Gemma4TextConfig.vocab_size_per_layer_input: TextConfig#vocab_size_per_layer_input.
+  Gemma4TextConfig.attention_k_eq_v: TextConfig#attention_k_eq_v.
+  Gemma4TextConfig.num_kv_shared_layers: TextConfig#num_kv_shared_layers.
+  Gemma4TextConfig.enable_moe_block: TextConfig#enable_moe_block.
+  Gemma4TextConfig.use_double_wide_mlp: TextConfig#use_double_wide_mlp.
+  Gemma4TextConfig.top_k_experts: TextConfig#top_k_experts.
+  Gemma4VisionConfig.gradient_checkpointing: VisionConfig#gradient_checkpointing.
+  Gemma4VisionConfig.num_hidden_layers: VisionConfig#num_hidden_layers.
+  Gemma4VisionConfig.num_attention_heads: VisionConfig#num_attention_heads.
+  Gemma4VisionConfig.num_key_value_heads: VisionConfig#num_key_value_heads.
+  Gemma4VisionConfig.hidden_activation: VisionConfig#hidden_activation.
+  Gemma4VisionConfig.max_position_embeddings: VisionConfig#max_position_embeddings.
+  Gemma4VisionConfig.attention_dropout: VisionConfig#attention_dropout.
+  Gemma4VisionConfig.standardize: VisionConfig#standardize.
+  Gemma4VisionConfig.rope_parameters: VisionConfig#rope_parameters.
+  Gemma4TextConfig.model_type: TextConfig#model_type.
+  Gemma4TextConfig.bits: TextConfig#bits.
+  Gemma4TextConfig.max_position_embeddings: TextConfig#max_position_embeddings.
+  Gemma4TextConfig.num_attention_heads: TextConfig#num_attention_heads.
+  Gemma4TextConfig.use_cache: TextConfig#use_cache.
+  Gemma4TextConfig.attention_bias: TextConfig#attention_bias.
+  Gemma4TextConfig.attention_dropout: TextConfig#attention_dropout.
+  Gemma4TextConfig.final_logit_softcapping: TextConfig#final_logit_softcapping.
+  Gemma4TextConfig.use_bidirectional_attention: TextConfig#use_bidirectional_attention.
+  Gemma4TextConfig.rope_parameters: TextConfig#rope_parameters.
+  Gemma4TextConfig.get_partition_rules: TextConfig#get_partition_rules().
+  Gemma4VisionConfig.pooling_kernel_size: VisionConfig#pooling_kernel_size.
+  Gemma4VisionConfig.use_clipped_linears: VisionConfig#use_clipped_linears.
+  Gemma4VisionConfig.get_partition_rules: VisionConfig#get_partition_rules().
+  Gemma4Config.model_type: Config#model_type.
+  Gemma4Config.audio_config: Config#audio_config.
+  Gemma4Config.boi_token_id: Config#boi_token_id.
+  Gemma4Config.eoi_token_id: Config#eoi_token_id.
+  Gemma4Config.image_token_id: Config#image_token_id.
+  Gemma4Config.video_token_id: Config#video_token_id.
+  Gemma4Config.boa_token_id: Config#boa_token_id.
+  Gemma4Config.eoa_token_index: Config#eoa_token_index.
+  Gemma4Config.audio_token_id: Config#audio_token_id.
+  Gemma4Config.initializer_range: Config#initializer_range.
+  Gemma4Config.get_partition_rules: Config#get_partition_rules().
+---
+# Module: [`easydel/modules/gemma4/gemma4_configuration.py`](../../../../../../../raw/code/EasyDeL/easydel/modules/gemma4/gemma4_configuration.py)
+
+> **Collapsed catalog** (82 symbols) — anchors above resolve for citations; detailed member listing omitted (`coverage_collapse`). See the source link above, or the curated codebase page, for depth.

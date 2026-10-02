@@ -1,0 +1,94 @@
+---
+title: 'Module: easydel/modules/qwen2_moe/modeling_qwen2_moe.py'
+type: catalog
+provenance: extracted
+module: easydel/modules/qwen2_moe/modeling_qwen2_moe.py
+status: fresh
+symbol_base: scip-python python easydel 0.0.0 `easydel.modules.qwen2_moe.modeling_qwen2_moe`/Qwen2Moe
+symbols:
+  Qwen2MoeModel.__call__: Model#__call__().
+  Qwen2MoeDecoderLayer.__call__: DecoderLayer#__call__().
+  Qwen2MoeSparseBlock.__init__: SparseBlock#__init__().
+  Qwen2MoeSparseBlock.__call__: SparseBlock#__call__().
+  Qwen2MoeForCausalLM.__call__: ForCausalLM#__call__().
+  Qwen2MoeForSequenceClassification.__call__: ForSequenceClassification#__call__().
+  Qwen2MoeModel.embed_tokens: Model#embed_tokens.
+  Qwen2MoeDecoderLayer.precision: DecoderLayer#precision.
+  Qwen2MoeModel: Model#
+  Qwen2MoeMLPStack.gate_proj: MLPStack#gate_proj.
+  Qwen2MoeMLPStack.down_proj: MLPStack#down_proj.
+  Qwen2MoeMLPStack.up_proj: MLPStack#up_proj.
+  Qwen2MoeForCausalLM: ForCausalLM#
+  Qwen2MoeForSequenceClassification: ForSequenceClassification#
+  Qwen2MoeMLP.__call__: MLP#__call__().
+  Qwen2MoeAttention._create_rotary: Attention#_create_rotary().
+  Qwen2MoeSparseBlock.gate: SparseBlock#gate.
+  Qwen2MoeSparseBlock.shared_expert_gate: SparseBlock#shared_expert_gate.
+  Qwen2MoeDecoderLayer.input_layernorm: DecoderLayer#input_layernorm.
+  Qwen2MoeDecoderLayer.post_attention_layernorm: DecoderLayer#post_attention_layernorm.
+  Qwen2MoeMLPStack.__call__: MLPStack#__call__().
+  Qwen2MoeAttention.__init__: Attention#__init__().
+  Qwen2MoeAttention._create_attention_performer: Attention#_create_attention_performer().
+  Qwen2MoeDecoderLayer.config: DecoderLayer#config.
+  Qwen2MoeMLP.precision: MLP#precision.
+  Qwen2MoeSparseBlock.experts: SparseBlock#experts.
+  Qwen2MoeForCausalLM.__init__: ForCausalLM#__init__().
+  Qwen2MoeForSequenceClassification.__init__: ForSequenceClassification#__init__().
+  Qwen2MoeSparseBlock.shared_expert: SparseBlock#shared_expert.
+  Qwen2MoeModel.norm: Model#norm.
+  Qwen2MoeForCausalLM._compute_aux_loss: ForCausalLM#_compute_aux_loss().
+  Qwen2MoeAttention._create_q_proj: Attention#_create_q_proj().
+  Qwen2MoeAttention._create_k_proj: Attention#_create_k_proj().
+  Qwen2MoeAttention._create_v_proj: Attention#_create_v_proj().
+  Qwen2MoeAttention._create_o_proj: Attention#_create_o_proj().
+  Qwen2MoeModel.__init__: Model#__init__().
+  Qwen2MoeForCausalLM._task_type: ForCausalLM#_task_type.
+  Qwen2MoeForSequenceClassification._task_type: ForSequenceClassification#_task_type.
+  Qwen2MoeModel.layers: Model#layers.
+  Qwen2MoeMLP.gate_proj: MLP#gate_proj.
+  Qwen2MoeMLP.down_proj: MLP#down_proj.
+  Qwen2MoeMLP.up_proj: MLP#up_proj.
+  Qwen2MoeAttention: Attention#
+  Qwen2MoeSparseBlock: SparseBlock#
+  Qwen2MoeMLPStack.__init__: MLPStack#__init__().
+  Qwen2MoeMLP.__init__: MLP#__init__().
+  Qwen2MoeDecoderLayer.__init__: DecoderLayer#__init__().
+  Qwen2MoeModel.get_embedding: Model#get_embedding().
+  Qwen2MoeForCausalLM._config_class: ForCausalLM#_config_class.
+  Qwen2MoeForSequenceClassification._config_class: ForSequenceClassification#_config_class.
+  Qwen2MoeMLPStack.act_fn: MLPStack#act_fn.
+  Qwen2MoeMLP: MLP#
+  Qwen2MoeMLP.config: MLP#config.
+  Qwen2MoeDecoderLayer.layer_idx: DecoderLayer#layer_idx.
+  Qwen2MoeMLPStack: MLPStack#
+  Qwen2MoeMLP.act_fn: MLP#act_fn.
+  Qwen2MoeDecoderLayer: DecoderLayer#
+  Qwen2MoeDecoderLayer.self_attn: DecoderLayer#self_attn.
+  Qwen2MoeDecoderLayer.mlp: DecoderLayer#mlp.
+  Qwen2MoeMLPStack.reform_param: MLPStack#reform_param.
+  Qwen2MoeMLPStack.config: MLPStack#config.
+  Qwen2MoeMLPStack.dtype: MLPStack#dtype.
+  Qwen2MoeMLPStack.param_dtype: MLPStack#param_dtype.
+  Qwen2MoeMLPStack.precision: MLPStack#precision.
+  Qwen2MoeMLP.dtype: MLP#dtype.
+  Qwen2MoeMLP.param_dtype: MLP#param_dtype.
+  Qwen2MoeSparseBlock.config: SparseBlock#config.
+  Qwen2MoeSparseBlock.dtype: SparseBlock#dtype.
+  Qwen2MoeSparseBlock.param_dtype: SparseBlock#param_dtype.
+  Qwen2MoeSparseBlock.precision: SparseBlock#precision.
+  Qwen2MoeDecoderLayer.dtype: DecoderLayer#dtype.
+  Qwen2MoeDecoderLayer.param_dtype: DecoderLayer#param_dtype.
+  Qwen2MoeModel.get_encoder: Model#get_encoder().
+  Qwen2MoeModel.get_decoder: Model#get_decoder().
+  Qwen2MoeModel.get_lm_head: Model#get_lm_head().
+  Qwen2MoeForCausalLM._model_type: ForCausalLM#_model_type.
+  Qwen2MoeForSequenceClassification._model_type: ForSequenceClassification#_model_type.
+  Qwen2MoeForSequenceClassification.get_encoder: ForSequenceClassification#get_encoder().
+  Qwen2MoeForSequenceClassification.get_decoder: ForSequenceClassification#get_decoder().
+  Qwen2MoeForSequenceClassification.get_lm_head: ForSequenceClassification#get_lm_head().
+  Qwen2MoeForSequenceClassification.get_embedding: ForSequenceClassification#get_embedding().
+  Qwen2MoeForSequenceClassification.get_task_head: ForSequenceClassification#get_task_head().
+---
+# Module: [`easydel/modules/qwen2_moe/modeling_qwen2_moe.py`](../../../../../../../raw/code/EasyDeL/easydel/modules/qwen2_moe/modeling_qwen2_moe.py)
+
+> **Collapsed catalog** (82 symbols) — anchors above resolve for citations; detailed member listing omitted (`coverage_collapse`). See the source link above, or the curated codebase page, for depth.

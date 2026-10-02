@@ -1,0 +1,92 @@
+---
+title: 'Module: easydel/modules/minimax/modeling_minimax.py'
+type: catalog
+provenance: extracted
+module: easydel/modules/minimax/modeling_minimax.py
+status: fresh
+symbol_base: scip-python python easydel 0.0.0 `easydel.modules.minimax.modeling_minimax`/MiniMax
+symbols:
+  MiniMaxModel.__call__: Model#__call__().
+  MiniMaxDecoderLayer.__call__: DecoderLayer#__call__().
+  MiniMaxLightningAttention.__call__: LightningAttention#__call__().
+  MiniMaxSparseMoeBlock.__init__: SparseMoeBlock#__init__().
+  MiniMaxSparseMoeBlock.__call__: SparseMoeBlock#__call__().
+  MiniMaxModel.embed_tokens: Model#embed_tokens.
+  MiniMaxForCausalLM.__call__: ForCausalLM#__call__().
+  MiniMaxDecoderLayer.attn_beta_factor: DecoderLayer#attn_beta_factor.
+  MiniMaxExperts.w1: Experts#w1.
+  MiniMaxExperts.w2: Experts#w2.
+  MiniMaxExperts.w3: Experts#w3.
+  MiniMaxForCausalLM: ForCausalLM#
+  MiniMaxModel: Model#
+  MiniMaxLightningAttention.qkv_proj: LightningAttention#qkv_proj.
+  MiniMaxLightningAttention.out_proj: LightningAttention#out_proj.
+  MiniMaxLightningAttention.output_gate: LightningAttention#output_gate.
+  MiniMaxLightningAttention.head_dim: LightningAttention#head_dim.
+  MiniMaxLightningAttention.num_attention_heads: LightningAttention#num_attention_heads.
+  MiniMaxLightningAttention.norm: LightningAttention#norm.
+  MiniMaxSparseMoeBlock.gate: SparseMoeBlock#gate.
+  MiniMaxExperts.__call__: Experts#__call__().
+  MiniMaxForCausalLM.__init__: ForCausalLM#__init__().
+  MiniMaxDecoderLayer.layer_type: DecoderLayer#layer_type.
+  MiniMaxLightningAttention.block_size: LightningAttention#block_size.
+  MiniMaxLightningAttention._get_slope_rate: LightningAttention#_get_slope_rate().
+  MiniMaxDecoderLayer.input_layernorm: DecoderLayer#input_layernorm.
+  MiniMaxDecoderLayer.post_attention_layernorm: DecoderLayer#post_attention_layernorm.
+  MiniMaxModel.norm: Model#norm.
+  MiniMaxSparseMoeBlock.experts: SparseMoeBlock#experts.
+  MiniMaxForCausalLM.get_operations_cache_view: ForCausalLM#get_operations_cache_view().
+  MiniMaxForCausalLM.create_recurrent_cache_config: ForCausalLM#create_recurrent_cache_config().
+  MiniMaxExperts.act_fn: Experts#act_fn.
+  MiniMaxLightningAttention.act_fn: LightningAttention#act_fn.
+  MiniMaxAttention: Attention#
+  MiniMaxSparseMoeBlock.jitter_noise: SparseMoeBlock#jitter_noise.
+  MiniMaxAttention.__init__: Attention#__init__().
+  MiniMaxModel.__init__: Model#__init__().
+  MiniMaxForCausalLM._task_type: ForCausalLM#_task_type.
+  MiniMaxDecoderLayer.attn_alpha_factor: DecoderLayer#attn_alpha_factor.
+  MiniMaxModel.layers: Model#layers.
+  MiniMaxLightningAttention.config: LightningAttention#config.
+  MiniMaxLightningAttention.num_hidden_layers: LightningAttention#num_hidden_layers.
+  MiniMaxLightningAttention._decay_factors: LightningAttention#_decay_factors().
+  MiniMaxSparseMoeBlock: SparseMoeBlock#
+  MiniMaxDecoderLayer.mlp_alpha_factor: DecoderLayer#mlp_alpha_factor.
+  MiniMaxDecoderLayer.mlp_beta_factor: DecoderLayer#mlp_beta_factor.
+  MiniMaxLightningAttention.__init__: LightningAttention#__init__().
+  MiniMaxLightningAttention.hidden_size: LightningAttention#hidden_size.
+  MiniMaxExperts.__init__: Experts#__init__().
+  MiniMaxExperts.precision: Experts#precision.
+  MiniMaxDecoderLayer.__init__: DecoderLayer#__init__().
+  MiniMaxModel.get_embedding: Model#get_embedding().
+  MiniMaxForCausalLM._config_class: ForCausalLM#_config_class.
+  MiniMaxDecoderLayer.config: DecoderLayer#config.
+  MiniMaxDecoderLayer.self_attn: DecoderLayer#self_attn.
+  MiniMaxLightningAttention: LightningAttention#
+  MiniMaxLightningAttention.layer_idx: LightningAttention#layer_idx.
+  MiniMaxExperts: Experts#
+  MiniMaxSparseMoeBlock.rngs: SparseMoeBlock#rngs.
+  MiniMaxSparseMoeBlock._normalize_weights: SparseMoeBlock#_normalize_weights().
+  MiniMaxDecoderLayer: DecoderLayer#
+  MiniMaxDecoderLayer.layer_idx: DecoderLayer#layer_idx.
+  MiniMaxDecoderLayer.block_sparse_moe: DecoderLayer#block_sparse_moe.
+  MiniMaxExperts.reform_param: Experts#reform_param.
+  MiniMaxExperts.config: Experts#config.
+  MiniMaxExperts.dtype: Experts#dtype.
+  MiniMaxExperts.param_dtype: Experts#param_dtype.
+  MiniMaxSparseMoeBlock.config: SparseMoeBlock#config.
+  MiniMaxSparseMoeBlock.dtype: SparseMoeBlock#dtype.
+  MiniMaxSparseMoeBlock.param_dtype: SparseMoeBlock#param_dtype.
+  MiniMaxSparseMoeBlock.precision: SparseMoeBlock#precision.
+  MiniMaxDecoderLayer.reform_param: DecoderLayer#reform_param.
+  MiniMaxDecoderLayer.dtype: DecoderLayer#dtype.
+  MiniMaxDecoderLayer.param_dtype: DecoderLayer#param_dtype.
+  MiniMaxDecoderLayer.precision: DecoderLayer#precision.
+  MiniMaxModel.get_encoder: Model#get_encoder().
+  MiniMaxModel.get_decoder: Model#get_decoder().
+  MiniMaxModel.get_lm_head: Model#get_lm_head().
+  MiniMaxForCausalLM._model_type: ForCausalLM#_model_type.
+  MiniMaxForCausalLM.get_inference_cache_type: ForCausalLM#get_inference_cache_type().
+---
+# Module: [`easydel/modules/minimax/modeling_minimax.py`](../../../../../../../raw/code/EasyDeL/easydel/modules/minimax/modeling_minimax.py)
+
+> **Collapsed catalog** (80 symbols) — anchors above resolve for citations; detailed member listing omitted (`coverage_collapse`). See the source link above, or the curated codebase page, for depth.

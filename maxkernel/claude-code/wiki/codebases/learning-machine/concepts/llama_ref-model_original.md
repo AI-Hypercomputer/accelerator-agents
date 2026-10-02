@@ -1,0 +1,41 @@
+---
+title: llama_ref/model_original — Meta's fairscale-parallel Llama3 reference (verbatim)
+type: concept
+provenance: mixed
+concept: llama_ref-model_original
+updated: 2026-07-03
+status: fresh
+---
+# llama_ref/model_original — Meta's fairscale-parallel Llama3 reference (verbatim)
+An unmodified copy of Meta's official Llama-3 inference reference implementation (source comment: `https://github.com/meta-llama/llama-models/blob/main/models/llama3/reference_impl/model.py`), kept in this repo as the ground-truth baseline that the other three `llama_ref` model variants (plain-PyTorch, GSPMD-scan, manual-collectives-scan) are progressively adapted from for TPU/JAX execution.
+
+## Entry points
+- [`Transformer.forward`](../catalog/llama_ref/model_original.md#Transformer.forward) — decorated `@torch.inference_mode()`, this is inference-only (no gradient path); it embeds `tokens` via [`tok_embeddings`](../catalog/llama_ref/model_original.md#Transformer.tok_embeddings), slices the precomputed [`freqs_cis`](../catalog/llama_ref/model_original.md#Transformer.freqs_cis) at the current decode position, builds the causal+cache-offset mask, and loops the token stream through every entry of [`layers`](../catalog/llama_ref/model_original.md#Transformer.layers) before [`norm`](../catalog/llama_ref/model_original.md#Transformer.norm) and [`output`](../catalog/llama_ref/model_original.md#Transformer.output) projection.
+- [`Attention.forward`](../catalog/llama_ref/model_original.md#Attention.forward) — the per-layer self-attention call, reached once per [`TransformerBlock.forward`](../catalog/llama_ref/model_original.md#TransformerBlock.forward) invocation; this is the only variant among the four `llama_ref` model files that maintains an explicit KV cache ([`cache_k`](../catalog/llama_ref/model_original.md#Attention.cache_k)/[`cache_v`](../catalog/llama_ref/model_original.md#Attention.cache_v)) and computes attention by hand rather than via `scaled_dot_product_attention`.
+
+## Mechanism (step-by-step)
+1. [`Attention.forward`](../catalog/llama_ref/model_original.md#Attention.forward) projects `x` through [`wq`](../catalog/llama_ref/model_original.md#Attention.wq)/[`wk`](../catalog/llama_ref/model_original.md#Attention.wk)/[`wv`](../catalog/llama_ref/model_original.md#Attention.wv) — each a `fairscale` `ColumnParallelLinear` with `gather_output=False`, so every model-parallel shard only ever holds its own slice of the head dimension — reshapes to `(bsz, seqlen, n_local_heads_or_kv, head_dim)` using [`head_dim`](../catalog/llama_ref/model_original.md#Attention.head_dim), then applies rotary embeddings via [`apply_rotary_emb`](../catalog/llama_ref/model_original.md#apply_rotary_emb) (which itself calls [`reshape_for_broadcast`](../catalog/llama_ref/model_original.md#reshape_for_broadcast) to align the complex-valued `freqs_cis` against the query/key tensor's shape).
+2. The new K/V for this decode step are written in-place into [`cache_k`](../catalog/llama_ref/model_original.md#Attention.cache_k)/[`cache_v`](../catalog/llama_ref/model_original.md#Attention.cache_v) at `[:bsz, start_pos:start_pos+seqlen]`, then the *entire* cache up to `start_pos+seqlen` is read back out — this is genuinely incremental (single-token or short-chunk) decoding, not a full-sequence forward pass; [`n_local_kv_heads`](../catalog/llama_ref/model_original.md#Attention.n_local_kv_heads) sizes the cache to only this shard's local KV heads.
+3. [`repeat_kv`](../catalog/llama_ref/model_original.md#repeat_kv) expands the cached K/V from `n_local_kv_heads` up to `n_local_heads` by [`n_rep`](../catalog/llama_ref/model_original.md#Attention.n_rep) (grouped-query-attention broadcast), implemented as an explicit `expand`+`reshape` rather than a native repeat-interleave op (the docstring notes it's equivalent to `torch.repeat_interleave(x, dim=2, repeats=n_rep)`, done via broadcast to avoid the interleave's copy cost).
+4. Attention scores are computed by hand — `torch.matmul(xq, keys.T) / sqrt(head_dim)`, add the mask, `F.softmax` in float32, matmul against `values` — rather than calling a fused SDPA kernel; the result is projected back through [`wo`](../catalog/llama_ref/model_original.md#Attention.wo), a `RowParallelLinear` with `input_is_parallel=True` that performs the model-parallel all-reduce internally (fairscale's own collective, not visible in this file).
+5. [`TransformerBlock.forward`](../catalog/llama_ref/model_original.md#TransformerBlock.forward) is the standard pre-norm residual pattern: `h = x + attention(attention_norm(x), ...)`, `out = h + feed_forward(ffn_norm(h))`, wiring together [`attention`](../catalog/llama_ref/model_original.md#TransformerBlock.attention), [`attention_norm`](../catalog/llama_ref/model_original.md#TransformerBlock.attention_norm), [`feed_forward`](../catalog/llama_ref/model_original.md#TransformerBlock.feed_forward), [`ffn_norm`](../catalog/llama_ref/model_original.md#TransformerBlock.ffn_norm).
+6. [`Transformer.forward`](../catalog/llama_ref/model_original.md#Transformer.forward) builds the causal mask only when `seqlen > 1` (i.e. only on a prefill/multi-token step — single-token decode steps need no mask since there is exactly one query position), horizontally stacking a zero block for the already-cached positions (`start_pos` columns) in front of the upper-triangular `-inf` block, so the mask has shape `(seqlen, start_pos+seqlen)` matching the score matrix produced against the full cache.
+
+## Key data structures
+- [`cache_k`](../catalog/llama_ref/model_original.md#Attention.cache_k) / [`cache_v`](../catalog/llama_ref/model_original.md#Attention.cache_v) — `torch.zeros((max_batch_size, max_seq_len, n_local_kv_heads, head_dim)).cuda()` — fixed-size, CUDA-resident (hardcoded `.cuda()`, not device-agnostic) per-layer KV caches; this hardcoding is exactly why this file is kept as an unmodified reference rather than run directly on TPU.
+- [`RMSNorm`](../catalog/llama_ref/model_original.md#RMSNorm) — computes the norm in float32 (`x.float()`) then casts back (`.type_as(x)`) regardless of the input's working dtype, a numerical-stability pattern reused unchanged across all four `llama_ref` model files.
+
+## Dynamics (design intent)
+> [!inferred] Because every linear layer here is a fairscale `ColumnParallelLinear`/`RowParallelLinear`/`VocabParallelEmbedding`, all cross-device communication (the all-reduce after `wo`/`w2`, the all-gather for vocab-parallel embedding/output) happens *inside* those layers via fairscale's own model-parallel process group — this file contains no visible collective ops itself, unlike [model_with_collectives](llama_ref-model_with_collectives.md), which makes the same collectives explicit using JAX primitives instead of fairscale.
+
+## Edge cases
+- [`Attention.forward`](../catalog/llama_ref/model_original.md#Attention.forward) always re-casts the entire cache to the query's dtype/device on every call (`self.cache_k = self.cache_k.to(xq)`) before writing into it — cheap once cache and query already match, but a correctness-relevant step if a caller ever changes dtype mid-generation.
+- [`Transformer.forward`](../catalog/llama_ref/model_original.md#Transformer.forward) special-cases the MPS backend for a known PyTorch `triu` bug (`torch.nan_to_num` cleanup) — evidence this reference implementation was validated across backends including Apple Silicon, not just CUDA/TPU.
+
+## Open questions
+> [!inferred] This file is explicitly marked in its own header comment as "not runnable without installing `torch` and `fairscale` dependencies" that aren't part of this repo's default requirements — it is committed purely as a reference/diff baseline, not as code meant to execute in this repo's environment.
+
+## See also
+- [llama_ref/model](llama_ref-model.md) — the single-device PyTorch port of this same architecture (no fairscale, no KV cache, `scaled_dot_product_attention` instead of manual softmax).
+- [llama_ref/model_with_scan](llama_ref-model_with_scan.md) — adds `jax.lax.scan`-over-layers and GSPMD sharding hints on top of the `model.py` port.
+- [llama_ref/model_with_collectives](llama_ref-model_with_collectives.md) — adds explicit FSDP/TP collectives (JAX `all_gather`/`psum`) in place of GSPMD auto-partitioning.

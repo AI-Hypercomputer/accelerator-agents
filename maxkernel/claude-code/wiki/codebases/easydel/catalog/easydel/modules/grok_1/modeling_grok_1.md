@@ -1,0 +1,89 @@
+---
+title: 'Module: easydel/modules/grok_1/modeling_grok_1.py'
+type: catalog
+provenance: extracted
+module: easydel/modules/grok_1/modeling_grok_1.py
+status: fresh
+symbol_base: scip-python python easydel 0.0.0 `easydel.modules.grok_1.modeling_grok_1`/Grok1
+symbols:
+  Grok1Attention.__call__: Attention#__call__().
+  Grok1Model.__call__: Model#__call__().
+  Grok1DecoderLayer.__call__: DecoderLayer#__call__().
+  Grok1SparseMoeBlock.__call__: SparseMoeBlock#__call__().
+  Grok1ForCausalLM.__call__: ForCausalLM#__call__().
+  Grok1Model.embed_tokens: Model#embed_tokens.
+  Grok1ForCausalLM: ForCausalLM#
+  Grok1Model: Model#
+  Grok1Attention.q_proj: Attention#q_proj.
+  Grok1Attention.k_proj: Attention#k_proj.
+  Grok1Attention.v_proj: Attention#v_proj.
+  Grok1Attention.o_proj: Attention#o_proj.
+  Grok1BLockSparseMLP.linear: BLockSparseMLP#linear.
+  Grok1BLockSparseMLP.linear_1: BLockSparseMLP#linear_1.
+  Grok1BLockSparseMLP.linear_v: BLockSparseMLP#linear_v.
+  Grok1Attention.head_dim: Attention#head_dim.
+  Grok1BLockSparseMLP.__call__: BLockSparseMLP#__call__().
+  Grok1SparseMoeBlock.gate: SparseMoeBlock#gate.
+  Grok1DecoderLayer.pre_attn_norm: DecoderLayer#pre_attn_norm.
+  Grok1DecoderLayer.post_attn_norm: DecoderLayer#post_attn_norm.
+  Grok1DecoderLayer.pre_moe_norm: DecoderLayer#pre_moe_norm.
+  Grok1DecoderLayer.post_moe_norm: DecoderLayer#post_moe_norm.
+  Grok1SparseMoeBlock.experts: SparseMoeBlock#experts.
+  Grok1DecoderLayer.config: DecoderLayer#config.
+  Grok1Attention.rotary: Attention#rotary.
+  Grok1Attention.attention_performer: Attention#attention_performer.
+  Grok1SparseMoeBlock.config: SparseMoeBlock#config.
+  Grok1ForCausalLM.__init__: ForCausalLM#__init__().
+  Grok1ForCausalLM.make_lm_head_fn: ForCausalLM#make_lm_head_fn().
+  Grok1Attention.num_key_value_groups: Attention#num_key_value_groups.
+  Grok1DecoderLayer.attn: DecoderLayer#attn.
+  Grok1Model.norm: Model#norm.
+  Grok1Model.frequencies: Model#frequencies().
+  Grok1ForCausalLM._compute_aux_loss: ForCausalLM#_compute_aux_loss().
+  Grok1Attention.__init__: Attention#__init__().
+  Grok1Model.__init__: Model#__init__().
+  Grok1ForCausalLM._task_type: ForCausalLM#_task_type.
+  Grok1ForCausalLM.apply_lm_head: ForCausalLM#apply_lm_head().
+  Grok1Model.layers: Model#layers.
+  Grok1ForCausalLM.output_multiplier_scale: ForCausalLM#output_multiplier_scale.
+  Grok1Attention.precision: Attention#precision.
+  Grok1Attention: Attention#
+  Grok1Attention.hidden_size: Attention#hidden_size.
+  Grok1Attention.resid_dropout: Attention#resid_dropout.
+  Grok1Attention._merge_heads: Attention#_merge_heads().
+  Grok1DecoderLayer.moe_block: DecoderLayer#moe_block.
+  Grok1BLockSparseMLP.precision: BLockSparseMLP#precision.
+  Grok1BLockSparseMLP.__init__: BLockSparseMLP#__init__().
+  Grok1SparseMoeBlock.__init__: SparseMoeBlock#__init__().
+  Grok1DecoderLayer.__init__: DecoderLayer#__init__().
+  Grok1Model.get_embedding: Model#get_embedding().
+  Grok1ForCausalLM._config_class: ForCausalLM#_config_class.
+  Grok1BLockSparseMLP.config: BLockSparseMLP#config.
+  Grok1SparseMoeBlock.dtype: SparseMoeBlock#dtype.
+  Grok1Attention.dtype: Attention#dtype.
+  Grok1BLockSparseMLP: BLockSparseMLP#
+  Grok1SparseMoeBlock: SparseMoeBlock#
+  Grok1DecoderLayer: DecoderLayer#
+  Grok1ForCausalLM._project: ForCausalLM#_project().
+  Grok1Attention.param_dtype: Attention#param_dtype.
+  Grok1Attention.rngs: Attention#rngs.
+  Grok1Attention.layer_index: Attention#layer_index.
+  Grok1BLockSparseMLP.dtype: BLockSparseMLP#dtype.
+  Grok1BLockSparseMLP.param_dtype: BLockSparseMLP#param_dtype.
+  Grok1BLockSparseMLP.rngs: BLockSparseMLP#rngs.
+  Grok1SparseMoeBlock.param_dtype: SparseMoeBlock#param_dtype.
+  Grok1SparseMoeBlock.precision: SparseMoeBlock#precision.
+  Grok1SparseMoeBlock.rngs: SparseMoeBlock#rngs.
+  Grok1DecoderLayer.layer_index: DecoderLayer#layer_index.
+  Grok1DecoderLayer.dtype: DecoderLayer#dtype.
+  Grok1DecoderLayer.param_dtype: DecoderLayer#param_dtype.
+  Grok1DecoderLayer.precision: DecoderLayer#precision.
+  Grok1DecoderLayer.rngs: DecoderLayer#rngs.
+  Grok1Model.get_encoder: Model#get_encoder().
+  Grok1Model.get_decoder: Model#get_decoder().
+  Grok1Model.get_lm_head: Model#get_lm_head().
+  Grok1ForCausalLM._model_type: ForCausalLM#_model_type.
+---
+# Module: [`easydel/modules/grok_1/modeling_grok_1.py`](../../../../../../../raw/code/EasyDeL/easydel/modules/grok_1/modeling_grok_1.py)
+
+> **Collapsed catalog** (77 symbols) — anchors above resolve for citations; detailed member listing omitted (`coverage_collapse`). See the source link above, or the curated codebase page, for depth.

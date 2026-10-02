@@ -1,0 +1,13 @@
+{
+  "tpus": [
+    {
+      "mode": "local",
+      "local_port": 8000,
+      "tpu_version": "TPU v6e",
+      "tpu_spec": {
+        "device_kind": "TPU v6 lite",
+        "device_count": 8
+      }
+    }
+  ]
+}

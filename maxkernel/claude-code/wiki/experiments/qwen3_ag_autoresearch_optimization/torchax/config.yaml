@@ -1,0 +1,14 @@
+# Default config for Qwen3 8B torchax baseline (minimal trainer).
+# CLI flags to train.py override these.
+
+model_id: Qwen/Qwen3-8B
+dataset: wikitext-2-raw-v1
+seqlen: 8192
+batch_size: 1
+train_steps: 20
+learning_rate: 1.0e-5
+weight_decay: 0.0
+tp_parallelism: 1
+weights_dtype: bf16
+use_real_data: true
+profile_step: 10

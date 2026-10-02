@@ -1,0 +1,126 @@
+-f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# --- Core: JAX / Pallas on TPU -------------------------------------------
+# jax 0.11.0 + libtpu 0.0.47 is the anchor every other version below is
+# chosen against. Do not let anything move it. The `[tpu]` extra is not used
+# because jax[tpu]==0.11.0 hard-pins libtpu==0.0.44.* (and no jax release
+# pins 0.0.47: 0.11.1 -> 0.0.46.*, 0.11.2 -> 0.0.48.*), so jaxlib and libtpu
+# are pinned explicitly instead.
+jax==0.11.0
+jaxlib==0.11.0
+libtpu==0.0.47
+
+# --- Array plumbing ------------------------------------------------------
+# Both arrive transitively with jax, but four tools import them by name
+# (jaxpr_compare, torchax_oracle, capture_torch_golden, verify_port import
+# numpy; capture_torch_golden/verify_port additionally use ml_dtypes to
+# round-trip bf16/fp8 through raw uint bits, which numpy cannot represent).
+# Listed explicitly so they survive any future change to jax's own deps.
+# Left unpinned on purpose: jax already constrains both, and pinning here
+# would just be a second place to update.
+numpy
+ml_dtypes
+
+# --- TPU execution server (server/tpu_server.py) -------------------------
+# These were missing: the server imports fastapi, pydantic and uvicorn
+# directly, so a venv built from this file could not start the TPU server.
+fastapi
+pydantic
+uvicorn
+
+# --- Profiling / trace analysis ------------------------------------------
+# xprof supplies both the offline converters (xprof.convert.raw_to_tool_data,
+# used by analyze_trace / get_overview_metrics / get_hlo_dump) and the
+# supported trace reader (xprof.profile_data.ProfileData, used by
+# tools/xplane_loader.py).
+#
+# NOTE: `tensorflow` was previously listed here solely so the trace tools
+# could import `tensorflow.tsl.profiler.protobuf.xplane_pb2`. xprof does not
+# expose xplane_pb2 in OSS, so that import could never work; the tools now use
+# xprof's own reader and TensorFlow is no longer needed at all.
+xprof
+protobuf
+tpu-info
+
+# --- Data handling / reporting -------------------------------------------
+pandas
+tabulate          # required for DataFrame.to_markdown() in query_xplane.py
+matplotlib        # create_chart_from_xplane.py
+
+# --- API introspection (tools/search_api.py) -----------------------------
+docstring-parser
+
+# --- LLMWiki Retrieval (tools/retrieval.py, tools/wiki_tool.py) ----
+ripgrep
+google-cloud-aiplatform[adk,agent_engines]
+
+# --- Tests (tools/tpu_client_test.py, server/tpu_server_test.py) ---------
+# pytest and httpx were missing: pytest-asyncio alone does not install pytest,
+# and fastapi's TestClient requires httpx.
+pytest
+pytest-asyncio
+httpx
+
+# --- Agent / integration extras (not imported by this repo's tools, kept
+# --- for kernels and harnesses that may rely on them) --------------------
+transformers
+
+# --- PyTorch <-> JAX bridges (eval harness + torchax oracle path) --------
+#
+# Pin torch: torchax and torch_xla both track it exactly, and an unpinned
+# torch silently installs a version torchax cannot import.
+#
+# Why 2.9 and not something newer: torch_xla's newest release is 2.9.0
+# (Nov 2025) and it must equal the torch minor version, so torch_xla is what
+# caps the whole chain. torchax 0.0.13 is the newest release and imports
+# cleanly against torch 2.9 -- the failure recorded here previously (its
+# autocast table referencing `aten.prod.dim_Dimname` and `aten.cholesky`,
+# both removed in torch 2.14) does not occur on 2.9, where both ops still
+# exist. Verified on this v6e-8 VM: `torchax.extract_jax` on a Linear+GELU
+# module matches eager torch to 1.0e-3 (TPU default bf16 matmul precision;
+# see the tolerance note in tools/torchax_oracle.py).
+#
+# CPU-only build: the default PyPI torch 2.9.0 wheel is CUDA-tagged and pulls
+# ~3.5 GB of unused nvidia-*-cu12 deps onto a TPU VM. The `+cpu` local version
+# only exists on the PyTorch CPU index (added via --extra-index-url at the top
+# of this file, so every other package still resolves from PyPI). Neither
+# torchax nor torch_xla declares a torch dependency, so nothing pulls the CUDA
+# build back in.
+torch==2.9.0+cpu
+torchax==0.0.13
+
+# torchax 0.0.13 imports flax but does not declare it -- without this,
+# `import torchax` dies with ModuleNotFoundError: No module named 'flax'.
+# Pinned to 0.12.8 because flax >= 0.12.9 requires jax >= 0.11.2 and would
+# silently drag jax off the 0.11.0 pin above.
+flax==0.12.8
+
+# torch_xla provides `make_kernel_from_pallas`, which is what lets a Pallas
+# kernel be called from a torch nn.Module on a TPU. evaluation/ is the only
+# consumer; no tool in tools/ or server/ imports it.
+#
+# INSTALLED WITHOUT THE `[tpu]` EXTRA, AND IT CANNOT EXECUTE ON TPU HERE.
+# torch_xla[tpu]==2.9.0 pins libtpu==0.0.21 and torch_xla[pallas] pins
+# jax==0.7.1; either extra would tear down the jax 0.11.0 / libtpu 0.0.47
+# stack this repo is built on. Bare torch_xla declares no libtpu at all, so
+# it coexists -- but at runtime it then loads libtpu 0.0.47, whose PJRT C
+# API is a year newer than torch_xla 2.9.0's framework side:
+#
+#   RuntimeError: Unexpected PJRT_ExecuteOptions size: expected 112, got 80.
+#
+# So `import torch_xla` and `make_kernel_from_pallas` work, and the CPU PJRT
+# backend (PJRT_DEVICE=CPU) runs, but TPU execution raises the above. There
+# is no fix by version choice today: torch_xla has shipped nothing since
+# 2.9.0 (Nov 2025), and libtpu 0.0.47 is far newer. Revisit when a
+# torch_xla built against libtpu 0.0.47+ ships; until then evaluation/ needs
+# its own venv with the matching libtpu.
+torch_xla==2.9.0
+google-cloud-bigquery
+langchain-google-community
+langchain-community
+google-adk~=1.0
+google-genai>=2.16.0
+pygithub
+cloudpickle
+PyYAML>=6.0.3

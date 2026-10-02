@@ -1,0 +1,108 @@
+---
+title: 'Module: easydel/modules/glm4_moe_lite/modeling_glm4_moe_lite.py'
+type: catalog
+provenance: extracted
+module: easydel/modules/glm4_moe_lite/modeling_glm4_moe_lite.py
+status: fresh
+symbol_base: scip-python python easydel 0.0.0 `easydel.modules.glm4_moe_lite.modeling_glm4_moe_lite`/
+symbols:
+  Glm4MoeLiteAttention.forward_mla: Glm4MoeLiteAttention#forward_mla().
+  Glm4MoeLiteModel.__call__: Glm4MoeLiteModel#__call__().
+  Glm4MoeLiteAttention.define_network: Glm4MoeLiteAttention#define_network().
+  Glm4MoeLiteDecoderLayer.__call__: Glm4MoeLiteDecoderLayer#__call__().
+  Glm4MoeLiteMoE.shared_experts: Glm4MoeLiteMoE#shared_experts.
+  Glm4MoeLiteModel.embed_tokens: Glm4MoeLiteModel#embed_tokens.
+  Glm4MoeLiteMoE.__init__: Glm4MoeLiteMoE#__init__().
+  Glm4MoeLiteMoE.__call__: Glm4MoeLiteMoE#__call__().
+  Glm4MoeLiteForCausalLM.create_ragged_page_cache_config: Glm4MoeLiteForCausalLM#create_ragged_page_cache_config().
+  Glm4MoeLiteAttention.qk_nope_head_dim: Glm4MoeLiteAttention#qk_nope_head_dim.
+  Glm4MoeLiteModel.__init__: Glm4MoeLiteModel#__init__().
+  Glm4MoeLiteMLPStack.gate_proj: Glm4MoeLiteMLPStack#gate_proj.
+  Glm4MoeLiteMLPStack.up_proj: Glm4MoeLiteMLPStack#up_proj.
+  Glm4MoeLiteMLPStack.down_proj: Glm4MoeLiteMLPStack#down_proj.
+  Glm4MoeLiteForCausalLM: Glm4MoeLiteForCausalLM#
+  Glm4MoeLiteModel: Glm4MoeLiteModel#
+  Glm4MoeLiteMLP.__call__: Glm4MoeLiteMLP#__call__().
+  Glm4MoeLiteMLPStack.__call__: Glm4MoeLiteMLPStack#__call__().
+  Glm4MoeLiteMLP.intermediate_size: Glm4MoeLiteMLP#intermediate_size.
+  Glm4MoeLiteAttention.q_head_dim: Glm4MoeLiteAttention#q_head_dim.
+  Glm4MoeLiteAttention._create_attention_performer: Glm4MoeLiteAttention#_create_attention_performer().
+  Glm4MoeLiteDecoderLayer.self_attn: Glm4MoeLiteDecoderLayer#self_attn.
+  Glm4MoeLiteModel.norm: Glm4MoeLiteModel#norm.
+  Glm4MoeLiteForCausalLM._create_mla_ragged_page_cache_config: Glm4MoeLiteForCausalLM#_create_mla_ragged_page_cache_config().
+  Glm4MoeLiteAttention.kv_lora_rank: Glm4MoeLiteAttention#kv_lora_rank.
+  Glm4MoeLiteAttention.v_head_dim: Glm4MoeLiteAttention#v_head_dim.
+  Glm4MoeLiteTopKRouter.kernel: Glm4MoeLiteTopKRouter#kernel.
+  Glm4MoeLiteDecoderLayer.input_layernorm: Glm4MoeLiteDecoderLayer#input_layernorm.
+  Glm4MoeLiteDecoderLayer.post_attention_layernorm: Glm4MoeLiteDecoderLayer#post_attention_layernorm.
+  Glm4MoeLiteAttention.projection_mapping: Glm4MoeLiteAttention#projection_mapping.
+  Glm4MoeLiteTopKRouter.__call__: Glm4MoeLiteTopKRouter#__call__().
+  Glm4MoeLiteMoE.experts: Glm4MoeLiteMoE#experts.
+  Glm4MoeLiteAttention.rotary: Glm4MoeLiteAttention#rotary.
+  Glm4MoeLiteForCausalLM.__init__: Glm4MoeLiteForCausalLM#__init__().
+  Glm4MoeLiteMLPStack.act_fn: Glm4MoeLiteMLPStack#act_fn.
+  Glm4MoeLiteDecoderLayer.mlp: Glm4MoeLiteDecoderLayer#mlp.
+  Glm4MoeLiteModel.layers: Glm4MoeLiteModel#layers.
+  Glm4MoeLiteMLP.gate_proj: Glm4MoeLiteMLP#gate_proj.
+  Glm4MoeLiteMLP.up_proj: Glm4MoeLiteMLP#up_proj.
+  Glm4MoeLiteMLP.down_proj: Glm4MoeLiteMLP#down_proj.
+  Glm4MoeLiteMLP.act_fn: Glm4MoeLiteMLP#act_fn.
+  Glm4MoeLiteMoE.group_topk_k: Glm4MoeLiteMoE#group_topk_k.
+  Glm4MoeLiteModel.frequencies: Glm4MoeLiteModel#frequencies().
+  Glm4MoeLiteMLP.hidden_size: Glm4MoeLiteMLP#hidden_size.
+  Glm4MoeLiteTopKRouter.craft_sharding: Glm4MoeLiteTopKRouter#craft_sharding().
+  Glm4MoeLiteDecoderLayer.hidden_size: Glm4MoeLiteDecoderLayer#hidden_size.
+  Glm4MoeLiteForCausalLM._task_type: Glm4MoeLiteForCausalLM#_task_type.
+  Glm4MoeLiteTopKRouter.n_routed_experts: Glm4MoeLiteTopKRouter#n_routed_experts.
+  Glm4MoeLiteAttention.qk_rope_head_dim: Glm4MoeLiteAttention#qk_rope_head_dim.
+  Glm4MoeLiteMoE: Glm4MoeLiteMoE#
+  Glm4MoeLiteMoE.n_group: Glm4MoeLiteMoE#n_group.
+  Glm4MoeLiteMoE.topk_group: Glm4MoeLiteMoE#topk_group.
+  Glm4MoeLiteMoE.norm_topk_prob: Glm4MoeLiteMoE#norm_topk_prob.
+  Glm4MoeLiteMoE.routed_scaling_factor: Glm4MoeLiteMoE#routed_scaling_factor.
+  Glm4MoeLiteMoE.gate: Glm4MoeLiteMoE#gate.
+  Glm4MoeLiteAttention: Glm4MoeLiteAttention#
+  Glm4MoeLiteMLP.__init__: Glm4MoeLiteMLP#__init__().
+  Glm4MoeLiteMLPStack.__init__: Glm4MoeLiteMLPStack#__init__().
+  Glm4MoeLiteTopKRouter.__init__: Glm4MoeLiteTopKRouter#__init__().
+  Glm4MoeLiteTopKRouter.e_score_correction_bias: Glm4MoeLiteTopKRouter#e_score_correction_bias.
+  Glm4MoeLiteAttention.__init__: Glm4MoeLiteAttention#__init__().
+  Glm4MoeLiteAttention.head_dim: Glm4MoeLiteAttention#head_dim.
+  Glm4MoeLiteDecoderLayer.__init__: Glm4MoeLiteDecoderLayer#__init__().
+  Glm4MoeLiteForCausalLM._config_class: Glm4MoeLiteForCausalLM#_config_class.
+  Glm4MoeLiteMLP: Glm4MoeLiteMLP#
+  Glm4MoeLiteMLP.config: Glm4MoeLiteMLP#config.
+  Glm4MoeLiteMLPStack.config: Glm4MoeLiteMLPStack#config.
+  Glm4MoeLiteTopKRouter.config: Glm4MoeLiteTopKRouter#config.
+  Glm4MoeLiteAttention.config: Glm4MoeLiteAttention#config.
+  Glm4MoeLiteAttention._apply_rope_interleaved: Glm4MoeLiteAttention#_apply_rope_interleaved().
+  Glm4MoeLiteDecoderLayer.config: Glm4MoeLiteDecoderLayer#config.
+  Glm4MoeLiteMLPStack: Glm4MoeLiteMLPStack#
+  Glm4MoeLiteTopKRouter: Glm4MoeLiteTopKRouter#
+  Glm4MoeLiteMoE._select_experts_static: Glm4MoeLiteMoE#_select_experts_static().
+  Glm4MoeLiteDecoderLayer: Glm4MoeLiteDecoderLayer#
+  Glm4MoeLiteMLP.dtype: Glm4MoeLiteMLP#dtype.
+  Glm4MoeLiteMLP.param_dtype: Glm4MoeLiteMLP#param_dtype.
+  Glm4MoeLiteMLP.precision: Glm4MoeLiteMLP#precision.
+  Glm4MoeLiteMLPStack.reform_param: Glm4MoeLiteMLPStack#reform_param.
+  Glm4MoeLiteMLPStack.dtype: Glm4MoeLiteMLPStack#dtype.
+  Glm4MoeLiteMLPStack.param_dtype: Glm4MoeLiteMLPStack#param_dtype.
+  Glm4MoeLiteMLPStack.precision: Glm4MoeLiteMLPStack#precision.
+  Glm4MoeLiteTopKRouter.dtype: Glm4MoeLiteTopKRouter#dtype.
+  Glm4MoeLiteTopKRouter.param_dtype: Glm4MoeLiteTopKRouter#param_dtype.
+  Glm4MoeLiteTopKRouter.precision: Glm4MoeLiteTopKRouter#precision.
+  Glm4MoeLiteMoE.config: Glm4MoeLiteMoE#config.
+  Glm4MoeLiteMoE.dtype: Glm4MoeLiteMoE#dtype.
+  Glm4MoeLiteMoE.param_dtype: Glm4MoeLiteMoE#param_dtype.
+  Glm4MoeLiteMoE.precision: Glm4MoeLiteMoE#precision.
+  Glm4MoeLiteDecoderLayer.dtype: Glm4MoeLiteDecoderLayer#dtype.
+  Glm4MoeLiteDecoderLayer.param_dtype: Glm4MoeLiteDecoderLayer#param_dtype.
+  Glm4MoeLiteDecoderLayer.precision: Glm4MoeLiteDecoderLayer#precision.
+  Glm4MoeLiteDecoderLayer.rngs: Glm4MoeLiteDecoderLayer#rngs.
+  Glm4MoeLiteDecoderLayer.layer_idx: Glm4MoeLiteDecoderLayer#layer_idx.
+  Glm4MoeLiteForCausalLM._model_type: Glm4MoeLiteForCausalLM#_model_type.
+  __all__: __all__.
+---
+# Module: [`easydel/modules/glm4_moe_lite/modeling_glm4_moe_lite.py`](../../../../../../../raw/code/EasyDeL/easydel/modules/glm4_moe_lite/modeling_glm4_moe_lite.py)
+
+> **Collapsed catalog** (96 symbols) — anchors above resolve for citations; detailed member listing omitted (`coverage_collapse`). See the source link above, or the curated codebase page, for depth.

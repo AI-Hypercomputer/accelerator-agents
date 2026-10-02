@@ -1,0 +1,91 @@
+---
+title: 'Module: easydel/modules/glm4v_moe/glm4v_moe_configuration.py'
+type: catalog
+provenance: extracted
+module: easydel/modules/glm4v_moe/glm4v_moe_configuration.py
+status: fresh
+symbol_base: scip-python python easydel 0.0.0 `easydel.modules.glm4v_moe.glm4v_moe_configuration`/
+symbols:
+  Glm4vMoeTextConfig: Glm4vMoeTextConfig#
+  Glm4vMoeConfig: Glm4vMoeConfig#
+  _patch_hf_glm4v_moe_router_logits_output: _patch_hf_glm4v_moe_router_logits_output().
+  Glm4vMoeVisionConfig: Glm4vMoeVisionConfig#
+  Glm4vMoeConfig.text_config: Glm4vMoeConfig#text_config.
+  Glm4vMoeConfig.vision_config: Glm4vMoeConfig#vision_config.
+  Glm4vMoeTextConfig.hidden_size: Glm4vMoeTextConfig#hidden_size.
+  Glm4vMoeConfig.sub_configs: Glm4vMoeConfig#sub_configs.
+  Glm4vMoeConfig.__init__: Glm4vMoeConfig#__init__().
+  Glm4vMoeConfig.get_text_config: Glm4vMoeConfig#get_text_config().
+  Glm4vMoeConfig.get_vision_config: Glm4vMoeConfig#get_vision_config().
+  Glm4vMoeTextConfig.rms_norm_eps: Glm4vMoeTextConfig#rms_norm_eps.
+  Glm4vMoeVisionConfig.__init__: Glm4vMoeVisionConfig#__init__().
+  Glm4vMoeTextConfig.rope_scaling: Glm4vMoeTextConfig#rope_scaling.
+  Glm4vMoeTextConfig._external_rope_config_kwargs: Glm4vMoeTextConfig#_external_rope_config_kwargs.
+  Glm4vMoeConfig.video_end_token_id: Glm4vMoeConfig#video_end_token_id.
+  _patch_hf_glm4v_moe_router_logits_output._patched_load_balancing_loss_func: _patch_hf_glm4v_moe_router_logits_output()._patched_load_balancing_loss_func().
+  Glm4vMoeTextConfig.vocab_size: Glm4vMoeTextConfig#vocab_size.
+  _patch_hf_glm4v_moe_router_logits_output._get_num_experts: _patch_hf_glm4v_moe_router_logits_output()._get_num_experts().
+  _patch_hf_glm4v_moe_router_logits_output._set_num_experts: _patch_hf_glm4v_moe_router_logits_output()._set_num_experts().
+  _patch_hf_glm4v_moe_router_logits_output._get_num_experts_per_tok: _patch_hf_glm4v_moe_router_logits_output()._get_num_experts_per_tok().
+  _patch_hf_glm4v_moe_router_logits_output._set_num_experts_per_tok: _patch_hf_glm4v_moe_router_logits_output()._set_num_experts_per_tok().
+  _rope_scaling_from_rope_parameters: _rope_scaling_from_rope_parameters().
+  Glm4vMoeVisionConfig.spatial_merge_size: Glm4vMoeVisionConfig#spatial_merge_size.
+  Glm4vMoeTextConfig.num_hidden_layers: Glm4vMoeTextConfig#num_hidden_layers.
+  Glm4vMoeTextConfig.initializer_range: Glm4vMoeTextConfig#initializer_range.
+  Glm4vMoeTextConfig.first_k_dense_replace: Glm4vMoeTextConfig#first_k_dense_replace.
+  Glm4vMoeConfig.image_token_id: Glm4vMoeConfig#image_token_id.
+  Glm4vMoeConfig.video_token_id: Glm4vMoeConfig#video_token_id.
+  Glm4vMoeVisionConfig.model_type: Glm4vMoeVisionConfig#model_type.
+  Glm4vMoeVisionConfig.base_config_key: Glm4vMoeVisionConfig#base_config_key.
+  Glm4vMoeVisionConfig.depth: Glm4vMoeVisionConfig#depth.
+  Glm4vMoeVisionConfig.hidden_size: Glm4vMoeVisionConfig#hidden_size.
+  Glm4vMoeVisionConfig.hidden_act: Glm4vMoeVisionConfig#hidden_act.
+  Glm4vMoeVisionConfig.attention_bias: Glm4vMoeVisionConfig#attention_bias.
+  Glm4vMoeVisionConfig.attention_dropout: Glm4vMoeVisionConfig#attention_dropout.
+  Glm4vMoeVisionConfig.num_heads: Glm4vMoeVisionConfig#num_heads.
+  Glm4vMoeVisionConfig.num_attention_heads: Glm4vMoeVisionConfig#num_attention_heads.
+  Glm4vMoeVisionConfig.in_channels: Glm4vMoeVisionConfig#in_channels.
+  Glm4vMoeVisionConfig.image_size: Glm4vMoeVisionConfig#image_size.
+  Glm4vMoeVisionConfig.patch_size: Glm4vMoeVisionConfig#patch_size.
+  Glm4vMoeVisionConfig.rms_norm_eps: Glm4vMoeVisionConfig#rms_norm_eps.
+  Glm4vMoeVisionConfig.temporal_patch_size: Glm4vMoeVisionConfig#temporal_patch_size.
+  Glm4vMoeVisionConfig.out_hidden_size: Glm4vMoeVisionConfig#out_hidden_size.
+  Glm4vMoeVisionConfig.intermediate_size: Glm4vMoeVisionConfig#intermediate_size.
+  Glm4vMoeVisionConfig.initializer_range: Glm4vMoeVisionConfig#initializer_range.
+  Glm4vMoeVisionConfig.get_partition_rules: Glm4vMoeVisionConfig#get_partition_rules().
+  Glm4vMoeTextConfig.model_type: Glm4vMoeTextConfig#model_type.
+  Glm4vMoeTextConfig.base_config_key: Glm4vMoeTextConfig#base_config_key.
+  Glm4vMoeTextConfig.keys_to_ignore_at_inference: Glm4vMoeTextConfig#keys_to_ignore_at_inference.
+  Glm4vMoeTextConfig.__init__: Glm4vMoeTextConfig#__init__().
+  Glm4vMoeTextConfig.intermediate_size: Glm4vMoeTextConfig#intermediate_size.
+  Glm4vMoeTextConfig.num_attention_heads: Glm4vMoeTextConfig#num_attention_heads.
+  Glm4vMoeTextConfig.num_key_value_heads: Glm4vMoeTextConfig#num_key_value_heads.
+  Glm4vMoeTextConfig.head_dim: Glm4vMoeTextConfig#head_dim.
+  Glm4vMoeTextConfig.hidden_act: Glm4vMoeTextConfig#hidden_act.
+  Glm4vMoeTextConfig.max_position_embeddings: Glm4vMoeTextConfig#max_position_embeddings.
+  Glm4vMoeTextConfig.use_cache: Glm4vMoeTextConfig#use_cache.
+  Glm4vMoeTextConfig.attention_bias: Glm4vMoeTextConfig#attention_bias.
+  Glm4vMoeTextConfig.attention_dropout: Glm4vMoeTextConfig#attention_dropout.
+  Glm4vMoeTextConfig.partial_rotary_factor: Glm4vMoeTextConfig#partial_rotary_factor.
+  Glm4vMoeTextConfig.rope_theta: Glm4vMoeTextConfig#rope_theta.
+  Glm4vMoeTextConfig.moe_intermediate_size: Glm4vMoeTextConfig#moe_intermediate_size.
+  Glm4vMoeTextConfig.num_experts_per_tok: Glm4vMoeTextConfig#num_experts_per_tok.
+  Glm4vMoeTextConfig.n_shared_experts: Glm4vMoeTextConfig#n_shared_experts.
+  Glm4vMoeTextConfig.n_routed_experts: Glm4vMoeTextConfig#n_routed_experts.
+  Glm4vMoeTextConfig.routed_scaling_factor: Glm4vMoeTextConfig#routed_scaling_factor.
+  Glm4vMoeTextConfig.n_group: Glm4vMoeTextConfig#n_group.
+  Glm4vMoeTextConfig.topk_group: Glm4vMoeTextConfig#topk_group.
+  Glm4vMoeTextConfig.norm_topk_prob: Glm4vMoeTextConfig#norm_topk_prob.
+  Glm4vMoeTextConfig.router_aux_loss_coef: Glm4vMoeTextConfig#router_aux_loss_coef.
+  Glm4vMoeTextConfig.get_partition_rules: Glm4vMoeTextConfig#get_partition_rules().
+  Glm4vMoeConfig.model_type: Glm4vMoeConfig#model_type.
+  Glm4vMoeConfig.keys_to_ignore_at_inference: Glm4vMoeConfig#keys_to_ignore_at_inference.
+  Glm4vMoeConfig.image_start_token_id: Glm4vMoeConfig#image_start_token_id.
+  Glm4vMoeConfig.image_end_token_id: Glm4vMoeConfig#image_end_token_id.
+  Glm4vMoeConfig.video_start_token_id: Glm4vMoeConfig#video_start_token_id.
+  Glm4vMoeConfig.get_partition_rules: Glm4vMoeConfig#get_partition_rules().
+  __all__: __all__.
+---
+# Module: [`easydel/modules/glm4v_moe/glm4v_moe_configuration.py`](../../../../../../../raw/code/EasyDeL/easydel/modules/glm4v_moe/glm4v_moe_configuration.py)
+
+> **Collapsed catalog** (79 symbols) — anchors above resolve for citations; detailed member listing omitted (`coverage_collapse`). See the source link above, or the curated codebase page, for depth.

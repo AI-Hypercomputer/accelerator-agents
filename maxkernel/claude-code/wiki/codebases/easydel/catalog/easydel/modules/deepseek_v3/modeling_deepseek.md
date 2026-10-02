@@ -1,0 +1,115 @@
+---
+title: 'Module: easydel/modules/deepseek_v3/modeling_deepseek.py'
+type: catalog
+provenance: extracted
+module: easydel/modules/deepseek_v3/modeling_deepseek.py
+status: fresh
+symbol_base: scip-python python easydel 0.0.0 `easydel.modules.deepseek_v3.modeling_deepseek`/
+symbols:
+  DeepseekV3Attention.define_network: DeepseekV3Attention#define_network().
+  DeepseekV3Model.__call__: DeepseekV3Model#__call__().
+  DeepseekV3DecoderLayer.__call__: DeepseekV3DecoderLayer#__call__().
+  MoEGate.__call__: MoEGate#__call__().
+  DeepseekV3MoE.__call__: DeepseekV3MoE#__call__().
+  DeepseekV3MoE.__init__: DeepseekV3MoE#__init__().
+  DeepseekV3ForCausalLM.__call__: DeepseekV3ForCausalLM#__call__().
+  DeepseekV3ForCausalLM.create_ragged_page_cache_config: DeepseekV3ForCausalLM#create_ragged_page_cache_config().
+  DeepseekV3ForCausalLM: DeepseekV3ForCausalLM#
+  DeepseekV3Model.embed_tokens: DeepseekV3Model#embed_tokens.
+  DeepseekV3Model: DeepseekV3Model#
+  DeepseekV3MLP.__call__: DeepseekV3MLP#__call__().
+  DeepseekV3MLPMoE.__call__: DeepseekV3MLPMoE#__call__().
+  DeepseekV3Attention._create_attention_performer: DeepseekV3Attention#_create_attention_performer().
+  DeepseekV3MoE.experts: DeepseekV3MoE#experts.
+  DeepseekV3MLPMoE.gate_proj: DeepseekV3MLPMoE#gate_proj.
+  DeepseekV3MLPMoE.up_proj: DeepseekV3MLPMoE#up_proj.
+  DeepseekV3MLPMoE.down_proj: DeepseekV3MLPMoE#down_proj.
+  MoEGate.config: MoEGate#config.
+  MoEGate.gating_dim: MoEGate#gating_dim.
+  DeepseekV3MLP.intermediate_size: DeepseekV3MLP#intermediate_size.
+  MoEGate.n_routed_experts: MoEGate#n_routed_experts.
+  MoEGate.kernel: MoEGate#kernel.
+  MoEGate.e_score_correction_bias: MoEGate#e_score_correction_bias.
+  DeepseekV3MoE.gate: DeepseekV3MoE#gate.
+  DeepseekV3DecoderLayer.mlp: DeepseekV3DecoderLayer#mlp.
+  DeepseekV3DecoderLayer.input_layernorm: DeepseekV3DecoderLayer#input_layernorm.
+  DeepseekV3DecoderLayer.post_attention_layernorm: DeepseekV3DecoderLayer#post_attention_layernorm.
+  MoEGate.topk_method: MoEGate#topk_method.
+  DeepseekV3Attention.projection_mapping: DeepseekV3Attention#projection_mapping.
+  DeepseekV3Attention.q_head_dim: DeepseekV3Attention#q_head_dim.
+  DeepseekV3Attention.kv_lora_rank: DeepseekV3Attention#kv_lora_rank.
+  DeepseekV3Attention.rotary: DeepseekV3Attention#rotary.
+  DeepseekV3DecoderLayer.hidden_size: DeepseekV3DecoderLayer#hidden_size.
+  DeepseekV3ForCausalLM.__init__: DeepseekV3ForCausalLM#__init__().
+  DeepseekV3ForCausalLM.create_transformer_cache_config: DeepseekV3ForCausalLM#create_transformer_cache_config().
+  MoEGate.top_k: MoEGate#top_k.
+  MoEGate.scoring_func: MoEGate#scoring_func.
+  MoEGate.n_group: MoEGate#n_group.
+  DeepseekV3MLPMoE.act_fn: DeepseekV3MLPMoE#act_fn.
+  DeepseekV3MLP.gate_proj: DeepseekV3MLP#gate_proj.
+  DeepseekV3MLP.down_proj: DeepseekV3MLP#down_proj.
+  DeepseekV3MLP.up_proj: DeepseekV3MLP#up_proj.
+  DeepseekV3MLP.act_fn: DeepseekV3MLP#act_fn.
+  MoEGate.routed_scaling_factor: MoEGate#routed_scaling_factor.
+  MoEGate.topk_group: MoEGate#topk_group.
+  MoEGate.norm_topk_prob: MoEGate#norm_topk_prob.
+  DeepseekV3Model.norm: DeepseekV3Model#norm.
+  DeepseekV3Model.frequencies: DeepseekV3Model#frequencies().
+  DeepseekV3ForCausalLM._compute_aux_loss: DeepseekV3ForCausalLM#_compute_aux_loss().
+  DeepseekV3MLP.hidden_size: DeepseekV3MLP#hidden_size.
+  MoEGate.seq_aux: MoEGate#seq_aux.
+  MoEGate.craft_sharding: MoEGate#craft_sharding().
+  DeepseekV3MLPMoE.precision: DeepseekV3MLPMoE#precision.
+  DeepseekV3Model.__init__: DeepseekV3Model#__init__().
+  DeepseekV3ForCausalLM._task_type: DeepseekV3ForCausalLM#_task_type.
+  DeepseekV3Attention.v_head_dim: DeepseekV3Attention#v_head_dim.
+  DeepseekV3Model.layers: DeepseekV3Model#layers.
+  DeepseekV3MoE: DeepseekV3MoE#
+  DeepseekV3MoE.shared_experts: DeepseekV3MoE#shared_experts.
+  DeepseekV3Attention: DeepseekV3Attention#
+  DeepseekV3DecoderLayer.self_attn: DeepseekV3DecoderLayer#self_attn.
+  DeepseekV3Attention.config: DeepseekV3Attention#config.
+  DeepseekV3MLP.__init__: DeepseekV3MLP#__init__().
+  MoEGate.__init__: MoEGate#__init__().
+  DeepseekV3MLPMoE.__init__: DeepseekV3MLPMoE#__init__().
+  DeepseekV3MoE.num_experts_per_tok: DeepseekV3MoE#num_experts_per_tok.
+  DeepseekV3MoE.experts_per_rank: DeepseekV3MoE#experts_per_rank.
+  DeepseekV3Attention.__init__: DeepseekV3Attention#__init__().
+  DeepseekV3Attention.qk_nope_head_dim: DeepseekV3Attention#qk_nope_head_dim.
+  DeepseekV3Attention.qk_rope_head_dim: DeepseekV3Attention#qk_rope_head_dim.
+  DeepseekV3Attention.head_dim: DeepseekV3Attention#head_dim.
+  DeepseekV3DecoderLayer.__init__: DeepseekV3DecoderLayer#__init__().
+  DeepseekV3Model.get_embedding: DeepseekV3Model#get_embedding().
+  DeepseekV3ForCausalLM._config_class: DeepseekV3ForCausalLM#_config_class.
+  DeepseekV3MLP: DeepseekV3MLP#
+  DeepseekV3MLP.config: DeepseekV3MLP#config.
+  DeepseekV3MLPMoE.config: DeepseekV3MLPMoE#config.
+  DeepseekV3MoE.config: DeepseekV3MoE#config.
+  DeepseekV3DecoderLayer.config: DeepseekV3DecoderLayer#config.
+  MoEGate: MoEGate#
+  MoEGate.precision: MoEGate#precision.
+  DeepseekV3MLPMoE: DeepseekV3MLPMoE#
+  DeepseekV3DecoderLayer: DeepseekV3DecoderLayer#
+  DeepseekV3MLP.dtype: DeepseekV3MLP#dtype.
+  DeepseekV3MLP.param_dtype: DeepseekV3MLP#param_dtype.
+  DeepseekV3MLP.precision: DeepseekV3MLP#precision.
+  MoEGate.dtype: MoEGate#dtype.
+  MoEGate.param_dtype: MoEGate#param_dtype.
+  DeepseekV3MLPMoE.reform_param: DeepseekV3MLPMoE#reform_param.
+  DeepseekV3MoE.dtype: DeepseekV3MoE#dtype.
+  DeepseekV3MoE.param_dtype: DeepseekV3MoE#param_dtype.
+  DeepseekV3MoE.precision: DeepseekV3MoE#precision.
+  DeepseekV3MoE.rngs: DeepseekV3MoE#rngs.
+  DeepseekV3DecoderLayer.dtype: DeepseekV3DecoderLayer#dtype.
+  DeepseekV3DecoderLayer.param_dtype: DeepseekV3DecoderLayer#param_dtype.
+  DeepseekV3DecoderLayer.precision: DeepseekV3DecoderLayer#precision.
+  DeepseekV3DecoderLayer.rngs: DeepseekV3DecoderLayer#rngs.
+  DeepseekV3DecoderLayer.layer_idx: DeepseekV3DecoderLayer#layer_idx.
+  DeepseekV3Model.get_encoder: DeepseekV3Model#get_encoder().
+  DeepseekV3Model.get_decoder: DeepseekV3Model#get_decoder().
+  DeepseekV3Model.get_lm_head: DeepseekV3Model#get_lm_head().
+  DeepseekV3ForCausalLM._model_type: DeepseekV3ForCausalLM#_model_type.
+---
+# Module: [`easydel/modules/deepseek_v3/modeling_deepseek.py`](../../../../../../../raw/code/EasyDeL/easydel/modules/deepseek_v3/modeling_deepseek.py)
+
+> **Collapsed catalog** (103 symbols) — anchors above resolve for citations; detailed member listing omitted (`coverage_collapse`). See the source link above, or the curated codebase page, for depth.

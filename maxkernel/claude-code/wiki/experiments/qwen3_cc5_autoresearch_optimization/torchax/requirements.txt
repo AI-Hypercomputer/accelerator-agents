@@ -1,0 +1,8 @@
+jax[tpu]
+transformers
+torchax
+accelerate
+datasets
+pyyaml
+optax
+fire

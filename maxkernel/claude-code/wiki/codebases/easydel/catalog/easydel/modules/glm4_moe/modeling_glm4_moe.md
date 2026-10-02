@@ -1,0 +1,102 @@
+---
+title: 'Module: easydel/modules/glm4_moe/modeling_glm4_moe.py'
+type: catalog
+provenance: extracted
+module: easydel/modules/glm4_moe/modeling_glm4_moe.py
+status: fresh
+symbol_base: scip-python python easydel 0.0.0 `easydel.modules.glm4_moe.modeling_glm4_moe`/Glm4Moe
+symbols:
+  Glm4MoeModel.__call__: Model#__call__().
+  Glm4MoeDecoderLayer.__call__: DecoderLayer#__call__().
+  Glm4MoeMoE.shared_experts: MoE#shared_experts.
+  Glm4MoeMoE.__init__: MoE#__init__().
+  Glm4MoeMoE.__call__: MoE#__call__().
+  Glm4MoeModel: Model#
+  Glm4MoeMLPStack.gate_proj: MLPStack#gate_proj.
+  Glm4MoeMLPStack.down_proj: MLPStack#down_proj.
+  Glm4MoeMLPStack.up_proj: MLPStack#up_proj.
+  Glm4MoeModel.embed_tokens: Model#embed_tokens.
+  Glm4MoeForCausalLM: ForCausalLM#
+  Glm4MoeForSequenceClassification: ForSequenceClassification#
+  Glm4MoeMLP.__call__: MLP#__call__().
+  Glm4MoeTopKRouter.kernel: TopKRouter#kernel.
+  Glm4MoeMLP.intermediate_size: MLP#intermediate_size.
+  Glm4MoeTopKRouter.get_selected_experts: TopKRouter#get_selected_experts().
+  Glm4MoeMLPStack.__call__: MLPStack#__call__().
+  Glm4MoeDecoderLayer.layer_idx: DecoderLayer#layer_idx.
+  Glm4MoeMLP.act_fn: MLP#act_fn.
+  Glm4MoeTopKRouter.e_score_correction_bias: TopKRouter#e_score_correction_bias.
+  Glm4MoeDecoderLayer.input_layernorm: DecoderLayer#input_layernorm.
+  Glm4MoeDecoderLayer.post_attention_layernorm: DecoderLayer#post_attention_layernorm.
+  Glm4MoeTopKRouter.n_routed_experts: TopKRouter#n_routed_experts.
+  Glm4MoeTopKRouter.__call__: TopKRouter#__call__().
+  Glm4MoeMoE.experts: MoE#experts.
+  Glm4MoeForCausalLM.__init__: ForCausalLM#__init__().
+  Glm4MoeForSequenceClassification.__init__: ForSequenceClassification#__init__().
+  Glm4MoeMLPStack.act_fn: MLPStack#act_fn.
+  Glm4MoeTopKRouter.n_group: TopKRouter#n_group.
+  Glm4MoeMLP.gate_proj: MLP#gate_proj.
+  Glm4MoeMLP.up_proj: MLP#up_proj.
+  Glm4MoeMLP.down_proj: MLP#down_proj.
+  Glm4MoeMoE.group_topk_k: MoE#group_topk_k.
+  Glm4MoeModel.norm: Model#norm.
+  Glm4MoeMoE: MoE#
+  Glm4MoeTopKRouter.craft_sharding: TopKRouter#craft_sharding().
+  Glm4MoeAttention.layer_idx: Attention#layer_idx.
+  Glm4MoeModel.__init__: Model#__init__().
+  Glm4MoeForCausalLM._task_type: ForCausalLM#_task_type.
+  Glm4MoeForSequenceClassification._task_type: ForSequenceClassification#_task_type.
+  Glm4MoeModel.layers: Model#layers.
+  Glm4MoeMLP: MLP#
+  Glm4MoeMoE.config: MoE#config.
+  Glm4MoeTopKRouter.top_k: TopKRouter#top_k.
+  Glm4MoeTopKRouter.topk_group: TopKRouter#topk_group.
+  Glm4MoeMoE.gate: MoE#gate.
+  Glm4MoeAttention: Attention#
+  Glm4MoeMLP.config: MLP#config.
+  Glm4MoeMLP.__init__: MLP#__init__().
+  Glm4MoeMLPStack.__init__: MLPStack#__init__().
+  Glm4MoeTopKRouter.__init__: TopKRouter#__init__().
+  Glm4MoeTopKRouter.routed_scaling_factor: TopKRouter#routed_scaling_factor.
+  Glm4MoeTopKRouter.norm_topk_prob: TopKRouter#norm_topk_prob.
+  Glm4MoeAttention.__init__: Attention#__init__().
+  Glm4MoeDecoderLayer.__init__: DecoderLayer#__init__().
+  Glm4MoeModel.padding_idx: Model#padding_idx.
+  Glm4MoeModel.vocab_size: Model#vocab_size.
+  Glm4MoeModel.get_embedding: Model#get_embedding().
+  Glm4MoeForCausalLM._config_class: ForCausalLM#_config_class.
+  Glm4MoeForSequenceClassification._config_class: ForSequenceClassification#_config_class.
+  Glm4MoeTopKRouter.config: TopKRouter#config.
+  Glm4MoeMLPStack: MLPStack#
+  Glm4MoeTopKRouter: TopKRouter#
+  Glm4MoeMoE._select_experts_static: MoE#_select_experts_static().
+  Glm4MoeDecoderLayer: DecoderLayer#
+  Glm4MoeDecoderLayer.config: DecoderLayer#config.
+  Glm4MoeDecoderLayer.self_attn: DecoderLayer#self_attn.
+  Glm4MoeDecoderLayer.mlp: DecoderLayer#mlp.
+  Glm4MoeMLP.dtype: MLP#dtype.
+  Glm4MoeMLP.param_dtype: MLP#param_dtype.
+  Glm4MoeMLP.precision: MLP#precision.
+  Glm4MoeMLPStack.reform_param: MLPStack#reform_param.
+  Glm4MoeMLPStack.config: MLPStack#config.
+  Glm4MoeMLPStack.dtype: MLPStack#dtype.
+  Glm4MoeMLPStack.param_dtype: MLPStack#param_dtype.
+  Glm4MoeMLPStack.precision: MLPStack#precision.
+  Glm4MoeTopKRouter.dtype: TopKRouter#dtype.
+  Glm4MoeTopKRouter.param_dtype: TopKRouter#param_dtype.
+  Glm4MoeTopKRouter.precision: TopKRouter#precision.
+  Glm4MoeMoE.dtype: MoE#dtype.
+  Glm4MoeMoE.param_dtype: MoE#param_dtype.
+  Glm4MoeMoE.precision: MoE#precision.
+  Glm4MoeDecoderLayer.dtype: DecoderLayer#dtype.
+  Glm4MoeDecoderLayer.param_dtype: DecoderLayer#param_dtype.
+  Glm4MoeDecoderLayer.precision: DecoderLayer#precision.
+  Glm4MoeModel.get_encoder: Model#get_encoder().
+  Glm4MoeModel.get_decoder: Model#get_decoder().
+  Glm4MoeModel.get_lm_head: Model#get_lm_head().
+  Glm4MoeForCausalLM._model_type: ForCausalLM#_model_type.
+  Glm4MoeForSequenceClassification._model_type: ForSequenceClassification#_model_type.
+---
+# Module: [`easydel/modules/glm4_moe/modeling_glm4_moe.py`](../../../../../../../raw/code/EasyDeL/easydel/modules/glm4_moe/modeling_glm4_moe.py)
+
+> **Collapsed catalog** (90 symbols) — anchors above resolve for citations; detailed member listing omitted (`coverage_collapse`). See the source link above, or the curated codebase page, for depth.

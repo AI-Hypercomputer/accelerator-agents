@@ -1,5 +1,5 @@
-task_id: 58p_SparseCore_Ragged_Gather
-description: Kernel task for 58p_SparseCore_Ragged_Gather
+task_id: 57p_SparseCore_Ragged_Gather
+description: Kernel task for 57p_SparseCore_Ragged_Gather
 input_gen_code: |-
   def get_inputs():
       import jax

@@ -1,5 +1,5 @@
-task_id: 61p_Linear_Softmax_Cross_Entropy
-description: Kernel task for 61p_Linear_Softmax_Cross_Entropy
+task_id: 64p_Linear_Softmax_Cross_Entropy
+description: Kernel task for 64p_Linear_Softmax_Cross_Entropy
 input_gen_code: |-
   def get_inputs():
       import jax

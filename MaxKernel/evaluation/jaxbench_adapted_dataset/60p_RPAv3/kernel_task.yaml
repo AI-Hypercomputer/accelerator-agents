@@ -1,5 +1,5 @@
-task_id: 63p_RPAv3
-description: Kernel task for 63p_RPAv3
+task_id: 60p_RPAv3
+description: Kernel task for 60p_RPAv3
 input_gen_code: |-
   def get_inputs():
       import math

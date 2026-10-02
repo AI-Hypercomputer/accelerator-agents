@@ -14,8 +14,6 @@ import numpy as np
 from collections.abc import Callable
 from typing import overload
 
-import jax
-import jax.numpy as jnp
 
 # bf16 tiles are (16, 128); keep token blocks sublane-aligned.
 SUBLANE = 16

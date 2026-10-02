@@ -1,5 +1,5 @@
-task_id: 62p_DeepSeek_V4_KV_Compressor
-description: Kernel task for 62p_DeepSeek_V4_KV_Compressor
+task_id: 58p_DeepSeek_V4_KV_Compressor
+description: Kernel task for 58p_DeepSeek_V4_KV_Compressor
 input_gen_code: |-
   def get_inputs():
       import enum

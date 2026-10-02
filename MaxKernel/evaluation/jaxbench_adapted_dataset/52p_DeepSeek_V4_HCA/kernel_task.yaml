@@ -1,5 +1,5 @@
-task_id: 59p_DeepSeek_V4_HCA
-description: Kernel task for 59p_DeepSeek_V4_HCA
+task_id: 52p_DeepSeek_V4_HCA
+description: Kernel task for 52p_DeepSeek_V4_HCA
 input_gen_code: |-
   def get_inputs():
       import jax

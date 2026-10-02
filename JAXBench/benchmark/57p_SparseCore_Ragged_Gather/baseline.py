@@ -26,12 +26,10 @@ import sys
 import types
 
 import jax
-import jax
 from jax import lax
 from jax.experimental import pallas as pl
 from jax.experimental.pallas import tpu as pltpu
 from jax.experimental.pallas import tpu_sc as plsc
-import jax.numpy as jnp
 import jax.numpy as jnp
 import numpy as np
 

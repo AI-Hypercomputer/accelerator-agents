@@ -1,5 +1,5 @@
-task_id: 54p_Megablox_GMM_v2
-description: Kernel task for 54p_Megablox_GMM_v2
+task_id: 59p_Megablox_GMM_v2
+description: Kernel task for 59p_Megablox_GMM_v2
 input_gen_code: |-
   def get_inputs():
       import jax

@@ -27,13 +27,10 @@ import numpy as np
 
 import functools
 
-import jax
 from jax import lax
 from jax.experimental import pallas as pl
 from jax.experimental.pallas import tpu as pltpu
 from jax.experimental.pallas import tpu_sc as plsc
-import jax.numpy as jnp
-
 
 
 def calculate_col_size(hidden_size: int, packing: int) -> int:

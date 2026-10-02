@@ -1,5 +1,5 @@
-task_id: 64p_Batched_RPA
-description: Kernel task for 64p_Batched_RPA
+task_id: 61p_Batched_RPA
+description: Kernel task for 61p_Batched_RPA
 input_gen_code: |-
   def get_inputs():
       import math

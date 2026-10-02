@@ -73,7 +73,6 @@ def matmul(
 ) -> jax.Array:
   if out_dtype is None:
     if x.dtype != y.dtype:
-      # TODO(tlongeri): Maybe we could use a deduction similar to jnp.dot
       raise TypeError(
           f"Cannot deduce output dtype for different input dtypes: {x.dtype},"
           f" {y.dtype}"

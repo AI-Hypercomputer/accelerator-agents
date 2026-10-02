@@ -49,8 +49,6 @@ class MultiPageAsyncCopyDescriptor:
     self._vmem_buf = vmem_buf
     seq_id, start_page_idx, end_page_idx = metadata
     self._async_copies = []
-    # TODO(jevinjiang): Only fetch dynamic shape in need! This will insert
-    # a bunch of if-ops. Check the performance when we have benchmarking setup.
     for i in range(vmem_buf.shape[0]):
       page_idx = start_page_idx + i
       page_idx = jax.lax.select(page_idx < end_page_idx, page_idx, 0)
@@ -296,7 +294,6 @@ def ragged_paged_attention_kernel(
     page_indices_ref,  # [max_num_seqs, pages_per_seq]
     cu_q_lens_ref,  # [max_num_seqs + 1]
     seq_buf_idx_ref,
-    # TODO(jevinjiang): if OOM in SMEM, consider pack to other scalar refs.
     num_seqs_ref,
     # Input
     q_ref,  # [num_q_per_blk, num_q_heads_per_blk, head_dim]
@@ -358,9 +355,6 @@ def ragged_paged_attention_kernel(
     )
     return async_copy_kv
 
-  # TODO(jevinjiang): Add these to Mosaic:
-  # 1. Support arbitrary strided load/store for int4 and int8 dtype.
-  # 2. Support arbitrary strided load/store for any last dimension.
   def strided_load_kv(ref, start, step):
     packing = get_dtype_packing(ref.dtype)
     if packing == 1:
@@ -373,8 +367,6 @@ def ragged_paged_attention_kernel(
     b_ref = ref.bitcast(jnp.uint32)
     b = b_ref[b_start::b_step, :]
 
-    # TODO(chengjiyao): use the general strided loading logic for bf16 after
-    # fixing the issue in mosaic's infer vector layout pass
     if ref.dtype == jnp.bfloat16:
       bk = b << 16
       bv = b & jnp.uint32(0xFFFF0000)
@@ -605,9 +597,6 @@ def ragged_paged_attention_kernel(
 
       @pl.when(next_heads_blk_idx < num_heads_blks)
       def prefetch_next_kv_blk():
-        # TODO(jevinjiang): reuse the same buffer if it is already prefetched!
-        # TODO(jevinjiang): only fetch effective dynamic size to hold kv_len and
-        # DMA to fixed size buffer!
         next_async_copy_kv = create_kv_async_copy_descriptors(
             next_heads_blk_idx, next_seq_idx, next_kv_blk_idx, next_buf_idx
         )
@@ -640,8 +629,6 @@ def ragged_paged_attention_kernel(
             v = v.astype(q_ref.dtype)
           kv_head_idx = kv_head_chunk_idx + step_idx
           q_head_idx = kv_head_idx * num_q_heads_per_kv_head
-          # TODO(jevinjiang): extra handling for packed type that can start at
-          # unaligned position!
           q = fold_on_2nd_minor(
               q_ref[:, q_head_idx : q_head_idx + num_q_heads_per_kv_head, :]
           )
@@ -705,7 +692,6 @@ def get_min_heads_per_blk(
     x //= packing
     return x in (1, 2, 4, 8) or x % 8 == 0
 
-  # TODO(jevinjiang): support unaligned number of heads!
   if not can_be_xla_fully_tiled(num_combined_kv_heads, kv_packing):
     raise ValueError(
         f"Not implemented: {num_combined_kv_heads=} can not be XLA fully tiled."
@@ -714,8 +700,6 @@ def get_min_heads_per_blk(
   num_kv_heads = num_combined_kv_heads // 2
   assert num_q_heads % num_kv_heads == 0
   ratio = num_q_heads // num_kv_heads
-  # TODO(jevinjiang): we can choose smaller tiling for packed type if large
-  # second minor tiling is not on.
   max_combined_kv_tiling = 8 * kv_packing
   min_combined_kv_heads = (
       max_combined_kv_tiling
@@ -744,7 +728,6 @@ def get_min_heads_per_blk(
 )
 def ragged_paged_attention(
     q: jax.Array,  # [max_num_batched_tokens, num_q_heads, head_dim]
-    # TODO(jevinjiang): create a write_to_kv_cache kernel!
     kv_pages: jax.Array,  # [total_num_pages, page_size, num_combined_kv_heads, head_dim]
     kv_lens: jax.Array,  # i32[max_num_seqs]
     page_indices: jax.Array,  # i32[max_num_seqs, pages_per_seq]
@@ -848,8 +831,6 @@ def ragged_paged_attention(
   ]
   out_specs = q_block_spec
   lm_scratch = pltpu.VMEM(
-      # TODO(jevinjiang): use 128 instead of 1 is due to Mosaic does not support
-      # unaligned slicing!
       (num_kv_heads_per_blk, num_q_per_blk * num_q_heads_per_kv_head, 128),
       jnp.float32,
   )

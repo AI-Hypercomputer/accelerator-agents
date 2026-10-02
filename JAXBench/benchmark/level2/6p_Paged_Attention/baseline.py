@@ -473,7 +473,6 @@ def paged_attention(
         f"The dtype of `lengths` must be int32. Got {lengths.dtype}"
     )
 
-  # TODO(dinghua): get the actual cores per chip once there's an official API.
   if megacore_mode == "kv_head":
     if num_kv_heads % 2 != 0:
       raise ValueError(

@@ -81,7 +81,7 @@ def _calculate_irregular_num_tiles(x: int, tx: int) -> tuple[int, int]:
   return tiles, rem
 
 
-GroupMetadata = Any  # TODO(enriqueps): Clean this up and use a namedtuple
+GroupMetadata = Any
 
 
 def make_group_metadata(
@@ -215,8 +215,6 @@ def make_group_metadata(
   # filter these out by assigning their tile id to `tile_m` (one beyond the max)
   # such that they're ignored by the subsequent histogram. Also filter out any
   # group which is empty.
-  #
-  # TODO(tgale): Invert the 'partial_tile_mask' predicates to be more clear.
   partial_tile_mask = jnp.logical_or(
       (group_offsets[:-1] % tm) == 0, group_sizes == 0
   )
@@ -247,8 +245,6 @@ def make_group_metadata(
   #
   # Find the start of the groups owned by our shard and shift the group_ids and
   # m_tile_ids s.t. the metadata for our tiles are at the front of the arrays.
-  #
-  # TODO(tgale): Move this offset into the kernel to avoid these rolls.
   first_tile_in_shard = (group_ids < start_group).sum()
   group_ids = jnp.roll(group_ids, shift=-first_tile_in_shard, axis=0)
   m_tile_ids = jnp.roll(m_tile_ids, shift=-first_tile_in_shard, axis=0)

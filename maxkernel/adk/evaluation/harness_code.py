@@ -9,6 +9,7 @@ import numpy as np
 import importlib
 import importlib.util
 import os
+import shutil
 import sys
 import traceback
 import xprof_utils
@@ -140,6 +141,9 @@ def benchmark(func, args, static_argnums, trace_dir=None, num_runs=20, num_warmu
     return (end - start) / num_runs
   
   def run_xprof():
+    # Clear stale traces so events from earlier runs aren't counted.
+    shutil.rmtree(trace_dir, ignore_errors=True)
+
     with jax.profiler.trace(trace_dir):
       for _ in range(num_runs):
         res = compiled_func(*dynamic_args_list)

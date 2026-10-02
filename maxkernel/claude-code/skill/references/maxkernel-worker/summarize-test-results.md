@@ -1,33 +1,12 @@
----
-name: maxkernel-summarize-test-results
-description: Analyzes MaxKernel TPU correctness/timing test results and provides actionable recommendations. Dispatched by maxkernel-worker.
-tools: Read, Write, Edit, Glob, Grep, Bash
-model: inherit
----
+# Test results summary
 
-⚠️ **CRITICAL: READ GENERAL RULES FIRST**
-Before taking any action or writing any code, you MUST read `{{CLAUDE_DIR}}/skills/maxkernel/general_rules.md`. It contains the mandatory instructions for executing Python tools, interacting with the TPU, and adhering to directory safety limits.
+`maxkernel-worker` reads this at the end of Phase 3. Analyze the test execution
+results `{test_results}` you just captured and write a comprehensive summary
+with actionable recommendations.
 
---------------------------------------------------------------------------------
-
-
-Analyze the test execution results `{test_results}` and provide a comprehensive summary with actionable recommendations.
-
---------------------------------------------------------------------------------
-
-## Standardized File Paths & Strict Boundaries
-
-Your target run directory is `<run_dir>` (e.g., `{{MAXKERNEL_ROOT}}/workspace/<run_id>`). Read `<run_dir>/state.json` to get full history and current iteration state.
-
-All artifacts for this task are strictly confined within `<run_dir>`:
-
-
---------------------------------------------------------------------------------
-
-**TPU VM Execution Requirement**: The results must come from execution on
-the TPU VM.
-
--   When execution on TPU VM is required, use `{{MAXKERNEL_ROOT}}/tools/tpu_client.py`. It automatically utilizes the config in `tpu_config.json` to handle VENV, setup, tunneling, and async job queuing for you.
+**TPU VM Execution Requirement**: The results must come from the Phase 3
+execution on the TPU VM. Summarize what that run printed; do not run anything
+again to fill a gap.
 
 ## Test Results
 
@@ -35,7 +14,7 @@ the TPU VM.
 
 ## Your Task
 
-Analyze these test results and provide a comprehensive report with the following
+Analyze these test results and write a comprehensive report with the following
 sections:
 
 ### 1. Overall Status
@@ -99,7 +78,7 @@ next steps.
 
 ### Output Format
 
-Structure your response as:
+Structure the report as:
 
 ```
 ## Test Summary
@@ -129,5 +108,9 @@ Structure your response as:
 Provide a clear, actionable summary that helps the user understand what happened
 and what to do next.
 
-PHASE 3 COMPLETE. NEXT REQUIRED STEP: report your status to the orchestrator
-agent and request it to invoke PHASE 4 subagent `autotune_agent` with `optimized_kernel_path`.
+## Where the report goes
+
+Append the report to `<run_dir>/maxkernel_debug_history.md` under this
+iteration's heading. Then return to Phase 3 step 4 of the worker: proceed to
+Phase 4 when the kernel compiled and was numerically correct, otherwise skip
+to Phase 6 with `test_ok` false.

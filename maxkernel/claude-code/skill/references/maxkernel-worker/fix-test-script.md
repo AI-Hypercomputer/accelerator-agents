@@ -1,17 +1,7 @@
----
-name: maxkernel-fix-test-script
-description: Fixes validation errors in the MaxKernel test harness's get_inputs(). Dispatched by maxkernel-worker when harness validation fails.
-tools: Read, Write, Edit, Glob, Grep, Bash
-model: inherit
----
+# Fix the test script
 
-⚠️ **CRITICAL: READ GENERAL RULES FIRST**
-Before taking any action or writing any code, you MUST read `{{CLAUDE_DIR}}/skills/maxkernel/general_rules.md`. It contains the mandatory instructions for executing Python tools, interacting with the TPU, and adhering to directory safety limits.
-
---------------------------------------------------------------------------------
-
-
-You are tasked with checking validation results and fixing errors in
+`maxkernel-worker` reads this in Phase 0.9 step 5 when harness validation
+failed and retries remain. You check the validation results and fix errors in
 `<run_dir>/get_inputs.py`. This is the only file you can touch: the rest of the
 shared harness at `<run_dir>/test_kernel.py` is assembled deterministically by
 `{{MAXKERNEL_ROOT}}/tools/assemble_test_harness.py` from `<run_dir>/get_inputs.py` plus
@@ -23,11 +13,10 @@ mismatch between what `get_inputs()` returns and what `<run_dir>/base.py`'s
 
 --------------------------------------------------------------------------------
 
-## Standardized File Paths & Strict Boundaries
+## Inputs and outputs
 
-Your target run directory is `<run_dir>` (e.g., `{{MAXKERNEL_ROOT}}/workspace/<run_id>`). Read `<run_dir>/state.json` to get full history and current iteration state.
-
-All artifacts for this task are strictly confined within `<run_dir>`:
+`<run_dir>` is the worker's own. All artifacts for this step are strictly
+confined within `<run_dir>`:
 
 *   Input generator to fix: `<run_dir>/get_inputs.py`
 *   Base kernel reference: `<run_dir>/base.py`
@@ -57,48 +46,49 @@ harness was run on the wrong backend, not that your file is wrong.
 `get_inputs()` file: `<run_dir>/get_inputs.py`
 Assembled harness (read-only, do not edit): `<run_dir>/test_kernel.py`
 
-**Validation Results:**
+**Validation Results** (from Phase 0.9 step 5):
 
--   Syntax Validation: {syntax_validation}
--   Import Validation: {import_validation}
--   Mock Execution Validation: {mock_execution_validation}
+-   Current validation error -- which check failed (syntax, import, or mock
+    execution) and its output
+-   Earlier errors and fixes from previous passes through this reference
 
 ## First: Check if the File Exists
 
-**If `<run_dir>/get_inputs.py` is empty or not provided:**
+**If `<run_dir>/get_inputs.py` does not exist or is empty:**
 
--   Respond: "❌ No `get_inputs()` was generated. Cannot fix a non-existent
-    file. Please generate it first."
+-   There is nothing to fix: Phase 0.9 step 3 did not produce it. Go back to
+    step 3 and generate it first.
 -   **STOP HERE**
 
 ## Second: Check for System/Connection Errors
 
-**If ANY validation result contains the string `FATAL_CONNECTION_ERROR`:**
+**If the validation error contains the string `FATAL_CONNECTION_ERROR`:**
 
 -   This is an unsolvable infrastructure error (e.g., SSH tunnel down, TPU
     unresponsive).
 -   **DO NOT** attempt to write any code fixes.
--   **Immediately halt** and return the exact message: `ESCALATE_SYSTEM_ERROR:
-    <details of the error>` back to the orchestrator.
+-   **Immediately halt**: record `ESCALATE_SYSTEM_ERROR: <details of the
+    error>` and follow step 3 of the worker's Strict Debuggability protocol,
+    which stops the workflow.
 -   **STOP HERE**.
 
 ## Third: Check if Fixes are Needed
 
-1.  If `syntax_validation.valid == True` AND `import_validation.valid == True`
-    AND `mock_execution_validation.valid == True`
+1.  If there is no current validation error -- syntax, import and mock
+    execution all passed:
 
     -   **All validations passed! No fixes needed.**
-    -   Respond: "✓ get_inputs() validation passed. No fixes required."
+    -   Go back to Phase 0.9 step 5, which breaks the loop.
     -   **STOP HERE - do not modify the file**
 
-2.  If ANY validation has `valid == False` → proceed to Step 3 below.
+2.  If any check failed → proceed to "Your Task" below.
 
 ## Tool Usage
 
 1.  `Read`: To read `<run_dir>/get_inputs.py`, `<run_dir>/base.py`, and
     `<run_dir>/test_kernel.py` (for context on the error only -- never write to the
     latter).
-2.  `write_to_file`: To overwrite `<run_dir>/get_inputs.py` with the corrected
+2.  `Write`: To overwrite `<run_dir>/get_inputs.py` with the corrected
     version.
 
 ## Your Task (Only if Fixes are Needed)
@@ -122,28 +112,29 @@ assembled harness (`<run_dir>/test_kernel.py`), read it too, but only to underst
 
 ### Step 3: Write the Fixed File
 
-Use `write_to_file` to overwrite `<run_dir>/get_inputs.py` with the corrected
+Use `Write` to overwrite `<run_dir>/get_inputs.py` with the corrected
 version.
 
 **CRITICAL RULES:**
 
 1.  **Only ever write to `<run_dir>/get_inputs.py`.** Never write to
-    `<run_dir>/test_kernel.py` — it is regenerated deterministically by the maxkernel-worker
-    from this file after you're done.
+    `<run_dir>/test_kernel.py` — Phase 0.9 step 4 regenerates it
+    deterministically from this file after you're done.
 2.  **DO NOT invent a new optimized kernel or `opt_computation` stub.**
 3.  Keep the required return shape: a list of `(dynamic_args, static_args)`
     tuples.
 
 **After writing:**
 
--   Confirm: "Fixed get_inputs() written to `<run_dir>/get_inputs.py`"
--   Summarize what was fixed
+-   Append what you fixed to the validation history
+-   Go back to Phase 0.9 step 4 to re-assemble the harness and validate
+    again
 
 ## Important Notes
 
 -   We are NOT fixing kernel bugs — only `get_inputs()`.
--   After your fix, the maxkernel-worker re-runs `{{MAXKERNEL_ROOT}}/tools/assemble_test_harness.py` and
-    validation runs again automatically.
+-   After your fix, Phase 0.9 re-runs `{{MAXKERNEL_ROOT}}/tools/assemble_test_harness.py` and
+    validation runs again.
 -   Unlike per-iteration kernel work, exhausting retries here is a
     **run-blocking failure**: nothing downstream (planning, implementation,
     testing, autotuning) can proceed without a valid harness. Say so plainly

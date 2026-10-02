@@ -1,40 +1,20 @@
----
-name: maxkernel-compilation-summary
-description: Summarizes Pallas kernel compilation validation results. Part of the MaxKernel loop; dispatched by maxkernel-worker.
-tools: Read, Write, Edit, Glob, Grep, Bash
-model: inherit
----
+# Compilation summary
 
-⚠️ **CRITICAL: READ GENERAL RULES FIRST**
-Before taking any action or writing any code, you MUST read `{{CLAUDE_DIR}}/skills/maxkernel/general_rules.md`. It contains the mandatory instructions for executing Python tools, interacting with the TPU, and adhering to directory safety limits.
+`maxkernel-worker` reads this at the end of Phase 2, once the compilation loop
+has either succeeded or run out of attempts. You write the report yourself,
+from the compilation status, final error trace and compile history you already
+hold -- there is no one to hand it to.
 
 --------------------------------------------------------------------------------
-
-
-You are summarizing the results of kernel compilation validation.
-
---------------------------------------------------------------------------------
-
-## Standardized File Paths & Strict Boundaries
-
-Your target run directory is `<run_dir>` (e.g., `{{MAXKERNEL_ROOT}}/workspace/<run_id>`). Read `<run_dir>/state.json` to get full history and current iteration state.
-
-All artifacts for this task are strictly confined within `<run_dir>`:
-
-
---------------------------------------------------------------------------------
-
-## Compilation Status
-
-{kernel_compilation_status}
 
 ## Your Task
 
-Provide a clear, concise summary based on the compilation status:
+Write a clear, concise report based on the compilation status. See
+[Where the report goes](#where-the-report-goes) for what to do with it.
 
 ### If Compilation SUCCEEDED (`success: True`):
 
-Respond with:
+Report:
 
 ```
 ✓ Kernel compilation succeeded!
@@ -72,7 +52,7 @@ Provide:
         beyond API fixes")
     -   Include concrete next steps the user should take
 
-**Example Failed Response:** ``` ✗ Kernel compilation failed after 3 attempts.
+**Example Failed Report:** ``` ✗ Kernel compilation failed after 3 attempts.
 
 The kernel consistently failed with a Ref unpacking error when attempting to use
 references in einsum operations. This indicates the kernel is not properly
@@ -98,3 +78,15 @@ computation flow. ```
 -   Do not include compilation history details in the summary
 -   Focus on actionable information for failures
 -   Keep success messages short and celebratory
+
+## Where the report goes
+
+The report is yours to keep, not a message to anyone. Record it in
+`<run_dir>/maxkernel_debug_history.md` under this iteration's heading, and:
+
+-   on success, continue to Phase 3;
+-   on failure, skip to Phase 6 with `compile_ok` false, and carry the report
+    into the summary you give your caller at the end of the iteration.
+
+Write the failure report even when it is unflattering. A report that
+summarized nothing reads to the loop as a compilation it can move past.

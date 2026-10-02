@@ -356,17 +356,17 @@ def build_plan(job, itype, needs, method, emit, refs):
 
   if itype == "specification" and synth == "jax":
     base_py = "SYNTHESIZED from the specification, then user-approved"
-    producer = "maxkernel-synthesize-baseline"
+    producer = "maxkernel-worker (synthesize-baseline reference)"
   elif effective == "jax":
     base_py = "copied from the input, unchanged"
     producer = "orchestrator"
   elif method == "torchax" and emit:
     base_py = "written from the jaxpr in Phase 0.7"
-    producer = "maxkernel-write-jnp-reference"
+    producer = "maxkernel-worker (write-jnp-reference reference)"
   elif method == "llm_port":
     base_py = "hand-written in Phase 0.4, gated in Phase 0.8"
     producer = (
-      "maxkernel-analyze-torch-source"
+      "maxkernel-worker (analyze-torch-source reference)"
       if effective == "pytorch"
       else "maxkernel-analyze-source"
     )

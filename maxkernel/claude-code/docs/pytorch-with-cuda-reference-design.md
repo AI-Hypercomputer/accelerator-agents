@@ -3,6 +3,13 @@
 Status: implemented on branch `pytorch_cuda`
 Scope: extends the MaxKernel loop (`skill/SKILL.md`, `agents/maxkernel-*.md`)
 
+> **Later change.** `analyze-torch-source`, `reconcile-reference`, `fix-port`
+> and `generate-test-file` are no longer subagents. They are references under
+> `skill/references/maxkernel-worker/` that `maxkernel-worker` follows in its
+> own context. The contracts below — what each step writes and what it must
+> not touch — are unchanged. `maxkernel-analyze-cuda-reference` stays a
+> subagent, so its brief is written without the primary in view.
+
 ---
 
 ## 1. What is being asked for, precisely
@@ -476,14 +483,14 @@ this schema fills `primary` from the flat fields and sets `references: []`.
 | `verify_port.py` | assemble + submit the golden check for `base.py` | gate must be mechanical |
 | `ledger.py` | read/append/transition `ideas_ledger.json` | status transitions are a state machine, not prose |
 
-### Subagents
+### Subagents and worker references
 
-| Agent | Writes | Explicitly cannot |
+| Step | Writes | Explicitly cannot |
 | --- | --- | --- |
-| `maxkernel-analyze-torch-source` | `torch_context.md`, `base.py` | write Pallas; read `<run_dir>/ref/` |
-| `maxkernel-analyze-cuda-reference` | `ref/ref_cuda_context.md` | write `base.py` or anything outside `ref/`; write Pallas |
-| `maxkernel-reconcile-reference` | `reference_alignment.md`, `ideas_ledger.json` | write code of any kind |
-| `maxkernel-fix-port` | `base.py` only | touch the optimized kernel or the harness |
+| `analyze-torch-source` (worker reference) | `torch_context.md`, `base.py` | write Pallas; read `<run_dir>/ref/` |
+| `maxkernel-analyze-cuda-reference` (subagent) | `ref/ref_cuda_context.md` | write `base.py` or anything outside `ref/`; write Pallas |
+| `reconcile-reference` (worker reference) | `reference_alignment.md`, `ideas_ledger.json` | write code of any kind |
+| `fix-port` (worker reference) | `base.py` only | touch the optimized kernel or the harness |
 
 ### Extended subagents
 
@@ -491,7 +498,7 @@ this schema fills `primary` from the flat fields and sets `references: []`.
 | --- | --- |
 | `maxkernel-plan-kernel` | roofline-before-ledger ordering; provenance tags; trust-conditional adoption rules |
 | `maxkernel-implement-kernel` | hard prohibition on reading `ref/` |
-| `maxkernel-generate-test-file` | prefer `torch_golden.json` shapes over brief prose |
+| `generate-test-file` (worker reference) | prefer `torch_golden.json` shapes over brief prose |
 | `maxkernel-summarize-profile` | adjudicate adopted ledger entries against the trace |
 
 ### Hook

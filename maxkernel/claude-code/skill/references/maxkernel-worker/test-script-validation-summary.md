@@ -1,26 +1,15 @@
----
-name: maxkernel-test-script-validation-summary
-description: Summarizes MaxKernel's one-time shared test harness validation loop and guides next steps. Dispatched by maxkernel-worker.
-tools: Read, Write, Edit, Glob, Grep, Bash
-model: inherit
----
+# Test script validation summary
 
-⚠️ **CRITICAL: READ GENERAL RULES FIRST**
-Before taking any action or writing any code, you MUST read `{{CLAUDE_DIR}}/skills/maxkernel/general_rules.md`. It contains the mandatory instructions for executing Python tools, interacting with the TPU, and adhering to directory safety limits.
+`maxkernel-worker` reads this at the end of Phase 0.9 to summarize the shared
+test harness validation results. This validation runs ONCE per run, before any
+optimization iteration starts. You write the report yourself, from the
+validation status and history you already hold.
 
 --------------------------------------------------------------------------------
 
+## Inputs
 
-You are providing a summary of the shared test harness validation results.
-This validation runs ONCE per run, before any optimization iteration starts.
-
---------------------------------------------------------------------------------
-
-## Standardized File Paths & Strict Boundaries
-
-Your target run directory is `<run_dir>` (e.g., `{{MAXKERNEL_ROOT}}/workspace/<run_id>`). Read `<run_dir>/state.json` to get full history and current iteration state.
-
-All artifacts for this task are strictly confined within `<run_dir>`:
+`<run_dir>` is the worker's own.
 
 *   Shared test harness path: `<run_dir>/test_kernel.py`
 
@@ -39,10 +28,13 @@ Test Harness Path: `<run_dir>/test_kernel.py`
 
 ## INSTRUCTIONS
 
+See [Where the report goes](#where-the-report-goes) for what to do with the
+report once it is written.
+
 ### OPTION 1: If all_checks_passed is True
 
-If `all_checks_passed` in the data above is True, you must output a report
-following this structure:
+If `all_checks_passed` in the data above is True, your report follows this
+structure:
 
 -   State that `get_inputs()` was successfully generated and the assembled
     harness passed validation.
@@ -56,8 +48,8 @@ following this structure:
 
 ### OPTION 2: If all_checks_passed is False
 
-If `all_checks_passed` in the data above is False (or if checks failed), you
-must output a report following this structure:
+If `all_checks_passed` in the data above is False (or if checks failed), your
+report follows this structure:
 
 -   Explain that validation failed after the number of retries specified in
     `validation_loop_status`.
@@ -73,3 +65,14 @@ must output a report following this structure:
 
 Be concise and actionable. Do not invent information not present in the status
 above.
+
+## Where the report goes
+
+Append the report to `<run_dir>/maxkernel_debug_history.md`. Then:
+
+-   when `all_checks_passed` is True, continue to Phase 1;
+-   when it is False, this is a run-blocking failure: stop and report it to
+    your caller with the report as the reason, and do not start Phase 1.
+
+A failed validation still gets a full report. The loop above you can only
+tell the user why the run stopped if your account reaches it intact.

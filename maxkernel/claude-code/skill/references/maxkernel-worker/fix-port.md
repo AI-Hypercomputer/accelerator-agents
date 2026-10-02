@@ -1,16 +1,7 @@
----
-name: maxkernel-fix-port
-description: Repairs base.py when verify_port.py finds it disagrees with the golden values captured from the user's source. Edits base.py and nothing else. Dispatched by maxkernel-worker in the Phase 0.8 gate, up to 3 attempts.
-tools: Read, Write, Edit, Bash
-model: inherit
----
+# Repair the port
 
-⚠️ **CRITICAL: READ GENERAL RULES FIRST**
-Before taking any action or writing any code, you MUST read `{{CLAUDE_DIR}}/skills/maxkernel/general_rules.md`. It contains the mandatory instructions for executing Python tools, interacting with the TPU, and adhering to directory safety limits.
-
---------------------------------------------------------------------------------
-
-You repair the run's baseline. `tools/verify_port.py` has compared
+`maxkernel-worker` reads this in Phase 0.8 to repair the run's baseline.
+`tools/verify_port.py` has compared
 `<run_dir>/base.py` against golden values captured by running the user's own
 PyTorch module on CPU, and they disagree.
 
@@ -24,11 +15,14 @@ computes what the source computes.
 
 ## Scope — you may edit exactly one file
 
+`<run_dir>` is the worker's own. While following this reference:
+
 *   You may edit: `<run_dir>/base.py`
 *   You must NOT touch: `<run_dir>/torch_golden.npz`, `<run_dir>/torch_golden.json`,
     `<run_dir>/test_kernel.py`, `<run_dir>/get_inputs.py`, any
-    `<run_dir>/iter<n>/` artifact, `<run_dir>/state.json`, or anything under
-    `<run_dir>/ref/`.
+    `<run_dir>/iter<n>/` artifact, or anything under `<run_dir>/ref/`. Leave
+    `<run_dir>/state.json` alone until you are back in Phase 0.8, which
+    records the verdict.
 *   You must NOT change `state.atol` / `state.rtol`. The tolerances are the
     user's (SKILL.md); a port that only passes at a loosened tolerance has not
     been fixed.
@@ -98,8 +92,8 @@ correct and usually trades one bug for another.
     the baseline is by definition what you write *without* a custom kernel;
 *   **signature-stable** — the same `computation(...)` argument order and the
     same `argnum` for every entry as `torch_context.md` §3. If you believe the
-    signature itself is wrong, that is the fix, but say so explicitly in your
-    report because the harness and `get_inputs()` depend on it;
+    signature itself is wrong, that is the fix, but record it explicitly in
+    `<run_dir>/maxkernel_debug_history.md` because the harness and `get_inputs()` depend on it;
 *   **dtype-faithful** — same storage dtypes in and out as the manifest
     records;
 *   **unoptimized** — do not make it faster. It is the denominator, and a
@@ -115,9 +109,9 @@ correct and usually trades one bug for another.
   --out <run_dir>/port_verification.json
 ```
 
-This runs on CPU and costs no TPU time, so run it. Iterate within your own
-turn until it passes or until you are confident it cannot be fixed by editing
-`base.py`.
+This runs on CPU and costs no TPU time, so run it. Iterate until it passes or
+until you are confident it cannot be fixed by editing `base.py`. One pass
+through this reference is one of Phase 0.8's three attempts.
 
 If the failing fraction went **down** but is not zero, you have found one of
 several bugs — keep going.
@@ -125,11 +119,22 @@ several bugs — keep going.
 If you genuinely cannot make it pass, stop and say so plainly, naming what you
 changed, what the residual disagreement looks like, and your best hypothesis.
 Do NOT declare success, do not loosen tolerances, and do not edit the golden
-file. The worker will stop the run after three attempts, which is the correct
+file. Phase 0.8 stops the run after three attempts, which is the correct
 outcome: a run whose baseline is wrong should not spend five iterations
 optimizing against it.
 
-## Output Requirement
+## Before you return to Phase 0.8
 
-Report in 2–4 sentences: the failure shape you diagnosed, the cause you found,
-the change you made, and the final `verify_port.py` verdict with its numbers.
+Append to `<run_dir>/maxkernel_debug_history.md`, in 2–4 sentences: the failure
+shape you diagnosed, the cause you found, the change you made, and the final
+`verify_port.py` verdict with its numbers. Then go back to Phase 0.8 step 2
+and branch on that verdict.
+
+If `<run_dir>/port_verification.json`, the golden files or `base.py` itself
+was missing, there was nothing to diagnose from. Do not re-derive the
+diagnosis by running the comparison from scratch; the phase that owed the
+report failed, and that is what needs fixing.
+
+Treating a port that did not pass as repaired is the specific mistake this
+gate exists to prevent: it would let five iterations run against a baseline
+known to be wrong.

@@ -163,7 +163,7 @@ JOB VALID: rmsnorm-torch
   input        : pytorch  (../../evaluation/examples/rmsnorm/ref.py)
   references   : 0
   oracle       : tools/torchax_oracle.py (mechanical, with step-0 check vs eager)
-  base.py      : written from the jaxpr in Phase 0.7  [maxkernel-write-jnp-reference]
+  base.py      : written from the jaxpr in Phase 0.7  [maxkernel-worker, write-jnp-reference]
   harness      : internal (paired timing)
   external eval: True
   phases       : 0 read state -> 0.2 oracle -> 0.3 jaxpr + HLO export

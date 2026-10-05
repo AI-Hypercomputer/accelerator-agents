@@ -379,10 +379,6 @@ def get_inputs(dtype=jnp.bfloat16):
   ]
 
 
-def workload(x, indices, start, end):
+def computation(x, indices, start, end):
   """Pallas SparseCore ragged gather kernel."""
   return ragged_gather_v2(x, indices, start, end)
-
-
-
-computation = workload

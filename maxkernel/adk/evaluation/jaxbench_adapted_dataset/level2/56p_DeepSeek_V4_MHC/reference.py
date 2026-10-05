@@ -574,7 +574,7 @@ def get_inputs(dtype=jnp.bfloat16):
   ]
 
 
-def workload(x, residual, post_layer_mix, comb_res_mix, fn, hc_scale, hc_base):
+def computation(x, residual, post_layer_mix, comb_res_mix, fn, hc_scale, hc_base):
   """Pallas fused MHC post/pre kernel."""
   hidden_size = x.shape[-1]
   token_block_size = 64 if hidden_size <= 4096 else 32
@@ -607,7 +607,3 @@ def get_flops(config=None):
   )
   pre_flops = 2 * num_tokens * (hc_mult * hidden_size) * hc_mult3
   return int(post_flops + pre_flops)
-
-
-
-computation = workload

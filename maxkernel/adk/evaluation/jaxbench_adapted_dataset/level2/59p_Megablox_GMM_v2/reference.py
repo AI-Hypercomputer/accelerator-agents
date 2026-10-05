@@ -1506,7 +1506,7 @@ def get_inputs(dtype=jnp.bfloat16):
 gmm = gmm_v2
 
 
-def workload(
+def computation(
     lhs, rhs, group_sizes, rhs_scale=None, rhs_bias=None, group_offset=None
 ):
   """Pallas TPU GMM v2 kernel."""
@@ -1526,7 +1526,3 @@ def workload(
       rhs_bias=rhs_bias,
       preferred_element_type=lhs.dtype,
   )
-
-
-
-computation = workload

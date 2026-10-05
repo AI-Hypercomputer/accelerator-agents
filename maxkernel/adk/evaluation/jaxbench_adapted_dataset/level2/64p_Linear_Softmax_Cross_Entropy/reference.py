@@ -1724,7 +1724,7 @@ def get_inputs(dtype=jnp.bfloat16):
   ]
 
 
-def workload(x, labels, w):
+def computation(x, labels, w):
   """Optimized Pallas TPU Linear Softmax Cross-Entropy Loss implementation."""
   return linear_softmax_cross_entropy_loss_fwd_pallas_mosaic_tpu(
       x, labels, w, reduction="mean"
@@ -1742,7 +1742,3 @@ def get_flops(config=None):
   H = cfg["hidden_dim"]
   V = cfg["vocab_size"]
   return int(2 * B * H * V + 3 * B * V)
-
-
-
-computation = workload

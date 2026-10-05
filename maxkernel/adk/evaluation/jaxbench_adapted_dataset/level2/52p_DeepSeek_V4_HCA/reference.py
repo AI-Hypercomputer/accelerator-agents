@@ -1095,7 +1095,7 @@ def get_inputs(dtype=jnp.bfloat16):
   ]
 
 
-def workload(
+def computation(
     q,
     cache_kv,
     kv_lens,
@@ -1132,7 +1132,3 @@ def workload(
       num_queries_per_block=(1, bq_sz, bq_sz),
       vmem_limit_bytes=100 * 1024 * 1024,
   )
-
-
-
-computation = workload

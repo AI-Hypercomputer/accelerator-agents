@@ -1068,7 +1068,7 @@ def create_inputs(dtype=jnp.bfloat16, config=None):
   for _ in range(B):
     for i in range(q_len):
       kv_lens_to_attend_list.append(
-          max(1, (kv_len_val - q_len + i + 1) // compress_ratio)
+          (kv_len_val - q_len + i) // compress_ratio
       )
   kv_lens_to_attend = jnp.array(kv_lens_to_attend_list, dtype=jnp.int32)
 

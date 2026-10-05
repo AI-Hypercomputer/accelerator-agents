@@ -1,5 +1,5 @@
-task_id: 52p_DeepSeek_V4_HCA
-description: Kernel task for 52p_DeepSeek_V4_HCA
+task_id: 59p_DeepSeek_V4_HCA
+description: Kernel task for 59p_DeepSeek_V4_HCA
 input_gen_code: |-
   def get_inputs():
       import jax
@@ -48,7 +48,7 @@ input_gen_code: |-
           kv_lens_to_attend_list = []
           for _ in range(B):
               for i in range(q_len):
-                  kv_lens_to_attend_list.append(max(1, (kv_len_val - q_len + i + 1) // compress_ratio))
+                  kv_lens_to_attend_list.append((kv_len_val - q_len + i) // compress_ratio)
           kv_lens_to_attend = jnp.array(kv_lens_to_attend_list, dtype=jnp.int32)
           return (q, kernel_cache, kv_lens, kv_lens_to_attend, page_indices, cu_q_lens, distribution, attention_sinks, swa_accumulation, swa_l, swa_m)
 

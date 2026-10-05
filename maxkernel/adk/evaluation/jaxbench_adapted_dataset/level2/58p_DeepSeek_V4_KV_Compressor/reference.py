@@ -1606,7 +1606,6 @@ def compute_is_first_mask(kv_slot_mapping, tile_n, pack_factor=4):
         "interpret",
         "name",
     ),
-    donate_argnames=("cache", "rope_cache"),
 )
 def compress_norm_rope_store(
     cache: jax.Array,

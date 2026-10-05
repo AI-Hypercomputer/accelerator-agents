@@ -6119,7 +6119,6 @@ def get_default_block_sizes(
         "disable_bounds_checks",
         "disable_semaphore_checks",
     ),
-    donate_argnames=("queries", "keys", "values", "kv_cache"),
 )
 def ragged_paged_attention(
     queries: jax.Array,  # [max_num_tokens, actual_num_q_heads, actual_head_dim]
@@ -8361,7 +8360,6 @@ def get_kernel_scope_name_hd64(bq_size, bkv_p, page_size, sliding_window):
         "vmem_limit_bytes",
         "debug_mode",
     ),
-    donate_argnames=("kv_cache",),
 )
 def ragged_paged_attention_hd64(
     queries: jax.Array,  # [max_num_tokens, actual_num_q_heads, actual_head_dim]

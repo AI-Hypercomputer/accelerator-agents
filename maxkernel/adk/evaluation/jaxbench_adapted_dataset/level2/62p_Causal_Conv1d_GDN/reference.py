@@ -2190,7 +2190,6 @@ def outer_kernel(
 
 
 @jax.jit(
-    donate_argnames=("conv_state", "recurrent_state"),
     static_argnames=(
         "n_kq",
         "n_v",

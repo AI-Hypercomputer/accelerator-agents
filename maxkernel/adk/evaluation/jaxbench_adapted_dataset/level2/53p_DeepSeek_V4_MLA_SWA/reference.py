@@ -1370,7 +1370,6 @@ def run_mla_batched_decode_kernel(
         "unnormalized_output",
         "q_compute_block_size",
     ),
-    donate_argnames=("cache_kv",),
 )
 def mla_sliding_window_ragged_paged_attention(
     q: jax.Array,  # [max_num_tokens, actual_num_q_heads, actual_head_dim]

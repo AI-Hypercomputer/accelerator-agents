@@ -2488,8 +2488,7 @@ def get_vmem_estimate_bytes(
         "debug_mode",
         "out_dtype",
         "use_causal_mask",
-    ),
-    donate_argnames=("queries", "keys", "values", "kv_cache"),
+    )
 )
 def ragged_paged_attention(
     queries: jax.Array,

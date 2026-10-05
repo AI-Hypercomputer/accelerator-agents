@@ -3158,7 +3158,6 @@ def _dispatch_with_distribution(
         "apply_silu",
         "lower_bound",
     ],
-    donate_argnames=["v", "initial_state"],
 )
 def fused_gdn(
     q: jax.Array,  # [T, H_qk, K]

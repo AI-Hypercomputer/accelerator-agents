@@ -1214,8 +1214,8 @@ CONFIGS = {
         'page_size': 256,
         'csa_topk': 256,
         'sm_scale': 1.0,
-        'gather_and_attention_chunk_size': 128,
-        'attention_kernel_batch_size': 4,
+        'gather_and_attention_chunk_size': 64,
+        'attention_kernel_batch_size': 16,
     },
     'dsv4_pro_decode': {
         'name': 'dsv4_pro_decode',
@@ -1229,8 +1229,8 @@ CONFIGS = {
         'page_size': 1024,
         'csa_topk': 1024,
         'sm_scale': 1.0,
-        'gather_and_attention_chunk_size': 128,
-        'attention_kernel_batch_size': 4,
+        'gather_and_attention_chunk_size': 64,
+        'attention_kernel_batch_size': 16,
     },
     'dsv4_pro_prefill_chunk_first': {
         'name': 'dsv4_pro_prefill_chunk_first',
@@ -1244,8 +1244,8 @@ CONFIGS = {
         'page_size': 1024,
         'csa_topk': 1024,
         'sm_scale': 1.0,
-        'gather_and_attention_chunk_size': 128,
-        'attention_kernel_batch_size': 4,
+        'gather_and_attention_chunk_size': 64,
+        'attention_kernel_batch_size': 16,
     },
     'dsv4_pro_prefill_chunk_last': {
         'name': 'dsv4_pro_prefill_chunk_last',
@@ -1259,8 +1259,8 @@ CONFIGS = {
         'page_size': 1024,
         'csa_topk': 1024,
         'sm_scale': 1.0,
-        'gather_and_attention_chunk_size': 128,
-        'attention_kernel_batch_size': 4,
+        'gather_and_attention_chunk_size': 64,
+        'attention_kernel_batch_size': 16,
     },
     'dsv4_flash_decode': {
         'name': 'dsv4_flash_decode',
@@ -1274,8 +1274,8 @@ CONFIGS = {
         'page_size': 1024,
         'csa_topk': 512,
         'sm_scale': 1.0,
-        'gather_and_attention_chunk_size': 128,
-        'attention_kernel_batch_size': 4,
+        'gather_and_attention_chunk_size': 64,
+        'attention_kernel_batch_size': 16,
     },
     'dsv4_flash_prefill_chunk_first': {
         'name': 'dsv4_flash_prefill_chunk_first',
@@ -1289,8 +1289,8 @@ CONFIGS = {
         'page_size': 1024,
         'csa_topk': 512,
         'sm_scale': 1.0,
-        'gather_and_attention_chunk_size': 128,
-        'attention_kernel_batch_size': 4,
+        'gather_and_attention_chunk_size': 64,
+        'attention_kernel_batch_size': 16,
     },
     'dsv4_flash_prefill_chunk_last': {
         'name': 'dsv4_flash_prefill_chunk_last',
@@ -1304,8 +1304,8 @@ CONFIGS = {
         'page_size': 1024,
         'csa_topk': 512,
         'sm_scale': 1.0,
-        'gather_and_attention_chunk_size': 128,
-        'attention_kernel_batch_size': 4,
+        'gather_and_attention_chunk_size': 64,
+        'attention_kernel_batch_size': 16,
     },
 }
 CONFIG = CONFIGS['decode_small']
@@ -1327,10 +1327,10 @@ def create_inputs(dtype=jnp.bfloat16, config=None):
   B = cfg['batch_size']
   q_len = cfg['q_len']
   num_tokens = B * q_len
-  kv_len = cfg['kv_len']
+  kv_len = cfg['kv_len'] // 4
   num_heads = cfg['num_q_heads']
   head_dim = cfg['head_dim']
-  page_size = cfg['page_size']
+  page_size = cfg['page_size'] // 4
   topk = cfg['csa_topk']
 
   pages_per_seq = (kv_len + page_size - 1) // page_size + 2
@@ -1350,12 +1350,20 @@ def create_inputs(dtype=jnp.bfloat16, config=None):
       total_pages, page_size // 4, 4, 128
   )
 
-  topk_indices = jax.random.randint(
-      k4, (num_tokens, topk), 0, kv_len, dtype=jnp.int32
-  )
+  rng = np.random.default_rng(42)
+  topk_indices_list = []
+  for _ in range(B):
+    for j in range(q_len):
+      perm = rng.permutation((cfg['kv_len'] - q_len + j) // 4)
+      indices = list(perm[:topk])
+      if len(indices) < topk:
+        indices.extend([-1] * (topk - len(indices)))
+      topk_indices_list.append(indices)
+  topk_indices = jnp.array(topk_indices_list, dtype=jnp.int32)
   page_indices = jnp.arange(total_pages, dtype=jnp.int32)
   cu_q_lens = jnp.arange(0, num_tokens + 1, q_len, dtype=jnp.int32)
-  distribution = jnp.array([B, B, B], dtype=jnp.int32)
+  num_decode_seqs = B if q_len == 1 else 0
+  distribution = jnp.array([num_decode_seqs, num_decode_seqs, B], dtype=jnp.int32)
 
   attention_sinks = jax.random.uniform(k5, (num_heads,), dtype=jnp.float32)
   swa_accumulation = jax.random.normal(
@@ -1420,7 +1428,7 @@ def computation(
       swa_l,
       swa_m,
       sm_scale=sm_scale,
-      gather_and_attention_chunk_size=128,
-      attention_kernel_batch_size=4,
+      gather_and_attention_chunk_size=64,
+      attention_kernel_batch_size=16,
       vmem_limit_bytes=100 * 1024 * 1024,
   )

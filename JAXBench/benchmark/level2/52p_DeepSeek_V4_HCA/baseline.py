@@ -1113,6 +1113,8 @@ def workload(
   num_tokens = q.shape[0]
   q_len = num_tokens // max(1, B)
   bq_sz = 1 if q_len == 1 else 32
+  page_size = cache_kv.shape[1] // 2
+  bkv_p = 1 if page_size <= 2 else 16
   chunk_size = q_len if q_len > 1 else None
   return mla_ragged_paged_attention(
       q,
@@ -1128,7 +1130,7 @@ def workload(
       swa_m,
       sm_scale=1.0,
       chunk_prefill_size=chunk_size,
-      num_kv_pages_per_block=(16, 16, 16),
+      num_kv_pages_per_block=(bkv_p, bkv_p, bkv_p),
       num_queries_per_block=(1, bq_sz, bq_sz),
       vmem_limit_bytes=100 * 1024 * 1024,
   )

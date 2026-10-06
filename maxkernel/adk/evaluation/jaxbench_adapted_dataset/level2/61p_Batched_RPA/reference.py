@@ -357,7 +357,10 @@ class RpaConfigs:
     max_steps_ub = available_bytes // bytes_per_step
 
     num_lanes = pltpu.get_tpu_info().num_lanes
-    max_steps_ub = max(1, max_steps_ub // num_lanes) * num_lanes
+    if max_steps_ub >= num_lanes:
+      max_steps_ub = (max_steps_ub // num_lanes) * num_lanes
+    else:
+      max_steps_ub = max(1, max_steps_ub)
     return max_steps_ub
 
   @property
@@ -986,7 +989,7 @@ def rpa_metadata_schedule_kernel(
     write_size = h.shape[0]
     if write_size > 1:
       write_size = (write_size // cfgs.max_steps_ub) * safe_max_steps
-      write_size = utils.align_to(write_size, 1024)
+      write_size = jnp.minimum(utils.align_to(write_size, 1024), h.shape[0])
 
     copy = pltpu.make_async_copy(
         s.at[pl.ds(0, write_size)],
@@ -2025,7 +2028,7 @@ def rpa_kernel(
       for h, s in zip(flat_hbm, flat_smem):
         if h.memory_space == pltpu.HBM:
           read_size = (h.shape[0] // cfgs.max_steps_ub) * safe_steps
-          read_size = utils.align_to(read_size, 1024)
+          read_size = jnp.minimum(utils.align_to(read_size, 1024), h.shape[0])
 
           copy = pltpu.make_async_copy(
               h.at[pl.ds(0, read_size)],
@@ -2331,6 +2334,25 @@ def calculate_block_sizes(
 
     return batch_size * num_muls
 
+  def fits_in_smem(batch_size: int, bkv_sz: int, is_decode: bool) -> bool:
+    """Check whether schedule metadata fits in SMEM with enough step capacity."""
+    fixed_bytes = (
+        serve_cfgs.num_seqs
+        + (serve_cfgs.num_seqs + 1)
+        + serve_cfgs.num_seqs * serve_cfgs.pages_per_seq
+        + 3
+        + batch_size
+        + 1
+    ) * 4
+    smem_limit_bytes = tpu_info.smem_capacity_bytes - 32 * 1024
+    available_bytes = smem_limit_bytes - fixed_bytes
+    bkv_p = bkv_sz // serve_cfgs.page_size
+    bkv_p_cache = bkv_p
+    bkv_p_new = 1 if is_decode else bkv_p
+    bytes_per_step = (28 + 12 * bkv_p_cache + 16 * bkv_p_new) * batch_size
+    min_steps = max(2 * num_lanes, pl.cdiv(1024, batch_size))
+    return available_bytes // bytes_per_step >= min_steps
+
   def find_best_block_sizes(
       max_batch_size: int, max_n_buffer: int, fixed_bq_sz: int | None = None
   ) -> configs.BlockSizes:
@@ -2355,7 +2377,8 @@ def calculate_block_sizes(
     # If current batch size triggers OOM, decrease batch size until the kernel
     # fits within VMEM limit.
     while (
-        calculate_vmem_usage(batch_size, n_buffer, bq_sz, bkv_sz)
+        batch_size > 1
+        and calculate_vmem_usage(batch_size, n_buffer, bq_sz, bkv_sz)
         > capped_vmem_limit_bytes
     ):
       batch_size -= 1
@@ -2373,10 +2396,15 @@ def calculate_block_sizes(
     if batch_size == 0 or n_buffer == 0:
       raise ValueError("Cannot find batch size that fits within VMEM limit.")
 
-    # Step 2: Increase block sizes until the kernel is unable to fit into VMEM.
+    # Step 2: Increase block sizes until the kernel is unable to fit into VMEM
+    # or SMEM schedule metadata capacity.
+    is_decode = fixed_bq_sz is not None
     while (
-        calculate_vmem_usage(batch_size, n_buffer, bq_sz, bkv_sz)
+        calculate_vmem_usage(
+            batch_size, n_buffer, bq_sz + bq_stride, bkv_sz + bkv_stride
+        )
         < capped_vmem_limit_bytes
+        and fits_in_smem(batch_size, bkv_sz + bkv_stride, is_decode)
     ):
       # Unless bq is a fixed value, we want to ensure bq size is the same as bkv
       # size. When using causal masking, if bq size is larger than bkv size,
@@ -2386,10 +2414,6 @@ def calculate_block_sizes(
       bkv_sz += bkv_stride
       bq_sz += bq_stride
 
-    # Rollback one step since the last attempted value triggered OOM.
-    bkv_sz -= bkv_stride
-    bq_sz -= bq_stride
-
     # Indicates OOM was triggered from the starting bkv size.
     if bkv_sz == 0:
       raise ValueError("Cannot find block sizes that fit within VMEM limit.")
@@ -2397,7 +2421,6 @@ def calculate_block_sizes(
     # Step 3: Given current tile size, calculate compute tile size.
 
     # Fixed threshold value based on hardware spec.
-    # TODO(kyuyeunk): Use different threshold based on hardware and precision.
     threshold = 1500
 
     num_bq_c = 1
@@ -2488,7 +2511,7 @@ def get_vmem_estimate_bytes(
         "debug_mode",
         "out_dtype",
         "use_causal_mask",
-    )
+    ),
 )
 def ragged_paged_attention(
     queries: jax.Array,
@@ -2715,7 +2738,7 @@ CONFIGS = {
         'operator': 'batched_ragged_paged_attention',
         'max_num_batched_tokens': 64,
         'max_num_seqs': 64,
-        'num_q_heads': 40,
+        'num_q_heads': 64,
         'num_kv_heads': 8,
         'head_dim': 128,
         'page_size': 16,
@@ -2809,9 +2832,6 @@ def get_inputs(dtype=jnp.bfloat16):
   ]
 
 
-batched_ragged_paged_attention = ragged_paged_attention
-
-
 def computation(
     queries,
     keys,
@@ -2836,4 +2856,5 @@ def computation(
       distribution,
       sm_scale=sm_scale,
   )
+
 

@@ -40,8 +40,6 @@ def silu_and_mul_with_clamp(
     gate: jax.Array, up: jax.Array, limit: float = 10.0
 ) -> jax.Array:
   """Activation used in some models DeepSeek V4."""
-  # The limit value is from DSV4's config.
-  # TODO: pass limit from model config, instead of hardcoding here.
   gate = jnp.clip(gate, max=limit)
   up = jnp.clip(up, min=-limit, max=limit)
   return jax.nn.silu(gate) * up
@@ -913,7 +911,6 @@ def calculate_tiling(
   # When using bf16 for lhs and rhs, 128 is the largest tile_m value that is
   # safe to use for most scenarios. But if lower bitwidth is used, we need
   # to tweak tile_m to account for using faster hardware unit.
-  # TODO(kyuyeunk): Account for different TPU hardware specs.
   bf16_bf16_tile_m = 128
   rhs_mod = min(pl.cdiv(16, rhs_bits), 2)
   tile_m = bf16_bf16_tile_m // rhs_mod
@@ -1016,8 +1013,7 @@ def calculate_tiling(
         f" {final_estimate=} (limit: {vmem_limit_bytes})."
     )
 
-  # TODO(alynie, kyuyeunk): max number of bucket was choosen empiirically.
-  # Revisit the value to be based on number of instruction memory size.
+  # Increase tile_m by powers of 2 until memory limit is reached or exceeded.
   max_num_buckets = 4
   bucket_base = tile_m
   for _ in range(1, max_num_buckets):
@@ -1091,10 +1087,10 @@ def get_cost_estimate(cfgs: GmmConfigs):
   rhs_bits = jax.dtypes.itemsize_bits(rhs_dtype)
   fp32_bytes = jnp.dtype(jnp.float32).itemsize
 
-  # TODO(kyuyeunk): Add compute flops for quant, dequant, and bias.
-  flops = 2 * dims.size_m * dims.size_k * dims.size_n
+  active_m = dims.size_m * dims.size_group // dims.size_lhs_group
+  flops = 2 * active_m * dims.size_k * dims.size_n
 
-  lhs_bytes = dims.size_m * dims.size_k * lhs_dtype.itemsize
+  lhs_bytes = active_m * dims.size_k * lhs_dtype.itemsize
 
   rhs_size = dims.size_group * dims.size_k * dims.size_n
   rhs_bytes = rhs_size * rhs_bits // 8
@@ -1104,7 +1100,9 @@ def get_cost_estimate(cfgs: GmmConfigs):
   if cfgs.rhs_cfgs.has_bias:
     rhs_bytes += dims.size_group * dims.size_n * fp32_bytes
 
-  out_bytes = dims.size_m * cfgs.out_size_n * cfgs.out_dtype.itemsize
+  out_bytes = (
+      dims.size_m if cfgs.zero_init else active_m
+  ) * cfgs.out_size_n * cfgs.out_dtype.itemsize
 
   total_bytes = lhs_bytes + rhs_bytes + out_bytes
 
@@ -1346,7 +1344,6 @@ def gmm_v2(
 
   num_lanes = pltpu.get_tpu_info().num_lanes
   if cfgs.zero_init:
-    # TODO(kyuyeunk): Create better heuristics for determining this value.
     target_zero_ref_bytes = 2 * 1024 * 1024
 
     # Zero initialization is done by tiling size_m dim where each tile invokes
@@ -1403,6 +1400,39 @@ def gmm_v2(
 # ==============================================================================
 # Benchmark Harness
 # ==============================================================================
+def sub_channel_quantize(x: jax.Array, quant_dtype: jnp.dtype, wsz: int = 128):
+  """Quantizes x with sub-channel quantization on the 2nd minor."""
+  if jnp.issubdtype(quant_dtype, jnp.floating):
+    dtype_info = jnp.finfo(quant_dtype)
+  else:
+    dtype_info = jnp.iinfo(quant_dtype)
+  dtype_max = float(dtype_info.max)
+  w_lst, scale_lst = [], []
+  assert len(x.shape) >= 2
+  assert x.shape[-2] % wsz == 0
+  for i in range(0, x.shape[1], wsz):
+    y = x[:, i : i + wsz, :]
+    abs_max = jnp.abs(y).max(axis=1, keepdims=True)
+    scale = (abs_max / dtype_max).astype(jnp.float32)
+    w = (y / scale).astype(quant_dtype)
+    w_lst.append(w)
+    scale_lst.append(scale)
+  return jnp.concat(w_lst, axis=1), jnp.concat(scale_lst, axis=1)
+
+
+def _parse_dtype(dtype_str: str) -> jnp.dtype:
+  if dtype_str == 'bf16':
+    return jnp.bfloat16
+  elif dtype_str == 'fp8':
+    return jnp.float8_e4m3fn
+  elif dtype_str == 'fp4':
+    return jnp.float4_e2m1fn
+  elif dtype_str == 'int4':
+    return jnp.int4
+  else:
+    raise ValueError(f'Unsupported dtype: {dtype_str}')
+
+
 CONFIGS = {
     'gmm_small': {
         'name': 'gmm_small',
@@ -1414,6 +1444,11 @@ CONFIGS = {
         'global_num_experts': 64,
         'local_num_experts': 8,
         'top_k': 4,
+        'weight_dtype': 'fp4',
+        'activation_dtype': 'fp8',
+        'quant_block_size': -1,
+        'atol': 0.1,
+        'rtol': 0.1,
     },
     'dsv4_pro_16k': {
         'name': 'dsv4_pro_16k',
@@ -1425,6 +1460,11 @@ CONFIGS = {
         'global_num_experts': 256,
         'local_num_experts': 16,
         'top_k': 8,
+        'weight_dtype': 'fp4',
+        'activation_dtype': 'fp8',
+        'quant_block_size': -1,
+        'atol': 0.1,
+        'rtol': 0.1,
     },
     'dsv4_pro_8k': {
         'name': 'dsv4_pro_8k',
@@ -1436,6 +1476,11 @@ CONFIGS = {
         'global_num_experts': 256,
         'local_num_experts': 16,
         'top_k': 8,
+        'weight_dtype': 'fp4',
+        'activation_dtype': 'fp8',
+        'quant_block_size': -1,
+        'atol': 0.1,
+        'rtol': 0.1,
     },
     'dsv4_flash_16k': {
         'name': 'dsv4_flash_16k',
@@ -1447,6 +1492,11 @@ CONFIGS = {
         'global_num_experts': 256,
         'local_num_experts': 16,
         'top_k': 8,
+        'weight_dtype': 'fp4',
+        'activation_dtype': 'fp8',
+        'quant_block_size': -1,
+        'atol': 0.1,
+        'rtol': 0.1,
     },
     'dsv4_flash_8k': {
         'name': 'dsv4_flash_8k',
@@ -1458,6 +1508,11 @@ CONFIGS = {
         'global_num_experts': 256,
         'local_num_experts': 16,
         'top_k': 8,
+        'weight_dtype': 'fp4',
+        'activation_dtype': 'fp8',
+        'quant_block_size': -1,
+        'atol': 0.1,
+        'rtol': 0.1,
     },
 }
 CONFIG = CONFIGS['gmm_small']
@@ -1478,6 +1533,8 @@ def create_inputs(dtype=jnp.bfloat16, config=None):
   N = cfg['intermediate_size']
   G_local = cfg['local_num_experts']
   G_global = cfg['global_num_experts']
+  weight_dtype = _parse_dtype(cfg.get('weight_dtype', 'fp4'))
+  quant_block_size = cfg.get('quant_block_size', -1)
 
   lhs = (jax.random.uniform(k1, (M, K), dtype=dtype) - 0.5) * 0.2
   rhs = (jax.random.normal(k2, (G_local, K, N), dtype=dtype)) * 0.02
@@ -1491,6 +1548,11 @@ def create_inputs(dtype=jnp.bfloat16, config=None):
   group_offset = jnp.array([0], dtype=jnp.int32)
 
   rhs_scale = None
+  if weight_dtype != jnp.bfloat16:
+    rhs_wsz = quant_block_size if quant_block_size > 0 else rhs.shape[1]
+    rhs, rhs_scale = sub_channel_quantize(rhs, weight_dtype, rhs_wsz)
+    rhs_scale = jnp.expand_dims(rhs_scale, axis=2)
+
   rhs_bias = None
   return lhs, rhs, group_sizes, rhs_scale, rhs_bias, group_offset
 
@@ -1510,10 +1572,6 @@ def computation(
     lhs, rhs, group_sizes, rhs_scale=None, rhs_bias=None, group_offset=None
 ):
   """Pallas TPU GMM v2 kernel."""
-  M, K = lhs.shape
-  G, _, N = rhs.shape
-  G_global = group_sizes.shape[0]
-
   if group_offset is None:
     group_offset = jnp.array([0], dtype=jnp.int32)
 
@@ -1525,4 +1583,6 @@ def computation(
       rhs_scale=rhs_scale,
       rhs_bias=rhs_bias,
       preferred_element_type=lhs.dtype,
+      maybe_quantize_lhs=True,
+      zero_initialize=True,
   )

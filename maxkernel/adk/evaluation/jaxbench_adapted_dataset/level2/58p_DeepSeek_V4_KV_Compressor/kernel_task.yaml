@@ -340,7 +340,7 @@ input_gen_code: |-
           return (cache, rope_cache)
 
 
-      CONFIGS = {'csa_small': {'name': 'csa_small', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa', 'batch_size': 16, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 256, 'quant_block': 128, 'overlap': True, 'mode': 'prefill'}, 'csa_decode_small': {'name': 'csa_decode_small', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa', 'batch_size': 16, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 256, 'quant_block': 128, 'overlap': True, 'mode': 'decode', 'history_len': 64}, 'csa_prefill_bs512': {'name': 'csa_prefill_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 256, 'quant_block': 128, 'overlap': True, 'mode': 'prefill'}, 'csa_decode_bs512': {'name': 'csa_decode_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 256, 'quant_block': 128, 'overlap': True, 'mode': 'decode', 'history_len': 1024}, 'hca_prefill_bs512': {'name': 'hca_prefill_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'hca', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 128, 'physical_page_size': 128, 'quant_block': 0, 'overlap': False, 'mode': 'prefill'}, 'hca_decode_bs512': {'name': 'hca_decode_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'hca', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 128, 'physical_page_size': 128, 'quant_block': 0, 'overlap': False, 'mode': 'decode', 'history_len': 1024}, 'csa_indexer_prefill_bs512': {'name': 'csa_indexer_prefill_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa_indexer', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 128, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 32, 'quant_block': 128, 'overlap': True, 'mode': 'prefill'}, 'csa_indexer_decode_bs512': {'name': 'csa_indexer_decode_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa_indexer', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 128, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 32, 'quant_block': 128, 'overlap': True, 'mode': 'decode', 'history_len': 1024}}
+      CONFIGS = {'csa_small': {'name': 'csa_small', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa', 'batch_size': 16, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 256, 'quant_block': 64, 'overlap': True, 'mode': 'prefill'}, 'csa_decode_small': {'name': 'csa_decode_small', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa', 'batch_size': 16, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 256, 'quant_block': 64, 'overlap': True, 'mode': 'decode', 'history_len': 64}, 'csa_prefill_bs512': {'name': 'csa_prefill_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 256, 'quant_block': 64, 'overlap': True, 'mode': 'prefill'}, 'csa_decode_bs512': {'name': 'csa_decode_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 256, 'quant_block': 64, 'overlap': True, 'mode': 'decode', 'history_len': 1024}, 'hca_prefill_bs512': {'name': 'hca_prefill_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'hca', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 128, 'physical_page_size': 128, 'quant_block': 0, 'overlap': False, 'mode': 'prefill'}, 'hca_decode_bs512': {'name': 'hca_decode_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'hca', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 512, 'rope_head_dim': 64, 'compress_ratio': 128, 'physical_page_size': 128, 'quant_block': 0, 'overlap': False, 'mode': 'decode', 'history_len': 1024}, 'csa_indexer_prefill_bs512': {'name': 'csa_indexer_prefill_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa_indexer', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 128, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 32, 'quant_block': 128, 'overlap': True, 'mode': 'prefill'}, 'csa_indexer_decode_bs512': {'name': 'csa_indexer_decode_bs512', 'model': 'DeepSeek-V4', 'operator': 'compress_norm_rope_store', 'case_type': 'csa_indexer', 'batch_size': 512, 'hidden_size': 7168, 'head_dim': 128, 'rope_head_dim': 64, 'compress_ratio': 4, 'physical_page_size': 32, 'quant_block': 128, 'overlap': True, 'mode': 'decode', 'history_len': 1024}}
       CONFIG = CONFIGS['csa_small']
 
       def create_inputs(dtype=jnp.bfloat16, config=None):
@@ -352,7 +352,7 @@ input_gen_code: |-
           compress_ratio = cfg.get('compress_ratio', 4)
           physical_page_size = cfg.get('physical_page_size', 256)
           rope_head_dim = cfg.get('rope_head_dim', 64)
-          quant_block = cfg.get('quant_block', 128)
+          quant_block = cfg.get('quant_block', 64 if case_type == 'csa' else (128 if case_type == 'csa_indexer' else 0))
           mode = cfg.get('mode', 'prefill')
           history_len = cfg.get('history_len', 1024)
           rms_eps = cfg.get('rms_eps', 1e-06)
@@ -381,7 +381,7 @@ input_gen_code: |-
               positions_np = np.pad(boundary_positions, (0, batch_size - num_boundary_tokens), constant_values=0)
               positions = jnp.array(positions_np, dtype=jnp.int32)
               token_to_req_indices = jnp.zeros((batch_size,), dtype=jnp.int32)
-              kv_slot_mapping_filtered = generate_kv_slot_mapping(num_boundary_tokens, num_pages, cfgs.kv_block_size, cfgs.kv_stride)
+              kv_slot_mapping_filtered = generate_kv_slot_mapping(num_boundary_tokens, num_pages, cfgs.kv_block_size * cfgs.kv_stride, cfgs.kv_stride)
               kv_slot_mapping = jnp.pad(kv_slot_mapping_filtered, (0, batch_size - num_boundary_tokens), constant_values=-1)
           elif mode == 'decode':
               boundary_ratio = cfg.get('boundary_ratio', 1.0 / compress_ratio)
@@ -398,7 +398,7 @@ input_gen_code: |-
               block_table = jnp.arange(batch_size * pages_for_state, dtype=jnp.int32).reshape(batch_size, pages_for_state)
               max_boundary_idx = max(1, history_len // compress_ratio)
               boundary_reqs = rng.choice(batch_size, size=num_boundary_tokens, replace=batch_size < num_boundary_tokens)
-              kv_slot_mapping_filtered = generate_kv_slot_mapping(num_boundary_tokens, num_pages, cfgs.kv_block_size, cfgs.kv_stride)
+              kv_slot_mapping_filtered = generate_kv_slot_mapping(num_boundary_tokens, num_pages, cfgs.kv_block_size * cfgs.kv_stride, cfgs.kv_stride)
               positions_active = np.zeros((num_boundary_tokens,), dtype=np.int32)
               for idx in range(num_boundary_tokens):
                   q = rng.integers(0, max_boundary_idx)
@@ -412,14 +412,25 @@ input_gen_code: |-
           else:
               raise ValueError(f'Unknown mode: {mode}')
           key = jax.random.key(42)
-          k1, k2, k3, k4 = jax.random.split(key, 4)
-          rms_weight = jax.random.normal(k1, (head_dim,), dtype=jnp.float32)
+          k1, k2, k3 = jax.random.split(key, 3)
+          rms_weight = jax.random.uniform(k1, (head_dim,), minval=0.5, maxval=1.5, dtype=jnp.float32)
           max_p = int(np.max(positions_np)) + 1 if len(positions_np) > 0 else batch_size
           cos_sin_len = max(max_p, batch_size)
-          cos_sin_cache = jax.random.normal(k2, (cos_sin_len, rope_head_dim), dtype=jnp.float32)
-          cache = jax.random.randint(k3, cfgs.cache_shape(num_pages), 1, 255, dtype=jnp.uint8)
+          cos_sin_cache = jax.random.uniform(k2, (cos_sin_len, rope_head_dim), minval=0.1, maxval=0.3, dtype=jnp.float32)
+          num_state_pages = num_pages - pages_for_kv_cache
+          state_rows = cfgs.physical_page_size // cfgs.state_block_size
+          sample_pages = min(num_state_pages, 64)
+          state_f32 = jax.random.uniform(k3, (sample_pages, cfgs.state_block_size, state_rows, cfgs.last_dim_size), minval=0.5, maxval=1.5, dtype=jnp.float32)
+          state_u8 = jax.lax.bitcast_convert_type(state_f32, jnp.uint8).transpose(0, 1, 2, 4, 3).reshape(sample_pages, cfgs.physical_page_size, cfgs.hbm_pack, cfgs.last_dim_size)
+          if num_state_pages > sample_pages:
+              reps = (num_state_pages + sample_pages - 1) // sample_pages
+              state_pages = jnp.tile(state_u8, (reps, 1, 1, 1))[:num_state_pages]
+          else:
+              state_pages = state_u8
+          kv_pages = jnp.zeros((pages_for_kv_cache, cfgs.physical_page_size, cfgs.hbm_pack, cfgs.last_dim_size), dtype=jnp.uint8)
+          cache = jnp.concatenate([state_pages, kv_pages], axis=0)
           if cfgs.dims.has_rope_cache:
-              rope_cache = jax.random.randint(k4, cfgs.rope_cache_shape(num_pages), 1, 255, dtype=jnp.uint8)
+              rope_cache = jnp.zeros(cfgs.rope_cache_shape(num_pages), dtype=jnp.uint8)
           else:
               rope_cache = None
           return (cache, positions, block_table, token_to_req_indices, kv_slot_mapping, rms_weight, cos_sin_cache, rope_cache)

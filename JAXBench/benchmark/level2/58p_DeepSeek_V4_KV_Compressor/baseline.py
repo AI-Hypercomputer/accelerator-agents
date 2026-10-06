@@ -1606,7 +1606,6 @@ def compute_is_first_mask(kv_slot_mapping, tile_n, pack_factor=4):
         "interpret",
         "name",
     ),
-    donate_argnames=("cache", "rope_cache"),
 )
 def compress_norm_rope_store(
     cache: jax.Array,
@@ -1776,7 +1775,7 @@ CONFIGS = {
         "rope_head_dim": 64,
         "compress_ratio": 4,
         "physical_page_size": 256,
-        "quant_block": 128,
+        "quant_block": 64,
         "overlap": True,
         "mode": "prefill",
     },
@@ -1791,7 +1790,7 @@ CONFIGS = {
         "rope_head_dim": 64,
         "compress_ratio": 4,
         "physical_page_size": 256,
-        "quant_block": 128,
+        "quant_block": 64,
         "overlap": True,
         "mode": "decode",
         "history_len": 64,
@@ -1807,7 +1806,7 @@ CONFIGS = {
         "rope_head_dim": 64,
         "compress_ratio": 4,
         "physical_page_size": 256,
-        "quant_block": 128,
+        "quant_block": 64,
         "overlap": True,
         "mode": "prefill",
     },
@@ -1822,7 +1821,7 @@ CONFIGS = {
         "rope_head_dim": 64,
         "compress_ratio": 4,
         "physical_page_size": 256,
-        "quant_block": 128,
+        "quant_block": 64,
         "overlap": True,
         "mode": "decode",
         "history_len": 1024,
@@ -1907,7 +1906,10 @@ def create_inputs(dtype=jnp.bfloat16, config=None):
   compress_ratio = cfg.get("compress_ratio", 4)
   physical_page_size = cfg.get("physical_page_size", 256)
   rope_head_dim = cfg.get("rope_head_dim", 64)
-  quant_block = cfg.get("quant_block", 128)
+  quant_block = cfg.get(
+      "quant_block",
+      64 if case_type == "csa" else (128 if case_type == "csa_indexer" else 0),
+  )
   mode = cfg.get("mode", "prefill")
   history_len = cfg.get("history_len", 1024)
   rms_eps = cfg.get("rms_eps", 1e-6)
@@ -1971,7 +1973,7 @@ def create_inputs(dtype=jnp.bfloat16, config=None):
     kv_slot_mapping_filtered = generate_kv_slot_mapping(
         num_boundary_tokens,
         num_pages,
-        cfgs.kv_block_size,
+        cfgs.kv_block_size * cfgs.kv_stride,
         cfgs.kv_stride,
     )
     kv_slot_mapping = jnp.pad(
@@ -2015,7 +2017,7 @@ def create_inputs(dtype=jnp.bfloat16, config=None):
     kv_slot_mapping_filtered = generate_kv_slot_mapping(
         num_boundary_tokens,
         num_pages,
-        cfgs.kv_block_size,
+        cfgs.kv_block_size * cfgs.kv_stride,
         cfgs.kv_stride,
     )
 
@@ -2047,16 +2049,57 @@ def create_inputs(dtype=jnp.bfloat16, config=None):
     raise ValueError(f"Unknown mode: {mode}")
 
   key = jax.random.key(42)
-  k1, k2, k3, k4 = jax.random.split(key, 4)
-  rms_weight = jax.random.normal(k1, (head_dim,), dtype=jnp.float32)
+  k1, k2, k3 = jax.random.split(key, 3)
+  rms_weight = jax.random.uniform(
+      k1, (head_dim,), minval=0.5, maxval=1.5, dtype=jnp.float32
+  )
   max_p = int(np.max(positions_np)) + 1 if len(positions_np) > 0 else batch_size
   cos_sin_len = max(max_p, batch_size)
-  cos_sin_cache = jax.random.normal(
-      k2, (cos_sin_len, rope_head_dim), dtype=jnp.float32
+  cos_sin_cache = jax.random.uniform(
+      k2,
+      (cos_sin_len, rope_head_dim),
+      minval=0.1,
+      maxval=0.3,
+      dtype=jnp.float32,
   )
-  cache = jax.random.randint(k3, cfgs.cache_shape(num_pages), 1, 255, dtype=jnp.uint8)
+
+  num_state_pages = num_pages - pages_for_kv_cache
+  state_rows = cfgs.physical_page_size // cfgs.state_block_size
+  sample_pages = min(num_state_pages, 64)
+  state_f32 = jax.random.uniform(
+      k3,
+      (sample_pages, cfgs.state_block_size, state_rows, cfgs.last_dim_size),
+      minval=0.5,
+      maxval=1.5,
+      dtype=jnp.float32,
+  )
+  state_u8 = (
+      jax.lax.bitcast_convert_type(state_f32, jnp.uint8)
+      .transpose(0, 1, 2, 4, 3)
+      .reshape(
+          sample_pages,
+          cfgs.physical_page_size,
+          cfgs.hbm_pack,
+          cfgs.last_dim_size,
+      )
+  )
+  if num_state_pages > sample_pages:
+    reps = (num_state_pages + sample_pages - 1) // sample_pages
+    state_pages = jnp.tile(state_u8, (reps, 1, 1, 1))[:num_state_pages]
+  else:
+    state_pages = state_u8
+  kv_pages = jnp.zeros(
+      (
+          pages_for_kv_cache,
+          cfgs.physical_page_size,
+          cfgs.hbm_pack,
+          cfgs.last_dim_size,
+      ),
+      dtype=jnp.uint8,
+  )
+  cache = jnp.concatenate([state_pages, kv_pages], axis=0)
   if cfgs.dims.has_rope_cache:
-    rope_cache = jax.random.randint(k4, cfgs.rope_cache_shape(num_pages), 1, 255, dtype=jnp.uint8)
+    rope_cache = jnp.zeros(cfgs.rope_cache_shape(num_pages), dtype=jnp.uint8)
   else:
     rope_cache = None
 
@@ -2110,7 +2153,7 @@ def workload(
     case_type = "csa"
     compress_ratio = 4
     overlap = True
-    quant_block = 128
+    quant_block = 64
     has_rope_cache = True
 
   if block_table.ndim == 2:
@@ -2151,7 +2194,7 @@ def get_flops(config=None):
   head_dim = cfg.get("head_dim", 512)
   rope_head_dim = cfg.get("rope_head_dim", 64)
   overlap = cfg.get("overlap", True)
-  quant_block = cfg.get("quant_block", 128)
+  quant_block = cfg.get("quant_block", 64)
 
   num_boundary_tokens = max(1, batch_size // compress_ratio)
   window_size = (1 + int(overlap)) * compress_ratio

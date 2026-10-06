@@ -12,10 +12,6 @@ import numpy as np
 # ==============================================================================
 # Inlined dequant_util.py
 # ==============================================================================
-"""TODO: gxd - DO NOT SUBMIT without one-line documentation for dequant_util.
-
-TODO: gxd - DO NOT SUBMIT without a detailed description of dequant_util.
-"""
 
 import jax
 from jax.experimental.pallas import tpu as pltpu
@@ -826,9 +822,6 @@ def prepare_outputs(
     actual_head_dim: int,
 ):
   return out[:, :actual_num_q_heads, :actual_head_dim]
-
-
-# TODO: support batching decode q tokens as performance optimization.
 
 
 # Main Attention kernel for DeepSeek V4 HCA.

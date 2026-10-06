@@ -1046,7 +1046,7 @@ def streamindex_topk(
     num_kv_pages_per_block: tuple[int, int, int] | int | None = None,
     num_queries_per_block: tuple[int, int, int] | int | None = None,
     vmem_limit_bytes: int = DEFAULT_VMEM_LIMIT_BYTES,
-    decode_req_batch_size: int = 4,
+    decode_req_batch_size: int = 8,
     enable_early_exit: bool = False,
 ) -> jax.Array:
   """StreamIndex Top-K retrieval.
@@ -1397,7 +1397,7 @@ CONFIGS = {
         'k': 256,
         'q_len': 1,
         'kv_len': 1024,
-        'page_size': 256,
+        'page_size': 1024,
         'num_heads': 64,
         'head_dim': 128,
         'num_tokens': 16,
@@ -1473,13 +1473,18 @@ CONFIGS = {
 CONFIG = CONFIGS['topk_small']
 
 
-def create_inputs(dtype=jnp.float32, config=None):
+def create_inputs(dtype=jnp.float8_e4m3fn, config=None):
   """Returns (q, indexer_weights, cache_kv, seq_lens, page_indices, cu_q_lens, distribution)."""
+  global CONFIG
   if config is not None:
     cfg = CONFIGS[config] if isinstance(config, str) else config
+    if cfg.get('k') != CONFIG.get('k'):
+      jax.clear_caches()
+    CONFIG = cfg
   else:
     cfg = CONFIG
 
+  del dtype  # StreamIndex Top-K uses FP8 queries and FP32 indexer weights (matching mbench).
   key = jax.random.key(42)
   k1, k2, k3 = jax.random.split(key, 3)
 
@@ -1489,20 +1494,35 @@ def create_inputs(dtype=jnp.float32, config=None):
   D = cfg['head_dim']
   seq_len = cfg['kv_len']
   page_size = cfg['page_size']
+  comp_ratio = cfg.get('compression_ratio', 4)
 
-  q = jax.random.normal(k1, (num_tokens, H_I, D), dtype=dtype) * 0.02
-  indexer_weights = jax.random.uniform(k2, (num_tokens, H_I), dtype=dtype)
+  q = (
+      jax.random.normal(k1, (num_tokens, H_I, D), dtype=jnp.float32) * 0.02
+  ).astype(jnp.float8_e4m3fn)
+  indexer_weights = jax.random.uniform(
+      k2, (num_tokens, H_I), dtype=jnp.float32
+  )
 
   pages_per_seq = (seq_len + page_size - 1) // page_size
   num_pages = B * pages_per_seq
+  page_size = page_size // comp_ratio
 
   q_lkv_dim = ((D + 127) // 128) * 128
   record_width = q_lkv_dim + (q_lkv_dim // 128)
   width = ((record_width + 127) // 128) * 128
 
-  cache_kv = jax.random.randint(
-      k3, (num_pages, page_size // 4, 4, width), 0, 256, dtype=jnp.uint8
+  fp8_keys = jax.random.normal(
+      k3, (num_pages, page_size // 4, 4, D), dtype=jnp.float32
+  ).astype(jnp.float8_e4m3fn)
+  fp8_bytes = jax.lax.bitcast_convert_type(fp8_keys, jnp.uint8)
+  scale_bytes = jnp.full(
+      (num_pages, page_size // 4, 4, 1), 127, dtype=jnp.uint8
   )
+  pad_bytes = jnp.zeros(
+      (num_pages, page_size // 4, 4, width - D - 1), dtype=jnp.uint8
+  )
+  cache_kv = jnp.concatenate([fp8_bytes, scale_bytes, pad_bytes], axis=-1)
+
   seq_lens = jnp.full((B,), seq_len, dtype=jnp.int32)
   page_indices = jnp.arange(num_pages, dtype=jnp.int32)
   cu_q_lens = jnp.arange(0, num_tokens + 1, num_tokens // B, dtype=jnp.int32)
@@ -1521,7 +1541,7 @@ def create_inputs(dtype=jnp.float32, config=None):
   )
 
 
-def get_inputs(dtype=jnp.float32):
+def get_inputs(dtype=jnp.float8_e4m3fn):
   """Returns list of inputs across all defined configurations."""
   return [
       (list(create_inputs(dtype=dtype, config=cfg)), [cfg['k']])
@@ -1546,7 +1566,16 @@ def workload(
   B = len(cu_q_lens) - 1
   q_len = num_tokens // B if B > 0 else 1
 
-  cfg_k = (256 if B < 64 else 512) if k is None else k
+  if k is None:
+    if (
+        CONFIG.get('batch_size') == B
+        and CONFIG.get('num_tokens') == num_tokens
+    ):
+      cfg_k = CONFIG['k']
+    else:
+      cfg_k = 256 if num_tokens < 64 else 512
+  else:
+    cfg_k = k
   bkv_p = (
       num_kv_pages_per_block
       if num_kv_pages_per_block is not None
@@ -1572,6 +1601,7 @@ def workload(
       num_kv_pages_per_block=bkv_p,
       num_queries_per_block=bq_sz,
       vmem_limit_bytes=100 * 1024 * 1024,
+      decode_req_batch_size=8,
   )
 
 

@@ -1370,7 +1370,6 @@ def run_mla_batched_decode_kernel(
         "unnormalized_output",
         "q_compute_block_size",
     ),
-    donate_argnames=("cache_kv",),
 )
 def mla_sliding_window_ragged_paged_attention(
     q: jax.Array,  # [max_num_tokens, actual_num_q_heads, actual_head_dim]
@@ -1933,7 +1932,7 @@ def computation(
   sm_scale = 1.0
   logical_page_size = 128
 
-  return mla_sliding_window_ragged_paged_attention(
+  output, _, out_l, out_m = mla_sliding_window_ragged_paged_attention(
       q,
       new_kv,
       kernel_cache,
@@ -1952,3 +1951,4 @@ def computation(
       q_compute_block_size=4,
       unnormalized_output=True,
   )
+  return output, out_l, out_m

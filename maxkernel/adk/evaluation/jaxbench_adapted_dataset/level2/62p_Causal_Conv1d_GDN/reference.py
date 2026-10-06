@@ -1013,7 +1013,7 @@ def get_tile_sizes(
 
   if decode_tile_size is None or decode_tile_size <= 0:
     decode_tile_size = calculate_decode_tile_size(
-        batch_size=padded_batch_size,
+        batch_size=num_seqs,
         n_kq=n_kq,
         n_v=n_v,
         d_k=d_k,
@@ -1059,7 +1059,7 @@ def get_tile_sizes(
     )
 
   # Guarantee strictly positive tile sizes (>= 1) for Pallas grid compilation.
-  decode_tile_size = max(1, min(decode_tile_size, padded_batch_size))
+  decode_tile_size = max(1, min(decode_tile_size, num_seqs))
   mixed_tile_size = max(1, min(mixed_tile_size, batch_size))
   return decode_tile_size, mixed_tile_size
 
@@ -2309,7 +2309,7 @@ def fused_conv1d_gdn(
         d_v=d_v,
         kernel_size=kernel_size,
         conv_state_dim_size=conv_state_dim_size,
-        act_in_dtype=act_in_dtype,
+        act_in_dtype=qkv.dtype,
         act_out_dtype=act_out_dtype,
         conv_state_dtype=conv_state.dtype,
         recurrent_state_dtype=recurrent_state.dtype,
@@ -2615,6 +2615,7 @@ def create_inputs(dtype=jnp.bfloat16, config=None):
   recurrent_state = jax.random.normal(
       k10, (state_size, n_v, d_k, d_v), dtype=jnp.float32
   )
+  recurrent_state = recurrent_state.at[0].set(0.0)
 
   conv_weight = jax.random.normal(k4, (mixed_dim, 1, kernel_size), dtype=dtype)
   conv_bias = jax.random.normal(k5, (mixed_dim,), dtype=dtype)
@@ -2711,5 +2712,7 @@ def computation(
       d_k=d_k,
       d_v=d_v,
       kernel_size=kernel_size,
+      decode_tile_size=4,
+      mixed_tile_size=64,
   )
 

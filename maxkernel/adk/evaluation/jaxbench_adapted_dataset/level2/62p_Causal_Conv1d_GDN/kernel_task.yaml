@@ -35,6 +35,7 @@ input_gen_code: |-
           state_size = max_reqs + 1
           conv_state = jax.random.normal(k9, (state_size, kernel_size - 1, mixed_dim), dtype=dtype)
           recurrent_state = jax.random.normal(k10, (state_size, n_v, d_k, d_v), dtype=jnp.float32)
+          recurrent_state = recurrent_state.at[0].set(0.0)
           conv_weight = jax.random.normal(k4, (mixed_dim, 1, kernel_size), dtype=dtype)
           conv_bias = jax.random.normal(k5, (mixed_dim,), dtype=dtype)
           a_log = jax.random.normal(k6, (n_v,), dtype=jnp.float32)

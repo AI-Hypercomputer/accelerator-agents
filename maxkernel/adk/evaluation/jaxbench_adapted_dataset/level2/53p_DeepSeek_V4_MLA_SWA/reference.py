@@ -1370,6 +1370,7 @@ def run_mla_batched_decode_kernel(
         "unnormalized_output",
         "q_compute_block_size",
     ),
+    donate_argnames=("cache_kv",),
 )
 def mla_sliding_window_ragged_paged_attention(
     q: jax.Array,  # [max_num_tokens, actual_num_q_heads, actual_head_dim]
@@ -1869,9 +1870,11 @@ def create_inputs(dtype=jnp.bfloat16, config=None):
   num_tokens = B * q_len
   num_q_heads = cfg['num_q_heads']
   head_dim = cfg['head_dim']
-  page_size = cfg['page_size']
+  page_size = (
+      cfg['page_size'] // 4 if cfg['page_size'] > 256 else cfg['page_size']
+  )
 
-  logical_page_size = page_size // 2
+  logical_page_size = 128
   pages_per_seq = (kv_len + logical_page_size - 1) // logical_page_size + 2
   total_pages = B * pages_per_seq
 
@@ -1928,7 +1931,7 @@ def computation(
   q_len = num_tokens // B
   sliding_window = 128
   sm_scale = 1.0
-  logical_page_size = kernel_cache.shape[1] // 2
+  logical_page_size = 128
 
   return mla_sliding_window_ragged_paged_attention(
       q,

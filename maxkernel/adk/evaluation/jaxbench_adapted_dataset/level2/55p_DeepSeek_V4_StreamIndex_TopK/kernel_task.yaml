@@ -1,5 +1,5 @@
 task_id: 55p_DeepSeek_V4_StreamIndex_TopK
-description: Kernel task for 55p_DeepSeek_V4_StreamIndex_TopK
+description: 'Kernel task for 55p_DeepSeek_V4_StreamIndex_TopK. Output is int32[num_tokens, k] compressed-KV top-k indices per token in canonical order: selected indices ascending within each row, -1 suffix-padded. The harness compares element-wise, so candidate kernels must return the same canonical order (sort if the kernel does not emit indices in ascending order).'
 input_gen_code: |-
   def get_inputs():
       import jax

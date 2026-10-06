@@ -5,19 +5,21 @@ Self-contained implementation.
 import json
 import sys
 import types
-
+import jax
 import jax.numpy as jnp
 import numpy as np
-import functools
+
+# ==============================================================================
+# Inlined dequant_util.py
+# ==============================================================================
+"""TODO: gxd - DO NOT SUBMIT without one-line documentation for dequant_util.
+
+TODO: gxd - DO NOT SUBMIT without a detailed description of dequant_util.
+"""
+
 import jax
-from jax.experimental import pallas as pl
 from jax.experimental.pallas import tpu as pltpu
-try:
-  from jax.experimental.pallas import tpu_sc as plsc
-except ImportError:
-  plsc = None
-from enum import Enum
-from jax import lax
+import jax.numpy as jnp
 
 
 def dequant_dsv4_fp8(bkv: jax.Array):
@@ -31,6 +33,21 @@ def dequant_dsv4_fp8(bkv: jax.Array):
   nope = (nope_fp8 * nope_scales).astype(jnp.bfloat16)
   rope = pltpu.bitcast(bkv[:, 448:576].T, jnp.bfloat16).T
   return jnp.concatenate([nope, rope], axis=-1)
+
+
+# ==============================================================================
+# Inlined csa_mask.py
+# ==============================================================================
+import functools
+import jax
+from jax.experimental import pallas as pl
+from jax.experimental.pallas import tpu as pltpu
+try:
+  from jax.experimental.pallas import tpu_sc as plsc
+except ImportError:
+  plsc = None
+import jax.numpy as jnp
+
 
 @functools.partial(jax.jit, static_argnames=("max_kv_len",))
 def generate_mask(topk_indices: jax.Array, max_kv_len: int) -> jax.Array:
@@ -152,8 +169,22 @@ csa_mask = types.SimpleNamespace(
     generate_mask_sc=generate_mask_sc,
 )
 
+# ==============================================================================
+# Inlined masked_dense_mla.py
+# ==============================================================================
+"""TPU-Friendly Masked-Dense Context Sparse Attention (CSA) MLA kernel."""
 
+from enum import Enum
+import functools
 
+import jax
+from jax import lax
+from jax.experimental import pallas as pl
+from jax.experimental.pallas import tpu as pltpu
+import jax.numpy as jnp
+
+# inlined csa_mask
+# inlined dequant_util
 
 DEFAULT_MASK_VALUE = -0.7 * float(jnp.finfo(jnp.dtype("float32")).max)
 
@@ -797,6 +828,8 @@ def prepare_outputs(
   return out[:, :actual_num_q_heads, :actual_head_dim]
 
 
+# TODO: support batching decode q tokens as performance optimization.
+
 
 # Main Attention kernel for DeepSeek V4 HCA.
 # Note that the compressed kv tokens of current batch (current forward pass)
@@ -1213,10 +1246,10 @@ def create_inputs(dtype=jnp.bfloat16, config=None):
   B = cfg['batch_size']
   q_len = cfg['q_len']
   num_tokens = B * q_len
-  kv_len = cfg['kv_len']
+  kv_len = cfg['kv_len'] // 4
   num_heads = cfg['num_q_heads']
   head_dim = cfg['head_dim']
-  page_size = cfg['page_size']
+  page_size = cfg['page_size'] // 4
   topk = cfg['csa_topk']
 
   pages_per_seq = (kv_len + page_size - 1) // page_size + 2
@@ -1237,9 +1270,16 @@ def create_inputs(dtype=jnp.bfloat16, config=None):
   )
   kv_lens = jnp.full((B,), kv_len, dtype=jnp.int32)
 
-  topk_indices = jax.random.randint(
-      k4, (num_tokens, topk), 0, kv_len, dtype=jnp.int32
-  )
+  rng = np.random.default_rng(42)
+  topk_indices_list = []
+  for _ in range(B):
+    for j in range(q_len):
+      perm = rng.permutation((cfg['kv_len'] - q_len + j) // 4)
+      indices = list(perm[:topk])
+      if len(indices) < topk:
+        indices.extend([-1] * (topk - len(indices)))
+      topk_indices_list.append(indices)
+  topk_indices = jnp.array(topk_indices_list, dtype=jnp.int32)
   page_indices = jnp.arange(total_pages, dtype=jnp.int32)
   cu_q_lens = jnp.arange(0, num_tokens + 1, q_len, dtype=jnp.int32)
   num_decode_seqs = B if q_len == 1 else 0
@@ -1309,7 +1349,7 @@ def workload(
   if num_queries_per_block is None:
     num_queries_per_block = 32 if q_len > 1 else 1
   if num_kv_pages_per_block is None:
-    num_kv_pages_per_block = 2 if q_len > 1 and max_kv_capacity > 4096 else 1
+    num_kv_pages_per_block = 2 if q_len > 1 and max_kv_capacity > 1024 else 1
 
   return masked_dense_mla(
       q,
@@ -1332,7 +1372,7 @@ def workload(
 
 
 def get_flops(config=None):
-  """Total FLOPs for Masked Dense MLA: 4 * tokens * heads * topk * dim."""
+  """Total FLOPs for Masked Dense MLA: 4 * tokens * heads * kv_len * dim."""
   cfg = (
       CONFIG
       if config is None
@@ -1341,8 +1381,8 @@ def get_flops(config=None):
   num_tokens = cfg['batch_size'] * cfg['q_len']
   num_heads = cfg['num_q_heads']
   head_dim = cfg['head_dim']
-  topk = cfg['csa_topk']
-  return int(4 * num_tokens * num_heads * topk * head_dim)
+  kv_len = cfg['kv_len'] // 4
+  return int(4 * num_tokens * num_heads * kv_len * head_dim)
 
 
 def benchmark(num_warmup=5, num_iters=100, config=None):

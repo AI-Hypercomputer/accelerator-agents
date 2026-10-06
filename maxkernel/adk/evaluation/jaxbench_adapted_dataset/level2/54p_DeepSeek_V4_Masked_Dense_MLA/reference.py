@@ -1212,10 +1212,10 @@ def create_inputs(dtype=jnp.bfloat16, config=None):
   B = cfg['batch_size']
   q_len = cfg['q_len']
   num_tokens = B * q_len
-  kv_len = cfg['kv_len']
+  kv_len = cfg['kv_len'] // 4
   num_heads = cfg['num_q_heads']
   head_dim = cfg['head_dim']
-  page_size = cfg['page_size']
+  page_size = cfg['page_size'] // 4
   topk = cfg['csa_topk']
 
   pages_per_seq = (kv_len + page_size - 1) // page_size + 2
@@ -1236,9 +1236,16 @@ def create_inputs(dtype=jnp.bfloat16, config=None):
   )
   kv_lens = jnp.full((B,), kv_len, dtype=jnp.int32)
 
-  topk_indices = jax.random.randint(
-      k4, (num_tokens, topk), 0, kv_len, dtype=jnp.int32
-  )
+  rng = np.random.default_rng(42)
+  topk_indices_list = []
+  for _ in range(B):
+    for j in range(q_len):
+      perm = rng.permutation((cfg['kv_len'] - q_len + j) // 4)
+      indices = list(perm[:topk])
+      if len(indices) < topk:
+        indices.extend([-1] * (topk - len(indices)))
+      topk_indices_list.append(indices)
+  topk_indices = jnp.array(topk_indices_list, dtype=jnp.int32)
   page_indices = jnp.arange(total_pages, dtype=jnp.int32)
   cu_q_lens = jnp.arange(0, num_tokens + 1, q_len, dtype=jnp.int32)
   num_decode_seqs = B if q_len == 1 else 0
@@ -1308,7 +1315,7 @@ def computation(
   if num_queries_per_block is None:
     num_queries_per_block = 32 if q_len > 1 else 1
   if num_kv_pages_per_block is None:
-    num_kv_pages_per_block = 2 if q_len > 1 and max_kv_capacity > 4096 else 1
+    num_kv_pages_per_block = 2 if q_len > 1 and max_kv_capacity > 1024 else 1
 
   return masked_dense_mla(
       q,

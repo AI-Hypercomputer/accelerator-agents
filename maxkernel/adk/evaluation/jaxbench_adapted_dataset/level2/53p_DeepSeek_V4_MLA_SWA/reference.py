@@ -1950,5 +1950,5 @@ def computation(
       num_queries_per_block=64,
       vmem_limit_bytes=100 * 1024 * 1024,
       q_compute_block_size=4,
-      unnormalized_output=False,
+      unnormalized_output=True,
   )

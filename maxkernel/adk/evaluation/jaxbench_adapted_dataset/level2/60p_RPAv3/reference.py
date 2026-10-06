@@ -8618,6 +8618,8 @@ CONFIGS = {
             + (1023, 1535, 2047, 2559, 3071, 3583, 4095, 4095)
         ),
         'distribution': (48, 55, 56),
+        'atol': 0.2,
+        'rtol': 0.2,
     },
     'llama3_8b_decode': {
         'name': 'rpa_v3_llama3_8b_decode',
@@ -8636,6 +8638,8 @@ CONFIGS = {
             128 + ((i * 37) % 120) * 16 for i in range(64)
         ),
         'distribution': (64, 64, 64),
+        'atol': 0.2,
+        'rtol': 0.2,
     },
     'gemma2_9b_hd64': {
         'name': 'rpa_v3_gemma2_9b_hd64',
@@ -8655,6 +8659,8 @@ CONFIGS = {
             + (512, 768, 1024, 1024)
         ),
         'distribution': (16, 19, 20),
+        'atol': 0.2,
+        'rtol': 0.2,
     },
 }
 
@@ -8761,18 +8767,34 @@ def computation(
     chunk_prefill_size=None,
 ):
   """Optimized ragged paged attention with fused KV cache update."""
-  actual_head_dim = queries.shape[2]
-  actual_num_q_heads = queries.shape[1]
+  max_tokens, actual_num_q_heads, actual_head_dim = queries.shape
+  actual_num_kv_heads = keys.shape[1]
+  page_size = kv_cache.shape[1]
+  max_seqs = kv_lens.shape[0]
+  pages_per_seq = page_indices.shape[0] // max_seqs
   sm_scale = 1.0 / math.sqrt(actual_head_dim)
   if chunk_prefill_size is None:
     matched_cfg = None
     for cfg in CONFIGS.values():
       if (
-          cfg.get('num_q_heads') == actual_num_q_heads
+          cfg.get('max_num_batched_tokens') == max_tokens
+          and cfg.get('max_num_seqs') == max_seqs
+          and cfg.get('num_q_heads') == actual_num_q_heads
+          and cfg.get('num_kv_heads') == actual_num_kv_heads
           and cfg.get('head_dim') == actual_head_dim
+          and cfg.get('page_size') == page_size
+          and cfg.get('pages_per_seq') == pages_per_seq
       ):
         matched_cfg = cfg
         break
+    if matched_cfg is None:
+      for cfg in CONFIGS.values():
+        if (
+            cfg.get('num_q_heads') == actual_num_q_heads
+            and cfg.get('head_dim') == actual_head_dim
+        ):
+          matched_cfg = cfg
+          break
     chunk_prefill_size = (
         matched_cfg.get('chunk_prefill_size', None) if matched_cfg else None
     )

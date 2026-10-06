@@ -1548,36 +1548,6 @@ def get_inputs(dtype=jnp.float8_e4m3fn):
   ]
 
 
-_INT32_MAX = jnp.iinfo(jnp.int32).max
-
-
-def _canonicalize_topk_indices(idx):
-  """Puts each row of top-k indices in canonical order.
-
-  Canonical order is: selected indices ascending, then any ``-1`` padding.
-
-  ``sparsecore_topk`` only guarantees the top-k *set* per row (its order is
-  documented as unspecified), but the evaluation harness compares outputs
-  element-wise with ``allclose``. Pinning the order here makes the reference
-  output well defined, so a kernel that selects the same set in a different
-  order (e.g. score-sorted ``lax.top_k``) is not marked wrong, as long as it
-  returns the same canonical order.
-
-  The SparseCore kernel emits winners in ascending column order already, so
-  the common case only pays an O(rows * k) check; the sort runs only if a row
-  arrives out of order.
-  """
-  key = jnp.where(idx < 0, _INT32_MAX, idx)
-  already_sorted = jnp.all(key[:, 1:] >= key[:, :-1])
-  key = jax.lax.cond(
-      already_sorted,
-      lambda x: x,
-      lambda x: jnp.sort(x, axis=-1),
-      key,
-  )
-  return jnp.where(key == _INT32_MAX, -1, key)
-
-
 def computation(
     q,
     indexer_weights,
@@ -1593,10 +1563,11 @@ def computation(
   """StreamIndex Top-K retrieval execution.
 
   Returns:
-    int32[num_tokens, k] compressed-KV indices per token, in canonical order:
-    selected indices ascending within each row, ``-1`` suffix-padded when a
-    row has fewer than ``k`` visible positions. Candidate kernels must return
-    the same canonical order (see ``_canonicalize_topk_indices``).
+    int32[num_tokens, k] compressed-KV indices per token: the top-k *set* of
+    each row, in unspecified order, ``-1`` padded when a row has fewer than
+    ``k`` visible positions. Order within a row is not part of the contract;
+    ``kernel_task.yaml`` sets ``sort_before_compare`` so the harness compares
+    rows as sorted sets, and a kernel may return the indices in any order.
   """
   num_tokens = q.shape[0]
   B = len(cu_q_lens) - 1
@@ -1624,7 +1595,7 @@ def computation(
   )
   compression_ratio = 4
 
-  topk_idxs = streamindex_topk(
+  return streamindex_topk(
       q,
       indexer_weights,
       cache_kv,
@@ -1639,4 +1610,3 @@ def computation(
       vmem_limit_bytes=100 * 1024 * 1024,
       decode_req_batch_size=8,
   )
-  return _canonicalize_topk_indices(topk_idxs)

@@ -216,6 +216,7 @@ def main():
     input_gen_code = task_data.get("input_gen_code")
     task_atol = task_data.get("atol")
     task_rtol = task_data.get("rtol")
+    sort_before_compare = bool(task_data.get("sort_before_compare", False))
 
     if input_gen_code:
       ldict = {}
@@ -370,6 +371,12 @@ def main():
         for b, o in zip(out_base_flat, out_optimized_flat):
           if b.shape != o.shape:
              raise ValueError(f"Shape mismatch: {b.shape} vs {o.shape}")
+          if sort_before_compare and np.ndim(b) > 0:
+            # Order along the last axis is not part of this task's output
+            # contract (e.g. top-k index sets): compare rows as sorted
+            # multisets. Done on the host, so it never affects timing.
+            b = np.sort(np.asarray(b), axis=-1)
+            o = np.sort(np.asarray(o), axis=-1)
           is_correct = is_correct and bool(jnp.allclose(b, o, atol=curr_atol, rtol=curr_rtol))
           leaf_abs, leaf_rel = diff_metrics(b, o)
           max_abs_diff = max(max_abs_diff, leaf_abs)

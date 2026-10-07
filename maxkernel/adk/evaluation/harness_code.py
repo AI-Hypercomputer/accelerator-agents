@@ -216,7 +216,7 @@ def main():
     input_gen_code = task_data.get("input_gen_code")
     task_atol = task_data.get("atol")
     task_rtol = task_data.get("rtol")
-    sort_before_compare = bool(task_data.get("sort_before_compare", False))
+    sort_before_compare = task_data.get("sort_before_compare", False)
 
     if input_gen_code:
       ldict = {}

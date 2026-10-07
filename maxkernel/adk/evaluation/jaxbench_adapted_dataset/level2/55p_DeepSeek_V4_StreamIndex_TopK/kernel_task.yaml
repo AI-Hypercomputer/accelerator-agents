@@ -1,0 +1,58 @@
+task_id: 55p_DeepSeek_V4_StreamIndex_TopK
+description: 'Kernel task for 55p_DeepSeek_V4_StreamIndex_TopK. Output is int32[num_tokens, k]: the top-k set of compressed-KV indices per token, in unspecified order, -1 padded. Order within a row is not part of the contract (sort_before_compare: the harness sorts both outputs along the last axis before comparing).'
+input_gen_code: |-
+  def get_inputs():
+      import jax
+      import jax.numpy as jnp
+
+      CONFIGS = {'topk_small': {'name': 'topk_small', 'model': 'DeepSeek-V4', 'operator': 'streamindex_topk', 'batch_size': 16, 'k': 256, 'q_len': 1, 'kv_len': 1024, 'page_size': 1024, 'num_heads': 64, 'head_dim': 128, 'num_tokens': 16, 'compression_ratio': 4, 'num_kv_pages_per_block': 1, 'num_queries_per_block': 16}, 'flash_decode_k512': {'name': 'flash_decode_k512', 'model': 'DeepSeek-V4-Flash', 'operator': 'streamindex_topk', 'batch_size': 256, 'k': 512, 'q_len': 1, 'kv_len': 9216, 'page_size': 1024, 'num_heads': 64, 'head_dim': 128, 'num_tokens': 256, 'compression_ratio': 4, 'num_kv_pages_per_block': 3, 'num_queries_per_block': 16}, 'pro_decode_k1024': {'name': 'pro_decode_k1024', 'model': 'DeepSeek-V4-Pro', 'operator': 'streamindex_topk', 'batch_size': 256, 'k': 1024, 'q_len': 1, 'kv_len': 9216, 'page_size': 1024, 'num_heads': 64, 'head_dim': 128, 'num_tokens': 256, 'compression_ratio': 4, 'num_kv_pages_per_block': 3, 'num_queries_per_block': 16}, 'flash_prefill_k512': {'name': 'flash_prefill_k512', 'model': 'DeepSeek-V4-Flash', 'operator': 'streamindex_topk', 'batch_size': 1, 'k': 512, 'q_len': 1024, 'kv_len': 8192, 'page_size': 1024, 'num_heads': 64, 'head_dim': 128, 'num_tokens': 1024, 'compression_ratio': 4, 'num_kv_pages_per_block': 2, 'num_queries_per_block': 128}, 'pro_prefill_k1024': {'name': 'pro_prefill_k1024', 'model': 'DeepSeek-V4-Pro', 'operator': 'streamindex_topk', 'batch_size': 1, 'k': 1024, 'q_len': 1024, 'kv_len': 8192, 'page_size': 1024, 'num_heads': 64, 'head_dim': 128, 'num_tokens': 1024, 'compression_ratio': 4, 'num_kv_pages_per_block': 2, 'num_queries_per_block': 128}}
+      CONFIG = CONFIGS['topk_small']
+
+      def create_inputs(dtype=jnp.float8_e4m3fn, config=None):
+          """Returns (q, indexer_weights, cache_kv, seq_lens, page_indices, cu_q_lens, distribution)."""
+          if config is not None:
+              cfg = CONFIGS[config] if isinstance(config, str) else config
+          else:
+              cfg = CONFIG
+          del dtype
+          key = jax.random.key(42)
+          k1, k2, k3 = jax.random.split(key, 3)
+          B = cfg['batch_size']
+          num_tokens = cfg['num_tokens']
+          H_I = cfg['num_heads']
+          D = cfg['head_dim']
+          seq_len = cfg['kv_len']
+          page_size = cfg['page_size']
+          comp_ratio = cfg.get('compression_ratio', 4)
+          q = (jax.random.normal(k1, (num_tokens, H_I, D), dtype=jnp.float32) * 0.02).astype(jnp.float8_e4m3fn)
+          indexer_weights = jax.random.uniform(k2, (num_tokens, H_I), dtype=jnp.float32)
+          pages_per_seq = (seq_len + page_size - 1) // page_size
+          num_pages = B * pages_per_seq
+          page_size = page_size // comp_ratio
+          q_lkv_dim = (D + 127) // 128 * 128
+          record_width = q_lkv_dim + q_lkv_dim // 128
+          width = (record_width + 127) // 128 * 128
+          fp8_keys = jax.random.normal(k3, (num_pages, page_size // 4, 4, D), dtype=jnp.float32).astype(jnp.float8_e4m3fn)
+          fp8_bytes = jax.lax.bitcast_convert_type(fp8_keys, jnp.uint8)
+          scale_bytes = jnp.full((num_pages, page_size // 4, 4, 1), 127, dtype=jnp.uint8)
+          pad_bytes = jnp.zeros((num_pages, page_size // 4, 4, width - D - 1), dtype=jnp.uint8)
+          cache_kv = jnp.concatenate([fp8_bytes, scale_bytes, pad_bytes], axis=-1)
+          seq_lens = jnp.full((B,), seq_len, dtype=jnp.int32)
+          page_indices = jnp.arange(num_pages, dtype=jnp.int32)
+          cu_q_lens = jnp.arange(0, num_tokens + 1, num_tokens // B, dtype=jnp.int32)
+          q_len = cfg.get('q_len', num_tokens // B)
+          num_decodes = B if q_len == 1 else 0
+          distribution = jnp.array([num_decodes, num_decodes, B], dtype=jnp.int32)
+          return (q, indexer_weights, cache_kv, seq_lens, page_indices, cu_q_lens, distribution)
+
+      outputs = []
+      for cfg in CONFIGS.values():
+          dynamic_args = list(create_inputs(dtype=jnp.float8_e4m3fn, config=cfg))
+          static_args = [cfg['k']]
+          outputs.append((dynamic_args, static_args))
+      return outputs
+
+rtol: 0.01
+atol: 0.01
+# Top-k indices are a set per row; compare rows order-independently.
+sort_before_compare: true

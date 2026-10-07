@@ -442,7 +442,7 @@ class JAXKernelEvaluator:
       "input_gen_code": task.input_gen_code,
       "atol": effective_atol,
       "rtol": effective_rtol,
-      "sort_before_compare": bool(task.sort_before_compare),
+      "sort_before_compare": task.sort_before_compare,
     }
     with open(local_path, "w") as f:
       json.dump(task_info, f)

@@ -67,6 +67,7 @@ def load_kernel_task_from_yaml(yaml_path: str) -> KernelTask:
     input_gen_code=data.get("input_gen_code"),
     atol=data.get("atol"),
     rtol=data.get("rtol"),
+    sort_before_compare=bool(data.get("sort_before_compare", False)),
   )
 
 

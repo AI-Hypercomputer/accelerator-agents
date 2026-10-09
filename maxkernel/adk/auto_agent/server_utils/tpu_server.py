@@ -535,4 +535,4 @@ if __name__ == "__main__":
     sys.exit(0)
 
   logging.info(f"Starting TPU server on port {tpu_port}")
-  uvicorn.run(app, host="0.0.0.0", port=tpu_port)
+  uvicorn.run(app, host="127.0.0.1", port=tpu_port)

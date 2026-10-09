@@ -512,4 +512,4 @@ if __name__ == "__main__":
     sys.exit(0)
 
   logging.info(f"Starting CPU server on port {cpu_port}")
-  uvicorn.run(app, host="0.0.0.0", port=cpu_port)
+  uvicorn.run(app, host="127.0.0.1", port=cpu_port)

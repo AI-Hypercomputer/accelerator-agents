@@ -15,6 +15,7 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException
 from pydantic import BaseModel
 
 from auto_agent.constants import EVAL_SERVER_PORT
+from auto_agent.server_utils.server_config import get_local_ip
 
 logging.basicConfig(
   level=logging.INFO,
@@ -173,9 +174,15 @@ class Evaluator:
         # Check if gcloud TPU VM tunnel is requested
         self._create_tunnel(backend_config)
 
+        ip = backend_config["ip"]
+        # CPU/TPU servers only listen on loopback, so reach local ones via
+        # 127.0.0.1 even when the config lists this machine's network IP.
+        if ip in ["localhost", get_local_ip()]:
+          ip = "127.0.0.1"
+
         backend_obj = Backend(
           name=backend_config["name"],
-          ip=backend_config["ip"],
+          ip=ip,
           port=backend_config["port"],
           backend_type=backend_config.get("type", "tpu"),
         )

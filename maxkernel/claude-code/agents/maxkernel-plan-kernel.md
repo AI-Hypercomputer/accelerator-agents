@@ -163,7 +163,9 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
 3.  **Baseline Architectural Analysis & First-Principles Protocol (for NEW plans):**
     For iteration 1, calculate theoretical arithmetic intensity (FLOPs/byte) using Section 1 of `{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md` and check against target TPU hardware limits. Adhere to Mosaic vector layout rules in Section 2 of `{{MAXKERNEL_ROOT}}/reference/tpu_mxu_and_register_optimization.md` (e.g. tiling last two dimensions to $8 \times 128$ VREGs, avoiding trailing singleton dimensions).
     
-    Before finalizing tile choices, execute the **5-Step First-Principles Analysis**:
+    Before finalizing tile choices, execute the **First-Principles Analysis**:
+    *   **Access Efficiency (bytes touched vs. bytes needed)**: For each array, compare the bytes the kernel needs with the bytes in the tiles it touches (Section 1.D of `{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md`). Indexed, strided or column access, a last dim < 128, and partial tiles waste bandwidth. If touched is much larger than needed, use it in the intensity estimate and evaluate a layout change before tuning tile sizes; for dense, contiguous access, note "~1×" and move on.
+    *   **LLMWiki Load Mandate**: Query the local 3-tiered LLMWiki knowledge base (`tools/retrieval.py`) for decision trees, hardware envelopes, and reference templates.
     *   **Roofline Bound Classification**: Categorize the operation:
         - *Memory-Bandwidth Bound* (FlashAttention, Softmax, LayerNorm, GQA): Bottleneck is HBM traffic. Minimize HBM rounds, maximize VMEM residency, double-buffer DMA.
         - *Compute Bound* (GEMM, Dense Matmul): Bottleneck is MXU arithmetic throughput. Align tile dimensions to multiples of 128x128, maximize accumulator reuse in VMEM.
@@ -177,7 +179,6 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
         Explicitly calculate the tile memory footprint in your plan:
         $$\text{Total Tile VMEM} = 2 \times \sum (\text{Block Dimension Product} \times \text{sizeof}(\text{dtype})) \le 16\text{ MB}$$
     *   **Formulate Falsifiable Hypothesis**: State the exact mechanism (e.g. *"By tiling M=128, K=128 and keeping accumulator in VMEM across K-iterations, HBM traffic is reduced by 4.2x"*).
-    *   **LLMWiki Load Mandate**: Query the local 3-tiered LLMWiki knowledge base (`tools/retrieval.py`) for decision trees, hardware envelopes, and reference templates.
 
 **For REVISIONS / NEXT ITERATION Plans:**
 
@@ -196,6 +197,7 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
         *   *What to look for*: **`SyncWait`** blocks.
         *   *Interpretation*: `SyncWait` blocks spanning a major portion (e.g. $>50\%$) of the timeline, or high DMA transfer ratio compared to compute ratio. Vector/matrix cores are idling while waiting for HBM-to-VMEM DMA copies to finish.
         *   *Diagnosis*: The kernel is **memory-bound**.
+        *   *Check first*: whether it moves more bytes than it needs (Section 1.D of the guide below). Wasted traffic is a layout problem, and pipelining cannot recover it.
         *   *Reference Guide*: Read and apply techniques from memory optimization guide `{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md`.
         *   *Secondary Reference*: If graph-level communication overlapping or scheduling weights are relevant, also consult `{{MAXKERNEL_ROOT}}/reference/pallas_xla_interaction.md` for `pl.CostEstimate` and async HLO-level execution.
 
@@ -499,7 +501,7 @@ You have the following reference documents to help you:
 **Reference Guides for Diagnosis & Optimization**:
     Use `Read` to read the relevant guides when diagnosing profile summaries and designing optimization strategies:
     *   **Diagnostic Guide**: `{{MAXKERNEL_ROOT}}/reference/tpu_profiling_and_diagnostics.md` (Section 2: Reading and Interpreting Profile Traces).
-    *   **Memory Optimization**: `{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md` (for memory-bound kernels, pipelining, double buffering, VMEM fusion).
+    *   **Memory Optimization**: `{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md` (for memory-bound kernels, access efficiency under tiled layouts, pipelining, double buffering, VMEM fusion).
     *   **Compute & Register Optimization**: `{{MAXKERNEL_ROOT}}/reference/tpu_mxu_and_register_optimization.md` (for compute-bound kernels, MXU queuing, VALU/MXU overlap, Mosaic vector layouts, register spill prevention).
     *   **XLA Interaction**: `{{MAXKERNEL_ROOT}}/reference/pallas_xla_interaction.md` (for manual fusion, cost estimates, async HLO execution).
 

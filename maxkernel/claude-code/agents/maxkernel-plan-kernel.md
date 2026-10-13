@@ -123,8 +123,8 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
         gave up, and do not give up precision it kept.
     *   The original's block and tile constants are **evidence about reuse, not
         values to copy.** A CUDA `BLOCK=256` says something about the working
-        set; it says nothing about what fits in 16MB of VMEM or aligns to the
-        MXU's 128×128.
+        set; it says nothing about what fits in the target's VMEM budget or aligns
+        to its MXU (128×128 on v5e/v5p, 256×256 on v6e/v7x).
 
     A PyTorch brief reads the same way, with Section 7 naming the fusion
     boundaries XLA will leave behind and Section 9 naming the intermediates
@@ -166,16 +166,20 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
     Before finalizing tile choices, execute the **5-Step First-Principles Analysis**:
     *   **Roofline Bound Classification**: Categorize the operation:
         - *Memory-Bandwidth Bound* (FlashAttention, Softmax, LayerNorm, GQA): Bottleneck is HBM traffic. Minimize HBM rounds, maximize VMEM residency, double-buffer DMA.
-        - *Compute Bound* (GEMM, Dense Matmul): Bottleneck is MXU arithmetic throughput. Align tile dimensions to multiples of 128x128, maximize accumulator reuse in VMEM.
+        - *Compute Bound* (GEMM, Dense Matmul): Bottleneck is MXU arithmetic throughput. Align matmul tile dimensions to the target's MXU size (128 on v5e/v5p, 256 on v6e/v7x), maximize accumulator reuse in VMEM.
         - *Dispatch / Latency Bound* (small sequence lengths, high grid counts): Coarsen grid, reduce tile count.
-    *   **Hardware Envelope Constraints (TPU v6e Architecture)**:
-        - *MXU Matrix Units*: 128x128 systolic arrays. Matrix contracting axes MUST align with multiples of 128 for 100% compute unit utilization.
-        - *Vector Sub-Lanes*: 128-element SIMD execution. Reduction dimensions must be divisible by 128 (or padded with lane-padding).
-        - *VMEM Capacity*: Strict **16MB limit** per TPU v6e core.
-        - *DMA Double-Buffering*: Working memory budget must accommodate 2 buffered tiles simultaneously: Active VMEM <= 8MB per buffer (16MB total).
+    *   **Hardware Envelope Constraints** — take every number from the
+        **TPU Hardware Context** table at the end of this file for the target's
+        `tpu_version`; do not assume v6e:
+        - *MXU Matrix Units*: systolic arrays of 128×128 on v5e/v5p and 256×256 on v6e/v7x. Matmul contracting and output dims should be multiples of that MXU size (128 or 256) for full MXU utilization; multiples of 128 still work on v6e/v7x but can leave half of each MXU idle.
+        - *Vector Lanes*: every generation uses (8 sublanes × 128 lanes) 32-bit vregs. The last dim of a block should be a multiple of 128 and the second-to-last a multiple of the dtype's sublane tiling, or padded: 8 for 32-bit, 32 for 8-bit, and for 16-bit 8 on v5e/v5p/v6e but 16 on v7x (XLA only enables the large bf16 tiling by default from v7x on).
+        - *VMEM Capacity*: two numbers matter. The **physical** VMEM per TensorCore is the hard wall; the **default scoped limit** is what Mosaic allows when the kernel does not set `pltpu.CompilerParams(vmem_limit_bytes=...)`. A plan whose working set exceeds the default scoped limit must say so and set `vmem_limit_bytes` explicitly, leaving headroom below the physical wall for Mosaic's internal scratch.
+        - *DMA Double-Buffering*: Pallas double-buffers every pipelined `BlockSpec` operand by default, so each block costs 2× its size in VMEM.
     *   **Analytical VMEM Sizing Equation**:
         Explicitly calculate the tile memory footprint in your plan:
-        $$\text{Total Tile VMEM} = 2 \times \sum (\text{Block Dimension Product} \times \text{sizeof}(\text{dtype})) \le 16\text{ MB}$$
+        $$\text{Total Tile VMEM} = 2 \times \sum_{\text{pipelined blocks}} (\text{Block Dimension Product} \times \text{sizeof}(\text{dtype})) + \sum \text{scratch} \le \text{VMEM budget}$$
+        where the VMEM budget is the target's default scoped limit, or the
+        `vmem_limit_bytes` the plan sets (which must stay below physical VMEM).
     *   **Formulate Falsifiable Hypothesis**: State the exact mechanism (e.g. *"By tiling M=128, K=128 and keeping accumulator in VMEM across K-iterations, HBM traffic is reduced by 4.2x"*).
     *   **LLMWiki Load Mandate**: Query the local 3-tiered LLMWiki knowledge base (`tools/retrieval.py`) for decision trees, hardware envelopes, and reference templates.
 
@@ -335,8 +339,8 @@ non-portable entries — they are informative — but never to adopt one.
 *   **`STRUCTURAL`** — a real decision whose *value* is hardware-specific.
     **Never adopt the constant.** A CUDA `BLOCK_M=128, BLOCK_N=64` is evidence
     about the shape of the working set and about what the author believed fit
-    in fast memory. It says nothing about what fits in 16 MB of VMEM or aligns
-    to a 128×128 MXU. Take the *ratio and the reason*; re-derive your own tile
+    in fast memory. It says nothing about what fits in the target's VMEM budget
+    or aligns to its MXU size. Take the *ratio and the reason*; re-derive your own tile
     sizes from the VMEM equation in step 3, and cite the reference only as
     corroboration. A plan that copies a tile constant has transliterated, not
     translated.
@@ -577,11 +581,28 @@ process.
 
 ### TPU Hardware Context & Version Guidance
 
-Read `tpu_version` from `<run_dir>/state.json` (e.g. `TPU v5p`, `TPU v6e`, `TPU v7x`) and inspect `<run_dir>/tpu_specs.txt`. Use this hardware context to guide block size selection, MXU alignment, and architectural optimizations:
-*   **TPU v5p (Megacore)**: 459 TFLOP/s BF16, 2765 GB/s HBM3, 32MB VMEM/core, 128x128 MXU, 64 VREGs. Focus on high arithmetic intensity, compute-bound tiling, and vector layout alignment.
-*   **TPU v6e (Trillium)**: 918 TFLOP/s BF16, 1638 GB/s HBM, 32MB VMEM, 256x256 / dual MXUs, 128 VREGs. Prioritize wide MXU occupancy, deep instruction pipelining, and minimizing HBM DMA sync latency.
-*   **TPU v7x (Ironwood / Ghostfish)**: 4614 TFLOP/s FP8 (2307 TFLOP/s BF16), 7380 GB/s HBM, 2 TensorCores/4 SparseCores per chip, Master Dual-Chiplet D2D architecture. Exploit FP8 precision, large tile sizes for high arithmetic intensity, and manage multi-tiered VMEM scaling.
-*   **TPU v5e (Viperlite)**: 197 TFLOP/s BF16, 819 GB/s HBM, 16MB VMEM. Tighter VMEM constraints; focus on aggressive memory overlapping and double-buffering.
+Read `tpu_version` from `<run_dir>/state.json` (e.g. `TPU v5p`, `TPU v6e`, `TPU v7x`) and inspect `<run_dir>/tpu_specs.txt`. Use this hardware context to guide block size selection, MXU alignment, and architectural optimizations.
+
+Numbers are **per JAX device** — the unit a Pallas kernel actually runs on.
+BF16 peak, HBM bandwidth and ridge are the figures in Section 1 of
+`{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md` (which quotes v7x per
+chip; the v7x row halves it). Core counts, MXUs and physical VMEM follow
+`jax/_src/pallas/mosaic/tpu_info.py`. VMEM is per TensorCore. The
+default scoped VMEM limit is not in `tpu_info.py`; it is the XLA default
+(`--xla_tpu_scoped_vmem_limit_kib`), and a `CompileTimeScopedVmemOom` names
+the limit that was actually applied.
+
+| Target | TCs per JAX device | BF16 peak | HBM BW | HBM | MXUs per TC | Physical VMEM / TC | Default scoped VMEM | Ridge (FLOP/byte) |
+|---|---|---|---|---|---|---|---|---|
+| v5e | 1 | 197 TFLOP/s | 819 GB/s | 16 GiB | 4 × 128×128 | 128 MiB | 16 MiB | ~240 |
+| v5p (megacore) | 2 | 459 TFLOP/s | 2765 GB/s | 96 GiB | 4 × 128×128 | 64 MiB | 16 MiB | ~166 |
+| v6e | 1 | 918 TFLOP/s | 1638 GB/s | 32 GiB | 2 × 256×256 | 128 MiB | 32 MiB | ~560 |
+| v7x | 1 (2 per chip) | 1154 TFLOP/s (FP8 2307) | 3690 GB/s | 96 GiB | 2 × 256×256 | 64 MiB | 32 MiB | ~312 |
+
+*   **v5e**: plenty of physical VMEM but a small default scoped limit; raise `vmem_limit_bytes` before shrinking tiles. Low HBM bandwidth — focus on aggressive memory overlapping and double-buffering.
+*   **v5p**: one JAX device is a megacore pair of TensorCores; mark parallel grid axes `"parallel"` in `dimension_semantics` so Mosaic can split them across both cores. 128×128 MXU.
+*   **v6e**: 256×256 MXUs — tiles of 128 along matmul dims leave MXU capacity idle. Highest ridge point, so most non-GEMM kernels are memory-bound; prioritize minimizing HBM traffic and DMA sync latency.
+*   **v7x**: each chip's two TensorCores are **separate JAX devices** (no megacore), so a single-device kernel gets half the chip's 2307 TFLOP/s / 7380 GB/s / 192 GiB. Do not plan against chip totals. Physical VMEM is half of v6e's (64 MiB per TC). Native FP8 (e4m3fn / e5m2) matmul at 2× the BF16 rate; int8 matmul is not native.
 
 ### Example Plan Structure:
 
@@ -616,7 +637,7 @@ We will implement a blocked matrix multiplication kernel using Pallas with the f
 
 ## 3. Memory Layout and Tiling
 - Block sizes: bM=128, bK=128, bN=128
-  - Rationale: Aligns with TPU matmul unit dimensions (128x128)
+  - Rationale: Aligns with the 128×128 MXU of a v5e/v5p target (use 256 on v6e/v7x)
   - Fits in VMEM: ~128KB per block with float32
 - Grid: (M//bM, N//bN, K//bK)
 - BlockSpecs:

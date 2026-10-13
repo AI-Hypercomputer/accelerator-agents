@@ -168,7 +168,7 @@ For each mechanism actually present in this source, its TPU counterpart:
 | --- | --- |
 | A chain of elementwise ops | XLA already fuses these — no Pallas needed |
 | A reduction followed by a broadcast multiply | One Pallas program per tile, reduction in VMEM |
-| `nn.Linear` / `torch.matmul` | MXU; contracting dims want multiples of 128 |
+| `nn.Linear` / `torch.matmul` | MXU; contracting dims want multiples of the MXU size (128 on v5e/v5p, 256 on v6e/v7x) |
 | A materialized `(B,H,S,S)` attention score | The round trip a Pallas kernel exists to remove |
 | `torch.cat` of tiles | Usually an artefact of the op graph; re-tile instead |
 | `.contiguous()` / `.transpose()` | Layout is a `BlockSpec` concern, not an op |

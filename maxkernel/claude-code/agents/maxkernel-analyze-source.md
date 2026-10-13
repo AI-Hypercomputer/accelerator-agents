@@ -177,7 +177,7 @@ none and why. Cover at minimum whatever applies from:
 | Occupancy / registers per thread | VMEM budget, and room for double buffering |
 | Bank-conflict padding | Irrelevant — no counterpart on TPU |
 | Coalescing | Partly irrelevant — DMA moves whole blocks; what matters is the last two dims tiling to (8, 128) |
-| `wmma` / tensor cores | MXU; contracting dims want multiples of 128 |
+| `wmma` / tensor cores | MXU; contracting dims want multiples of the MXU size (128 on v5e/v5p, 256 on v6e/v7x) |
 
 Then, explicitly:
 - **What the CUDA author's design reveals about the problem** that is *still

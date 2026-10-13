@@ -18,8 +18,8 @@ The Matrix Multiply Unit (MXU) is a systolic array. Keeping all MXUs busy is cri
 *   **Pipelining & Latency**: The MXU behaves like a pipeline. You can queue one matrix multiplication every ~8 cycles on TPUv5. However, **the latency for a single matmul to complete is over 100+ cycles**.
 *   **The Hazard**: If you only execute one matmul at a time, the compiler must wait for the systolic array to drain (100+ cycles of idle time) before fetching the result with `vpop`.
 *   **The Solution**: Queue multiple matrix multiplications in succession to keep the pipeline full.
-*   **Native Sizes & Instructions**: Matmuls are performed in chunks of $(8 \times 128) \times (128 \times 128)$ and use three LLO assembly instructions:
-    1.  `vmatpush`: Pushes Vector Registers (VREGs) representing the RHS ("gains matrix", which has a fixed $128 \times 128$ shape) into specialized registers.
+*   **Native Sizes & Instructions**: Matmuls are performed in chunks of $(8 \times 128) \times (128 \times 128)$ on v5e/v5p ($(8 \times 256) \times (256 \times 256)$ on v6e/v7x, whose MXUs are 256 wide) and use three LLO assembly instructions:
+    1.  `vmatpush`: Pushes Vector Registers (VREGs) representing the RHS ("gains matrix", which has a fixed square shape matching the MXU size: $128 \times 128$ on v5e/v5p, $256 \times 256$ on v6e/v7x) into specialized registers.
     2.  `vmatmul`: Queues the matrix multiplication of the LHS (read from VREG or LHS register) @ RHS to the MXU.
     3.  `vpop`: Transfers the computed result back from the MXU to a VREG.
 

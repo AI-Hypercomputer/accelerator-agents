@@ -428,9 +428,9 @@ def infer_tpu_version(tpu_entry):
     return "TPU v6e"
   elif "v5 lite" in dk_lower or "v5e" in dk_lower:
     return "TPU v5e"
-  elif "v5p" in dk_lower:
+  elif "v5p" in dk_lower or dk_lower == "tpu v5":
     return "TPU v5p"
-  elif "v7x" in dk_lower or "v7" in dk_lower:
+  elif "v7x" in dk_lower or "v7" in dk_lower or "tpu7" in dk_lower:
     return "TPU v7x"
   elif "v4" in dk_lower:
     return "TPU v4"

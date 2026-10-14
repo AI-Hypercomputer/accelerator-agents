@@ -31,6 +31,10 @@ To safely register TPU machines into `tpu_config.json` without risk of race cond
 
 #### Manual / Initial Config File Examples (`$MAXKERNEL/tpu_config.json`):
 
+Leave out `tpu_spec`, `tpu_version` and `tpu_spec_verified`: `tpu_client.py`
+detects them from the hardware on first contact. A `tpu_spec` you write yourself
+is checked once against the hardware and replaced if it is wrong.
+
 ##### Option A: Multi-TPU Mode (Pool of Multiple TPUs)
 ```json
 {
@@ -38,22 +42,12 @@ To safely register TPU machines into `tpu_config.json` without risk of race cond
         {
             "tpu_name": "tpu-v6e-8-1",
             "zone": "us-east5-b",
-            "project": "tpu-prod-env-multipod",
-            "tpu_version": "TPU v6e",
-            "tpu_spec": {
-                "device_kind": "TPU v6 lite",
-                "device_count": 8
-            }
+            "project": "tpu-prod-env-multipod"
         },
         {
             "tpu_name": "tpu-v6e-8-2",
             "zone": "us-east5-b",
-            "project": "tpu-prod-env-multipod",
-            "tpu_version": "TPU v6e",
-            "tpu_spec": {
-                "device_kind": "TPU v6 lite",
-                "device_count": 8
-            }
+            "project": "tpu-prod-env-multipod"
         }
     ]
 }
@@ -65,16 +59,17 @@ To safely register TPU machines into `tpu_config.json` without risk of race cond
     "mode": "remote",
     "tpu_name": "<YOUR_TPU_NAME>",
     "zone": "<YOUR_TPU_ZONE>",
-    "project": "<YOUR_GCP_PROJECT>",
-    "tpu_version": "TPU v6e"
+    "project": "<YOUR_GCP_PROJECT>"
 }
 ```
 
 ##### Option C: Local TPU VM Mode (Agent running on the TPU VM directly)
+When `tpu_config.json` is absent, `tpu_client.py` uses the
+local TPU on port 8000 and, once a TPU answers, writes the file with the
+detected `tpu_spec` and `tpu_version`. The explicit equivalent is:
 ```json
 {
-    "mode": "local",
-    "tpu_version": "TPU v6e"
+    "mode": "local"
 }
 ```
 

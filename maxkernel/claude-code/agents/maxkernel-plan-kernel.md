@@ -197,7 +197,7 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
         *   *What to look for*: **`SyncWait`** blocks.
         *   *Interpretation*: `SyncWait` blocks spanning a major portion (e.g. $>50\%$) of the timeline, or high DMA transfer ratio compared to compute ratio. Vector/matrix cores are idling while waiting for HBM-to-VMEM DMA copies to finish.
         *   *Diagnosis*: The kernel is **memory-bound**.
-        *   *Check first*: whether it moves more bytes than it needs (Section 1.D of the guide below). Wasted traffic is a layout problem, and pipelining cannot recover it.
+        *   *Check first*: whether it moves more bytes than it needs (Section 1.D of the the memory optimization guide). Wasted traffic is a layout problem, and pipelining cannot recover it.
         *   *Reference Guide*: Read and apply techniques from memory optimization guide `{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md`.
         *   *Secondary Reference*: If graph-level communication overlapping or scheduling weights are relevant, also consult `{{MAXKERNEL_ROOT}}/reference/pallas_xla_interaction.md` for `pl.CostEstimate` and async HLO-level execution.
 

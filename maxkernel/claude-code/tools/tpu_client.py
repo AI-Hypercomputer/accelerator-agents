@@ -1090,7 +1090,12 @@ def main():
     config_path_override=args.tpu_config, run_dir=args.run_dir
   )
 
-  if not start_server_idempotent(mode=args.mode, tpu_configs=tpu_configs):
+  if not start_server_idempotent(
+    mode=args.mode,
+    tpu_configs=tpu_configs,
+    config_path_override=args.tpu_config,
+    run_dir=args.run_dir,
+  ):
     logging.error("Cannot proceed: No TPU server is reachable.")
     sys.exit(1)
 

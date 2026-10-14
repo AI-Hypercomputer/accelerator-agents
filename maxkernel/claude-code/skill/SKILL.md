@@ -396,7 +396,10 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     -   Then read `{{MAXKERNEL_ROOT}}/tpu_config.json` (or `<run_dir>/tpu_config.json`):
         - If `"tpu_version"` is explicitly present, use it.
         - Otherwise, derive it from `"tpu_spec"` (`device_kind`) or `"tpu_name"` (e.g., `device_kind: "TPU v6 lite"` -> `"TPU v6e"`, `device_kind: "TPU v5 lite"` -> `"TPU v5e"`, `device_kind: "TPU v5p"` -> `"TPU v5p"`, `device_kind: "TPU v7x"` -> `"TPU v7x"`).
-        - If no hardware or config is found, default to `"TPU v6e"`.
+        - If no hardware or config is found, **stop setup and tell the user**:
+          quote the `--queue` output and ask them to fix TPU access
+          (`{{MAXKERNEL_ROOT}}/docs/tpu-setup.md`) or name the TPU version
+          explicitly. Do NOT guess a version.
 
 6.  **Initialize `<run_dir>/state.json`**:
     -   Write `<run_dir>/state.json` using **absolute paths**, the determined
@@ -494,6 +497,8 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
       Device Count: <device_count>
       Device Kind: <device_kind>
       ```
+    - If there is no `tpu_spec` (the user named the version), write `unknown`
+      for the count and kind. Do NOT guess them.
     - Do NOT run a remote JAX script to query hardware specs on every run; use the cached `tpu_spec` from `tpu_config.json`.
 
 8.  If resuming an existing run, read its `<run_dir>/state.json` as-is, then

@@ -25,6 +25,8 @@ logging.basicConfig(
 )
 
 SERVER_URL = "http://127.0.0.1:8000"
+# Serializes every read-modify-write of tpu_config.json across processes.
+CONFIG_LOCK_FILE = "/tmp/maxkernel_tpu_config_update.lock"
 
 
 def extract_trace_artifacts(res, output_dir=None, code_file=None, run_dir=None):
@@ -503,18 +505,19 @@ def ensure_tpu_specs_cached(config_path_override=None, run_dir=None):
   if not config_path or not os.path.exists(config_path):
     if config_path_override:
       return
-    # No config: written only if a real TPU answers on the local port.
     config_path = os.path.join(
       os.path.dirname(__file__), "..", "tpu_config.json"
     )
-    raw = {"tpus": [{"mode": "local", "local_port": 8000}]}
-  else:
-    raw = None
 
+  lock_fd = os.open(CONFIG_LOCK_FILE, os.O_RDWR | os.O_CREAT)
   try:
-    if raw is None:
+    fcntl.flock(lock_fd, fcntl.LOCK_EX)
+    if os.path.exists(config_path):
       with open(config_path, "r") as f:
         raw = json.load(f) or {}
+    else:
+      # No config: written only if a real TPU answers on the local port.
+      raw = {"tpus": [{"mode": "local", "local_port": 8000}]}
 
     tpu_list = []
     if (
@@ -542,13 +545,21 @@ def ensure_tpu_specs_cached(config_path_override=None, run_dir=None):
           updated = True
 
     if updated:
-      with open(config_path, "w") as f:
+      tmp_file = os.path.join(
+        os.path.dirname(os.path.abspath(config_path)),
+        f".tpu_config.json.tmp.{os.getpid()}_{uuid.uuid4().hex[:6]}",
+      )
+      with open(tmp_file, "w") as f:
         json.dump(raw, f, indent=2)
+      os.replace(tmp_file, config_path)
       logging.info(
         "Updated %s with auto-cached tpu_spec/tpu_version.", config_path
       )
   except Exception as e:  # pylint: disable=broad-exception-caught
     logging.warning("Could not auto-update tpu_spec in config: %s", e)
+  finally:
+    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+    os.close(lock_fd)
 
 
 def cleanup_stale_temp_files(config_dir, max_age_seconds=600):
@@ -603,8 +614,7 @@ def add_tpu_to_config(new_tpu_input, config_path_override=None, run_dir=None):
       os.path.dirname(__file__), "..", "tpu_config.json"
     )
 
-  lock_file = "/tmp/maxkernel_tpu_config_update.lock"
-  lock_fd = os.open(lock_file, os.O_RDWR | os.O_CREAT)
+  lock_fd = os.open(CONFIG_LOCK_FILE, os.O_RDWR | os.O_CREAT)
   try:
     fcntl.flock(lock_fd, fcntl.LOCK_EX)
 

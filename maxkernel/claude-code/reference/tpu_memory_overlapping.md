@@ -2,7 +2,7 @@
 name: tpu-memory-overlapping
 description: >-
   Detailed reference for diagnosing and resolving memory bottlenecks by overlapping
-  communication and compute in JAX/Pallas. Includes roofline calculations, cost estimation,
+  communication and compute in JAX/Pallas. Includes roofline calculations, access efficiency under tiled layouts, cost estimation,
   pipelining, bubbles, and distributed ICI configurations.
 ---
 
@@ -63,6 +63,23 @@ print("Memory Access (Bytes):", cost.bytes_accessed)
 
 ### C. Empirical Trace Analysis
 Open an **Xprof** trace and inspect the **`Tensor Core Sync Flag`** track. If the execution timeline is dominated by **`SyncWait`** blocks, the vector and matrix cores are idling while waiting for DMAs to complete, confirming the kernel is memory-bound.
+
+### D. Access Efficiency Under Tiled Layouts
+TPU memory (HBM and VMEM) stores the last two dims of an array in tiles of 8 rows × 128 columns for 32-bit data (narrower dtypes may use more rows; check the HLO layout, e.g. `T(8,128)(2,1)`, or `tpu_info.get_sublane_tiling`). Data moves most efficiently in whole tiles, so an access that uses only part of each tile wastes bandwidth.
+
+*   **Check**: for each array, compare the bytes the kernel needs with the bytes in the tiles it touches. Dense, contiguous blocks are ~1×, so nothing to do. If touched is much larger, use it in the roofline (Section 1.A) and consider a layout change.
+*   **Common causes of waste**:
+    *   *Rows picked by an index* (gather, embedding lookup, page table, permutation): uses 1 row of each multi-row tile.
+    *   *Last dim smaller than 128*: each row is padded to 128 columns.
+    *   *Column or strided access*: uses 1 column, or a few rows, of each tile.
+    *   *Partial tiles*: ragged edges, or a block height that is not a multiple of the tile height.
+*   **Fixes**:
+    *   *Make each access cover whole tiles* by keeping the indexed dim out of the last two. E.g. store a row-indexed `(N, H)` f32 array as `(N, 8, H // 8)` (needs `H // 8` divisible by 128).
+    *   *Have the producer write that layout*: converting later costs an extra HBM pass.
+    *   *Gather inside the kernel*: scalar-prefetch the indices and DMA the rows directly, rather than letting XLA build a reordered copy first.
+    *   *Sort once* if the data is read many times.
+    *   *Pack narrow rows* into the 128 columns, e.g. `(N, 64)` → `(N // 2, 128)`.
+*   **Many small DMAs are slow** because each has a fixed issue cost: achieved bandwidth ≈ bytes per DMA ÷ issue time (capped at peak). Measure that cost on the target instead of assuming it.
 
 ---
 

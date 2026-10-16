@@ -389,7 +389,7 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     -   If the user explicitly specified the TPU version (e.g. `TPU v5p`, `TPU v6e`, `TPU v7x`, `v5p`, `v6e`, `v7x`) in their prompt or message, normalize it (e.g. `TPU v5p`, `TPU v6e`, `TPU v7x`) and use it.
     -   Otherwise, read `{{MAXKERNEL_ROOT}}/tpu_config.json` (or `<run_dir>/tpu_config.json`):
         - If `"tpu_version"` is explicitly present, use it.
-        - Otherwise, derive it from `"tpu_spec"` (`device_kind`) or `"tpu_name"` (e.g., `device_kind: "TPU v6 lite"` -> `"TPU v6e"`, `device_kind: "TPU v5 lite"` -> `"TPU v5e"`, `device_kind: "TPU v5p"` -> `"TPU v5p"`, `device_kind: "TPU v7x"` -> `"TPU v7x"`).
+        - Otherwise, derive it from `"tpu_spec"` (`device_kind`) or `"tpu_name"` (e.g., `device_kind: "TPU v6 lite"` -> `"TPU v6e"`, `device_kind: "TPU v5 lite"` -> `"TPU v5e"`, `device_kind: "TPU v5"` or `"TPU v5p"` -> `"TPU v5p"`, `device_kind: "TPU7x"` -> `"TPU v7x"`).
         - If no hardware or config is found, default to `"TPU v6e"`.
 
 6.  **Initialize `<run_dir>/state.json`**:

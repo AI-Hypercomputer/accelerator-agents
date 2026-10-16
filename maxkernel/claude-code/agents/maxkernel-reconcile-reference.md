@@ -183,8 +183,8 @@ anything:
         a CUDA kernel.
     *   `STRUCTURAL` — a real decision whose value is hardware-specific. Record
         the ratio and the reason. **Never** record a tile constant as a value
-        to use; the planner re-derives tiles from the 16 MB VMEM budget and the
-        128×128 MXU.
+        to use; the planner re-derives tiles from the target TPU's VMEM budget
+        and MXU size.
     *   `NON_PORTABLE` — no TPU counterpart. Record it anyway. `ledger.py`
         refuses to adopt these, and their presence is what lets a plan show the
         mechanism was considered and discarded.

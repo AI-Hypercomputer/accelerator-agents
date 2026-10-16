@@ -1,23 +1,14 @@
----
-name: maxkernel-reconcile-reference
-description: Decides whether a CUDA reference computes the same thing as the PyTorch primary, and turns its candidate ideas into a triaged ideas_ledger.json with a trust verdict. Writes no code. Dispatched once per run by maxkernel-worker when a reference exists.
-tools: Read, Write, Bash
-model: inherit
----
+# Reconcile the reference
 
-⚠️ **CRITICAL: READ GENERAL RULES FIRST**
-Before taking any action or writing any code, you MUST read `{{CLAUDE_DIR}}/skills/maxkernel/general_rules.md`. It contains the mandatory instructions for executing Python tools, interacting with the TPU, and adhering to directory safety limits.
-
---------------------------------------------------------------------------------
-
-You are the linchpin of the advisory spine. You answer one question:
+`maxkernel-worker` reads this in Phase 0.6, the linchpin of the advisory
+spine. It answers one question:
 
 > **Does the CUDA reference actually compute what the PyTorch primary computes?**
 
-Everything the planner is later allowed to borrow depends on your answer.
+Everything the planner is later allowed to borrow depends on the answer.
 
-You write **no code of any kind** — not JAX, not Pallas, not a port, not a
-snippet. You write two documents.
+In this phase you write **no code of any kind** — not JAX, not Pallas, not a
+port, not a snippet. You write two documents.
 
 --------------------------------------------------------------------------------
 
@@ -36,12 +27,14 @@ problem at hand in ways that quietly invalidate everything borrowed from it:
 
 If the planner borrows a tiling strategy whose justification is a fused
 epilogue *this* problem does not have, the result is a slower kernel and no
-way to explain why. Your job is to find those differences before anyone builds
+way to explain why. This phase exists to find those differences before anyone builds
 on the reference, and to attach each one to the ideas that depend on it.
 
 --------------------------------------------------------------------------------
 
-## Standardized File Paths & Strict Boundaries
+## Inputs and outputs
+
+`<run_dir>` is the worker's own.
 
 Inputs:
 *   `<run_dir>/state.json`
@@ -64,8 +57,8 @@ Outputs:
 *   `<run_dir>/reference_alignment.md`
 *   `<run_dir>/ideas_ledger.json`
 
-You must NOT read or write `<run_dir>/base.py`, and must not write anything
-under `<run_dir>/ref/`.
+While following this reference, do NOT read or write `<run_dir>/base.py`, and
+do not write anything under `<run_dir>/ref/`.
 
 --------------------------------------------------------------------------------
 
@@ -217,11 +210,20 @@ reports and re-run until it passes. Then:
 and confirm the listing matches what you intended.
 
 **Never hand-edit `status`, `adopted_in` or `verdict_evidence`.** Those are a
-state machine owned by `ledger.py`. You write ideas in `proposed`; the planner
-adopts through the tool; the profile summarizer adjudicates through the tool.
+state machine owned by `ledger.py`. Ideas are written here in `proposed`; the
+planner adopts through the tool; the profile summarizer adjudicates through
+the tool.
 
-## Output Requirement
+## Before you return to Phase 0.6
 
-Write both files, then report back in 3–4 sentences: the trust verdict and its
-one-line reason, the number of differences you found, the ledger's class
-breakdown, and whether `ledger.py` validated it clean.
+Both documents must exist and `ledger.py` must have validated the ledger
+clean. A `rejected` verdict reached on good evidence is a finished
+reconciliation, not a failure.
+
+Append to `<run_dir>/maxkernel_debug_history.md`, in 3–4 sentences: the trust
+verdict and its one-line reason, the number of differences you found, the
+ledger's class breakdown, and that `ledger.py` validated it clean. Then go
+back to Phase 0.6 step 3.
+
+A missing brief on either side means an earlier phase failed; record that
+rather than reconciling against a guess.

@@ -96,18 +96,17 @@ the tool result. There is no polling timer and no subagent-management tool in
 this harness — do not invent one. What you trust is `<run_dir>/state.json` on
 disk, not the worker's prose.
 
-The other registered subagents (`maxkernel-analyze-torch-source`,
-`maxkernel-write-jnp-reference`, `maxkernel-synthesize-baseline`,
-`maxkernel-analyze-source`, `maxkernel-analyze-cuda-reference`,
-`maxkernel-reconcile-reference`, `maxkernel-fix-port`,
-`maxkernel-plan-kernel`,
+The other registered subagents (`maxkernel-analyze-source`,
+`maxkernel-analyze-cuda-reference`, `maxkernel-plan-kernel`,
 `maxkernel-implement-kernel`, `maxkernel-fix-kernel-compilation`,
-`maxkernel-compilation-summary`, `maxkernel-generate-test-file`,
-`maxkernel-fix-test-script`, `maxkernel-test-script-validation-summary`,
-`maxkernel-summarize-test-results`, `maxkernel-autotune-planner`,
-`maxkernel-autotune-summary`, `maxkernel-generate-profile-script`,
-`maxkernel-summarize-profile`) are dispatched **by the worker**, not by you.
-You only ever dispatch `maxkernel-worker`.
+`maxkernel-generate-profile-script`, `maxkernel-summarize-profile`) are
+dispatched **by the worker**, not by you. The worker carries out the remaining
+steps itself — synthesizing a baseline, porting a PyTorch primary, reconciling
+a reference, writing the jnp reference, repairing the port, writing and fixing
+`get_inputs()`, planning the autotune sweep, and the compilation, test,
+harness-validation and autotune summaries — by following the references under
+`{{CLAUDE_DIR}}/skills/maxkernel/references/maxkernel-worker/`. You only ever
+dispatch `maxkernel-worker`.
 
 ## The conversion pipeline
 
@@ -336,7 +335,7 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     | `reference_mode` | How the JAX reference is obtained | Trade-off |
     | --- | --- | --- |
     | `"torchax"` *(default when torchax imports)* | `torchax.extract_jax` converts the module **mechanically** | No mistranslation risk at all. Costs a torch/torchax version pin. |
-    | `"llm_port"` | `maxkernel-analyze-torch-source` hand-writes `base.py` | No extra dependency. The port is an LLM artifact and must be gated by Phase 0.8. |
+    | `"llm_port"` | The worker hand-writes `base.py` in Phase 0.4, following its `analyze-torch-source` reference | No extra dependency. The port is an LLM artifact and must be gated by Phase 0.8. |
 
     And a second, independent switch:
 

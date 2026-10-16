@@ -1,33 +1,24 @@
----
-name: maxkernel-analyze-torch-source
-description: Reads the user's PyTorch primary source, writes a deep context brief (torch_context.md) and ports it to a faithful JAX reference base.py. Runs once per run; dispatched by maxkernel-worker when state.primary.language is "pytorch".
-tools: Read, Write, Edit, Glob, Bash
-model: inherit
----
+# Analyze the PyTorch source
 
-⚠️ **CRITICAL: READ GENERAL RULES FIRST**
-Before taking any action or writing any code, you MUST read `{{CLAUDE_DIR}}/skills/maxkernel/general_rules.md`. It contains the mandatory instructions for executing Python tools, interacting with the TPU, and adhering to directory safety limits.
+`maxkernel-worker` reads this **once per run**, in Phase 0.4, at the very
+front of the loop, on the run's **primary** source — the thing being
+converted.
 
---------------------------------------------------------------------------------
-
-You are an expert in PyTorch and JAX. You run **once per run**, at the very
-front of the loop, on the run's **primary** source — the thing being converted.
-
-You produce exactly two artifacts:
+Following it, you produce exactly two artifacts:
 
 1.  **`<run_dir>/torch_context.md`** — your understanding of the source,
-    written for the planner that comes after you.
+    written for `maxkernel-plan-kernel`, which reads it every iteration.
 2.  **`<run_dir>/base.py`** — a faithful JAX reference implementation exposing
     a module-level `computation(...)`.
 
-You do **not** write a Pallas kernel, you do **not** optimize anything, and you
-do **not** advance the loop.
+In this phase you do **not** write a Pallas kernel and you do **not** optimize
+anything.
 
 --------------------------------------------------------------------------------
 
-## Standardized File Paths & Strict Boundaries
+## Inputs and outputs
 
-Your target run directory is `<run_dir>` (e.g. `{{MAXKERNEL_ROOT}}/workspace/<run_id>`).
+Everything this phase produces lives under the worker's own `<run_dir>`.
 
 *   State file: `<run_dir>/state.json` — read `primary.source_path`,
     `primary.golden_path`, `primary.golden_meta_path`
@@ -36,7 +27,7 @@ Your target run directory is `<run_dir>` (e.g. `{{MAXKERNEL_ROOT}}/workspace/<ru
 *   Context brief output: `<run_dir>/torch_context.md`
 *   JAX reference output: `<run_dir>/base.py`
 
-**You must NOT read `<run_dir>/ref/`.** That directory holds the reference
+**Do NOT read `<run_dir>/ref/`.** That directory holds the reference
 kernel, which is advisory and belongs to a different chain of custody. Your
 job is to record what the *primary* computes; letting a reference influence
 that would make the run's baseline a blend of two sources and its measurements
@@ -45,8 +36,8 @@ meaningless.
 Read only `<run_dir>` (excluding `ref/`), `state.primary.source_path`, and the
 MaxKernel knowledge base under `{{MAXKERNEL_ROOT}}/*.md` by explicit path.
 
-Do not write `state.json`. The worker records your artifacts after verifying
-them on disk.
+Leave `state.json` alone while following this reference. Phase 0.4 records
+the artifacts after verifying them on disk.
 
 --------------------------------------------------------------------------------
 
@@ -84,7 +75,8 @@ Read every file under `state.primary.source_path`. Read the `forward()` body,
 the `__init__`, any helper functions, and any `get_inputs()` /
 `get_init_inputs()` the file ships.
 
-If `state.primary.source_path` is missing or empty, STOP and report the error.
+If `state.primary.source_path` is missing or empty, STOP and report the
+missing path to your caller.
 Do not search for a replacement and do not invent a module.
 
 ## Step 3: Write the context brief
@@ -249,12 +241,16 @@ the failing fraction tells you what kind of bug it is:
     off-by-one, non-divisible tiling;
 *   a broad middle → accumulator dtype or reduction order.
 
-Do not submit anything to the TPU. The worker's phases do that next.
+Do not submit anything to the TPU here. Later phases do that.
 
-## Output Requirement
+## Before you return to Phase 0.4
 
-Write both files, then report back in 2–3 sentences: the entry point, the
-one-line specification of what it computes, whether `verify_port.py` passed,
-and any porting risk you flagged in Section 8. Both files must exist and be
-non-empty — the worker verifies them on disk and will re-dispatch you if they
-are not there.
+Both `<run_dir>/base.py` and `<run_dir>/torch_context.md` must exist and be
+non-empty. Record in `<run_dir>/maxkernel_debug_history.md`, in 2–3 sentences:
+the entry point, the one-line specification of what it computes, whether
+`verify_port.py` passed, and any porting risk you flagged in Section 8. Then
+go back to Phase 0.4 step 3.
+
+If you could not produce a faithful port, say what defeated you in the debug
+history rather than leaving a port you know is wrong: every number the run
+reports would be measured against it.

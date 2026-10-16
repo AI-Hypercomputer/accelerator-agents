@@ -1,25 +1,15 @@
----
-name: maxkernel-autotune-summary
-description: Summarizes the results of a JAX/Pallas kernel autotuning sweep. Part of the MaxKernel loop; dispatched by maxkernel-worker.
-tools: Read, Write, Edit, Glob, Grep, Bash
-model: inherit
----
+# Autotune summary
 
-⚠️ **CRITICAL: READ GENERAL RULES FIRST**
-Before taking any action or writing any code, you MUST read `{{CLAUDE_DIR}}/skills/maxkernel/general_rules.md`. It contains the mandatory instructions for executing Python tools, interacting with the TPU, and adhering to directory safety limits.
+`maxkernel-worker` reads this in Phase 4 step 4, after
+`apply_best_config.py` has reduced the sweep and applied the winner. You write
+the summary yourself, in this context, from the files the sweep left behind.
 
 --------------------------------------------------------------------------------
 
+## Inputs and outputs
 
-You are providing a summary of autotuning results.
-
---------------------------------------------------------------------------------
-
-## Standardized File Paths & Strict Boundaries
-
-Your target run directory is `<run_dir>` (e.g., `{{MAXKERNEL_ROOT}}/workspace/<run_id>`). Read `<run_dir>/state.json` to get full history and current iteration state.
-
-All artifacts for this task are strictly confined within `<run_dir>`:
+`<run_dir>` and `<N>` are the worker's own (`<N>` is this iteration's `n`).
+All artifacts for this step are strictly confined within `<run_dir>`:
 
 *   Optimized kernel input: `<run_dir>/iter<N>/optimized.py`
 *   Autotune results input: `<run_dir>/iter<N>/autotune_results.json`
@@ -42,7 +32,7 @@ You must:
 2.  Verify that the best configuration was applied correctly to the kernel code
     by reading the file located at `<run_dir>/iter<N>/optimized.py` using the `Read`
     tool.
-3.  Provide a clear summary in your response. Do NOT list all tested
+3.  Write a clear summary into your report. Do NOT list all tested
     configurations from `all_results`.
 
 ### Case 2: If the status is "failed" or "error"
@@ -51,7 +41,7 @@ You must:
 
 1.  Report the error message.
 
-In all cases, you must: Provide a clear summary in your response. Do NOT list
+In all cases, you must: Write a clear summary into your report. Do NOT list
 all tested configurations from `all_results`.
 
 Please use the following format for your summary:
@@ -65,4 +55,14 @@ Please use the following format for your summary:
 
 ### Output Requirement
 
-You **must** use the `write_to_file` tool to save your autotuning summary report (including status, best configuration, latency, and verification of application) to `<run_dir>/iter<N>/autotune_summary.md`.
+You **must** use the `Write` tool to save your autotuning summary report (including status, best configuration, latency, and verification of application) to `<run_dir>/iter<N>/autotune_summary.md`.
+
+The `"success"` / `"failed"` values above belong to the `autotune_results`
+file — they are the sweep's own record, written by `apply_best_config.py`. Do
+not rename or reinterpret them.
+
+When the sweep failed, report no latency anywhere, only an account of why.
+There was no best time, and reporting one would be inventing a measurement.
+
+Once `<run_dir>/iter<N>/autotune_summary.md` is written, continue to the
+worker's Phase 5.

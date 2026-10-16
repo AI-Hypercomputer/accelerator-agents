@@ -17,8 +17,8 @@ WHERE THIS RUNS: CPU BY DEFAULT, TPU WHEN THE DATA FITS
 ------------------------------------------------------
 `--device cpu` (the default) is the right choice almost always:
 
-1.  `base.py` is contractually pure JAX -- `maxkernel-analyze-torch-source` is
-    forbidden from putting Pallas in it, because the baseline is what a
+1.  `base.py` is contractually pure JAX -- the worker's Phase 0.4 port (the
+    `analyze-torch-source` reference) forbids putting Pallas in it, because the baseline is what a
     competent engineer writes *without* a custom kernel. Pure JAX runs on the
     CPU backend unchanged.
 2.  This is a *semantic* check, not a performance one. Running it on CPU keeps
@@ -39,7 +39,7 @@ it did.
 
 Exit codes:
   0  the port reproduces the golden values within tolerance
-  1  MISMATCH -- the port disagrees with the source (dispatch fix-port)
+  1  MISMATCH -- the port disagrees with the source (worker follows fix-port)
   2  the port could not be executed at all (syntax, import, shape error)
   3  inputs missing or malformed (no golden file, no `computation`)
   5  --device tpu requested but the golden data exceeds --max-embed-bytes
@@ -177,9 +177,9 @@ def compare(expected, actual, atol, rtol):
 
 
 def diagnose(results):
-  """Turns comparison statistics into a hypothesis fix-port can act on.
+  """Turns comparison statistics into a hypothesis a port repair can act on.
 
-  A bare "mismatch" sends the repair agent hunting. The *shape* of the
+  A bare "mismatch" sends the repair hunting. The *shape* of the
   disagreement is usually diagnostic: everything wrong points at a different
   bug than a thin edge being wrong.
   """
@@ -424,7 +424,7 @@ def device_mismatch(golden_meta_path, ran_on):
   failure means: the disagreement then mixes a possible port error with the
   genuine numeric difference between two accelerators -- default matmul
   precision, reduction order, accumulation width. Read as a port bug, that
-  sends a repair agent hunting for a semantic error that is not there.
+  sends a repair hunting for a semantic error that is not there.
 
   Returns a warning string, or None when the two sides agree.
   """

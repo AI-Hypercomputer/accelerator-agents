@@ -28,7 +28,8 @@ Read the **[User Guide](user_guide.md)** — a short walkthrough of how to use M
 | --- | --- |
 | `skill/SKILL.md` | The `maxkernel` skill — the orchestrator. It only reads state and dispatches the worker; it never writes kernel code itself. |
 | `skill/general_rules.md` | The invariants every subagent loads before doing anything. |
-| `agents/maxkernel-*.md` | 19 subagent prompts: one worker plus eighteen single-phase specialists. |
+| `agents/maxkernel-*.md` | 8 subagent prompts: one worker plus seven single-phase specialists that each need a context of their own. |
+| `skill/references/maxkernel-worker/` | 12 references the worker follows itself, in its own context: steps that format output it already holds, or read and write one small file. |
 | `tools/` | The agent's CLI surface: TPU client, input classification, golden capture and port verification, CUDA fact extraction, the ideas ledger, test-harness assembly, autotune config selection, XProf trace analysis, HLO dumps, RAG retrieval. |
 | `server/tpu_server.py` | The job-queue daemon that runs on (or beside) the TPU VM. |
 | `hooks/` | Optional `PreToolUse` guard — see [Workspace guard](#workspace-guard-optional). |
@@ -131,7 +132,7 @@ runs and nothing about the port. If the check fails three times, the run
 **stops**: five iterations optimizing against a wrong denominator is worse
 than no run, because it ends in a confident, wrong number.
 
-**Borrowing from a reference.** `maxkernel-reconcile-reference` first asks
+**Borrowing from a reference.** The worker's reconciliation step first asks
 whether the reference actually computes what the primary computes, and records
 a verdict — `aligned`, `partial`, `divergent` or `rejected`. Then it distils
 the reference into `ideas_ledger.json`, one entry per borrowable idea, each
@@ -233,10 +234,14 @@ python3 install.py --with-guard
 your actual paths and writes:
 
 ```
-~/.claude/agents/maxkernel-*.md          14 subagents
+~/.claude/agents/maxkernel-*.md          8 subagents
 ~/.claude/skills/maxkernel/SKILL.md      the orchestrator skill
 ~/.claude/skills/maxkernel/general_rules.md
+~/.claude/skills/maxkernel/references/maxkernel-worker/*.md
+                                         12 steps the worker follows inline
 ```
+
+It also removes the agent files earlier versions installed for those 12 steps.
 
 Nothing else in your config is touched. Useful flags:
 
@@ -456,6 +461,14 @@ Two invariants worth preserving if you rewrite prompts:
 - **Verify on disk, not on the report.** After every subagent returns, the caller
   checks that the phase's artifact exists and is non-empty. A subagent's prose
   summary is not evidence.
+- **Agent or reference?** A step earns its own subagent only when its context
+  would otherwise crowd the worker's (plan, implement, the compile-fix loop,
+  profiling) or when it must not see what the worker has seen
+  (`maxkernel-analyze-cuda-reference` writes its brief without the primary in
+  view, and keeps raw CUDA out of the context that later writes `base.py`).
+  Steps that format output the worker already holds, or read and write one
+  small file, are references under `skill/references/maxkernel-worker/` that
+  the worker follows itself.
 
 ---
 

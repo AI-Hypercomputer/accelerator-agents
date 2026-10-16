@@ -12,6 +12,7 @@ run.
 This is the cheap check that would have caught it. It resolves:
 
   * `{{MAXKERNEL_ROOT}}/...` paths in any prompt      -> must exist on disk
+  * `{{CLAUDE_DIR}}/skills/maxkernel/...` paths       -> must exist under skill/
   * `maxkernel-*` subagent names in a dispatch        -> must have agents/<name>.md
   * `tools/<name>.py` mentioned anywhere              -> must exist
   * every registered agent's frontmatter              -> name must match filename
@@ -36,9 +37,13 @@ PROMPT_GLOBS = (
   "agents/maxkernel-*.md",
   "skill/SKILL.md",
   "skill/general_rules.md",
+  "skill/references/**/*.md",
 )
 
 RE_MK_PATH = re.compile(r"\{\{MAXKERNEL_ROOT\}\}/([\w./-]+)")
+# install.py renders skill/ into {{CLAUDE_DIR}}/skills/maxkernel/, so a prompt
+# naming an installed skill file names skill/<same path> in this checkout.
+RE_SKILL_PATH = re.compile(r"\{\{CLAUDE_DIR\}\}/skills/maxkernel/([\w./-]+)")
 RE_TOOLS = re.compile(r"\btools/([\w-]+\.py)\b")
 RE_SUBAGENT = re.compile(r"subagent_type\s*=\s*[\"']([\w-]+)[\"']")
 RE_AGENT_BACKTICK = re.compile(r"`(maxkernel-[\w-]+)`")
@@ -92,6 +97,17 @@ def check():
       if not (ROOT / target).exists():
         problems.append(
           f"{rel}: {{{{MAXKERNEL_ROOT}}}}/{target} does not exist"
+        )
+
+    # 1b. {{CLAUDE_DIR}}/skills/maxkernel/-rooted paths
+    for m in RE_SKILL_PATH.finditer(text):
+      target = strip_trailing_punct(m.group(1))
+      if "<" in target or target.endswith("/") or not target:
+        continue
+      if not (ROOT / "skill" / target).exists():
+        problems.append(
+          f"{rel}: {{{{CLAUDE_DIR}}}}/skills/maxkernel/{target} "
+          f"has no skill/{target}"
         )
 
     # 2. tools/<name>.py

@@ -1,28 +1,16 @@
----
-name: maxkernel-generate-test-file
-description: Writes get_inputs() -- the one LLM-authored piece of MaxKernel's shared test harness. Runs once per run; dispatched by maxkernel-worker.
-tools: Read, Write, Edit, Glob, Grep, Bash
-model: inherit
----
+# Generate get_inputs()
 
-⚠️ **CRITICAL: READ GENERAL RULES FIRST**
-Before taking any action or writing any code, you MUST read `{{CLAUDE_DIR}}/skills/maxkernel/general_rules.md`. It contains the mandatory instructions for executing Python tools, interacting with the TPU, and adhering to directory safety limits.
+`maxkernel-worker` reads this in Phase 0.9 step 3 to write the **input
+generation function** `get_inputs()` for testing a Pallas kernel. This runs
+ONCE per run, before any optimization has started -- there is no optimized
+kernel to look at, because none exists yet.
 
 --------------------------------------------------------------------------------
 
+## Inputs and outputs
 
-You are tasked with generating the **input generation function** `get_inputs()`
-for testing a Pallas kernel. This runs ONCE per run, before any optimization
-has started -- you will NOT be given an optimized kernel, because none exists
-yet.
-
---------------------------------------------------------------------------------
-
-## Standardized File Paths & Strict Boundaries
-
-Your target run directory is `<run_dir>` (e.g., `{{MAXKERNEL_ROOT}}/workspace/<run_id>`). Read `<run_dir>/state.json` to get full history and current iteration state.
-
-All artifacts for this task are strictly confined within `<run_dir>`:
+`<run_dir>` is the worker's own. All artifacts for this step are strictly
+confined within `<run_dir>`:
 
 *   Base kernel input: `<run_dir>/base.py`
 *   Output destination: `<run_dir>/get_inputs.py`
@@ -35,9 +23,10 @@ else -- inlining the base kernel, copying the fixed correctness/benchmark
 logic, keeping the two isolated so a helper function named the same in both
 kernels can't collide -- is handled deterministically afterward by
 `{{MAXKERNEL_ROOT}}/tools/assemble_test_harness.py` (plain file I/O and `exec()`-based namespace
-isolation, no LLM involved). Do not try to do any of that yourself; do not
-read or inline `<run_dir>/base.py`'s source into your output, and do not read
-`{{MAXKERNEL_ROOT}}/tools/test_harness_template.py` at all -- your only job is `get_inputs()`.
+isolation, no LLM involved). Do not try to do any of that here; do not
+inline `<run_dir>/base.py`'s source into your output, and do not read
+`{{MAXKERNEL_ROOT}}/tools/test_harness_template.py` at all -- the job in this
+step is `get_inputs()` and nothing else.
 
 ## Finding the Base Kernel
 
@@ -49,12 +38,14 @@ Proceed to read it with `Read` (to learn its signature and shapes -- not to copy
 
 **Step 2: If Path is Missing**
 
-**STOP immediately and report error back to parent agent. DO NOT use list_directory or search for files.**
+**STOP immediately.** Phase 0.9 step 2 owed you `base.py`; stop and report
+the missing path to your caller. DO NOT use list_directory or search for
+files.
 
 ## Tool Usage
 
 1.  `Read`: To read `<run_dir>/base.py` (to learn its signature/shapes only).
-2.  `write_to_file`: To write `get_inputs()` to `<run_dir>/get_inputs.py`.
+2.  `Write`: To write `get_inputs()` to `<run_dir>/get_inputs.py`.
 
 ## Your Task
 
@@ -132,9 +123,9 @@ Proceed to read it with `Read` (to learn its signature and shapes -- not to copy
 
 ## Output Format
 
-Use the `write_to_file` tool to write the snippet above to `<run_dir>/get_inputs.py`
-(NOT `<run_dir>/test_kernel.py` -- the maxkernel-worker assembles the final harness at
-`<run_dir>/test_kernel.py` from this file deterministically, in a separate step you
-are not responsible for).
+Use the `Write` tool to write the snippet above to `<run_dir>/get_inputs.py`
+(NOT `<run_dir>/test_kernel.py` -- Phase 0.9 step 4 assembles the final harness
+at `<run_dir>/test_kernel.py` from this file deterministically, in a separate
+step).
 
-Generate the `get_inputs()` snippet now.
+Then return to Phase 0.9 step 4.

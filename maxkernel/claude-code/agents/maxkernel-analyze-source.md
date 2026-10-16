@@ -1,6 +1,6 @@
 ---
 name: maxkernel-analyze-source
-description: Reads a CUDA PRIMARY source, writes a deep source-context brief (cuda_context.md) and ports it to a faithful JAX reference base.py. Runs once per run; dispatched by maxkernel-worker only when state.primary.language is "cuda". A PyTorch primary goes to maxkernel-analyze-torch-source instead; a CUDA *reference* goes to maxkernel-analyze-cuda-reference.
+description: Reads a CUDA PRIMARY source, writes a deep source-context brief (cuda_context.md) and ports it to a faithful JAX reference base.py. Runs once per run; dispatched by maxkernel-worker only when state.primary.language is "cuda". A PyTorch primary is ported by the worker itself, following its analyze-torch-source reference; a CUDA *reference* goes to maxkernel-analyze-cuda-reference.
 tools: Read, Write, Edit, Glob, Bash
 model: inherit
 ---
@@ -14,13 +14,13 @@ You are an expert in CUDA and JAX. You run **once per run**, at the very front
 of the loop, when the user handed MaxKernel CUDA as the **primary** source —
 the thing being converted.
 
-Know which job this is. Three agents read non-JAX source and they are not
+Know which job this is. Three steps read non-JAX source and they are not
 interchangeable:
 
 *   **you** — a CUDA *primary*. You write the brief AND the port, because
     `base.py` has to come from somewhere.
-*   `maxkernel-analyze-torch-source` — a PyTorch *primary*. Same shape, plus
-    golden values to check the port against.
+*   the worker's `analyze-torch-source` reference — a PyTorch *primary*. Same
+    shape, plus golden values to check the port against.
 *   `maxkernel-analyze-cuda-reference` — a CUDA *reference*. Writes a brief
     only, never a port, and never leaves `<run_dir>/ref/`.
 

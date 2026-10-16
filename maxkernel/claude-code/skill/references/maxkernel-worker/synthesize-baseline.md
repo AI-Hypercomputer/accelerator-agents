@@ -1,17 +1,8 @@
----
-name: maxkernel-synthesize-baseline
-description: Writes a baseline implementation from a written specification when the user supplied no source file. Produces a plain, readable reference (PyTorch or JAX) for the user to approve before any optimization begins. Never writes Pallas, never optimizes. Dispatched once by maxkernel-worker in Phase 0.1 when input.type is "specification".
-tools: Read, Write, Edit, Bash
-model: inherit
----
+# Synthesize a baseline
 
-⚠️ **CRITICAL: READ GENERAL RULES FIRST**
-Before taking any action or writing any code, you MUST read `{{CLAUDE_DIR}}/skills/maxkernel/general_rules.md`. It contains the mandatory instructions for executing Python tools, interacting with the TPU, and adhering to directory safety limits.
-
---------------------------------------------------------------------------------
-
-The user did not supply a source file. They described what they want computed,
-and you write the reference implementation of it.
+`maxkernel-worker` reads this in Phase 0.1. The user did not supply a source
+file. They described what they want computed, and you write the reference
+implementation of it.
 
 ## Read this before you write a line
 
@@ -39,7 +30,9 @@ the user reads it before anything is optimized. Write it to be read.
 
 --------------------------------------------------------------------------------
 
-## Standardized File Paths & Strict Boundaries
+## Inputs and outputs
+
+`<run_dir>` is the worker's own.
 
 *   State file: `<run_dir>/state.json`
 *   The specification: `<run_dir>/job.json`, under `input.specification`
@@ -50,7 +43,8 @@ the user reads it before anything is optimized. Write it to be read.
 
 Do not write `<run_dir>/base.py`. That name belongs to the JAX reference and is
 produced later by the normal route, from `source.py`, exactly as it would be for
-a user-supplied file. Do not write `state.json`.
+a user-supplied file. Leave `state.json` alone while following this reference;
+Phase 0.1 records the approval once the user gives it.
 
 --------------------------------------------------------------------------------
 
@@ -78,7 +72,7 @@ costs the whole run.
 
 If the specification is too thin to implement at all — no formula, no named
 equivalent, and a description that could mean several different computations —
-STOP and report exactly what you need. Do not invent a plausible operation.
+STOP and report to your caller exactly what you need. Do not invent a plausible operation.
 
 ## Step 2: Write `<run_dir>/source.py`
 
@@ -192,13 +186,22 @@ round trip.
 *   **No optimization.** See above — every trick you apply here is one the
     kernel cannot be credited for.
 *   **No changing the user's shapes, dtypes or constants.**
-*   **No proceeding past the gate.** You write the files and stop. The worker
-    presents them to the user; the user approves. You do not advance the loop.
+*   **No proceeding past the gate.** You write the files and go back to Phase
+    0.1 step 3, which verifies them and then stops the run for the user's
+    approval. You do not approve it yourself and you do not advance the loop.
 
-## Output Requirement
+## Before you return to Phase 0.1
 
-Write both files, then report in 3–5 sentences: the operation you implemented,
-the one-line formula, the number of assumptions you recorded (and the most
-consequential one), and confirmation that the file parses and runs with the
-specified output shape. State plainly that the baseline is awaiting user
-approval and that you wrote no Pallas and did not optimize.
+Both files must exist and the smoke test must have produced the specified
+output shape. Written here means "awaiting approval", not "accepted": the
+approval is the user's and happens after the worker returns.
+
+Keep, for the report Phase 0.1 step 4 sends up, 3–5 sentences: the operation
+you implemented, the one-line formula, the number of assumptions you recorded
+(and the most consequential one), and confirmation that the file parses and
+runs with the specified output shape. State plainly that the baseline is
+awaiting user approval and that no Pallas was written and nothing was
+optimized.
+
+If the baseline would not run, do not hand a broken file to the approval gate:
+fix it, or stop and report the error to your caller.

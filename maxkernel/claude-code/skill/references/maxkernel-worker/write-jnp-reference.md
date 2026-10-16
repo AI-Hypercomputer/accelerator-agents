@@ -1,18 +1,8 @@
----
-name: maxkernel-write-jnp-reference
-description: Writes a readable pure-JAX reference (base.py) from the torchax jaxpr and the PyTorch source. Runs once per run in torchax mode when emit_jnp_reference is true; dispatched by maxkernel-worker in Phase 0.7. Never writes Pallas.
-tools: Read, Write, Edit, Bash
-model: inherit
----
+# Write the jnp reference
 
-⚠️ **CRITICAL: READ GENERAL RULES FIRST**
-Before taking any action or writing any code, you MUST read `{{CLAUDE_DIR}}/skills/maxkernel/general_rules.md`. It contains the mandatory instructions for executing Python tools, interacting with the TPU, and adhering to directory safety limits.
-
---------------------------------------------------------------------------------
-
-You are an expert in JAX. You run **once per run**, in `torchax` reference mode,
-and you write exactly one file: `<run_dir>/base.py`, a readable pure-JAX
-restatement of the user's PyTorch module.
+`maxkernel-worker` reads this **once per run**, in Phase 0.7 of `torchax`
+reference mode. Following it, you write exactly one file: `<run_dir>/base.py`,
+a readable pure-JAX restatement of the user's PyTorch module.
 
 The run already has a mechanically-converted JAX function — torchax produced it
 in Phase 0.2 and it serves as the correctness oracle. **You do not get to see
@@ -27,17 +17,20 @@ been *established*, not assumed.
 
 --------------------------------------------------------------------------------
 
-## Standardized File Paths & Strict Boundaries
+## Inputs and outputs
+
+`<run_dir>` is the worker's own.
 
 *   State file: `<run_dir>/state.json`
 *   Original source: `state.primary.source_path`
 *   **The jaxpr**: `state.jaxpr_path` (`<run_dir>/ref.jaxpr.txt`) — your primary specification
 *   **Structured facts**: `state.jaxpr_facts_path` (`<run_dir>/ref.facts.json`)
 *   Optimized HLO: `state.hlo_path` — useful context, not a specification
-*   Your only output: `<run_dir>/base.py`
+*   The only output: `<run_dir>/base.py`
 
-You must NOT read `<run_dir>/ref/` (reference kernels, a different chain of
-custody) and must NOT write anything but `base.py`.
+While following this reference, do NOT read `<run_dir>/ref/` (reference
+kernels, a different chain of custody) and do NOT write anything but
+`base.py`.
 
 --------------------------------------------------------------------------------
 
@@ -151,12 +144,22 @@ Reading the verdict:
     `x * rsqrt(v)` also reports `divergent` — prefer the reference's
     formulation, since you are writing a restatement, not an improvement.
 
-Iterate within your own turn until both gates pass. If you genuinely cannot make
+Iterate until both gates pass. If you genuinely cannot make
 them pass, say so plainly, naming the surviving difference and your hypothesis.
 Do not loosen the tolerances and do not declare success.
 
-## Output Requirement
+## Before you return to Phase 0.7
 
-Write the one file, then report in 2–4 sentences: the entry point signature you
-committed to, the verdict from `jaxpr_compare.py` with its numbers, and any
-difference you accepted and why.
+Record in `<run_dir>/maxkernel_debug_history.md`, in 2–4 sentences: the entry
+point signature you committed to, the verdict from `jaxpr_compare.py` with its
+numbers, and any difference you accepted and why. Then go back to Phase 0.7
+step 3, which runs the gate for the record.
+
+If the jaxpr, the facts file or the source was missing or unreadable, there
+was nothing to write a reference *from*. Phase 0.3 owed those files; a missing
+one is a bug upstream, not something to work around by reading the PyTorch
+source instead.
+
+Phase 0.7 allows three passes through this reference and then stops the run —
+which is right, because every number the run would report is measured against
+this file.

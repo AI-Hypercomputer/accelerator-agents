@@ -29,6 +29,24 @@ REPO = pathlib.Path(__file__).resolve().parent
 SKILL_NAME = "maxkernel"
 AGENT_GLOB = "maxkernel-*.md"
 
+# Steps maxkernel-worker now follows inline, from the rendered copies under
+# skills/maxkernel/references/maxkernel-worker/. Earlier versions installed
+# each as a subagent; remove those so a stale prompt cannot be dispatched.
+RETIRED_AGENTS = [
+  "maxkernel-analyze-torch-source.md",
+  "maxkernel-autotune-planner.md",
+  "maxkernel-autotune-summary.md",
+  "maxkernel-compilation-summary.md",
+  "maxkernel-fix-port.md",
+  "maxkernel-fix-test-script.md",
+  "maxkernel-generate-test-file.md",
+  "maxkernel-reconcile-reference.md",
+  "maxkernel-summarize-test-results.md",
+  "maxkernel-synthesize-baseline.md",
+  "maxkernel-test-script-validation-summary.md",
+  "maxkernel-write-jnp-reference.md",
+]
+
 PLACEHOLDER = re.compile(r"\{\{([A-Z_]+)\}\}")
 
 # The PreToolUse guard is opt-in; these are the settings.json edits it needs.
@@ -156,10 +174,16 @@ def install_prompts(run: Runner, claude_dir: pathlib.Path, variables) -> None:
     raise SystemExit(f"No agent templates found under {REPO / 'agents'}.")
   for src in sources:
     run.write(agents_dir / src.name, render(src.read_text(), variables, src))
+  for name in RETIRED_AGENTS:
+    run.remove(agents_dir / name)
 
   for name in ("SKILL.md", "general_rules.md"):
     src = REPO / "skill" / name
     run.write(skill_dir / name, render(src.read_text(), variables, src))
+
+  for src in sorted((REPO / "skill" / "references").rglob("*.md")):
+    rel = src.relative_to(REPO / "skill")
+    run.write(skill_dir / rel, render(src.read_text(), variables, src))
 
 
 def install_workspace(run: Runner) -> None:

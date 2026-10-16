@@ -286,7 +286,7 @@ completely differently:
   about the working set's shape and about what the author believed fit in
   fast memory — it is **not** a value to copy into a `BlockSpec`. The ledger
   records the *ratio and the reason*, and the planner re-solves the tile sizing
-  from the 16 MB VMEM budget and the 128×128 MXU.
+  from the target TPU's VMEM budget and MXU size.
 
 - **`NON_PORTABLE`** — record it and drop it. Warp shuffles, `__syncthreads`,
   bank-conflict padding, per-thread register blocking, occupancy targets,

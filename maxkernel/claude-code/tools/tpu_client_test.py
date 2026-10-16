@@ -91,22 +91,30 @@ class TestTPUClient(unittest.TestCase):
     self.assertEqual(res["queued_count"], 1)
     self.assertEqual(res["running_count"], 1)
 
+  @patch("tpu_client.ensure_tpu_specs_cached")
   @patch("tpu_client.check_health")
-  def test_start_server_idempotent_already_healthy(self, mock_health):
+  @patch("tpu_client.get_tpu_config")
+  def test_start_server_idempotent_already_healthy(
+    self, mock_config, mock_health, mock_ensure
+  ):
+    mock_config.return_value = [{"mode": "local", "local_port": 8000}]
     mock_health.return_value = True
     self.assertTrue(tpu_client.start_server_idempotent(mode="local"))
+    mock_ensure.assert_called_once()
 
+  @patch("tpu_client.ensure_tpu_specs_cached")
   @patch("builtins.open", new_callable=MagicMock)
   @patch("subprocess.Popen")
   @patch("tpu_client.check_health")
   @patch("tpu_client.get_tpu_config")
   def test_start_server_idempotent_local_mode(
-    self, mock_config, mock_health, mock_popen, mock_open
+    self, mock_config, mock_health, mock_popen, mock_open, mock_ensure
   ):
     mock_health.side_effect = [False, False, False, False, True]
     mock_config.return_value = [{"mode": "local", "local_port": 8000}]
     res = tpu_client.start_server_idempotent(mode="local")
     self.assertTrue(res)
+    mock_ensure.assert_called_once()
     mock_popen.assert_called_once()
     cmd_args = mock_popen.call_args[0][0]
     self.assertIn("tpu_server.py", cmd_args[1])

@@ -87,7 +87,7 @@ transformers
 # of this file, so every other package still resolves from PyPI). Neither
 # torchax nor torch_xla declares a torch dependency, so nothing pulls the CUDA
 # build back in.
-torch==2.9.0+cpu
+torch==2.12.1+cpu
 torchax==0.0.13
 
 # torchax 0.0.13 imports flax but does not declare it -- without this,

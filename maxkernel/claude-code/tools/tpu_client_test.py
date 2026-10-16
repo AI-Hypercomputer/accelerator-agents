@@ -313,10 +313,12 @@ class TestTPUClient(unittest.TestCase):
     with tempfile.TemporaryDirectory() as tmp:
       fake_tools = os.path.join(tmp, "tools")
       os.makedirs(fake_tools)
-      with patch.object(
-        tpu_client, "__file__", os.path.join(fake_tools, "tpu_client.py")
-      ), patch("tpu_client.check_health", return_value=True), patch(
-        "tpu_client.fetch_tpu_spec", return_value=spec
+      with (
+        patch.object(
+          tpu_client, "__file__", os.path.join(fake_tools, "tpu_client.py")
+        ),
+        patch("tpu_client.check_health", return_value=True),
+        patch("tpu_client.fetch_tpu_spec", return_value=spec),
       ):
         tpu_client.ensure_tpu_specs_cached()
       path = os.path.join(tmp, "tpu_config.json")
@@ -354,9 +356,10 @@ class TestTPUClient(unittest.TestCase):
       path = os.path.join(tmp, "tpu_config.json")
       with open(path, "w") as f:
         json.dump({"tpus": [entry]}, f)
-      with patch("tpu_client.check_health", return_value=True), patch(
-        "tpu_client.fetch_tpu_spec", return_value=spec
-      ) as mock_fetch:
+      with (
+        patch("tpu_client.check_health", return_value=True),
+        patch("tpu_client.fetch_tpu_spec", return_value=spec) as mock_fetch,
+      ):
         tpu_client.ensure_tpu_specs_cached(config_path_override=path)
       with open(path) as f:
         return json.load(f)["tpus"][0], mock_fetch

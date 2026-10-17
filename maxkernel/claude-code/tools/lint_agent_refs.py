@@ -50,7 +50,7 @@ NOT_AGENTS = {"maxkernel-worker.md", "maxkernel-debug_history.md"}
 # Paths created at install or run time, so absent from a fresh checkout. A
 # prompt referencing one is correct; the file's absence is not a dead link.
 GENERATED = {
-  "tpu_config.json",  # written by install.py / tpu_client.py --add_tpu
+  "tpu_config.json",  # written by tpu_client.py
   "workspace",  # run directories
   "maxkernel_debug_history.md",
 }

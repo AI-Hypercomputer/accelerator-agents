@@ -25,6 +25,8 @@ logging.basicConfig(
 )
 
 SERVER_URL = "http://127.0.0.1:8000"
+# Serializes every read-modify-write of tpu_config.json across processes.
+CONFIG_LOCK_FILE = "/tmp/maxkernel_tpu_config_update.lock"
 
 
 def extract_trace_artifacts(res, output_dir=None, code_file=None, run_dir=None):
@@ -104,6 +106,9 @@ def get_tpu_config(config_path_override=None, run_dir=None):
       logging.error(
         "Failed to read tpu_config.json from %s: %s", config_path, e
       )
+  else:
+    logging.info("No tpu_config.json found; using the local TPU on port 8000.")
+    raw_data = {"tpus": [{"mode": "local", "local_port": 8000}]}
 
   tpu_list = []
   if isinstance(raw_data, dict):
@@ -404,6 +409,13 @@ def fetch_tpu_spec(port=8000):
       kind_match = re.search(r"DEVICE_KIND:(.+)", out)
       count_match = re.search(r"DEVICE_COUNT:(\d+)", out)
       if kind_match and count_match:
+        if "tpu" not in kind_match.group(1).lower():
+          logging.warning(
+            "Server on port %s reports device kind '%s', not a TPU.",
+            port,
+            kind_match.group(1).strip(),
+          )
+          return None
         return {
           "device_kind": kind_match.group(1).strip(),
           "device_count": int(count_match.group(1).strip()),
@@ -452,8 +464,31 @@ def infer_tpu_version(tpu_entry):
   return "TPU v6e"
 
 
+def version_from_spec(tpu_entry):
+  """Infer tpu_version from tpu_spec/tpu_name, ignoring any cached tpu_version."""
+  return infer_tpu_version(
+    {k: v for k, v in tpu_entry.items() if k != "tpu_version"}
+  )
+
+
+def apply_detected_spec(tpu_entry, spec, port):
+  """Store a spec fetched from the server, replacing (and reporting) any other."""
+  old = tpu_entry.get("tpu_spec")
+  if old is not None and old != spec:
+    logging.warning(
+      "tpu_spec for TPU on port %s was %s but the server reports %s;"
+      " replacing it.",
+      port,
+      old,
+      spec,
+    )
+  tpu_entry["tpu_spec"] = spec
+  tpu_entry["tpu_spec_verified"] = True
+  tpu_entry["tpu_version"] = version_from_spec(tpu_entry)
+
+
 def ensure_tpu_specs_cached(config_path_override=None, run_dir=None):
-  """Populate missing tpu_spec and tpu_version fields in tpu_config.json if TPU servers are reachable."""
+  """Detect tpu_spec/tpu_version for reachable TPUs whose spec is missing or was never checked against the hardware."""
   config_path = config_path_override
   if not config_path and run_dir:
     run_config = os.path.join(run_dir, "tpu_config.json")
@@ -468,11 +503,21 @@ def ensure_tpu_specs_cached(config_path_override=None, run_dir=None):
       config_path = default_path
 
   if not config_path or not os.path.exists(config_path):
-    return
+    if config_path_override:
+      return
+    config_path = os.path.join(
+      os.path.dirname(__file__), "..", "tpu_config.json"
+    )
 
+  lock_fd = os.open(CONFIG_LOCK_FILE, os.O_RDWR | os.O_CREAT)
   try:
-    with open(config_path, "r") as f:
-      raw = json.load(f) or {}
+    fcntl.flock(lock_fd, fcntl.LOCK_EX)
+    if os.path.exists(config_path):
+      with open(config_path, "r") as f:
+        raw = json.load(f) or {}
+    else:
+      # No config: written only if a real TPU answers on the local port.
+      raw = {"tpus": [{"mode": "local", "local_port": 8000}]}
 
     tpu_list = []
     if (
@@ -488,25 +533,33 @@ def ensure_tpu_specs_cached(config_path_override=None, run_dir=None):
     for idx, item in enumerate(tpu_list):
       if isinstance(item, dict):
         port = item.get("local_port") or (8000 + idx)
-        if "tpu_spec" not in item:
+        if not item.get("tpu_spec_verified"):
           if check_health(port=port, timeout=3):
             logging.info("Auto-fetching tpu_spec for TPU on port %s...", port)
             spec = fetch_tpu_spec(port=port)
             if spec:
-              item["tpu_spec"] = spec
+              apply_detected_spec(item, spec, port)
               updated = True
-        if "tpu_version" not in item:
+        elif "tpu_version" not in item:
           item["tpu_version"] = infer_tpu_version(item)
           updated = True
 
     if updated:
-      with open(config_path, "w") as f:
+      tmp_file = os.path.join(
+        os.path.dirname(os.path.abspath(config_path)),
+        f".tpu_config.json.tmp.{os.getpid()}_{uuid.uuid4().hex[:6]}",
+      )
+      with open(tmp_file, "w") as f:
         json.dump(raw, f, indent=2)
+      os.replace(tmp_file, config_path)
       logging.info(
         "Updated %s with auto-cached tpu_spec/tpu_version.", config_path
       )
   except Exception as e:  # pylint: disable=broad-exception-caught
     logging.warning("Could not auto-update tpu_spec in config: %s", e)
+  finally:
+    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+    os.close(lock_fd)
 
 
 def cleanup_stale_temp_files(config_dir, max_age_seconds=600):
@@ -561,8 +614,7 @@ def add_tpu_to_config(new_tpu_input, config_path_override=None, run_dir=None):
       os.path.dirname(__file__), "..", "tpu_config.json"
     )
 
-  lock_file = "/tmp/maxkernel_tpu_config_update.lock"
-  lock_fd = os.open(lock_file, os.O_RDWR | os.O_CREAT)
+  lock_fd = os.open(CONFIG_LOCK_FILE, os.O_RDWR | os.O_CREAT)
   try:
     fcntl.flock(lock_fd, fcntl.LOCK_EX)
 
@@ -612,7 +664,8 @@ def add_tpu_to_config(new_tpu_input, config_path_override=None, run_dir=None):
 
     if existing:
       logging.info(
-        "TPU '%s' is already present in %s. No duplicate added.",
+        "TPU '%s' is already present in %s. No duplicate added;"
+        " refreshing its tpu_spec.",
         tpu_identifier,
         config_path,
       )
@@ -636,21 +689,15 @@ def add_tpu_to_config(new_tpu_input, config_path_override=None, run_dir=None):
     os.replace(tmp_file, config_path)
     logging.info("Safely updated %s.", config_path)
 
-    if "tpu_version" not in target_entry:
-      target_entry["tpu_version"] = infer_tpu_version(target_entry)
-
     port = target_entry.get("local_port") or (8000 + (len(tpu_list) - 1))
     target_entry["local_port"] = port
     start_server_for_tpu(target_entry)
     if check_health(port=port, timeout=5):
-      if "tpu_spec" not in target_entry:
-        logging.info(
-          "Fetching tpu_spec for newly added TPU '%s'...", tpu_identifier
-        )
+      if existing or not target_entry.get("tpu_spec_verified"):
+        logging.info("Fetching tpu_spec for TPU '%s'...", tpu_identifier)
         spec = fetch_tpu_spec(port=port)
         if spec:
-          target_entry["tpu_spec"] = spec
-          target_entry["tpu_version"] = infer_tpu_version(target_entry)
+          apply_detected_spec(target_entry, spec, port)
           tmp_file2 = os.path.join(
             dir_name,
             f".tpu_config.json.tmp.{os.getpid()}_{uuid.uuid4().hex[:6]}",
@@ -683,8 +730,6 @@ def start_server_idempotent(
     configs = get_tpu_config(
       config_path_override=config_path_override, run_dir=run_dir
     )
-  if not configs and mode == "local":
-    configs = [{"mode": "local", "local_port": 8000, "tpu_version": "TPU v6e"}]
   if not configs:
     logging.error("No TPU configurations found.")
     return False
@@ -1055,7 +1100,12 @@ def main():
     config_path_override=args.tpu_config, run_dir=args.run_dir
   )
 
-  if not start_server_idempotent(mode=args.mode, tpu_configs=tpu_configs):
+  if not start_server_idempotent(
+    mode=args.mode,
+    tpu_configs=tpu_configs,
+    config_path_override=args.tpu_config,
+    run_dir=args.run_dir,
+  ):
     logging.error("Cannot proceed: No TPU server is reachable.")
     sys.exit(1)
 

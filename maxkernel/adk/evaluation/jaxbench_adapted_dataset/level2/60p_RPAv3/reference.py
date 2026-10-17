@@ -8755,6 +8755,10 @@ def get_inputs(dtype=jnp.bfloat16):
   ]
 
 
+# Evaluation contract (see `donate_args` in kernel_task.yaml): the harness
+# donates `kv_cache` and expects it back, updated, as the second output
+# with unchanged shape and dtype, so update it in place (e.g. pallas_call
+# input_output_aliases) instead of copying.
 def computation(
     queries,
     keys,

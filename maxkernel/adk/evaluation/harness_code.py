@@ -33,54 +33,89 @@ def load_module_from_path(module_name, file_path):
   return module
 
 
-def benchmark(func, args, static_argnums, trace_dir=None, num_runs=20, num_warmups=5):
+def normalize_donate_map(donate_map):
+  \"\"\"Returns `donate_map` as {int: int}; JSON round-trips turn the keys into strings.\"\"\"
+  return {int(k): int(v) for k, v in dict(donate_map or {}).items()}
+
+
+def check_donate_map(donate_map, args, static_argnums, out_leaves, kernel_name):
+  \"\"\"Validates a task's `donate_args` against a kernel's actual output structure.
+
+  Every entry maps a dynamic argument to the flattened output leaf that holds
+  the same buffer after the call. Donation only pays off (and recycling the
+  output as the next input only works) when the two have identical shape and
+  dtype, so anything else is rejected before a buffer is donated.
+  \"\"\"
+  dynamic_positions = [i for i in range(len(args)) if i not in static_argnums]
+  for in_idx, out_idx in donate_map.items():
+    if not 0 <= in_idx < len(dynamic_positions):
+      raise ValueError(
+          f"donate_args: dynamic arg index {in_idx} is out of range "
+          f"(the task has {len(dynamic_positions)} dynamic args).")
+    if not 0 <= out_idx < len(out_leaves):
+      raise ValueError(
+          f"donate_args: output leaf index {out_idx} is out of range "
+          f"({kernel_name} returns {len(out_leaves)} leaves).")
+    arg = args[dynamic_positions[in_idx]]
+    out = out_leaves[out_idx]
+    arg_shape = tuple(getattr(arg, "shape", ()))
+    arg_dtype = jnp.dtype(getattr(arg, "dtype", type(arg)))
+    if arg_shape != tuple(out.shape) or arg_dtype != jnp.dtype(out.dtype):
+      raise ValueError(
+          f"donate_args: dynamic arg {in_idx} ({arg_dtype}{list(arg_shape)}) "
+          f"cannot alias output leaf {out_idx} of {kernel_name} "
+          f"({jnp.dtype(out.dtype)}{list(out.shape)}); shape and dtype must match.")
+
+
+def benchmark(func, args, static_argnums, trace_dir=None, num_runs=20,
+              num_warmups=5, donate_map=None):
+  \"\"\"Times `func(*args)` over `num_runs` calls of one compiled executable.
+
+  `donate_map` ({dynamic_arg_index: output_leaf_index}, from the task's
+  `donate_args`) names the buffers the kernel updates in place, e.g. a KV
+  cache or a recurrent state. Each listed input is donated to the compiled
+  call, which lets XLA alias it with that output instead of materializing a
+  full copy, and after every call the input slot is rebound to the returned
+  leaf so the next call sees a live buffer. Donation has to happen on this
+  outer `jax.jit`: a `donate_argnums` on a jitted `computation` is dropped
+  when it is traced inside another jit. The caller's `args` are never
+  consumed, the donated buffers are private copies.
+  \"\"\"
+  donate_map = normalize_donate_map(donate_map)
+  dynamic_positions = [i for i in range(len(args)) if i not in static_argnums]
+
   # 1. Identify dynamic args for the compiled function call.
-  dynamic_args = tuple(
-      arg for i, arg in enumerate(args) if i not in static_argnums)
+  dynamic_args_list = [args[i] for i in dynamic_positions]
 
-  # Check if func donates any dynamic arguments
-  donate_argnums = ()
-  if hasattr(func, "lower"):
-    try:
-      lowered_info = func.lower(*args)
-      donate_argnums = getattr(lowered_info, "donate_argnums", None)
-      if donate_argnums is None:
-        donate_argnums = getattr(lowered_info, "_donate_argnums", ())
-    except Exception:
-      donate_argnums = ()
+  if donate_map:
+    def with_static_args(*dyn_args):
+      full_args = list(args)
+      for pos, arg in zip(dynamic_positions, dyn_args):
+        full_args[pos] = arg
+      return func(*full_args)
 
-  # Map donated args to dynamic arg indices (if static_argnums exists)
-  if donate_argnums and static_argnums:
-    dynamic_donate_argnums = tuple(
-        sum(1 for s in range(d) if s not in static_argnums)
-        for d in donate_argnums if d not in static_argnums
-    )
-  else:
-    dynamic_donate_argnums = donate_argnums
+    # Check the contract against this kernel's outputs before donating
+    # anything; a mismatch would otherwise surface as a confusing argument
+    # type error on the second call.
+    out_leaves = jax.tree_util.tree_leaves(
+        jax.eval_shape(with_static_args, *dynamic_args_list))
+    check_donate_map(donate_map, args, static_argnums, out_leaves, "the kernel")
 
-  # Helper to update dynamic_args after each step if donation is used
-  def update_donated_args(dyn_args_list, res):
-    if not dynamic_donate_argnums:
-      return dyn_args_list
-    leaves = jax.tree_util.tree_leaves(res)
-    matched_indices = set()
-    for in_idx in dynamic_donate_argnums:
-      target_arg = dyn_args_list[in_idx]
-      for out_idx, out in enumerate(leaves):
-        if out_idx in matched_indices:
-          continue
-        if hasattr(out, 'shape') and out.shape == target_arg.shape and out.dtype == target_arg.dtype:
-          dyn_args_list[in_idx] = out
-          matched_indices.add(out_idx)
-          break
-    return dyn_args_list
+    # Donate private copies: the caller's `args` are benchmarked again with
+    # the other kernel (and must stay intact for the layout fallback below).
+    for in_idx in donate_map:
+      dynamic_args_list[in_idx] = jnp.copy(dynamic_args_list[in_idx])
 
-  # If arguments will be donated, copy them first so the original `args` tuple is preserved
-  dynamic_args_list = list(dynamic_args)
-  if dynamic_donate_argnums:
-    for idx in dynamic_donate_argnums:
-      if idx < len(dynamic_args_list) and isinstance(dynamic_args_list[idx], jax.Array):
-        dynamic_args_list[idx] = jnp.copy(dynamic_args_list[idx])
+  # Positional indices for jax.jit (static args may precede dynamic ones).
+  donate_argnums = tuple(dynamic_positions[i] for i in sorted(donate_map))
+
+  def recycle_donated(res):
+    # The donated inputs are dead after the call; the in-place-updated
+    # buffers now live in the outputs the task mapped them to.
+    if donate_map:
+      leaves = jax.tree_util.tree_leaves(res)
+      for in_idx, out_idx in donate_map.items():
+        dynamic_args_list[in_idx] = leaves[out_idx]
 
   def benchmark_func(*f_args):
     with jax.named_scope('benchmark_func'):
@@ -96,7 +131,7 @@ def benchmark(func, args, static_argnums, trace_dir=None, num_runs=20, num_warmu
     compiled_func = jax.jit(
         benchmark_func,
         static_argnums=static_argnums,
-        donate_argnums=dynamic_donate_argnums,
+        donate_argnums=donate_argnums,
         in_shardings=in_shardings,
         out_shardings=out_shardings
     ).lower(*args).compile()
@@ -121,13 +156,13 @@ def benchmark(func, args, static_argnums, trace_dir=None, num_runs=20, num_warmu
     compiled_func = jax.jit(
         benchmark_func,
         static_argnums=static_argnums,
-        donate_argnums=dynamic_donate_argnums
+        donate_argnums=donate_argnums
     ).lower(*args).compile()
 
   # 3. Warm up
   for _ in range(num_warmups):
     res = compiled_func(*dynamic_args_list)
-    update_donated_args(dynamic_args_list, res)
+    recycle_donated(res)
   jax.block_until_ready(res)
 
   # 4. Benchmark
@@ -135,7 +170,7 @@ def benchmark(func, args, static_argnums, trace_dir=None, num_runs=20, num_warmu
     start = time.perf_counter()
     for _ in range(num_runs):
       res = compiled_func(*dynamic_args_list)
-      update_donated_args(dynamic_args_list, res)
+      recycle_donated(res)
     jax.block_until_ready(res)
     end = time.perf_counter()
     return (end - start) / num_runs
@@ -147,7 +182,7 @@ def benchmark(func, args, static_argnums, trace_dir=None, num_runs=20, num_warmu
     with jax.profiler.trace(trace_dir):
       for _ in range(num_runs):
         res = compiled_func(*dynamic_args_list)
-        update_donated_args(dynamic_args_list, res)
+        recycle_donated(res)
         jax.block_until_ready(res)
         # Inject dummy op to separate trace events
         jnp.sum(jax.random.normal(jax.random.key(0), (128, 128), jnp.float32)).block_until_ready()
@@ -217,6 +252,7 @@ def main():
     task_atol = task_data.get("atol")
     task_rtol = task_data.get("rtol")
     sort_before_compare = task_data.get("sort_before_compare", False)
+    donate_args = normalize_donate_map(task_data.get("donate_args"))
 
     if input_gen_code:
       ldict = {}
@@ -321,6 +357,14 @@ def main():
         result["xprof_optimized_time_ms"].append(0.0)
         continue
 
+      # `donate_args` is part of the task contract, so a map that does not fit
+      # the reference's own outputs is a dataset bug: fail the task rather
+      # than quietly benchmarking without donation.
+      if donate_args:
+        check_donate_map(
+            donate_args, args, static_argnums,
+            jax.tree_util.tree_leaves(out_base_cpu), "the reference")
+
       # Dirty all HBM memory leaves with NaN / Sentinel values to prevent cache reuse
       try:
         for leaf in jax.tree_util.tree_leaves(out_base_cpu):
@@ -398,8 +442,8 @@ def main():
 
       # Benchmark and collect timing results
       try:
-        time_base, xprof_time_base = benchmark(base_mod.computation, args, static_argnums, trace_dir=f"trace_base_{idx}")
-        time_optimized, xprof_time_optimized = benchmark(optimized_mod.computation, args, static_argnums, trace_dir=f"trace_opt_{idx}")
+        time_base, xprof_time_base = benchmark(base_mod.computation, args, static_argnums, trace_dir=f"trace_base_{idx}", donate_map=donate_args)
+        time_optimized, xprof_time_optimized = benchmark(optimized_mod.computation, args, static_argnums, trace_dir=f"trace_opt_{idx}", donate_map=donate_args)
         result["reference_time_ms"].append(time_base * 1000)
         result["optimized_time_ms"].append(time_optimized * 1000)
         result["xprof_reference_time_ms"].append(xprof_time_base)

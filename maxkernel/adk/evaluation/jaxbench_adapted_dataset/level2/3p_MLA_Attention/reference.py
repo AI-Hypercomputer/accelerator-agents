@@ -90,6 +90,10 @@ def get_inputs():
     return dynamic_args, static_args
 
 # Computation
+# Evaluation contract (see `donate_args` in kernel_task.yaml): the harness
+# donates `cache_kv` and expects it back, updated, as the second output
+# with unchanged shape and dtype, so update it in place (e.g. pallas_call
+# input_output_aliases) instead of copying.
 def computation(ql_nope, q_pe, new_kv_c, new_k_pe, cache_kv, kv_lens, page_indices, cu_q_lens, distribution):
     DEFAULT_MASK_VALUE = -0.7 * float(jnp.finfo(jnp.dtype("float32")).max)
     DEFAULT_VMEM_LIMIT_BYTES = 100 * 1024 * 1024

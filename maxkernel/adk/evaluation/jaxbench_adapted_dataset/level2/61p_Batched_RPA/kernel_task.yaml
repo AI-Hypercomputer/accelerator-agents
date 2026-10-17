@@ -88,3 +88,7 @@ input_gen_code: |-
 
 rtol: 0.01
 atol: 0.01
+# In-place buffers the harness donates (and recycles across benchmark runs):
+# kv_cache (dynamic arg 3) comes back updated as output 1.
+donate_args:
+  3: 1

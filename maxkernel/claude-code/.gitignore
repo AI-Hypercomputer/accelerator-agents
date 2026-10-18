@@ -9,8 +9,12 @@ venv/
 # Environment / secrets
 .env
 
-# Local TPU config, seeded by install.py from tpu_config.example.json
+# Local TPU config, written by tools/tpu_client.py (--add_tpu, or on first
+# contact with a local TPU when the file is absent)
 tpu_config.json
+
+# Local TPU server logs, one per port, written by tools/tpu_client.py
+server_*.log
 
 # Run outputs (large, per-user)
 workspace/

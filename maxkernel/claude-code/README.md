@@ -252,10 +252,11 @@ Re-run it after every `git pull`, or after editing a template.
 
 ### 5. Point it at a TPU
 
-`install.py` seeds `tpu_config.json` from `tpu_config.example.json`, which
-assumes you are running **on** a TPU VM. For a remote TPU, register it through the CLI rather than editing the
-file: it takes a lock, de-duplicates, assigns a local port, and caches the
-hardware spec.
+If you are running **on** a TPU VM, there is nothing to do: with no
+`tpu_config.json`, MaxKernel uses the local TPU and writes the file itself once
+it has detected the hardware. For a remote TPU, register it through the CLI
+rather than writing the file by hand: it takes a lock, de-duplicates, assigns a
+local port, and caches the hardware spec.
 
 ```bash
 ~/maxkernel_venv/bin/python tools/tpu_client.py \

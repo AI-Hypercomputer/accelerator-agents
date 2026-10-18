@@ -109,6 +109,7 @@ def get_local_cpu_port(cfg_path: str = "eval_config.yaml") -> Optional[int]:
     if isinstance(b, dict)
     and b.get("type") == "cpu"
     and b.get("ip") in ["127.0.0.1", "localhost", local_ip]
+    and "tpu_vm" not in b
   ]
 
   if not local_cpu_backends:

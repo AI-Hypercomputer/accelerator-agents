@@ -91,22 +91,30 @@ class TestTPUClient(unittest.TestCase):
     self.assertEqual(res["queued_count"], 1)
     self.assertEqual(res["running_count"], 1)
 
+  @patch("tpu_client.ensure_tpu_specs_cached")
   @patch("tpu_client.check_health")
-  def test_start_server_idempotent_already_healthy(self, mock_health):
+  @patch("tpu_client.get_tpu_config")
+  def test_start_server_idempotent_already_healthy(
+    self, mock_config, mock_health, mock_ensure
+  ):
+    mock_config.return_value = [{"mode": "local", "local_port": 8000}]
     mock_health.return_value = True
     self.assertTrue(tpu_client.start_server_idempotent(mode="local"))
+    mock_ensure.assert_called_once()
 
+  @patch("tpu_client.ensure_tpu_specs_cached")
   @patch("builtins.open", new_callable=MagicMock)
   @patch("subprocess.Popen")
   @patch("tpu_client.check_health")
   @patch("tpu_client.get_tpu_config")
   def test_start_server_idempotent_local_mode(
-    self, mock_config, mock_health, mock_popen, mock_open
+    self, mock_config, mock_health, mock_popen, mock_open, mock_ensure
   ):
     mock_health.side_effect = [False, False, False, False, True]
     mock_config.return_value = [{"mode": "local", "local_port": 8000}]
     res = tpu_client.start_server_idempotent(mode="local")
     self.assertTrue(res)
+    mock_ensure.assert_called_once()
     mock_popen.assert_called_once()
     cmd_args = mock_popen.call_args[0][0]
     self.assertIn("tpu_server.py", cmd_args[1])
@@ -204,6 +212,192 @@ class TestTPUClient(unittest.TestCase):
       tpu_client.infer_tpu_version({"tpu_version": "TPU v7x"}),
       "TPU v7x",
     )
+
+  def test_version_from_spec_ignores_cached_version(self):
+    self.assertEqual(
+      tpu_client.version_from_spec(
+        {
+          "tpu_version": "TPU v6e",
+          "tpu_spec": {"device_kind": "TPU v5 lite"},
+        }
+      ),
+      "TPU v5e",
+    )
+
+  @patch("tpu_client.fetch_tpu_spec")
+  @patch("tpu_client.check_health")
+  def test_ensure_tpu_specs_cached_fetches_real_spec(
+    self, mock_health, mock_fetch
+  ):
+    import tempfile
+
+    mock_health.return_value = True
+    mock_fetch.return_value = {"device_kind": "TPU v5 lite", "device_count": 4}
+    with tempfile.TemporaryDirectory() as tmp:
+      path = os.path.join(tmp, "tpu_config.json")
+      with open(path, "w") as f:
+        json.dump({"tpus": [{"mode": "local", "local_port": 8000}]}, f)
+      tpu_client.ensure_tpu_specs_cached(config_path_override=path)
+      with open(path) as f:
+        entry = json.load(f)["tpus"][0]
+    self.assertEqual(entry["tpu_spec"]["device_count"], 4)
+    self.assertEqual(entry["tpu_version"], "TPU v5e")
+
+  @patch("tpu_client.check_health")
+  def test_ensure_tpu_specs_cached_unreachable_writes_no_guess(
+    self, mock_health
+  ):
+    import tempfile
+
+    mock_health.return_value = False
+    with tempfile.TemporaryDirectory() as tmp:
+      path = os.path.join(tmp, "tpu_config.json")
+      with open(path, "w") as f:
+        json.dump({"tpus": [{"mode": "local", "local_port": 8000}]}, f)
+      tpu_client.ensure_tpu_specs_cached(config_path_override=path)
+      with open(path) as f:
+        entry = json.load(f)["tpus"][0]
+    self.assertNotIn("tpu_spec", entry)
+    self.assertNotIn("tpu_version", entry)
+
+  @patch("tpu_client.fetch_tpu_spec")
+  @patch("tpu_client.check_health")
+  @patch("tpu_client.start_server_for_tpu")
+  def test_add_tpu_refreshes_existing_entry(
+    self, mock_start, mock_health, mock_fetch
+  ):
+    import tempfile
+
+    mock_health.return_value = True
+    mock_fetch.return_value = {"device_kind": "TPU v5 lite", "device_count": 4}
+    with tempfile.TemporaryDirectory() as tmp:
+      path = os.path.join(tmp, "tpu_config.json")
+      stale = {
+        "mode": "local",
+        "local_port": 8000,
+        "tpu_version": "TPU v6e",
+        "tpu_spec": {"device_kind": "TPU v6 lite", "device_count": 8},
+      }
+      with open(path, "w") as f:
+        json.dump({"tpus": [stale]}, f)
+      self.assertTrue(
+        tpu_client.add_tpu_to_config(
+          {"mode": "local"}, config_path_override=path
+        )
+      )
+      with open(path) as f:
+        tpus = json.load(f)["tpus"]
+    self.assertEqual(len(tpus), 1)
+    self.assertEqual(tpus[0]["tpu_spec"]["device_count"], 4)
+    self.assertEqual(tpus[0]["tpu_version"], "TPU v5e")
+
+  @patch("os.path.exists", return_value=False)
+  def test_get_tpu_config_no_file_falls_back_to_local(self, mock_exists):
+    self.assertEqual(
+      tpu_client.get_tpu_config(), [{"mode": "local", "local_port": 8000}]
+    )
+
+  @patch("tpu_client.submit_job")
+  @patch("tpu_client.check_job_status")
+  def test_fetch_tpu_spec_rejects_non_tpu(self, mock_status, mock_submit):
+    mock_submit.return_value = {"job_id": "job_1"}
+    mock_status.return_value = {
+      "status": "completed",
+      "result": {"output": "DEVICE_KIND:cpu\nDEVICE_COUNT:1\n"},
+    }
+    self.assertIsNone(tpu_client.fetch_tpu_spec(port=8000))
+
+  def _run_ensure_without_config(self, spec):
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+      fake_tools = os.path.join(tmp, "tools")
+      os.makedirs(fake_tools)
+      with (
+        patch.object(
+          tpu_client, "__file__", os.path.join(fake_tools, "tpu_client.py")
+        ),
+        patch("tpu_client.check_health", return_value=True),
+        patch("tpu_client.fetch_tpu_spec", return_value=spec),
+      ):
+        tpu_client.ensure_tpu_specs_cached()
+      path = os.path.join(tmp, "tpu_config.json")
+      if not os.path.exists(path):
+        return None
+      with open(path) as f:
+        return json.load(f)
+
+  def test_ensure_tpu_specs_cached_creates_config_for_local_tpu(self):
+    raw = self._run_ensure_without_config(
+      {"device_kind": "TPU v6 lite", "device_count": 1}
+    )
+    self.assertEqual(
+      raw,
+      {
+        "tpus": [
+          {
+            "mode": "local",
+            "local_port": 8000,
+            "tpu_spec": {"device_kind": "TPU v6 lite", "device_count": 1},
+            "tpu_spec_verified": True,
+            "tpu_version": "TPU v6e",
+          }
+        ]
+      },
+    )
+
+  def test_ensure_tpu_specs_cached_no_tpu_writes_no_config(self):
+    self.assertIsNone(self._run_ensure_without_config(None))
+
+  def _run_ensure_with_entry(self, entry, spec):
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+      path = os.path.join(tmp, "tpu_config.json")
+      with open(path, "w") as f:
+        json.dump({"tpus": [entry]}, f)
+      with (
+        patch("tpu_client.check_health", return_value=True),
+        patch("tpu_client.fetch_tpu_spec", return_value=spec) as mock_fetch,
+      ):
+        tpu_client.ensure_tpu_specs_cached(config_path_override=path)
+      with open(path) as f:
+        return json.load(f)["tpus"][0], mock_fetch
+
+  def test_ensure_tpu_specs_cached_corrects_hand_written_spec(self):
+    entry, mock_fetch = self._run_ensure_with_entry(
+      {
+        "mode": "local",
+        "local_port": 8000,
+        "tpu_version": "TPU v6e",
+        "tpu_spec": {"device_kind": "TPU v6 lite", "device_count": 8},
+      },
+      {"device_kind": "TPU v6 lite", "device_count": 1},
+    )
+    mock_fetch.assert_called_once()
+    self.assertEqual(entry["tpu_spec"]["device_count"], 1)
+    self.assertTrue(entry["tpu_spec_verified"])
+
+  def test_ensure_tpu_specs_cached_skips_verified_spec(self):
+    verified = {
+      "mode": "local",
+      "local_port": 8000,
+      "tpu_version": "TPU v6e",
+      "tpu_spec": {"device_kind": "TPU v6 lite", "device_count": 1},
+      "tpu_spec_verified": True,
+    }
+    entry, mock_fetch = self._run_ensure_with_entry(dict(verified), None)
+    mock_fetch.assert_not_called()
+    self.assertEqual(entry, verified)
+
+  def test_ensure_tpu_specs_cached_keeps_unverified_spec_if_unreachable(self):
+    hand = {
+      "mode": "local",
+      "local_port": 8000,
+      "tpu_spec": {"device_kind": "TPU v6 lite", "device_count": 8},
+    }
+    entry, _ = self._run_ensure_with_entry(dict(hand), None)
+    self.assertEqual(entry, hand)
 
 
 if __name__ == "__main__":

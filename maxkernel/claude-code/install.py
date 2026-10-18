@@ -163,14 +163,8 @@ def install_prompts(run: Runner, claude_dir: pathlib.Path, variables) -> None:
 
 
 def install_workspace(run: Runner) -> None:
-  print("Workspace and TPU config:")
+  print("Workspace:")
   run.mkdir(REPO / "workspace")
-  config = REPO / "tpu_config.json"
-  if config.exists():
-    run.say("keep", f"{config} (already configured)")
-  else:
-    example = REPO / "tpu_config.example.json"
-    run.write(config, example.read_text())
 
 
 def install_guard(run: Runner, claude_dir: pathlib.Path, variables) -> None:
@@ -275,16 +269,16 @@ def preflight(venv: pathlib.Path) -> None:
   print(f"  ok        {python}")
 
   config = REPO / "tpu_config.json"
-  example = REPO / "tpu_config.example.json"
-  if config.exists() and config.read_text() != example.read_text():
+  if config.exists():
     print(f"  ok        {config}")
   else:
     print(
-      f"  todo      {config} still holds the example (local-TPU) config. "
-      "Register your TPU with"
+      f"  note      no {config}; MaxKernel will use the local TPU on this "
+      "machine."
     )
     print(
-      "            tools/tpu_client.py --add_tpu — see docs/tpu-setup.md, Part 1."
+      "            For a remote TPU, register it with tools/tpu_client.py "
+      "--add_tpu — see docs/tpu-setup.md, Part 1."
     )
 
 

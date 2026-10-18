@@ -71,7 +71,7 @@ When creating, updating, or adding TPU machines to `tpu_config.json`:
      ```
    - `tpu_client.py` uses advisory file locking (`fcntl.flock`) and atomic file replacement (`os.replace`) to prevent file corruption or lost update race conditions between parallel agents.
 2. **De-duplication & Auto-Cached Hardware Specs (`tpu_spec`)**:
-   - `tpu_client.py` automatically checks if `tpu_name` is already in `tpu_config.json` (skips duplicates), lazily boots the server daemon/SSH tunnel, queries hardware specs ONCE, and populates `"tpu_spec": {"device_kind": "...", "device_count": ...}` into `tpu_config.json`.
+   - `tpu_client.py` automatically checks if `tpu_name` is already in `tpu_config.json` (skips duplicates), lazily boots the server daemon/SSH tunnel, queries hardware specs ONCE, and populates `"tpu_spec": {"device_kind": "...", "device_count": ...}` plus `"tpu_spec_verified": true` into `tpu_config.json`. A `tpu_spec` without that flag (e.g. hand-written) is re-checked against the hardware on first contact and replaced if it differs.
    - Planners and worker agents read `tpu_spec` directly from `tpu_config.json` without running remote spec query scripts on every run.
 
 ## How to dispatch the worker agent
@@ -387,10 +387,19 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
 
 5.  **Determine TPU Version (`tpu_version`)**:
     -   If the user explicitly specified the TPU version (e.g. `TPU v5p`, `TPU v6e`, `TPU v7x`, `v5p`, `v6e`, `v7x`) in their prompt or message, normalize it (e.g. `TPU v5p`, `TPU v6e`, `TPU v7x`) and use it.
-    -   Otherwise, read `{{MAXKERNEL_ROOT}}/tpu_config.json` (or `<run_dir>/tpu_config.json`):
+    -   Otherwise, if `{{MAXKERNEL_ROOT}}/tpu_config.json` is missing, or any
+        entry lacks `"tpu_spec_verified": true`, run
+        `{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/tpu_client.py --queue` once
+        first: it starts the TPU server (the local TPU when there is no config),
+        checks the spec against the hardware, and writes the detected one into
+        `tpu_config.json`.
+    -   Then read `{{MAXKERNEL_ROOT}}/tpu_config.json` (or `<run_dir>/tpu_config.json`):
         - If `"tpu_version"` is explicitly present, use it.
-        - Otherwise, derive it from `"tpu_spec"` (`device_kind`) or `"tpu_name"` (e.g., `device_kind: "TPU v6 lite"` -> `"TPU v6e"`, `device_kind: "TPU v5 lite"` -> `"TPU v5e"`, `device_kind: "TPU v5"` or `"TPU v5p"` -> `"TPU v5p"`, `device_kind: "TPU7x"` -> `"TPU v7x"`).
-        - If no hardware or config is found, default to `"TPU v6e"`.
+        - Otherwise, derive it from `"tpu_spec"` (`device_kind`) or `"tpu_name"` (e.g., `device_kind: "TPU v6 lite"` -> `"TPU v6e"`, `device_kind: "TPU v5 lite"` -> `"TPU v5e"`, `device_kind: "TPU v5p"` -> `"TPU v5p"`, `device_kind: "TPU v7x"` -> `"TPU v7x"`).
+        - If no hardware or config is found, **stop setup and tell the user**:
+          quote the `--queue` output and ask them to fix TPU access
+          (`{{MAXKERNEL_ROOT}}/docs/tpu-setup.md`) or name the TPU version
+          explicitly. Do NOT guess a version.
 
 6.  **Initialize `<run_dir>/state.json`**:
     -   Write `<run_dir>/state.json` using **absolute paths**, the determined
@@ -488,6 +497,8 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
       Device Count: <device_count>
       Device Kind: <device_kind>
       ```
+    - If there is no `tpu_spec` (the user named the version), write `unknown`
+      for the count and kind. Do NOT guess them.
     - Do NOT run a remote JAX script to query hardware specs on every run; use the cached `tpu_spec` from `tpu_config.json`.
 
 8.  If resuming an existing run, read its `<run_dir>/state.json` as-is, then

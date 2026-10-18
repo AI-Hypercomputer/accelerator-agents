@@ -142,8 +142,8 @@ triaged into one of three classes:
   are statements about the problem, not about the GPU, and they are the reason
   to read a CUDA kernel at all.
 - **STRUCTURAL** — a real decision whose value is hardware-specific. `BLOCK_M=128`
-  is evidence about the working set; it says nothing about what fits in 16 MB
-  of VMEM. The planner re-derives its own tiles and may cite the reference only
+  is evidence about the working set; it says nothing about what fits in TPU
+  VMEM. The planner re-derives its own tiles and may cite the reference only
   as corroboration.
 - **NON_PORTABLE** — warp shuffles, `__syncthreads`, bank-conflict padding.
   Recorded explicitly so a plan can show the mechanism was considered and

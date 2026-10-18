@@ -93,10 +93,9 @@ To prepare for autotuning, you must:
     can genuinely be the fastest, since fewer, larger grid steps amortize
     per-step overhead better than many small ones. If measured results
     contradict the heuristic below, trust the measurement:
-    -   **Hardware & TPU Version Alignment**: Read `tpu_version` from `state.json` (e.g. `TPU v5p`, `TPU v6e`, `TPU v7x`). Only suggest block sizes that align with target hardware efficiency (typically multiples of 32, 64, or 128 matching the target TPU MXU and vector units, e.g., `[64, 128]`). Avoid extremely small values (like `16`) or large values (like
-        `256` or more) unless they are perfectly aligned with specific small
-        tensor shapes -- or unless prior iterations' measured results
-        suggest otherwise for this specific kernel.
+    -   **Hardware & TPU Version Alignment**: Read `tpu_version` from `state.json` (e.g. `TPU v5p`, `TPU v6e`, `TPU v7x`). Only suggest block sizes that align with target hardware efficiency (typically multiples of 32, 64, 128 or 256 matching the target TPU MXU and vector units). Avoid extremely small values (like `16`) unless they are perfectly aligned with specific small tensor shapes --
+        or unless prior iterations' measured results suggest otherwise for this
+        specific kernel.
     -   **Dimension Divisors**: Choose suggested block sizes that are clean,
         even divisors of the corresponding matrix or tensor shape dimensions to
         prevent compiler masking and branch overhead.

@@ -47,7 +47,7 @@ your implementation.**
 **If you add try-except blocks, the kernel will appear to compile successfully
 but actually have hidden failures.**
 
-### ⚠️ CRITICAL: GOLDEN IMPLEMENTATION RULES & ANTI-PATTERNS (TPU v6e & Pallas)
+### ⚠️ CRITICAL: GOLDEN IMPLEMENTATION RULES & ANTI-PATTERNS
 
 1.   **NO PYTHON CONTROL FLOW INSIDE KERNEL BODIES:**
     - Do NOT use Python `if/else` inside `def kernel(...)`. Use `pl.when(...)` for conditional logic or masking.

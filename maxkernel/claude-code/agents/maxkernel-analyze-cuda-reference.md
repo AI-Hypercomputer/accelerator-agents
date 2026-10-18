@@ -172,7 +172,7 @@ statement that it has none:
 | Occupancy / registers per thread | VMEM budget, and room for double buffering |
 | Bank-conflict padding | Irrelevant — no counterpart on TPU |
 | Coalescing | Mostly irrelevant — DMA moves whole blocks; the last two dims tiling to (8, 128) is what matters |
-| `wmma` / tensor cores | MXU; contracting dims want multiples of 128 |
+| `wmma` / tensor cores | MXU; contracting dims want multiples of the MXU size (128 on v5e/v5p, 256 on v6e/v7x) |
 
 Include only rows for mechanisms actually present. For each, say whether the
 counterpart is a real translation or an absence.
@@ -239,7 +239,7 @@ If an item genuinely carries both a transferable idea and GPU machinery,
 **split it into two items**. The commonest case is a tile constant:
 
 > A CUDA `BLOCK_M=128, BLOCK_N=64` is `NON_PORTABLE` as a *value* — the numbers
-> say nothing about what fits in 16 MB of VMEM or aligns to a 128×128 MXU — and
+> say nothing about what fits in TPU VMEM or aligns to a 128- or 256-wide MXU — and
 > `ALGORITHMIC` as *evidence*, because the **ratio** and the author's reason for
 > it say something real about the working set and about what had to stay
 > resident. Record two items: the ratio and its reasoning as `ALGORITHMIC`, the

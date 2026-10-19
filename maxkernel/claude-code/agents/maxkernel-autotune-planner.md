@@ -85,14 +85,15 @@ To prepare for autotuning, you must:
         `opt_computation` when assembling each trial, matching how
         `maxkernel-generate-test-file` names things.
 4.  Define a highly optimized, high-probability search space as a dictionary
-    mapping placeholder names to lists of suggested values. You MUST follow
+    mapping placeholder names to lists of suggested values. Follow
     these rules to minimize evaluation time and avoid sub-optimal
-    configurations. **These are starting heuristics tuned for compute-bound
-    ops like matmul, not hard limits** — for memory-bound/elementwise
-    kernels, larger blocks (well above 256, even up to the full array/1024+)
-    can genuinely be the fastest, since fewer, larger grid steps amortize
-    per-step overhead better than many small ones. If measured results
-    contradict the heuristic below, trust the measurement:
+    configurations.
+    **These are starting heuristics, not hard limits.** Large blocks (up to the full dimension)
+    can be the fastest, because fewer, larger grid steps cost less per-step overhead, so
+    consider them when the shapes and VMEM allow. If measured results contradict the heuristics below,
+    trust the measurement:
+    -   **Include the current value**: Put the value currently in
+        `optimized.py` in the list, with a value on each side of it where possible.
     -   **Hardware & TPU Version Alignment**: Read `tpu_version` from `state.json` (e.g. `TPU v5p`, `TPU v6e`, `TPU v7x`). Only suggest block sizes that align with target hardware efficiency (typically multiples of 32, 64, 128 or 256 matching the target TPU MXU and vector units). Avoid extremely small values (like `16`) unless they are perfectly aligned with specific small tensor shapes --
         or unless prior iterations' measured results suggest otherwise for this
         specific kernel.
@@ -103,7 +104,7 @@ To prepare for autotuning, you must:
         parameter lists so that the total Cartesian product (all possible
         combinations) stays small—ideally between **10 to 100 total combinations
         max**. Keep each parameter list to 2 or 3 high-probability values (e.g.,
-        `[64, 128]`). Do not generate massive combinatorial sweeps.
+        `[256, 512, 1024]`). Do not generate massive combinatorial sweeps.
 5.  Write the `kernel_name`, `code_template`, and `search_space` to a JSON
     string and save it to `<run_dir>/iter<N>/autotune_spec.json` using the `write_to_file` tool.
     The JSON file must have exactly this structure:

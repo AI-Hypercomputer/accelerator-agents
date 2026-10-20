@@ -104,7 +104,7 @@ To prepare for autotuning, you must:
         parameter lists so that the total Cartesian product (all possible
         combinations) stays small—ideally between **10 to 100 total combinations
         max**. Keep each parameter list to 2 or 3 high-probability values (e.g.,
-        `[256, 512, 1024]`). Do not generate massive combinatorial sweeps.
+        `[64, 128]`, `[256, 512, 1024]`). Do not generate massive combinatorial sweeps.
 5.  Write the `kernel_name`, `code_template`, and `search_space` to a JSON
     string and save it to `<run_dir>/iter<N>/autotune_spec.json` using the `write_to_file` tool.
     The JSON file must have exactly this structure:

@@ -122,6 +122,43 @@ dataset_dir/
 ...
 ```
 
+### `kernel_task.yaml` fields
+
+| Field | Type | Description |
+|---|---|---|
+| `task_id` | `str` | Task identifier (should match the directory name). |
+| `input_gen_code` | `str` | Source of `get_inputs()`, returning `(dynamic_args, static_args)` or a list of such pairs. |
+| `atol`, `rtol` | `float` or `list[float]` | Correctness tolerances, optionally one per input config. |
+| `sort_before_compare` | `bool` | Sort every output leaf along its last axis before comparing (for order-free outputs such as top-k index sets). |
+| `donate_args` | `{int: int}` | Buffers the kernel updates in place, as `dynamic_arg_index: output_leaf_index`. See below. |
+
+#### In-place buffers (`donate_args`)
+
+Kernels that update a buffer in place (a paged KV cache, a recurrent state)
+return the updated buffer as one of their outputs. Without buffer donation, XLA
+has to leave the input intact and materialize the output in a fresh buffer,
+i.e. every call pays a full copy of the cache that a production caller never
+pays. `donate_args` tells the harness which inputs may be donated and which
+output leaf returns them:
+
+```yaml
+# kv_cache is dynamic arg 3 and comes back, updated, as output 1.
+donate_args:
+  3: 1
+```
+
+The harness then donates those inputs on the outer `jax.jit` for **both** the
+reference and the optimized kernel (so the comparison stays fair), and after
+every benchmark run feeds the returned buffer back in as the next run's input.
+The map is validated against the kernel's real outputs: the input and the
+output leaf must have identical shape and dtype. Only list buffers that are
+returned; inputs that production code donates merely to free memory early
+(queries, new keys/values) alias no output and change nothing in a benchmark.
+An optimized kernel benefits from the contract by updating the buffer in place
+(e.g. `pallas_call(..., input_output_aliases=...)`) rather than copying it.
+A `donate_argnames` on the reference's own `jax.jit` has no effect inside the
+harness, because inner-jit donation is dropped when traced under another jit.
+
 ### CLI Usage Examples
 
 > [!NOTE]

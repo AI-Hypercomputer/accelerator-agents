@@ -61,6 +61,10 @@ def load_kernel_task_from_yaml(yaml_path: str) -> KernelTask:
   with open(yaml_path, "r", encoding="utf-8") as f:
     data = yaml.safe_load(f)
 
+  donate_args = data.get("donate_args") or None
+  if donate_args:
+    donate_args = {int(k): int(v) for k, v in dict(donate_args).items()}
+
   return KernelTask(
     task_id=data.get("task_id"),
     description=data.get("description"),
@@ -68,6 +72,7 @@ def load_kernel_task_from_yaml(yaml_path: str) -> KernelTask:
     atol=data.get("atol"),
     rtol=data.get("rtol"),
     sort_before_compare=bool(data.get("sort_before_compare", False)),
+    donate_args=donate_args,
   )
 
 

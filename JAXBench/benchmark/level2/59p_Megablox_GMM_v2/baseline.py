@@ -1576,6 +1576,9 @@ def workload(
   """Pallas TPU GMM v2 kernel."""
   if group_offset is None:
     group_offset = jnp.array([0], dtype=jnp.int32)
+  # Mosaic can't convert fp4 vectors in-kernel; fp4 -> fp8 e4m3 is exact.
+  if rhs.dtype == jnp.float4_e2m1fn:
+    rhs = rhs.astype(jnp.float8_e4m3fn)
 
   return gmm_v2(
       lhs,
@@ -1587,6 +1590,11 @@ def workload(
       preferred_element_type=lhs.dtype,
       maybe_quantize_lhs=True,
       zero_initialize=True,
+      # calculate_tiling's VMEM estimate undercounts by ~2 MiB on the
+      # dsv4_pro shapes; leave headroom so the chosen tiles compile.
+      tile_info=lambda d, l, r, v, f: calculate_tiling(
+          d, l, r, v - (16 << 20), f
+      ),
   )
 
 

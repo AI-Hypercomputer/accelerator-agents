@@ -1,0 +1,17 @@
+"""Kernel writing subagent module."""
+
+from .agent import (
+  KernelCompilationValidationLoop,
+  implement_kernel_agent,
+  plan_kernel_agent,
+  prepare_base_kernel_agent,
+  validate_kernel_compilation_agent,
+)
+
+__all__ = [
+  "KernelCompilationValidationLoop",
+  "plan_kernel_agent",
+  "implement_kernel_agent",
+  "validate_kernel_compilation_agent",
+  "prepare_base_kernel_agent",
+]

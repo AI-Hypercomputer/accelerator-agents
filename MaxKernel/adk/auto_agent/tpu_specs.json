@@ -1,0 +1,102 @@
+{
+  "TPU v4": {
+    "generation": "TPU v4",
+    "specs": {
+      "performance": {
+        "peak_bf16_tflops": 275,
+        "peak_int8_tops": 550
+      },
+      "memory": {
+        "type": "HBM",
+        "capacity_gib": 32,
+        "bandwidth_tb_per_s": 1.2
+      },
+      "interconnect": {
+        "topology": "3D Torus"
+      },
+      "architecture": {
+        "max_pod_size_chips": 4096
+      }
+    }
+  },
+  "TPU v5e": {
+    "generation": "TPU v5e",
+    "specs": {
+      "performance": {
+        "peak_bf16_tflops": 197,
+        "peak_int8_tops": 393
+      },
+      "memory": {
+        "type": "HBM",
+        "capacity_gib": 16,
+        "bandwidth_tb_per_s": 0.8
+      },
+      "interconnect": {
+        "topology": "2D Torus"
+      },
+      "architecture": {
+        "max_pod_size_chips": 256
+      }
+    }
+  },
+  "TPU v5p": {
+    "generation": "TPU v5p",
+    "specs": {
+      "performance": {
+        "peak_bf16_tflops": 459,
+        "peak_int8_tops": 918
+      },
+      "memory": {
+        "type": "HBM",
+        "capacity_gib": 95,
+        "bandwidth_tb_per_s": 2.76
+      },
+      "interconnect": {
+        "topology": "3D Torus"
+      },
+      "architecture": {
+        "max_pod_size_chips": 8960
+      }
+    }
+  },
+  "TPU v6e": {
+    "generation": "Trillium",
+    "specs": {
+      "performance": {
+        "peak_bf16_tflops": 918,
+        "peak_int8_tops": 1836
+      },
+      "memory": {
+        "type": "HBM",
+        "capacity_gib": 32,
+        "bandwidth_tb_per_s": 1.6
+      },
+      "interconnect": {
+        "topology": "2D Torus"
+      },
+      "architecture": {
+        "max_pod_size_chips": 256
+      }
+    }
+  },
+  "TPU 7x": {
+    "generation": "Ironwood",
+    "specs": {
+      "performance": {
+        "peak_bf16_tflops": 2157,
+        "peak_int8_tops": 4314
+      },
+      "memory": {
+        "type": "HBM",
+        "capacity_gib": 192,
+        "bandwidth_tb_per_s": 7.4
+      },
+      "interconnect": {
+        "topology": "3D Torus"
+      },
+      "architecture": {
+        "max_pod_size_chips": 9216
+      }
+    }
+  }
+}

@@ -1,0 +1,4 @@
+.pytest_cache/
+.env
+*_test.py
+test_data/*

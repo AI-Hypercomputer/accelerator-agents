@@ -1,0 +1,515 @@
+import asyncio
+import json
+import logging
+import os
+import sys
+import tempfile
+from pathlib import Path
+from typing import Optional
+
+import uvicorn
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+from auto_agent.server_utils.server_config import get_local_cpu_port
+from auto_agent.tools.analyze_profile import analyze_trace
+
+logging.basicConfig(
+  level=logging.INFO,
+  format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+  datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+app = FastAPI(title="CPU Code Execution Server", version="1.0.0")
+
+# Semaphore to limit concurrent compilation requests
+compilation_semaphore = asyncio.Semaphore(1)
+correctness_semaphore = asyncio.Semaphore(1)
+performance_semaphore = asyncio.Semaphore(1)
+profile_semaphore = asyncio.Semaphore(1)
+
+
+class CodeRequest(BaseModel):
+  code: str
+  timeout: Optional[int] = 30
+  dependencies: Optional[dict] = None
+
+
+class CodeResponse(BaseModel):
+  output: str
+  error: Optional[str] = None
+  exit_code: int
+
+
+class GetBackendVersionResponse(BaseModel):
+  backend_version: str
+
+
+def get_cpu_env():
+  """
+  Returns environment variables that force JAX to use CPU backend.
+  """
+  env = os.environ.copy()
+  env["JAX_PLATFORMS"] = "cpu"
+  env["JAX_PLATFORM_NAME"] = "cpu"
+  # Disable GPU visibility to ensure CPU-only execution
+  env["CUDA_VISIBLE_DEVICES"] = ""
+  return env
+
+
+def extract_code(code: str) -> str:
+  """Extracts code from markdown blocks if present."""
+  code_content = code.strip()
+  if code_content.startswith("```python") and code_content.endswith("```"):
+    lines = code_content.split("\n")
+    if lines[0].strip() == "```python":
+      lines = lines[1:]
+    if lines[-1].strip() == "```":
+      lines = lines[:-1]
+    return "\n".join(lines)
+  elif code_content.startswith("```") and code_content.endswith("```"):
+    lines = code_content.split("\n")
+    if lines[0].strip().startswith("```"):
+      lines = lines[1:]
+    if lines[-1].strip() == "```":
+      lines = lines[:-1]
+    return "\n".join(lines)
+  return code_content
+
+
+def _save_dependencies(dependencies: Optional[dict], temp_dir: str):
+  """Safely writes dependencies to temp_dir, preventing path traversal attacks."""
+  if not dependencies:
+    return
+  base_dir = Path(temp_dir).resolve()
+  for filename, content in dependencies.items():
+    if not filename:
+      raise HTTPException(
+        status_code=400, detail="Invalid dependency filename: empty"
+      )
+    normalized_filename = filename.replace("\\", "/")
+    target_path = (base_dir / normalized_filename).resolve()
+    if not target_path.is_relative_to(base_dir) or target_path == base_dir:
+      raise HTTPException(
+        status_code=400,
+        detail=f"Path traversal detected in dependency filename: {filename}",
+      )
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_text(content)
+
+
+@app.get("/health")
+async def health_check():
+  return {"status": "healthy", "backend": "cpu"}
+
+
+@app.post("/compilation_test", response_model=CodeResponse)
+async def compilation_test(request: CodeRequest):
+  """
+  Try to execute kernel safely in a subprocess with CPU backend and return the output.
+  """
+  logging.info("Starting compilation test on CPU backend")
+  async with compilation_semaphore:
+    try:
+      request.code = extract_code(request.code)
+      # Create a temporary directory to store the code and dependencies
+      temp_dir = tempfile.mkdtemp()
+      temp_file_path = os.path.join(temp_dir, "run_code.py")
+
+      _save_dependencies(request.dependencies, temp_dir)
+
+      with open(temp_file_path, "w") as f:
+        f.write(request.code)
+
+      # Execute the code in a subprocess with CPU-only environment
+      process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        temp_file_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=temp_dir,
+        env=get_cpu_env(),  # Force CPU backend
+      )
+
+      try:
+        stdout, stderr = await asyncio.wait_for(
+          process.communicate(), timeout=request.timeout
+        )
+
+        output = stdout.decode("utf-8") if stdout else ""
+        error = stderr.decode("utf-8") if stderr else None
+        exit_code = process.returncode
+
+        logging.info(
+          f"Compilation test completed successfully on CPU with exit_code: {exit_code}"
+        )
+        return CodeResponse(output=output, error=error, exit_code=exit_code)
+
+      except asyncio.TimeoutError:
+        process.kill()
+        await process.wait()
+        logging.error(f"Compilation test timed out after {request.timeout}s")
+        raise HTTPException(status_code=408, detail="Code execution timed out")
+
+    except HTTPException:
+      # Re-raise HTTPExceptions to avoid logging them twice
+      raise
+
+    except Exception as e:
+      logging.error(f"Compilation test failed with error: {str(e)}")
+      raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
+
+    finally:
+      if "process" in locals() and process.returncode is None:
+        logging.warning("Process still running in finally block, killing it.")
+        try:
+          process.kill()
+          await process.wait()
+        except Exception as e:
+          logging.error(f"Failed to kill process: {e}")
+      # Clean up the temporary directory
+      if "temp_dir" in locals():
+        import shutil
+
+        try:
+          shutil.rmtree(temp_dir)
+        except Exception:
+          pass
+      logging.info("Compilation test finished")
+
+
+@app.post("/correctness_test", response_model=CodeResponse)
+async def correctness_test(request: CodeRequest):
+  """
+  Test the correctness of the kernel code by executing it on CPU and comparing the output.
+  """
+  logging.info("Starting correctness test on CPU backend")
+  async with correctness_semaphore:
+    try:
+      request.code = extract_code(request.code)
+      # Create a temporary directory to store the code and dependencies
+      temp_dir = tempfile.mkdtemp()
+      temp_file_path = os.path.join(temp_dir, "run_code.py")
+
+      _save_dependencies(request.dependencies, temp_dir)
+
+      with open(temp_file_path, "w") as f:
+        f.write(request.code)
+
+      # Execute the code in a subprocess with CPU-only environment
+      process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        temp_file_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=temp_dir,
+        env=get_cpu_env(),  # Force CPU backend
+      )
+
+      try:
+        stdout, stderr = await asyncio.wait_for(
+          process.communicate(), timeout=request.timeout
+        )
+
+        output = stdout.decode("utf-8") if stdout else ""
+        error = stderr.decode("utf-8") if stderr else None
+        exit_code = process.returncode
+
+        logging.info(
+          f"Correctness test completed successfully on CPU with exit_code: {exit_code}"
+        )
+        return CodeResponse(output=output, error=error, exit_code=exit_code)
+
+      except asyncio.TimeoutError:
+        process.kill()
+        await process.wait()
+        logging.error(f"Correctness test timed out after {request.timeout}s")
+        raise HTTPException(status_code=408, detail="Code execution timed out")
+
+    except HTTPException:
+      # Re-raise HTTPExceptions to avoid logging them twice
+      raise
+    except Exception as e:
+      logging.error(f"Correctness test failed with error: {str(e)}")
+      raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
+
+    finally:
+      if "process" in locals() and process.returncode is None:
+        logging.warning("Process still running in finally block, killing it.")
+        try:
+          process.kill()
+          await process.wait()
+        except Exception as e:
+          logging.error(f"Failed to kill process: {e}")
+      # Clean up the temporary directory
+      if "temp_dir" in locals():
+        import shutil
+
+        try:
+          shutil.rmtree(temp_dir)
+        except Exception:
+          pass
+      logging.info("Correctness test finished")
+
+
+@app.post("/performance_test", response_model=CodeResponse)
+async def performance_test(request: CodeRequest):
+  """
+  Test the performance of the kernel code by executing it on CPU and measuring the execution time.
+  """
+  logging.info("Starting performance test on CPU backend")
+  async with performance_semaphore:
+    try:
+      request.code = extract_code(request.code)
+      # Create a temporary directory to store the code and dependencies
+      temp_dir = tempfile.mkdtemp()
+      temp_file_path = os.path.join(temp_dir, "run_code.py")
+
+      _save_dependencies(request.dependencies, temp_dir)
+
+      with open(temp_file_path, "w") as f:
+        f.write(request.code)
+
+      # Execute the code in a subprocess with CPU-only environment
+      process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        temp_file_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=temp_dir,
+        env=get_cpu_env(),  # Force CPU backend
+      )
+
+      try:
+        stdout, stderr = await asyncio.wait_for(
+          process.communicate(), timeout=request.timeout
+        )
+
+        output = stdout.decode("utf-8") if stdout else ""
+        error = stderr.decode("utf-8") if stderr else None
+        exit_code = process.returncode
+
+        logging.info(
+          f"Performance test completed successfully on CPU with exit_code: {exit_code}"
+        )
+        return CodeResponse(output=output, error=error, exit_code=exit_code)
+
+      except asyncio.TimeoutError:
+        process.kill()
+        await process.wait()
+        logging.error(f"Performance test timed out after {request.timeout}s")
+        raise HTTPException(status_code=408, detail="Code execution timed out")
+
+    except HTTPException:
+      # Re-raise HTTPExceptions to avoid logging them twice
+      raise
+    except Exception as e:
+      logging.error(f"Performance test failed with error: {str(e)}")
+      raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
+
+    finally:
+      if "process" in locals() and process.returncode is None:
+        logging.warning("Process still running in finally block, killing it.")
+        try:
+          process.kill()
+          await process.wait()
+        except Exception as e:
+          logging.error(f"Failed to kill process: {e}")
+      # Clean up the temporary directory
+      if "temp_dir" in locals():
+        import shutil
+
+        try:
+          shutil.rmtree(temp_dir)
+        except Exception:
+          pass
+      logging.info("Performance test finished")
+
+
+@app.post("/unified_test", response_model=CodeResponse)
+async def unified_test(request: CodeRequest):
+  """
+  Test the correctness and performance of the kernel code on CPU.
+  """
+  logging.info("Starting unified test on CPU backend")
+  async with performance_semaphore:
+    try:
+      request.code = extract_code(request.code)
+      # Create a temporary directory to store the code and dependencies
+      temp_dir = tempfile.mkdtemp()
+      temp_file_path = os.path.join(temp_dir, "run_code.py")
+
+      _save_dependencies(request.dependencies, temp_dir)
+
+      with open(temp_file_path, "w") as f:
+        f.write(request.code)
+
+      # Execute the code in a subprocess with CPU-only environment
+      process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        temp_file_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=temp_dir,
+        env=get_cpu_env(),
+      )
+
+      try:
+        stdout, stderr = await asyncio.wait_for(
+          process.communicate(), timeout=request.timeout
+        )
+
+        output = stdout.decode("utf-8") if stdout else ""
+        error = stderr.decode("utf-8") if stderr else None
+        exit_code = process.returncode
+
+        logging.info(
+          f"Unified test completed successfully on CPU with exit_code: {exit_code}"
+        )
+        return CodeResponse(output=output, error=error, exit_code=exit_code)
+
+      except asyncio.TimeoutError:
+        process.kill()
+        await process.wait()
+        logging.error(f"Unified test timed out after {request.timeout}s")
+        raise HTTPException(status_code=408, detail="Code execution timed out")
+
+    except HTTPException:
+      raise
+    except Exception as e:
+      logging.error(f"Unified test failed with error: {str(e)}")
+      raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
+
+    finally:
+      if "process" in locals() and process.returncode is None:
+        logging.warning("Process still running in finally block, killing it.")
+        try:
+          process.kill()
+          await process.wait()
+        except Exception as e:
+          logging.error(f"Failed to kill process: {e}")
+      # Clean up the temporary directory
+      if "temp_dir" in locals():
+        import shutil
+
+        try:
+          shutil.rmtree(temp_dir)
+        except Exception:
+          pass
+      logging.info("Unified test finished")
+
+
+@app.post("/profile", response_model=CodeResponse)
+async def profile(request: CodeRequest):
+  logging.info("Starting profile on CPU backend")
+  async with profile_semaphore:
+    try:
+      request.code = extract_code(request.code)
+      # Create a temporary directory to store the code and any generated files
+
+      temp_dir = tempfile.mkdtemp()
+      logging.info("temp_dir: " + str(temp_dir))
+
+      _save_dependencies(request.dependencies, temp_dir)
+
+      # Create a temporary file to store the code within temp_dir
+      temp_file_path = os.path.join(temp_dir, "profile_code.py")
+      with open(temp_file_path, "w") as temp_file:
+        temp_file.write(request.code)
+
+      # Execute the code in a subprocess with CPU-only environment
+      process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        temp_file_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=temp_dir,
+        env=get_cpu_env(),  # Force CPU backend
+      )
+
+      try:
+        stdout, stderr = await asyncio.wait_for(
+          process.communicate(), timeout=request.timeout
+        )
+
+        output = stdout.decode("utf-8") if stdout else ""
+        error = stderr.decode("utf-8") if stderr else None
+        exit_code = process.returncode
+
+        logging.info("Profile code executed, now analyzing trace.")
+        # Recursively search for .xplane.pb file under temp_file_path directory
+        xplane_pb_file = None
+        for root, _, files in os.walk(temp_dir):
+          for fname in files:
+            if fname.endswith(".xplane.pb"):
+              xplane_pb_file = os.path.join(root, fname)
+              break
+          if xplane_pb_file:
+            break
+
+        logging.info("Found xplane file at: " + str(xplane_pb_file))
+
+        ratio = analyze_trace(xplane_pb_file)
+
+        logging.info(
+          f"Profile analysis completed successfully on CPU with exit_code: {exit_code}"
+        )
+
+        return CodeResponse(
+          output=json.dumps({"ratio": ratio, "xplane_path": xplane_pb_file}),
+          error=error,
+          exit_code=exit_code,
+        )
+
+      except asyncio.TimeoutError:
+        process.kill()
+        await process.wait()
+        logging.error(f"Profile analysis timed out after {request.timeout}s")
+        raise HTTPException(status_code=408, detail="Code execution timed out")
+
+    except HTTPException:
+      # Re-raise HTTPExceptions to avoid logging them twice
+      raise
+    except Exception as e:
+      logging.error(f"Profile analysis failed with error: {str(e)}")
+      raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
+
+    finally:
+      if "process" in locals() and process.returncode is None:
+        logging.warning("Process still running in finally block, killing it.")
+        try:
+          process.kill()
+          await process.wait()
+        except Exception as e:
+          logging.error(f"Failed to kill process: {e}")
+      # Clean up the temporary directory
+      # try:
+      #     shutil.rmtree(temp_dir)
+      # except Exception:
+      #     pass
+      logging.info("Profile analysis finished")
+
+
+@app.post("/get_backend_version", response_model=GetBackendVersionResponse)
+async def get_backend_version() -> str:
+  """
+  Returns the backend version for CPU execution.
+
+  Returns:
+      A string indicating CPU backend.
+  """
+  return GetBackendVersionResponse(backend_version="CPU")
+
+
+if __name__ == "__main__":
+  cpu_port = get_local_cpu_port()
+
+  if cpu_port is None:
+    logging.info(
+      "No local CPU server needed according to eval_config.yaml. Skipping"
+      " startup."
+    )
+    sys.exit(0)
+
+  logging.info(f"Starting CPU server on port {cpu_port}")
+  uvicorn.run(app, host="0.0.0.0", port=cpu_port)

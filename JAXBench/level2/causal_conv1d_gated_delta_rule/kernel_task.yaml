@@ -1,0 +1,168 @@
+task_id: Qwen3p5_GDN_Serving
+description: >-
+  Fused ragged causal conv1d + gated delta rule for a Qwen3.5 gated delta-net
+  (linear attention) layer, sized for continuous-batching inference. The six
+  configurations form a ladder over the three regimes a serving kernel sees --
+  decode-only, chunked prefill, and mixed batches -- at a small and a large
+  size each, so a kernel's capacity ceiling shows up as the case where it stops
+  working rather than as a blanket failure. Paged conv and recurrent state
+  caches are updated in place; slot 0 of each cache is the null block reserved
+  for padded/invalid tokens, so sequence i maps to slot i + 1.
+input_gen_code: |-
+  def get_inputs():
+      import math
+
+      import jax
+      import jax.numpy as jnp
+      import numpy as np
+
+      # ---------------------------------------------------------------------
+      # Qwen3.5-397B gated delta-net layer geometry.
+      #
+      #   hidden dim 4096, 16 QK heads, 64 V heads, GDN head dim 128.
+      #   conv_dim = 2*16*128 + 64*128 = 12288 = 3 * hidden.
+      #   Head/value ratio n_v/n_kq = 4, so q and k are repeated 4x per v head.
+      #
+      # Layer layout is 3:1 (three GDN+MoE layers, then one gated-attention+MoE)
+      # over 60 layers, i.e. 45 GDN layers -- this kernel runs 45 times per
+      # forward pass, so multiply per-call latency by 45 for the layer budget.
+      #
+      # These are FULL-MODEL head counts. If the layer is tensor-parallel
+      # sharded across N chips at serving time each chip sees N_KQ/N and N_V/N
+      # heads, and this is the one place to divide them.
+      #
+      # d_k = d_v = 128 is load-bearing: the tokamax baseline raises
+      # "Need at least one array to concatenate" at 64.
+      # ---------------------------------------------------------------------
+      N_KQ = 16
+      N_V = 64
+      D_K = 128
+      D_V = 128
+      # Not supplied with the head config; Qwen3-Next uses
+      # linear_conv_kernel_dim = 4. Change here if 397B differs.
+      KERNEL_SIZE = 4
+
+      # bf16 activations throughout: the serving dtype. qkv, b and a must share
+      # a dtype, which the baseline asserts.
+      ACT_DTYPE = jnp.bfloat16
+
+      def build_case(query_lens, num_decode, ctx_lens, act_dtype=ACT_DTYPE,
+                     n_kq=N_KQ, n_v=N_V, d_k=D_K, d_v=D_V,
+                     kernel_size=KERNEL_SIZE):
+          num_seqs = len(query_lens)
+          num_tokens = int(sum(query_lens))
+          dim = 2 * n_kq * d_k + n_v * d_v
+          keys = jax.random.split(jax.random.key(0), 8)
+
+          assert len(ctx_lens) == num_seqs
+          # Every sequence must own at least one token: the baseline and the
+          # kernels disagree about state slots of requests that receive none.
+          assert all(l >= 1 for l in query_lens)
+          # A decode step continues an existing sequence, so it must carry
+          # prior context; a context-free first token is a prefill, not a
+          # decode. The two implementations diverge otherwise.
+          assert all(c > 0 for c in ctx_lens[:num_decode])
+
+          # Ragged offsets: sequence i owns tokens [starts[i], starts[i + 1]).
+          starts = np.zeros(num_seqs + 1, np.int32)
+          starts[1:] = np.cumsum(np.asarray(query_lens, np.int32))
+
+          # Slot 0 of each cache is the null block, so the caches carry one
+          # extra slot and sequence i is mapped to slot i + 1.
+          num_slots = num_seqs + 1
+
+          qkv = jax.random.normal(
+              keys[0], (num_tokens, dim), jnp.float32
+          ).astype(act_dtype)
+          b = jax.random.normal(
+              keys[1], (num_tokens, n_v), jnp.float32
+          ).astype(act_dtype)
+          a = jax.random.normal(
+              keys[2], (num_tokens, n_v), jnp.float32
+          ).astype(act_dtype)
+          conv_state = jax.random.normal(
+              keys[3], (num_slots, kernel_size - 1, dim), jnp.float32
+          )
+          recurrent_state = jax.random.normal(
+              keys[4], (num_slots, n_v, d_k, d_v), jnp.float32
+          )
+          conv_weight = jax.random.normal(
+              keys[5], (dim, 1, kernel_size), jnp.float32
+          ) / math.sqrt(kernel_size)
+          conv_bias = 0.1 * jax.random.normal(keys[6], (dim,), jnp.float32)
+          a_log = jnp.log(jnp.arange(1, n_v + 1, dtype=jnp.float32))
+          dt_bias = 0.1 * jax.random.normal(keys[7], (n_v,), jnp.float32)
+          query_start_loc = jnp.asarray(starts, jnp.int32)
+          state_indices = jnp.arange(1, num_slots, dtype=jnp.int32)
+          # [decode_end, prefill_end, mixed_end]: sequences [0, decode_end) run
+          # the decode pass, [decode_end, mixed_end) the prefill/mixed pass.
+          distribution = jnp.asarray(
+              [num_decode, num_seqs, num_seqs], jnp.int32
+          )
+          # seq_lens > query_lens marks a sequence continuing from cached state.
+          seq_lens = jnp.asarray(
+              np.asarray(ctx_lens, np.int32) + np.asarray(query_lens, np.int32),
+              jnp.int32,
+          )
+
+          dynamic_args = [
+              qkv,
+              b,
+              a,
+              conv_state,
+              recurrent_state,
+              conv_weight,
+              conv_bias,
+              a_log,
+              dt_bias,
+              query_start_loc,
+              state_indices,
+              distribution,
+              seq_lens,
+          ]
+          static_args = [n_kq, n_v, d_k, d_v, kernel_size]
+          return dynamic_args, static_args
+
+      # Assorted context lengths: sequences in flight are at different depths.
+      def ctx(n, base=512):
+          return [base + 37 * i for i in range(n)]
+
+      return [
+          # --- decode-only: the latency-critical steady state -------------
+          # 0. Small decode batch, 32 sequences advancing one token each.
+          build_case(
+              query_lens=[1] * 32, num_decode=32, ctx_lens=ctx(32),
+          ),
+          # 1. Large decode batch, 128 sequences: the throughput regime.
+          build_case(
+              query_lens=[1] * 128, num_decode=128, ctx_lens=ctx(128),
+          ),
+
+          # --- chunked prefill: one sequence, one chunk -------------------
+          # 2. Short prefill chunk.
+          build_case(
+              query_lens=[512], num_decode=0, ctx_lens=[0],
+          ),
+          # 3. Full-size prefill chunk.
+          build_case(
+              query_lens=[2048], num_decode=0, ctx_lens=[0],
+          ),
+
+          # --- mixed: continuous batching, decodes alongside prefill ------
+          # 4. Small mixed batch: 8 decodes + one 504-token prefill chunk.
+          build_case(
+              query_lens=[1] * 8 + [504],
+              num_decode=8,
+              ctx_lens=ctx(8) + [0],
+          ),
+          # 5. Large mixed batch: 16 decodes + two 1016-token prefill chunks,
+          #    the second resuming a partially prefilled sequence.
+          build_case(
+              query_lens=[1] * 16 + [1016, 1016],
+              num_decode=16,
+              ctx_lens=ctx(16) + [0, 2048],
+          ),
+      ]
+
+rtol: 0.01
+atol: 0.02

@@ -10,6 +10,8 @@ import argparse
 import json
 import sys
 
+from JAXBench.benchmark import LEVELS
+
 
 def cmd_evaluate(args):
     """Evaluate a candidate kernel."""
@@ -21,6 +23,7 @@ def cmd_evaluate(args):
         tpu=args.tpu,
         num_warmup=args.num_warmup,
         num_iters=args.num_iters,
+        level=args.level,
     )
 
     if args.json:
@@ -40,6 +43,7 @@ def cmd_run(args):
             tpu=args.tpu,
             num_warmup=args.num_warmup,
             num_iters=args.num_iters,
+            level=args.level,
         )
         if args.json:
             print(json.dumps(output, indent=2))
@@ -54,6 +58,7 @@ def cmd_run(args):
                 tpu=args.tpu,
                 num_warmup=args.num_warmup,
                 num_iters=args.num_iters,
+                level=args.level,
             )
             if r is not None:
                 results.append(r)
@@ -80,14 +85,15 @@ def cmd_list(args):
     """List available workloads."""
     from JAXBench.benchmark import list_workloads, has_optimized
 
-    workloads = list_workloads()
+    workloads = list_workloads(level=args.level)
     if args.json:
-        items = [{'name': w, 'has_optimized': has_optimized(w)} for w in workloads]
+        items = [{'name': w, 'has_optimized': has_optimized(w, level=args.level)}
+                 for w in workloads]
         print(json.dumps(items, indent=2))
     else:
         print(f"JAXBench: {len(workloads)} workloads\n")
         for w in workloads:
-            opt = " [+ optimized]" if has_optimized(w) else ""
+            opt = " [+ optimized]" if has_optimized(w, level=args.level) else ""
             print(f"  {w}{opt}")
     return 0
 
@@ -133,6 +139,10 @@ def main():
     list_p = sub.add_parser('list', help='List available workloads')
     list_p.add_argument('--json', action='store_true',
                         help='Output as JSON')
+
+    for command_parser in (eval_p, run_p, list_p):
+        command_parser.add_argument('--level', choices=LEVELS, default='level1',
+                                    help='Workload level (default: level1)')
 
     args = parser.parse_args()
 

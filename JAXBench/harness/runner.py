@@ -11,7 +11,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from JAXBench.benchmark import list_workloads, get_workload_dir, has_optimized, BENCHMARK_DIR
+from JAXBench.benchmark import list_workloads, get_workload_dir, BENCHMARK_DIR
 from JAXBench.harness.loader import load_module
 from JAXBench.harness.profiler import benchmark_fn
 from JAXBench.harness.tpu_specs import get_tpu_spec
@@ -37,7 +37,7 @@ def get_flop_count(mod, workload_fn, inputs, skip_jit):
 
 
 def run_workload(name, variant='baseline', tpu='auto', num_warmup=5,
-                 num_iters=50):
+                 num_iters=50, level='level1'):
     """Run a single workload variant with device profiling.
 
     Args:
@@ -46,6 +46,7 @@ def run_workload(name, variant='baseline', tpu='auto', num_warmup=5,
         tpu: TPU target ('v5e', 'v6e', or 'auto')
         num_warmup: Number of warmup iterations
         num_iters: Number of benchmark iterations
+        level: Workload level ('level1' or 'level2', default: 'level1')
 
     Returns:
         dict with structured results including timing, FLOPS, utilization.
@@ -53,7 +54,7 @@ def run_workload(name, variant='baseline', tpu='auto', num_warmup=5,
     tpu_name, tpu_spec = get_tpu_spec(tpu)
     peak_tflops = tpu_spec['peak_tflops_bf16']
 
-    workload_dir = get_workload_dir(name)
+    workload_dir = get_workload_dir(name, level=level)
     module_path = os.path.join(workload_dir, f'{variant}.py')
 
     if not os.path.exists(module_path):
@@ -61,6 +62,7 @@ def run_workload(name, variant='baseline', tpu='auto', num_warmup=5,
 
     result = {
         'name': name,
+        'level': level,
         'variant': variant,
         'status': 'error',
         'tpu': tpu_name,
@@ -133,7 +135,7 @@ def run_workload(name, variant='baseline', tpu='auto', num_warmup=5,
     return result
 
 
-def run_all(tpu='auto', num_warmup=5, num_iters=50, output_dir=None):
+def run_all(tpu='auto', num_warmup=5, num_iters=50, output_dir=None, level='level1'):
     """Run all workloads (baseline + optimized if present).
 
     Args:
@@ -141,6 +143,7 @@ def run_all(tpu='auto', num_warmup=5, num_iters=50, output_dir=None):
         num_warmup: Number of warmup iterations
         num_iters: Number of benchmark iterations
         output_dir: Directory for results.json and results.csv (default: benchmark/)
+        level: Workload level ('level1' or 'level2', default: 'level1')
 
     Returns:
         dict with metadata and results list.
@@ -155,7 +158,7 @@ def run_all(tpu='auto', num_warmup=5, num_iters=50, output_dir=None):
     print(f"Timing: jax.profiler device-side (jit_*() events)")
     print()
 
-    workload_names = list_workloads()
+    workload_names = list_workloads(level=level)
     print(f"Found {len(workload_names)} workloads")
     print()
 
@@ -167,14 +170,14 @@ def run_all(tpu='auto', num_warmup=5, num_iters=50, output_dir=None):
 
     for i, name in enumerate(workload_names, 1):
         for variant in ['baseline', 'optimized']:
-            vpath = os.path.join(get_workload_dir(name), f'{variant}.py')
+            vpath = os.path.join(get_workload_dir(name, level=level), f'{variant}.py')
             if not os.path.exists(vpath):
                 continue
 
             jax.clear_caches()
 
             r = run_workload(name, variant, tpu=tpu_name,
-                             num_warmup=num_warmup, num_iters=num_iters)
+                             num_warmup=num_warmup, num_iters=num_iters, level=level)
             if r is None:
                 continue
 
@@ -234,6 +237,7 @@ def run_all(tpu='auto', num_warmup=5, num_iters=50, output_dir=None):
             'jax_version': jax.__version__,
             'devices': str(jax.devices()),
             'tpu': tpu_name,
+            'level': level,
             'tpu_peak_tflops_bf16': tpu_spec['peak_tflops_bf16'],
             'timing_method': 'jax.profiler device-side (jit_*() events from Perfetto trace)',
             'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ'),
@@ -267,7 +271,7 @@ def _save_csv(results, path):
             'workload', 'variant', 'status', 'timing_method',
             'median_ms', 'mean_ms', 'std_ms', 'min_ms',
             'xla_flops', 'tflops', 'utilization_pct',
-            'output_shape', 'error',
+            'output_shape', 'error', 'level',
         ])
 
         for r in sorted(results, key=lambda r: _sort_key(r['name'])):
@@ -278,5 +282,5 @@ def _save_csv(results, path):
                 r.get('std_ms', ''), r.get('min_ms', ''),
                 r.get('xla_flops', ''), r.get('tflops', ''),
                 r.get('utilization_pct', ''),
-                str(r.get('output_shape', '')), r.get('error', ''),
+                str(r.get('output_shape', '')), r.get('error', ''), r['level'],
             ])

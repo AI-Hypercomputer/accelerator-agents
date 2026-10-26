@@ -30,7 +30,14 @@ def mock_invocation_context(temp_workdir):
   session.state["token_metrics"] = {
     "iterations": {
       "0": {
-        "agents": {"PlanAgent": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150, "calls": 1}}
+        "agents": {
+          "PlanAgent": {
+            "prompt_tokens": 100,
+            "completion_tokens": 50,
+            "total_tokens": 150,
+            "calls": 1,
+          }
+        }
       }
     }
   }
@@ -77,18 +84,24 @@ def test_save_metrics_to_disk(temp_workdir, mock_invocation_context):
   assert timing_data["overall_pipeline_time"] > 0
 
 
-def test_update_timing_metrics_flushes_incrementally(temp_workdir, mock_invocation_context):
+def test_update_timing_metrics_flushes_incrementally(
+  temp_workdir, mock_invocation_context
+):
   """Verify that _update_timing_metrics flushes metrics on each iteration."""
   agent = Mock()
   agent.name = "TestAutonomousPipelineAgent"
-  agent._save_metrics_to_disk = lambda ctx: AutonomousPipelineAgent._save_metrics_to_disk(agent, ctx)
+  agent._save_metrics_to_disk = lambda ctx: (
+    AutonomousPipelineAgent._save_metrics_to_disk(agent, ctx)
+  )
 
   mock_invocation_context.session.state["iter_start_time"] = time.time() - 10.0
 
   token_file = os.path.join(temp_workdir, "token_metrics.json")
   timing_file = os.path.join(temp_workdir, "timing_metrics.json")
 
-  AutonomousPipelineAgent._update_timing_metrics(agent, mock_invocation_context, iteration=0)
+  AutonomousPipelineAgent._update_timing_metrics(
+    agent, mock_invocation_context, iteration=0
+  )
 
   assert os.path.exists(token_file)
   assert os.path.exists(timing_file)

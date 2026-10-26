@@ -375,8 +375,10 @@ class AutonomousPipelineAgent(BaseAgent):
       tm = ctx.session.state["token_metrics"]
       try:
         token_path = os.path.join(workdir, "token_metrics.json")
-        with open(token_path, "w") as f:
+        temp_token_path = token_path + ".tmp"
+        with open(temp_token_path, "w") as f:
           json.dump(tm, f, indent=2)
+        os.replace(temp_token_path, token_path)
       except Exception as e:
         logging.warning(f"[{self.name}] Failed to save token_metrics.json: {e}")
 
@@ -388,10 +390,14 @@ class AutonomousPipelineAgent(BaseAgent):
       )
       try:
         timing_path = os.path.join(workdir, "timing_metrics.json")
-        with open(timing_path, "w") as f:
+        temp_timing_path = timing_path + ".tmp"
+        with open(temp_timing_path, "w") as f:
           json.dump(m, f, indent=2)
+        os.replace(temp_timing_path, timing_path)
       except Exception as e:
-        logging.warning(f"[{self.name}] Failed to save timing_metrics.json: {e}")
+        logging.warning(
+          f"[{self.name}] Failed to save timing_metrics.json: {e}"
+        )
 
   def _update_timing_metrics(self, ctx: InvocationContext, iteration: int):
     if "iter_start_time" in ctx.session.state:

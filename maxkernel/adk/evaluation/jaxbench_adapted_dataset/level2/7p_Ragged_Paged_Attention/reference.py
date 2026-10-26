@@ -886,7 +886,7 @@ def computation(q, kv_pages, kv_lens, page_indices, cu_q_lens, num_seqs, D, max_
     TUNED_PARAMS = {
         'num_kv_pages_per_block': 64,
         'num_queries_per_block': 64,
-        'vmem_limit_bytes': 33554432,
+        'vmem_limit_bytes': 67108864,
     }
     sm_scale = 1.0 / math.sqrt(D)
     return ragged_paged_attention(

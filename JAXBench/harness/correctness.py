@@ -1,6 +1,7 @@
 """Correctness checking for kernel outputs.
 
-Uses the same tolerance as KernelBench: atol=1e-2, rtol=1e-2.
+Integer outputs must match exactly. Floating outputs use the same tolerance
+as KernelBench: atol=1e-2, rtol=1e-2.
 """
 
 import jax
@@ -11,15 +12,17 @@ RTOL = 1e-2
 
 
 def check_correctness(ref_output, test_output, atol=ATOL, rtol=RTOL):
-    """Compare reference and test outputs after converting to float32.
+    """Compare integers exactly and floating outputs with float32 tolerances.
 
     Handles single tensors, tuples, and pytree outputs.
+    Integer widths may differ, but integer and non-integer outputs cannot mix.
 
     Returns:
         dict with keys:
             correct (bool): Whether outputs match within tolerance
             max_diff (float): Maximum absolute difference
-            reason (str): 'ok', 'output count mismatch', 'shape mismatch: ...', 'values differ'
+            reason (str): 'ok', 'output count mismatch', 'shape mismatch: ...',
+                'dtype mismatch: ...', 'values differ'
     """
     ref_flat = jax.tree.leaves(ref_output) if isinstance(ref_output, (tuple, list)) else [ref_output]
     test_flat = jax.tree.leaves(test_output) if isinstance(test_output, (tuple, list)) else [test_output]
@@ -33,8 +36,8 @@ def check_correctness(ref_output, test_output, atol=ATOL, rtol=RTOL):
 
     max_diff = 0.0
     for r, t in zip(ref_flat, test_flat):
-        r_np = np.array(r, dtype=np.float32)
-        t_np = np.array(t, dtype=np.float32)
+        r_np = np.asarray(r)
+        t_np = np.asarray(t)
 
         if r_np.shape != t_np.shape:
             return {
@@ -43,6 +46,42 @@ def check_correctness(ref_output, test_output, atol=ATOL, rtol=RTOL):
                 'reason': f'shape mismatch: {r_np.shape} vs {t_np.shape}',
             }
 
+        # JAX also recognizes low-bit integer dtypes such as int4/uint4.
+        r_integer = jax.dtypes.issubdtype(r_np.dtype, np.integer)
+        t_integer = jax.dtypes.issubdtype(t_np.dtype, np.integer)
+        if r_integer or t_integer:
+            if not (r_integer and t_integer):
+                return {
+                    'correct': False,
+                    'max_diff': float('inf'),
+                    'reason': f'dtype mismatch: {r_np.dtype} vs {t_np.dtype}',
+                }
+
+            r_signed = jax.dtypes.issubdtype(r_np.dtype, np.signedinteger)
+            t_signed = jax.dtypes.issubdtype(t_np.dtype, np.signedinteger)
+            if r_signed != t_signed:
+                # NumPy can promote int64/uint64 comparisons to float64.
+                # Reject negatives before comparing both arrays as uint64.
+                signed = r_np if r_signed else t_np
+                equal = np.all(signed >= 0) and np.array_equal(
+                    r_np.astype(np.uint64, copy=False), t_np.astype(np.uint64, copy=False)
+                )
+            else:
+                equal = np.array_equal(r_np, t_np)
+            if equal:
+                continue
+
+            # Python integers avoid overflow and preserve unit differences at
+            # int64/uint64 limits. Only mismatches need this slower conversion.
+            diff = float(np.max(np.abs(r_np.astype(object) - t_np.astype(object))))
+            return {
+                'correct': False,
+                'max_diff': max(max_diff, diff),
+                'reason': 'values differ',
+            }
+
+        r_np = np.asarray(r_np, dtype=np.float32)
+        t_np = np.asarray(t_np, dtype=np.float32)
         diff = float(np.max(np.abs(r_np - t_np)))
         max_diff = max(max_diff, diff)
 

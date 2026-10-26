@@ -232,33 +232,7 @@ class AutonomousPipelineAgent(BaseAgent):
 
     finally:
       end_time = time.time()
-      if "token_metrics" in ctx.session.state:
-        tm = ctx.session.state["token_metrics"]
-        try:
-          with open(
-            os.path.join(
-              ctx.session.state.get("workdir", ""), "token_metrics.json"
-            ),
-            "w",
-          ) as f:
-            json.dump(tm, f, indent=2)
-        except Exception:
-          pass
-      if "timing_metrics" in ctx.session.state:
-        m = ctx.session.state["timing_metrics"]
-        m["overall_pipeline_time"] = end_time - ctx.session.state.get(
-          "pipeline_start_time", end_time
-        )
-        try:
-          with open(
-            os.path.join(
-              ctx.session.state.get("workdir", ""), "timing_metrics.json"
-            ),
-            "w",
-          ) as f:
-            json.dump(m, f, indent=2)
-        except Exception:
-          pass
+      self._save_metrics_to_disk(ctx, end_time=end_time)
     if iteration >= self.max_iterations:
       logging.warning(
         f"[{self.name}] Maximum iterations reached ({self.max_iterations}). Stopping pipeline."
@@ -389,6 +363,36 @@ class AutonomousPipelineAgent(BaseAgent):
     ]:
       ctx.session.state.pop(key, None)
 
+  def _save_metrics_to_disk(
+    self, ctx: InvocationContext, end_time: Optional[float] = None
+  ) -> None:
+    """Flushes token and timing metrics from session state to disk."""
+    workdir = ctx.session.state.get("workdir", "")
+    if not workdir or not os.path.exists(workdir):
+      return
+
+    if "token_metrics" in ctx.session.state:
+      tm = ctx.session.state["token_metrics"]
+      try:
+        token_path = os.path.join(workdir, "token_metrics.json")
+        with open(token_path, "w") as f:
+          json.dump(tm, f, indent=2)
+      except Exception as e:
+        logging.warning(f"[{self.name}] Failed to save token_metrics.json: {e}")
+
+    if "timing_metrics" in ctx.session.state:
+      m = ctx.session.state["timing_metrics"]
+      current_time = end_time if end_time is not None else time.time()
+      m["overall_pipeline_time"] = current_time - ctx.session.state.get(
+        "pipeline_start_time", current_time
+      )
+      try:
+        timing_path = os.path.join(workdir, "timing_metrics.json")
+        with open(timing_path, "w") as f:
+          json.dump(m, f, indent=2)
+      except Exception as e:
+        logging.warning(f"[{self.name}] Failed to save timing_metrics.json: {e}")
+
   def _update_timing_metrics(self, ctx: InvocationContext, iteration: int):
     if "iter_start_time" in ctx.session.state:
       iter_end_time = time.time()
@@ -404,6 +408,7 @@ class AutonomousPipelineAgent(BaseAgent):
         llm_time = sum(c["duration"] for c in it_m["llm_calls"])
         tl_time = sum(t["duration"] for t in it_m["tools"])
         it_m["framework_overhead"] = max(0.0, ag_time - (llm_time + tl_time))
+    self._save_metrics_to_disk(ctx)
 
   def _initialize_state(self, ctx: InvocationContext) -> Event:
     if "timing_metrics" not in ctx.session.state:

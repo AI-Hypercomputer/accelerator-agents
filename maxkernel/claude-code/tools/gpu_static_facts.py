@@ -169,7 +169,7 @@ _DIM3_DECL = re.compile(
   r"\bdim3\s+(?P<name>\w+)\s*(?:\((?P<call>[^)]*)\)|=\s*dim3\s*\((?P<assign>[^)]*)\)|=\s*\{(?P<brace>[^}]*)\)|\{(?P<direct_brace>[^}]*)\})"
 )
 _INT_DECL = re.compile(
-  r"\b(?:int|unsigned|size_t|unsigned\s+int|const\s+int)\s+(?P<name>\w+)\s*=\s*(?P<value>[^;,]+)[;,]"
+  r"\b(?:const\s+)?(?:int|unsigned(?:\s+int)?|size_t|u?int(?:8|16|32|64)_t)\s+(?P<name>\w+)\s*=\s*(?P<value>[^;,]+)[;,]"
 )
 
 

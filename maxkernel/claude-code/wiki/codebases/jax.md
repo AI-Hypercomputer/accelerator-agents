@@ -83,7 +83,6 @@ jax/
   tests/                           ← integration tests
   docs/                            ← Sphinx docs (ignored for this wiki)
   benchmarks/                      ← micro-benchmarks
-  third_party/                     ← vendored deps
   cloud_tpu_colabs/                ← TPU setup notebooks
 ```
 

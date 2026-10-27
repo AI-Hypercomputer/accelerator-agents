@@ -21,6 +21,9 @@ Replaces `detect_input_language.py`, whose single-slot verdict
 (`jax` | `cuda` | `pytorch`) cannot express "this CUDA file is a reference for
 that PyTorch file".
 
+A reference may be written in any GPU kernel dialect this tool recognizes:
+CUDA C++, Triton, or NVIDIA cuTile, reported as its `kind`.
+
 Exit codes:
   0  a single unambiguous primary candidate was found
   3  zero or multiple primary candidates -- the orchestrator must ask the user
@@ -75,6 +78,32 @@ INLINE_CUDA_MARKERS = [
   (re.compile(r"\bcuda_sources\s*="), "cuda_sources string"),
   (re.compile(r"\bCUDAExtension\b"), "CUDAExtension build"),
 ]
+
+# A Triton kernel is marked by its decorator, not by `import triton`: torch
+# code imports triton for utilities without defining any kernel.
+TRITON_MARKERS = [
+  (re.compile(r"@\s*triton\.(?:jit|autotune|heuristics)\b"), "@triton.jit kernel"),
+]
+
+# NVIDIA cuTile Python (`import cuda.tile as ct`).
+CUTILE_MARKERS = [
+  (
+    re.compile(
+      r"^\s*(?:import\s+cuda\.tile|from\s+cuda\.tile|from\s+cuda\s+import\s+tile)\b",
+      re.M,
+    ),
+    "import cuda.tile",
+  ),
+  (re.compile(r"@\s*ct\.kernel\b"), "@ct.kernel kernel"),
+]
+
+GPU_DIALECTS = ("cuda", "triton", "cutile")
+# A torch file that also carries GPU kernels -> the kernels' dialect.
+EMBEDDED_KIND = {
+  "pytorch_with_inline_cuda": "cuda",
+  "pytorch_with_triton": "triton",
+  "pytorch_with_cutile": "cutile",
+}
 
 TORCH_MARKERS = [
   (re.compile(r"^\s*import\s+torch\b", re.M), "import torch"),
@@ -139,11 +168,17 @@ def classify_text(text, suffix):
 
   Language is one of:
     cuda                      -- CUDA C++ device code
+    triton                    -- Triton kernels with no torch module
+    cutile                    -- cuTile kernels with no torch module
     pytorch                   -- a torch reference
     pytorch_with_inline_cuda  -- a torch module that also carries CUDA source
                                  for load_inline (the KernelBench layout).
                                  This single file yields BOTH a pytorch
                                  primary candidate and a cuda reference.
+    pytorch_with_triton       -- a torch module whose forward() launches
+                                 Triton kernels. As the primary, the kernels
+                                 are what is converted (language `triton`).
+    pytorch_with_cutile       -- the same, with cuTile kernels
     jax                       -- JAX, with `has_pallas` saying whether it is
                                  already a Pallas kernel
     unknown                   -- no marker of any known framework
@@ -153,10 +188,14 @@ def classify_text(text, suffix):
   torch_hits = _scan(text, TORCH_MARKERS)
   jax_hits = _scan(text, JAX_MARKERS)
   pallas_hits = _scan(text, PALLAS_MARKERS)
+  triton_hits = _scan(text, TRITON_MARKERS)
+  cutile_hits = _scan(text, CUTILE_MARKERS)
 
   evidence = {
     "cuda": cuda_hits,
     "inline_cuda": inline_hits,
+    "triton": triton_hits,
+    "cutile": cutile_hits,
     "torch": torch_hits,
     "jax": jax_hits,
     "pallas": pallas_hits,
@@ -175,8 +214,16 @@ def classify_text(text, suffix):
     # both, and collapsing it to one language throws away a slot.
     if torch_hits and (inline_hits or cuda_hits):
       return "pytorch_with_inline_cuda", evidence
+    if torch_hits and triton_hits:
+      return "pytorch_with_triton", evidence
+    if torch_hits and cutile_hits:
+      return "pytorch_with_cutile", evidence
     if torch_hits:
       return "pytorch", evidence
+    if triton_hits:
+      return "triton", evidence
+    if cutile_hits:
+      return "cutile", evidence
     if jax_hits:
       return "jax", evidence
     # CUDA embedded in Python with no torch at all -- still a CUDA reference.
@@ -207,12 +254,14 @@ def slot_candidacy(language, entry_ok):
   with an entry point. CUDA can be a primary too -- that is today's behaviour,
   used when the user supplies CUDA and nothing else -- but it is only ever
   *preferred* as a reference when a non-CUDA candidate exists.
+
+  Triton and cuTile follow the same rule as CUDA.
   """
-  if language == "pytorch_with_inline_cuda":
+  if language in EMBEDDED_KIND:
     return ["primary", "reference"] if entry_ok else ["reference"]
   if language in ("pytorch", "jax"):
     return ["primary"] if entry_ok else []
-  if language == "cuda":
+  if language in GPU_DIALECTS:
     return ["reference", "primary"] if entry_ok else ["reference"]
   return []
 
@@ -289,9 +338,16 @@ def propose_slots(records):
   # a torch module and a .cu file, the torch module is what is being
   # converted and the .cu is the reference. This is the whole point of the
   # two-slot model.
-  non_cuda = [r for r in primaries if r["language"] != "cuda"]
+  non_cuda = [r for r in primaries if r["language"] not in GPU_DIALECTS]
   if non_cuda:
     primaries = non_cuda
+  # Likewise prefer a plain torch/JAX module over one that also carries GPU
+  # kernels: given `model.py` and a KernelBench-style `model_new.py` whose
+  # forward calls Triton, the plain module is what is being converted and the
+  # other is a reference. A lone embedded file still fills both slots.
+  plain = [r for r in primaries if r["language"] not in EMBEDDED_KIND]
+  if plain:
+    primaries = plain
 
   ambiguity = None
   primary = None
@@ -301,7 +357,8 @@ def propose_slots(records):
     ambiguity = (
       "No file exposes an entry point the loop can bind. Expected a JAX or "
       "PyTorch module with a `computation`, `forward`, `Model` or "
-      "`get_inputs` definition, or a CUDA file with a `__global__` kernel."
+      "`get_inputs` definition, a CUDA file with a `__global__` kernel, or a "
+      "Triton/cuTile file with one of those Python definitions."
     )
   else:
     names = ", ".join(Path(r["path"]).name for r in primaries)
@@ -315,7 +372,8 @@ def propose_slots(records):
   for r in records:
     if primary is not None and r["path"] == primary["path"]:
       # The KernelBench layout is its own reference: the same file holds the
-      # torch module (primary) and the CUDA it was written against.
+      # torch module (primary) and the CUDA it was written against. Triton or
+      # cuTile in the primary file are the primary itself, not a reference.
       if r["language"] == "pytorch_with_inline_cuda":
         references.append(
           {
@@ -329,11 +387,9 @@ def propose_slots(records):
     if "reference" in r["slot_candidacy"]:
       references.append(
         {
-          "kind": "cuda"
-          if r["language"] in ("cuda", "pytorch_with_inline_cuda")
-          else r["language"],
+          "kind": EMBEDDED_KIND.get(r["language"], r["language"]),
           "path": r["path"],
-          "embedded": r["language"] == "pytorch_with_inline_cuda",
+          "embedded": r["language"] in EMBEDDED_KIND,
         }
       )
 
@@ -355,9 +411,18 @@ def main():
 
   primary, references, ambiguity = propose_slots(records)
 
+  # Inline CUDA is a string beside the torch module, so the module is what is
+  # converted. Triton or cuTile kernels launched by forward() are the
+  # computation itself.
+  primary_language = primary and primary["language"]
+  if primary_language == "pytorch_with_inline_cuda":
+    primary_language = "pytorch"
+  primary_language = EMBEDDED_KIND.get(primary_language, primary_language)
+
   report = {
     "files": records,
     "primary": primary,
+    "primary_language": primary_language,
     "references": references,
     "ambiguity": ambiguity,
   }
@@ -372,7 +437,7 @@ def main():
     sys.exit(3)
 
   print(
-    f"\nPRIMARY: {primary['language']} {primary['path']}\n"
+    f"\nPRIMARY: {report['primary_language']} {primary['path']}\n"
     f"REFERENCES: {len(references)}",
     file=sys.stderr,
   )

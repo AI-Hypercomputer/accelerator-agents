@@ -15,7 +15,7 @@ four `.py` files in a directory is the thing being converted, and refuses
 
 ---
 
-## The four supported shapes
+## The supported shapes
 
 | Shape | `input.type` | `has_reference` | `needs_jax_conversion` | `jax_conversion.method` |
 | --- | --- | --- | --- | --- |
@@ -23,6 +23,7 @@ four `.py` files in a directory is the thing being converted, and refuses
 | PyTorch → Pallas | `pytorch` | `false` | `true` | `torchax` or `llm_port` |
 | PyTorch + CUDA ref → Pallas | `pytorch` | `true` | `true` | `torchax` or `llm_port` |
 | CUDA → Pallas | `cuda` | `false` | `true` | `llm_port` only |
+| Triton / cuTile / other GPU → Pallas | `triton`, `cutile`, `gpu` | either | `true` | `llm_port` only |
 | *no source* → Pallas | `specification` | either | depends on `synthesize_as` | `torchax`/`llm_port` when synthesizing PyTorch |
 
 The third row is the one worth being precise about: **PyTorch is the input and
@@ -38,7 +39,7 @@ never becomes `base.py`. It reaches the planner solely as triaged entries in
 
 | Field | Meaning |
 | --- | --- |
-| `type` | `"jax"`, `"pytorch"` or `"cuda"`. The thing being converted. |
+| `type` | `"jax"`, `"pytorch"`, or a GPU dialect: `"cuda"`, `"triton"`, `"cutile"`, `"gpu"` (any other). The thing being converted. Only `triton` among the GPU dialects gets golden values (Triton's CPU interpreter); the others are ported unverified. |
 | `path` | File or directory. Relative paths resolve against the job file. |
 | `entry_point` | The class or function being converted, e.g. `"Model"`. **Optional but strongly advised** — it is what removes the ambiguity that makes `classify_inputs.py` refuse to guess. |
 | `inputs_fn` | Name of the function returning forward arguments, usually `"get_inputs"`. |
@@ -88,15 +89,26 @@ reference and forgets the path is a mistake worth catching at validation rather
 than discovering as a silently reference-less run four phases later. The
 validator fails on any disagreement between the two.
 
-Each entry in `references`:
+`references` holds at most one entry; the validator rejects more. Its fields:
 
 | Field | Meaning |
 | --- | --- |
-| `type` | `"cuda"`, `"triton"`, `"pallas"`, `"jax"`, `"pytorch"` |
+| `type` | The reference's dialect: `"cuda"`, `"triton"`, `"cutile"`, `"gpu"`, or `"pallas"`, `"jax"`, `"pytorch"` (see below) |
 | `path` | File or directory |
 | `role` | `"donor"` — a source of ideas. The only role today. |
 | `relationship` | Your claim about how it relates to the input: `"same_operation"`, `"same_family"`, `"unknown"`. **A hint, not a fact** — Phase 0.6 reconciles it independently and its verdict wins. Saying `"same_operation"` does not make it so. |
 | `notes` | Free text passed to the reconciler. Use it for what you already know differs. |
+
+`type` becomes `references[].kind` in `state.json`, and decides how Phase 0.5
+reads the reference:
+
+| `type` | Phase 0.5 |
+| --- | --- |
+| `"cuda"` | `gpu_static_facts.py --dialect cuda`, then the GPU reference analyzer |
+| `"triton"` | `gpu_static_facts.py --dialect triton`, then the analyzer |
+| `"cutile"` | `gpu_static_facts.py --dialect cutile`, then the analyzer |
+| `"gpu"` | Any other GPU kernel dialect (CUTLASS/CuTe C++, CuTe-DSL, ...). No extractor; the analyzer reads the source alone and marks every number as not extractor-verified. |
+| `"pallas"`, `"jax"`, `"pytorch"` | Accepted, but there is no dedicated handling: they take the `"gpu"` path. |
 
 ### `needs_jax_conversion` and `jax_conversion` — required
 
@@ -141,19 +153,21 @@ readable `base.py` is produced in torchax mode.
 
 ## What the validator checks
 
-Beyond required fields and enum membership, it rejects seven contradictions
+Beyond required fields and enum membership, it rejects eight contradictions
 that are each a real failure mode:
 
 1. `has_reference: true` with no `references` — a silently reference-less run.
 2. `has_reference: false` with references listed — silently ignored input.
-3. `torchax` on a CUDA input — torchax traces PyTorch, not CUDA C++.
+3. `torchax` on a GPU input (`cuda`, `triton`, `cutile`, `gpu`) — torchax
+   traces PyTorch, not GPU kernels.
 4. `needs_jax_conversion: false` on a non-JAX input — no `base.py`, so no
    internal harness.
 5. `torchax` + `emit_readable_reference: false` — same, unless external
    evaluation is declared, in which case it downgrades to a warning.
 6. `needs_jax_conversion: true` on a JAX input — already the reference.
-7. `evaluation.compare_against_source: true` on a CUDA input — nothing to
+7. `evaluation.compare_against_source: true` on a GPU input — nothing to
    compare against on a TPU.
+8. More than one entry in `references` — a run takes at most one.
 
 On success it prints the plan the job implies, so you can see what will happen
 before it happens:

@@ -1,6 +1,6 @@
 ---
 name: maxkernel
-description: Orchestrates Pallas TPU kernel development and optimization. Converts JAX, PyTorch or CUDA into a Pallas TPU kernel and runs a self-refinement loop (plan -> implement -> compile -> test -> autotune -> profile) by dispatching the maxkernel-worker subagent once per iteration. Accepts an optional reference kernel (e.g. a CUDA implementation of the same computation) that the planner mines for design ideas. Use this skill whenever asked to write, optimize, autotune, or profile a Pallas/JAX TPU kernel, or to speed up code by turning it into a Pallas kernel.
+description: Orchestrates Pallas TPU kernel development and optimization. Converts JAX, PyTorch or GPU kernel code (CUDA, Triton, cuTile) into a Pallas TPU kernel and runs a self-refinement loop (plan -> implement -> compile -> test -> autotune -> profile) by dispatching the maxkernel-worker subagent once per iteration. Accepts an optional reference kernel (a CUDA, Triton, cuTile or other GPU implementation of the same computation) that the planner mines for design ideas. Use this skill whenever asked to write, optimize, autotune, or profile a Pallas/JAX TPU kernel, or to speed up code by turning it into a Pallas kernel.
 ---
 
 # MaxKernel
@@ -98,7 +98,7 @@ disk, not the worker's prose.
 
 The other registered subagents (`maxkernel-analyze-torch-source`,
 `maxkernel-write-jnp-reference`, `maxkernel-synthesize-baseline`,
-`maxkernel-analyze-source`, `maxkernel-analyze-cuda-reference`,
+`maxkernel-analyze-source`, `maxkernel-analyze-gpu-reference`,
 `maxkernel-reconcile-reference`, `maxkernel-fix-port`,
 `maxkernel-plan-kernel`,
 `maxkernel-implement-kernel`, `maxkernel-fix-kernel-compilation`,
@@ -225,7 +225,7 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     | --- | --- |
     | `input.type` | `primary.language` |
     | `input.path` | `primary.source_path` |
-    | `references[]` | `references[]` |
+    | `references[]` | `references[]` — `type` → `kind`, `path` → `source_path` |
     | `jax_conversion.method` | `reference_mode` (`"torchax"` / `"llm_port"`) |
     | `jax_conversion.emit_readable_reference` | `emit_jnp_reference` |
     | `correctness.atol` / `.rtol` / `.seed` | `atol`, `rtol`, `seed` |
@@ -243,7 +243,7 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     -   Create `<run_dir>/inbox/`.
     -   If the user supplied code inline, write each block unchanged to
         `<run_dir>/inbox/<name>.<ext>` — `.cu` if it is obviously CUDA C++,
-        otherwise `.py`. Writing the user's own bytes to a file is not
+        otherwise `.py` (Triton and cuTile are Python). Writing the user's own bytes to a file is not
         authoring code.
     -   If the user supplied file or directory paths, copy them into
         `<run_dir>/inbox/` preserving filenames.
@@ -291,7 +291,12 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     `<run_dir>/maxkernel_debug_history.md`.
 
     Then move the files into their slots: the primary to
-    `<run_dir>/source.<ext>`, each reference to `<run_dir>/ref/<name>`.
+    `<run_dir>/source.<ext>`, the reference to `<run_dir>/ref/<name>`. A run
+    takes **at most one reference**: if the classifier proposes several, ask
+    the user which one to keep. The reference carries a `kind` (its GPU
+    dialect: `cuda`, `triton` or `cutile`); copy it into `state.references`. A
+    reference the user names that the classifier did not recognize (CUTLASS,
+    CuTe-DSL, …) gets `kind: "gpu"`.
 
     **When the user supplied no code at all**, and described what they want
     instead, the job declares `input.type: "specification"` with an
@@ -314,12 +319,25 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
         to convert). Phase 0.4 writes `<run_dir>/cuda_context.md` and ports
         it. There is no golden capture and no port verification: a TPU host
         cannot execute CUDA.
+    -   **`triton`** — Triton kernels launched on torch tensors from a
+        Python entry point (`Model`, `computation`, …). Phase 0.2 captures
+        golden values by running it through Triton's CPU interpreter, Phase
+        0.4 writes `<run_dir>/triton_context.md` and ports it, and Phase 0.8
+        verifies the port. Always `reference_mode: "llm_port"`.
+    -   **`cutile`**, **`gpu`** — like `cuda`: ported in Phase 0.4
+        (`<run_dir>/<language>_context.md`), never verified. `gpu` covers any
+        other dialect the user declares (CUTLASS/CuTe, …).
 
     A `pytorch_with_inline_cuda` file — the KernelBench layout, a torch module
     plus a `cuda_sources` string — fills **both** slots: it is the primary, and
-    the CUDA embedded in it is a reference. The classifier reports this.
+    the CUDA embedded in it is a reference. `pytorch_with_triton` and
+    `pytorch_with_cutile` hold Triton or cuTile kernels that `forward()`
+    launches, so the kernels *are* the primary: record its language as the
+    classifier's `primary_language` (`triton` / `cutile`; `pytorch` for inline
+    CUDA). When a plain torch module is supplied alongside one, the plain
+    module is the primary and the other file is only a reference.
 
-    Neither a CUDA primary nor a CUDA reference can be measured directly: the
+    Neither a GPU primary nor a GPU reference can be measured directly: the
     harness binds `base_computation` with `jax.jit`, so the run's baseline is
     always the JAX side. That is a real property of running on a TPU, not a
     workaround — say so in your final report, so nobody reads the speedup as
@@ -330,7 +348,9 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     what the user asked for and only fall back on a default when they said
     nothing.
 
-    For a `pytorch` primary the loop needs a JAX reference. There are two ways
+    For a `pytorch` primary the loop needs a JAX reference. (A GPU primary —
+    `cuda`, `triton`, `cutile`, `gpu` — is always `"llm_port"`; skip this
+    choice.) There are two ways
     to get one and they have different failure modes:
 
     | `reference_mode` | How the JAX reference is obtained | Trade-off |
@@ -459,7 +479,8 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
         measured". Do NOT write the string `"Infinity"` — it cannot be compared
         numerically and silently breaks every `<` test downstream. The worker
         fills `base_time_ms` in its Phase 0.9 and the other two in its Phase 6.
-    -   `primary.language` is one of `"pytorch"`, `"cuda"`, `"jax"` — the
+    -   `primary.language` is one of `"pytorch"`, `"jax"`, `"cuda"`,
+        `"triton"`, `"cutile"`, `"gpu"` — the
         verdict from step 3, written once and never revised mid-run. Every
         downstream agent branches on it, so an unset or guessed value silently
         skips the source-analysis phase.
@@ -474,8 +495,10 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
         `jaxpr_comparison_path` stay `null` here. The worker fills them as each
         artifact appears on disk.
     -   `references` is `[]` when the user supplied no reference kernel — the
-        common case, and the whole advisory spine is then skipped. The worker
-        fills each entry's `facts_path` and `context_path` in Phase 0.5.
+        common case, and the whole advisory spine is then skipped. It holds at
+        most one entry, with a `kind`. The worker fills its `facts_path`
+        (`ref/gpu_facts.json`, or `null` for `kind: "gpu"`) and `context_path`
+        (`ref/context.md`) in Phase 0.5.
     -   `reference_trust`, `reference_alignment_path` and `ideas_ledger_path`
         stay `null` here; the worker sets them in Phase 0.6.
     -   **`input_language`, `source_path` and `source_context_path` are legacy

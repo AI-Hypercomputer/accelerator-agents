@@ -33,7 +33,7 @@ MaxKernel from. You can also provide it with a GKE cluster.
 
 ## What you can give it
 
-`<your code or code path>` can be any of three things, and you do not have to
+`<your code or code path>` can be any of these, and you do not have to
 say which — the run classifies it first and records the answer in `state.json`
 as `input_language`:
 
@@ -41,6 +41,18 @@ as `input_language`:
 - **CUDA** — a `.cu`/`.cuh` file, or CUDA sources embedded in a Python file for
   `torch.utils.cpp_extension.load_inline`. (Coming soon)
 - **PyTorch** — an `nn.Module` reference.
+- **Triton** — Triton kernels launched on torch tensors from a Python entry
+  point (`Model`, `computation`, …) with a `get_inputs()`. The port is checked
+  against outputs recorded by running it on CPU through Triton's interpreter,
+  as for PyTorch.
+- **cuTile** — cuTile kernels with a Python entry point (`Model`,
+  `computation`, …).
+
+You can also hand over one **reference kernel** — a GPU implementation of the
+same computation in CUDA, Triton or cuTile (or another dialect, declared in a
+job file). A reference is never run or measured; the planner mines it for
+design ideas, after a reconciliation step checks that it computes what your
+primary computes.
 
 ## Watching a run
 

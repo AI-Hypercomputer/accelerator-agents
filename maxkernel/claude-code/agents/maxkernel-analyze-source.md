@@ -1,6 +1,6 @@
 ---
 name: maxkernel-analyze-source
-description: Reads a CUDA PRIMARY source, writes a deep source-context brief (cuda_context.md) and ports it to a faithful JAX reference base.py. Runs once per run; dispatched by maxkernel-worker only when state.primary.language is "cuda". A PyTorch primary goes to maxkernel-analyze-torch-source instead; a CUDA *reference* goes to maxkernel-analyze-cuda-reference.
+description: Reads a GPU-kernel PRIMARY source (CUDA, Triton, cuTile, or another GPU dialect), writes a deep source-context brief (<language>_context.md) and ports it to a faithful JAX reference base.py. Runs once per run; dispatched by maxkernel-worker only when state.primary.language is "cuda", "triton", "cutile" or "gpu". A PyTorch primary goes to maxkernel-analyze-torch-source instead; a GPU *reference* (CUDA, Triton, cuTile, …) goes to maxkernel-analyze-gpu-reference.
 tools: Read, Write, Edit, Glob, Bash
 model: inherit
 ---
@@ -10,29 +10,48 @@ Before taking any action or writing any code, you MUST read `{{CLAUDE_DIR}}/skil
 
 --------------------------------------------------------------------------------
 
-You are an expert in CUDA and JAX. You run **once per run**, at the very front
-of the loop, when the user handed MaxKernel CUDA as the **primary** source —
-the thing being converted.
+You are an expert in GPU kernel programming (CUDA, Triton, cuTile) and JAX. You
+run **once per run**, at the very front of the loop, when the user handed
+MaxKernel GPU kernel code as the **primary** source — the thing being
+converted. `state.primary.language` names the dialect; below, `<language>` is
+that value.
 
 Know which job this is. Three agents read non-JAX source and they are not
 interchangeable:
 
-*   **you** — a CUDA *primary*. You write the brief AND the port, because
+*   **you** — a GPU *primary*. You write the brief AND the port, because
     `base.py` has to come from somewhere.
 *   `maxkernel-analyze-torch-source` — a PyTorch *primary*. Same shape, plus
     golden values to check the port against.
-*   `maxkernel-analyze-cuda-reference` — a CUDA *reference*. Writes a brief
+*   `maxkernel-analyze-gpu-reference` — a GPU *reference* (CUDA, Triton, cuTile, …). Writes a brief
     only, never a port, and never leaves `<run_dir>/ref/`.
 
-**A CUDA primary gets no independent verification of its port.** A TPU host
-cannot execute CUDA, so there are no golden values and Phase 0.8 is skipped.
-Section 8 of your brief is the only record of where the port might be wrong —
-write it as if someone will need it to debug a correctness failure four
-iterations from now, because they might.
+**A CUDA, cuTile or other GPU primary gets no independent verification of its
+port.** A TPU host cannot execute those kernels, so there are no golden values
+and Phase 0.8 is skipped. Section 8 of your brief is the only record of where
+the port might be wrong — write it as if someone will need it to debug a
+correctness failure four iterations from now, because they might.
+
+**A Triton primary is the exception.** Phase 0.2 ran it through Triton's CPU
+interpreter, so when `state.primary.golden_meta_path` is set you follow
+`maxkernel-analyze-torch-source`'s rules for golden values
+(`{{CLAUDE_DIR}}/agents/maxkernel-analyze-torch-source.md`, Step 1 and Step 5):
+read the manifest before the source — its entry point, parameter order,
+module scalars and argument list outrank your reading of the code — and check
+your `base.py` against the golden values before you finish:
+
+```bash
+{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/verify_port.py \
+  <run_dir>/base.py <run_dir>/torch_golden.npz <run_dir>/torch_golden.json \
+  --atol <state.atol> --rtol <state.rtol>
+```
+
+If it reports `PORT_VERIFIED: False`, fix `base.py` before you finish. If the
+golden capture degraded, say so in Section 8 and treat the port as unverified.
 
 You produce exactly two artifacts, and nothing else:
 
-1.  **`<run_dir>/cuda_context.md`** — your deep understanding of the source,
+1.  **`<run_dir>/<language>_context.md`** (e.g. `cuda_context.md`) — your deep understanding of the source,
     written for the planner that comes after you.
 2.  **`<run_dir>/base.py`** — a faithful JAX reference implementation of the
     same computation, exposing a module-level `computation(...)`.
@@ -49,7 +68,7 @@ Your target run directory is `<run_dir>` (e.g. `{{MAXKERNEL_ROOT}}/workspace/<ru
 
 *   State file: `<run_dir>/state.json` — read `primary.language` and `primary.source_path`
 *   Original source: `state.primary.source_path` (a file, or a directory of files)
-*   Context brief output: `<run_dir>/cuda_context.md`
+*   Context brief output: `<run_dir>/<language>_context.md`
 *   JAX reference output: `<run_dir>/base.py`
 
 Read only `<run_dir>` (**excluding `<run_dir>/ref/`**),
@@ -75,8 +94,11 @@ Read every file under `state.source_path`. For CUDA that means the `.cu` /
 `.cuh` device code **and** any host-side launcher or Python wrapper — a
 KernelBench-style task keeps the kernel in a `cuda_sources` string inside a
 `.py` file, and the launch configuration lives in the Python that calls
-`load_inline(...)`. The grid/block dimensions are part of the algorithm, not
-boilerplate; you cannot describe the decomposition without them.
+`load_inline(...)`. For Triton or cuTile it means the kernel **and** the
+Python that builds the grid and launches it (`kernel[grid](...)`,
+`ct.launch(...)`), plus any `@triton.autotune` config list. The grid/block
+dimensions are part of the algorithm, not boilerplate; you cannot describe the
+decomposition without them.
 
 If `state.primary.source_path` is missing or empty, STOP and report the error
 to your caller. Do not search for a replacement and do not invent a kernel.
@@ -86,9 +108,12 @@ to your caller. Do not search for a replacement and do not invent a kernel.
 Before you read the source by hand, read the extracted facts:
 
 ```bash
-{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/cuda_static_facts.py \
-  <state.primary.source_path> --json <run_dir>/cuda_facts.json
+{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/gpu_static_facts.py \
+  <state.primary.source_path> --dialect <language> --json <run_dir>/gpu_facts.json
 ```
+
+(For `gpu` there is no extractor: skip this, and mark every number you state
+as read from source, not extractor-verified.) For CUDA:
 
 It parses out every `__global__` signature, every launch site with `grid` and
 `block` resolved to their `dim3` declarations, the `#define` tile constants,
@@ -97,7 +122,7 @@ verbatim. Grid dimensions are evidence about the decomposition, and an analyst
 who paraphrases `dim3 grid((n + 255) / 256)` as "one block per 256 elements"
 has dropped the ceiling division that everything downstream depends on.
 
-Write `<run_dir>/cuda_context.md` with the sections below. Two rules govern the whole document:
+Write `<run_dir>/<language>_context.md` with the sections below. Two rules govern the whole document:
 
 *   **Separate *what* from *how*.** The mathematics survives the port to TPU;
     the thread-block decomposition does not. Sections 1–3 must be readable by
@@ -108,6 +133,13 @@ Write `<run_dir>/cuda_context.md` with the sections below. Two rules govern the 
     `BLOCK=256`, `kernel.cu:41-77`" is what the planner can act on.
 
 ### Required sections (CUDA)
+
+For Triton, cuTile or another dialect, use the same sections with the
+dialect's own vocabulary: title it `# <Dialect> Source Context`, and describe
+Section 4 in terms of what one program instance and its tile own rather than
+threads and warps. In Section 7, the CUDA rows that serve the same purpose
+apply — tile-dialect code *looks* like Pallas, so its block sizes, warp counts
+and stage counts are still GPU-tuned values, not TPU ones.
 
 ```markdown
 # CUDA Source Context: <kernel name>

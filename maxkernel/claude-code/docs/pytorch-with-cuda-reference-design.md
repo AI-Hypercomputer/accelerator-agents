@@ -3,6 +3,22 @@
 Status: implemented on branch `pytorch_cuda`
 Scope: extends the MaxKernel loop (`skill/SKILL.md`, `agents/maxkernel-*.md`)
 
+> **Generalized to any GPU dialect.** This document was written for a CUDA
+> reference, and its CUDA examples still stand. The reference spine now accepts
+> CUDA C++, Triton, cuTile, or any other GPU dialect (still at most one
+> reference per run). What changed relative to the text below:
+>
+> *   `references[].kind` is `cuda`, `triton`, `cutile`, or `gpu` (no extractor;
+>     the brief is written from source alone).
+> *   `tools/cuda_static_facts.py` is now `tools/gpu_static_facts.py
+>     --dialect auto|cuda|triton|cutile`. The CUDA output is unchanged, with an
+>     added `dialect` field; Triton and cuTile are parsed with Python `ast`.
+> *   `maxkernel-analyze-cuda-reference` is now `maxkernel-analyze-gpu-reference`.
+>     It writes `ref/context.md` from `ref/gpu_facts.json`. Its §7 tables (one per
+>     dialect) and §9 decision tree are the triage authority. The
+>     `analyze_cuda_reference.md` and `cuda_to_pallas.md` documents cited below
+>     were never checked in.
+
 ---
 
 ## 1. What is being asked for, precisely
@@ -201,7 +217,7 @@ is the mistake to avoid. Its differences are contractual:
 - It reads a deterministic facts file first:
   ```bash
   {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/cuda_static_facts.py \
-    <run_dir>/ref/*.cu --json <run_dir>/ref/cuda_facts.json
+    <run_dir>/ref/*.cu --json <run_dir>/ref/gpu_facts.json
   ```
   which extracts `__global__` signatures, launch configurations, shared-memory
   byte counts, `#define`d tile constants and `wmma` fragment shapes by parsing,
@@ -230,7 +246,7 @@ a different head dimension. If the planner borrows a tiling strategy justified
 by a fused epilogue that this problem does not have, it will produce a slower
 kernel and nobody will know why.
 
-Inputs: `torch_context.md` §2/§3/§5, `ref_cuda_context.md`, `cuda_facts.json`,
+Inputs: `torch_context.md` §2/§3/§5, `ref_cuda_context.md`, `gpu_facts.json`,
 `torch_golden.json`.
 
 Output 1 — `<run_dir>/reference_alignment.md`, whose header is a single verdict:
@@ -446,7 +462,7 @@ no number.
     {
       "kind": "cuda",
       "source_path": "<abs>/ref/flash.cu",
-      "facts_path": "<abs>/ref/cuda_facts.json",
+      "facts_path": "<abs>/ref/gpu_facts.json",
       "context_path": "<abs>/ref/ref_cuda_context.md"
     }
   ],

@@ -166,7 +166,7 @@ _LAUNCH = re.compile(
 
 
 _DIM3_DECL = re.compile(
-  r"\bdim3\s+(?P<name>\w+)\s*(?:\((?P<call>[^)]*)\)|=\s*dim3\s*\((?P<assign>[^)]*)\))"
+  r"\bdim3\s+(?P<name>\w+)\s*(?:\((?P<call>[^)]*)\)|=\s*dim3\s*\((?P<assign>[^)]*)\)|=\s*\{(?P<brace>[^}]*)\)|\{(?P<direct_brace>[^}]*)\})"
 )
 _INT_DECL = re.compile(
   r"\b(?:int|unsigned|size_t|unsigned\s+int|const\s+int)\s+(?P<name>\w+)\s*=\s*(?P<value>[^;,]+)[;,]"

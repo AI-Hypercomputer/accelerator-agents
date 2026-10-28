@@ -36,15 +36,22 @@ All artifacts for this task are strictly confined within `<run_dir>`:
 --------------------------------------------------------------------------------
 
 ## Tools
-1.  `retrieval_tool`: Query the local 3-tiered LLMWiki knowledge base (Ripgrep -> Python Lexical -> Master Index) for compilation error diagnoses, decision trees, and fix patterns.
+1.  `retrieval_tool`: Query the local LLMWiki knowledge base **strictly for API name and symbol validation**.
     *   Invoke via CLI:
 
     ```bash
-    {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/retrieval.py -- "<query>"
+    {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/retrieval.py -- "<api_or_symbol_name>"
     ```
 
-    where `<query>` is the query you want to search. Run this command every
-    time the instructions say to "query" or "use `retrieval_tool`".
+    where `<api_or_symbol_name>` is the Pallas/JAX API or symbol name you want
+    to validate or locate.
+
+    **CRITICAL RESTRICTION**: The LLMWiki retrieval corpus is biased toward
+    specific kernel designs and past experiments. You **MUST ONLY** use
+    `retrieval_tool` to validate or discover exact Pallas/JAX API and symbol
+    names (e.g., locating the exact module path or attribute name before calling
+    `search_api`). **DO NOT** query `retrieval_tool` for kernel designs,
+    decision trees, or full kernel implementation examples.
 
 2. `search_api`: For looking up specific API definitions and signatures when
     you need precise technical details.
@@ -97,29 +104,27 @@ understand:
 "Fix: Changed block size" but error persists), this suggests the approach isn't
 working and you need a different strategy.
 
-### Step 2.5: MANDATORY Research (DO THIS BEFORE WRITING ANY CODE)
+### Step 2.5: MANDATORY API Verification (DO THIS BEFORE WRITING ANY CODE)
 
-**BEFORE making any changes, you MUST use `retrieval_tool` and/or `search_api`
-to research:**
+**BEFORE making any changes, you MUST verify any Pallas/JAX APIs involved using
+`search_api` (and `retrieval_tool` strictly for API name validation):**
 
-1.  **Query the specific error message (Use `retrieval_tool`):**
-    -   Extract the main error type (e.g., "TypeError", "ValueError", "Block
-        shape error")
-    -   Search: `retrieval_tool` with the error message or key phrase
-    -   Example: "Block shape must have same number of dimensions"
-2.  **Query each Pallas API involved (Use `search_api` for definitions,
-    `retrieval_tool` for docs):**
-    -   Identify Pallas functions in the error trace (pl.pallas_call,
-        pl.BlockSpec, pltpu.emit_pipeline, etc.)
-    -   Use `search_api` with the exact API name to get its definition and
-        parameters
-    -   Use `retrieval_tool` to search for broader documentation or discussions
-        about the API
-3.  **Search for examples (Use `retrieval_tool` or `search_api`):**
-    -   Query: Use `retrieval_tool` with "example" + the API or pattern you need
+1.  **Identify each Pallas/JAX API involved in the error trace:**
+    -   Locate Pallas/JAX functions, classes, or attributes mentioned in the
+        traceback or surrounding code (e.g., `pl.pallas_call`, `pl.BlockSpec`,
+        `pltpu.emit_pipeline`, `pltpu.CompilerParams`).
+2.  **Validate API names (Use `retrieval_tool` ONLY for API name lookup):**
+    -   If an AttributeError, ImportError, or unknown symbol occurs and you are
+        unsure of the exact Pallas/JAX API name or module path, query
+        `retrieval_tool` with the symbol name to find its valid API name.
+    -   **DO NOT** query `retrieval_tool` for kernel designs, decision trees, or
+        kernel examples, as the LLMWiki corpus is biased toward specific designs.
+3.  **Inspect exact API signatures and definitions (Use `search_api`):**
+    -   Use `search_api` with the exact dotted API name to get its signature,
+        parameters, docstring, and source definition.
 
-**DO NOT skip this step.** Even if you think you know the answer, verify it
-first. API signatures and requirements change between versions.
+**DO NOT skip this step.** Even if you think you know the API signature, verify
+it first. API signatures and parameter names change between versions.
 
 ### Step 3: Fix the Compilation Errors
 
@@ -155,7 +160,7 @@ information. Use those results to guide your fixes.
 2.  **Fix Only What's Broken:**
     -   Correct Python syntax errors.
     -   Fix import statements and module paths.
-    -   Correct Pallas/JAX API usage (use `retrieval_tool` and/or `search_api`).
+    -   Correct Pallas/JAX API usage (use `retrieval_tool` strictly for API name validation and `search_api` for definitions/signatures).
     -   Fix variable references and scoping issues.
     -   Ensure the `main` function is present and correctly calls the kernel.
     -   **Consider the progression of errors** - if the same type of error
@@ -237,8 +242,9 @@ dimension`
     inform the user.
 -   If you must change block sizes or grid config to fix compilation, explain
     why.
--   Always verify API usage with `retrieval_tool` or `search_api` before making
-    changes.
+-   Always verify API names with `retrieval_tool` and signatures with
+    `search_api` before making changes (never use `retrieval_tool` for kernel
+    design).
 -   The goal is a compiling kernel that still achieves the planned
     optimizations.
 -   Compilation errors are often simple syntax/API issues that don't require

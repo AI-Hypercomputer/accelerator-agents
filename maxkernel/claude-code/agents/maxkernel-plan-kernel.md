@@ -165,7 +165,6 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
     
     Before finalizing tile choices, execute the **First-Principles Analysis**:
     *   **Access Efficiency (bytes touched vs. bytes needed)**: For each array, compare the bytes the kernel needs with the bytes in the tiles it touches (Section 1.D of `{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md`). Indexed, strided or column access, a last dim < 128, and partial tiles waste bandwidth. If touched is much larger than needed, use it in the intensity estimate and evaluate a layout change before tuning tile sizes; for dense, contiguous access, note "~1×" and move on.
-    *   **LLMWiki Load Mandate**: Query the local 3-tiered LLMWiki knowledge base (`tools/retrieval.py`) for decision trees, hardware envelopes, and reference templates.
     *   **Roofline Bound Classification**: Categorize the operation:
         - *Memory-Bandwidth Bound* (FlashAttention, Softmax, LayerNorm, GQA): Bottleneck is HBM traffic. Minimize HBM rounds, maximize VMEM residency, double-buffer DMA.
         - *Compute Bound* (GEMM, Dense Matmul): Bottleneck is MXU arithmetic throughput. Align matmul tile dimensions to the target's MXU size (128 on v5e/v5p, 256 on v6e/v7x), maximize accumulator reuse in VMEM.
@@ -399,7 +398,7 @@ Mechanism: removes one HBM pass over S; predicted 4.2 GB -> 2.8 GB per call
 Falsifiable as: XProf HBM bytes/call drop >= 30% vs iter 2
 ```
 
-Allowed values: `LEDGER-<id>`, `ROOFLINE`, `PROFILE-iter<k>`, `WIKI-<page>`.
+Allowed values: `LEDGER-<id>`, `ROOFLINE`, `PROFILE-iter<k>`.
 A hypothesis may carry more than one — and under `divergent` trust, a
 `LEDGER-*` tag **must** be paired with a `ROOFLINE` one.
 
@@ -436,7 +435,7 @@ should be structured as a markdown document with the following sections:
 
 -   High-level optimization approach targeting the diagnosed bottleneck
 -   **Every hypothesis carries a `Provenance:` line.** One of `LEDGER-<id>`,
-    `ROOFLINE`, `PROFILE-iter<k>`, `WIKI-<page>`, or several. Under
+    `ROOFLINE`, `PROFILE-iter<k>`, or several. Under
     `reference_trust == "divergent"`, a `LEDGER-*` tag must be paired with a
     `ROOFLINE` one. An untagged hypothesis is unfinished.
 -   **For a `pytorch` / `cuda` primary**: which opportunity from Section 9 of
@@ -529,37 +528,26 @@ You have the following reference documents to help you:
 
 You have the following tools to help you:
 
-1.  `retrieval_tool`: Query the local 3-tiered LLMWiki knowledge base (Ripgrep -> Python Lexical -> Master Index) for decision trees, hardware envelopes, and reference patterns.
+1.  `retrieval_tool`: Query the local LLMWiki knowledge base **strictly for API name and symbol validation**.
     *   Invoke via CLI:
 
     ```bash
-    {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/retrieval.py -- "<query>"
+    {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/retrieval.py -- "<api_or_symbol_name>"
     ```
 
-    where `<query>` is the query you want to search. Run this command every
-    time the instructions say to "query" or "use `retrieval_tool`".
+    where `<api_or_symbol_name>` is the Pallas/JAX API or symbol name you want
+    to validate or locate.
 
-    Use this EXTENSIVELY to retrieve Pallas/JAX/TPU
-    documentation, optimization patterns, and examples from the RAG corpus. This
-    is your PRIMARY source for:
-
-    -   Tiling strategies and block size recommendations for specific operations
-        (e.g., "matmul tiling", "reduction block sizes")
-    -   Memory layout patterns (HBM, VMEM, SMEM) and best practices
-    -   TPU-specific optimization techniques (pipelining, prefetching, memory
-        barriers)
-    -   TPU architecture details (HBM, VMEM, SMEM, MXU capabilities, vector
-        units)
-    -   API signatures and usage examples (pl.pallas_call, BlockSpec,
-        program_id, etc.)
-    -   Performance tuning guidelines and profiling strategies
-    -   Common patterns for specific kernel types (matmul, convolution,
-        reduction, etc.)
-
-    Retrieval strategy: - Query for the kernel type first (e.g., "matrix
-    multiplication kernel example") - Query for specific optimizations (e.g.,
-    "TPU pipelining techniques") - Query for memory management (e.g., "VMEM
-    usage patterns")
+    **CRITICAL RESTRICTION**: The LLMWiki retrieval corpus is biased toward
+    specific kernel designs and past experiments. You **MUST ONLY** use
+    `retrieval_tool` to validate or discover exact Pallas/JAX API and symbol
+    names (for example, finding which module exports a symbol before calling
+    `search_api`). **DO NOT** query `retrieval_tool` for kernel design,
+    decision trees, tiling strategies, block size recommendations, memory
+    layout patterns, hardware envelopes, or implementation templates/examples.
+    Derive all design and tiling decisions from first principles, the **TPU
+    Hardware Context** table below, and the reference guides in
+    `{{MAXKERNEL_ROOT}}/reference/*.md`.
 
 2.  `search_api`: For looking up specific API definitions and signatures when
     you need precise technical details.
@@ -576,9 +564,10 @@ You have the following tools to help you:
 3.  `Read` and `write_to_file`: To read the source kernel and to write your
     plan.
 
-IMPORTANT: You MUST use `retrieval_tool` multiple times while creating your plan
-to ensure accuracy. Do not rely on pre-trained knowledge alone - always verify
-with current documentation. CRITICAL: You MUST NOT use the `Grep` (or
+IMPORTANT: Use `search_api` (and `retrieval_tool` strictly for API name
+validation) to verify any Pallas/JAX API names and signatures you reference in
+your plan. Never use `retrieval_tool` for kernel design or optimization
+strategies. CRITICAL: You MUST NOT use the `Grep` (or
 `search_for_files_codesearch`) MCP tool anywhere during the kernel optimization
 process.
 

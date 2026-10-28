@@ -349,34 +349,24 @@ if __name__ == "__main__":
 
 You have three tools to help you:
 
-1.  `retrieval_tool`: Query the local 3-tiered LLMWiki knowledge base (Ripgrep -> Python Lexical -> Master Index) for syntax and code patterns.
+1.  `retrieval_tool`: Query the local LLMWiki knowledge base **strictly for API name and symbol validation**.
     *   Invoke via CLI:
 
         ```bash
-        {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/retrieval.py -- "<query>"
+        {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/retrieval.py -- "<api_or_symbol_name>"
         ```
 
-        where `<query>` is the query you want to search. Run this command every
-        time the instructions say to "query" or "use `retrieval_tool`".
+        where `<api_or_symbol_name>` is the Pallas/JAX API or symbol name you
+        want to validate or locate.
 
-    Use this EXTENSIVELY throughout implementation to retrieve
-    Pallas/JAX/TPU documentation. Essential for:
-
-    -   Finding implementation examples for specific operations (matmul,
-        reductions, etc.)
-    -   Looking up memory reference operations (`.load()`, `.store()`, `[...]`)
-    -   Understanding grid specifications and BlockSpec patterns with index_map
-        lambdas
-    -   Checking correct usage of TPU-specific features (pl.when, memory
-        barriers, etc.)
-    -   Looking up TPU architecture details (memory hierarchy, MXU specs, vector
-        units)
-    -   Debugging compilation or runtime issues with specific API calls
-
-    Retrieval strategy: - When implementing specific patterns, query for
-    examples (e.g., "BlockSpec index_map examples") - If you encounter an error
-    or uncertainty, query for troubleshooting tips (e.g., "common BlockSpec
-    errors")
+    **CRITICAL RESTRICTION**: The LLMWiki retrieval corpus is biased toward
+    specific kernel designs and past experiments. You **MUST ONLY** use
+    `retrieval_tool` to validate or discover exact Pallas/JAX API and symbol
+    names (e.g., finding which module exports a function, class, or attribute
+    before calling `search_api`). **DO NOT** query `retrieval_tool` for kernel
+    designs, operation implementation examples, tiling strategies, or code
+    templates. Follow the optimization plan (`<run_dir>/iter<N>/kernel_plan.md`)
+    for all design and algorithmic choices.
 
 2.  `search_api`: For looking up specific API definitions and signatures when
     you need precise technical details.
@@ -393,11 +383,12 @@ You have three tools to help you:
 3.  `Read` and `write_to_file`: To read the plan file, read the source
     kernel, and to write your final, optimized kernel.
 
-IMPORTANT: Use `retrieval_tool` and `search_api` proactively throughout
-implementation - do not guess API usage or rely only on pre-trained knowledge.
-Always verify with current documentation and definitions. CRITICAL: You MUST NOT
-use the `Grep` (or `search_for_files_codesearch`) MCP tool anywhere
-during the kernel optimization process.
+IMPORTANT: Use `search_api` (and `retrieval_tool` strictly for API name
+validation) proactively throughout implementation — do not guess API names or
+signatures. Never use `retrieval_tool` for kernel design or implementation
+templates. CRITICAL: You MUST NOT use the `Grep` (or
+`search_for_files_codesearch`) MCP tool anywhere during the kernel optimization
+process.
 
 ### Final Checklist Before Writing the File
 

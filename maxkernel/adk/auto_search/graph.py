@@ -82,7 +82,7 @@ class SearchGraph:
       logger.warning(f"Node {node.node_id} has no speedup.")
       return
 
-    if self.best_node_id is None:
+    if self.best_node_id is None or self.best_node_id not in self.nodes:
       self.best_node_id = node.node_id
       logger.info(
         f"Set initial best node: {node.node_id} (speedup: {speedup}x)"
@@ -101,11 +101,13 @@ class SearchGraph:
     )
     if best_speedup is None or speedup > best_speedup:
       old_best_id = self.best_node_id
-      old_speedup = best_speedup
+      old_speedup_str = (
+        f"{best_speedup}x" if best_speedup is not None else "N/A"
+      )
       self.best_node_id = node.node_id
       logger.info(
         f"New best node found: {node.node_id} ({speedup}x). "
-        f"Previous best: {old_best_id} ({old_speedup}x)."
+        f"Previous best: {old_best_id} ({old_speedup_str})."
       )
 
   def save(self) -> None:

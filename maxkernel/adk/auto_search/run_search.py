@@ -176,8 +176,11 @@ async def run_search(
         from auto_search.utils.analyze_timing import analyze_path
 
         dest_dir = os.path.join(problem_dir, os.path.basename(run_subdir))
-        shutil.copytree(run_subdir, dest_dir, dirs_exist_ok=True)
-        logger.info(f"Copied artifacts to {dest_dir}")
+        try:
+          shutil.copytree(run_subdir, dest_dir, dirs_exist_ok=True)
+          logger.info(f"Copied artifacts to {dest_dir}")
+        except Exception as copy_err:
+          logger.error(f"Failed to copy artifacts to {dest_dir}: {copy_err}")
 
         try:
           logger.info("Generating timing summary...")

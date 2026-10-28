@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class ADKSessionWorker:
   def __init__(self):
-    self._active_client: Optional[AutoAgentClient] = None
+    pass
 
   async def expand_node(
     self,
@@ -35,6 +35,7 @@ class ADKSessionWorker:
 
     # Run the agent and process results
     salvaged_node = None
+    active_client_container: list[AutoAgentClient] = []
     try:
       state = await self._run_agent(
         node_id=node_id,
@@ -45,6 +46,7 @@ class ADKSessionWorker:
         initial_state=initial_state,
         events_compaction=events_compaction,
         on_node_update=on_node_update,
+        active_client_container=active_client_container,
       )
       node = self._process_results(
         node_id=node_id,
@@ -57,9 +59,12 @@ class ADKSessionWorker:
         on_node_update(node)
       return node
     except BaseException as e:
-      if self._active_client and self._active_client.session:
+      active_client = (
+        active_client_container[0] if active_client_container else None
+      )
+      if active_client and active_client.session:
         try:
-          curr_state = self._active_client.get_state()
+          curr_state = active_client.get_state()
           if curr_state and curr_state.get("history"):
             candidate = self._process_results(
               node_id=node_id,
@@ -140,6 +145,7 @@ class ADKSessionWorker:
     initial_state: Optional[Dict[str, Any]] = None,
     events_compaction: bool = False,
     on_node_update: Optional[Callable[[Node], None]] = None,
+    active_client_container: Optional[list] = None,
   ) -> Dict[str, Any]:
     """Sets up a custom AutonomousPipelineAgent and runs the client."""
     agent_config = agent_config or {}
@@ -162,7 +168,8 @@ class ADKSessionWorker:
       agent=custom_agent,
       events_compaction=events_compaction,
     )
-    self._active_client = client
+    if active_client_container is not None:
+      active_client_container.append(client)
 
     def handle_event(event: Any) -> None:
       if not on_node_update:

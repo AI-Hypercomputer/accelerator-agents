@@ -110,6 +110,11 @@ class AutoAgentClient:
       ):
         if on_event:
           try:
+            self.session = await self.session_service.get_session(
+              app_name=self.app_name,
+              user_id=self.user_id,
+              session_id=self.session_id,
+            )
             res = on_event(event)
             if asyncio.iscoroutine(res):
               await res

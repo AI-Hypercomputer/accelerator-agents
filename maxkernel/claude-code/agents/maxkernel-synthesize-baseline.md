@@ -95,7 +95,8 @@ Target `synthesize_as`:
     verify the baseline against. Only use it when the user asked for it.
 
 Follow `{{MAXKERNEL_ROOT}}/evaluation/templates/reference_model.py.template`
-for the PyTorch shape. The contract:
+for the PyTorch shape if it exists; if it does not, the contract below is
+complete on its own:
 
 ```python
 class Model(nn.Module):          # the computation

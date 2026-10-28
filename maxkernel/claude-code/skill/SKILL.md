@@ -1,6 +1,6 @@
 ---
 name: maxkernel
-description: Orchestrates Pallas TPU kernel development and optimization. Converts JAX, PyTorch or CUDA into a Pallas TPU kernel and runs a self-refinement loop (plan -> implement -> compile -> test -> autotune -> profile) by dispatching the maxkernel-worker subagent once per iteration. Accepts an optional reference kernel (e.g. a CUDA implementation of the same computation) that the planner mines for design ideas. Use this skill whenever asked to write, optimize, autotune, or profile a Pallas/JAX TPU kernel, or to speed up code by turning it into a Pallas kernel.
+description: Orchestrates Pallas TPU kernel development and optimization. Converts JAX, PyTorch or CUDA into a Pallas TPU kernel — or, when the user gives no code at all, writes one from a plain description of the computation — and runs a self-refinement loop (plan -> implement -> compile -> test -> autotune -> profile) by dispatching the maxkernel-worker subagent once per iteration. Accepts an optional reference kernel (e.g. a CUDA implementation of the same computation) that the planner mines for design ideas. Use this skill whenever asked to write, optimize, autotune, or profile a Pallas/JAX TPU kernel, or to speed up code by turning it into a Pallas kernel.
 ---
 
 # MaxKernel
@@ -247,7 +247,18 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
         authoring code.
     -   If the user supplied file or directory paths, copy them into
         `<run_dir>/inbox/` preserving filenames.
-    -   Otherwise, if `$MK/workspace/base.py` exists, copy it to
+    -   **If the user supplied no primary code at all but described the
+        computation they want** ("write me a fused RMSNorm kernel for
+        (8, 4096, 4096) bf16"), this is a **specification run**. Go to step
+        2b. Do not reach for `$MK/workspace/base.py`: a leftover file from an
+        earlier run is not what the user asked for, and silently optimizing it
+        benchmarks the wrong computation. If such a file exists, ask whether
+        they meant it before going to step 2b. Code the user explicitly calls
+        a *reference* ("here is a CUDA version to borrow ideas from") does not
+        count as primary code. Still copy it into `inbox/`; it becomes a
+        reference of the specification run.
+    -   Otherwise (no code and no description, e.g. just "optimize my
+        kernel"), if `$MK/workspace/base.py` exists, copy it to
         `<run_dir>/inbox/base.py`.
     -   Never edit or translate what you copied. `inbox/` is the untouched
         record of what the user handed you; everything downstream is derived
@@ -255,6 +266,82 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     -   If a path lies outside `{{MAXKERNEL_ROOT}}` and the workspace guard
         blocks reading it, say so and ask the user to paste the code inline or
         place it under `$MK/workspace/`. Do not try to work around the guard.
+
+2b. **Specification run: build the job file from the user's description.**
+
+    Only when step 2 found no primary code but a described computation. The
+    user does not write a job file. You write `<run_dir>/job.json` for them,
+    because that is where `maxkernel-synthesize-baseline` reads the
+    specification from. You are transcribing what the user said, not
+    designing anything. This is no more authoring than copying their code
+    into `inbox/`.
+
+    1.  Write the user's request **verbatim** to `<run_dir>/inbox/request.md`.
+        That file is the untouched record; `job.json` is derived from it.
+    2.  Extract the `input.specification` fields (see
+        `{{MAXKERNEL_ROOT}}/docs/job-spec.md`, "`input.specification`") from
+        the request: `description`, `operation`, `tensors[]`, and whichever of
+        `constants`, `numerics`, `edge_cases`, `reference_formula` and
+        `known_implementations` the user actually stated. Leave out anything
+        they did not say. Filling a gap is the synthesis agent's job, and it
+        records each one as an assumption the user can see.
+    3.  **`tensors[]` must come from the user.** Every tensor needs `name`,
+        `role`, `shape` and `dtype`, and these define the problem
+        (general_rules #6). If the request does not pin them down, or the
+        description is too vague to name the computation at all, **ask the
+        user once, with every missing item in one question.** You may propose
+        concrete values (e.g. typical LLM sizes for the named op). Use them
+        only after the user accepts them, and never pick shapes silently.
+    4.  `synthesize_as`: `"jax"` only if the user asked for a JAX baseline,
+        otherwise `"pytorch"`. Run the torchax probe from step 3b now and set
+        `jax_conversion.method` from it (`"torchax"` or `"llm_port"`). For
+        `"jax"`, set `needs_jax_conversion: false` and `method: "none"`.
+    5.  Set `user_confirms_baseline: true`. This records that you are telling
+        the user, in the plan you show them, that the run will stop for them
+        to approve the synthesized baseline. It is **not** the approval. The
+        worker's Phase 0.1 gate still stops and waits.
+    6.  Fill the rest from what the user said, defaulting otherwise:
+        `has_reference`/`references` (any reference code from step 2,
+        `role: "donor"`), `correctness` (step 4 rules), `target.tpu_version`
+        (only if stated), `loop.max_iterations`.
+
+    The shape to write:
+
+    ```json
+    {
+      "schema": "maxkernel.job/1",
+      "input": {
+        "type": "specification",
+        "path": null,
+        "specification": {
+          "description": "<from the request>",
+          "operation": "<short_name>",
+          "synthesize_as": "pytorch",
+          "tensors": [
+            {"name": "x", "role": "input", "shape": [8, 4096, 4096], "dtype": "bfloat16"},
+            {"name": "y", "role": "output", "shape": [8, 4096, 4096], "dtype": "bfloat16"}
+          ],
+          "user_confirms_baseline": true
+        }
+      },
+      "has_reference": false,
+      "references": [],
+      "needs_jax_conversion": true,
+      "jax_conversion": {"method": "torchax", "emit_readable_reference": true}
+    }
+    ```
+
+    Then validate it exactly as a user-supplied job (step 1b), with
+    `<run_dir>/job.json` as the path. On exit 1, the error is yours, not the
+    user's. Fix the transcription, or ask the user for the missing fact the
+    error names, and re-validate. Show the user the extracted specification
+    and the plan the validator printed, and say plainly that an agent will
+    write the baseline every speedup is measured against and that the run
+    will stop for their approval of it. Then map the job onto `state.json`
+    per step 1b, setting `primary.source_path` to
+    `<run_dir>/source.py` (written in Phase 0.1) and
+    `primary.baseline_approved` to `false`, skip step 3 and 3b, and go to
+    step 4.
 
 3.  **Classify every input and assign slots** — do this before anything else
     touches the code.
@@ -294,8 +381,9 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     `<run_dir>/source.<ext>`, each reference to `<run_dir>/ref/<name>`.
 
     **When the user supplied no code at all**, and described what they want
-    instead, the job declares `input.type: "specification"` with an
-    `input.specification` object. The worker's Phase 0.1 synthesizes a
+    instead, you never reach this step: step 2b writes a job that declares
+    `input.type: "specification"` with an `input.specification` object (the
+    user may also hand you such a job file directly). The worker's Phase 0.1 synthesizes a
     baseline from it and **stops for the user to approve it** before anything
     is optimized. Say so when you report the plan: in that mode the agent
     writes the file the run is scored against, so the approval step is the only
@@ -462,7 +550,12 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     -   `primary.language` is one of `"pytorch"`, `"cuda"`, `"jax"` — the
         verdict from step 3, written once and never revised mid-run. Every
         downstream agent branches on it, so an unset or guessed value silently
-        skips the source-analysis phase.
+        skips the source-analysis phase. **The one exception is
+        `"specification"`** (step 2b or a specification job file): the worker
+        rewrites it to `"pytorch"` or `"jax"` itself, once, when the user
+        approves the synthesized baseline in Phase 0.1. Do not "correct" it
+        yourself in either direction. A specification run also carries
+        `primary.baseline_approved: false` until that approval.
     -   `primary.source_path` is the absolute path to the untouched user input.
     -   `primary.context_path`, `golden_path`, `golden_meta_path` and
         `port_verified` all stay `null` here; the worker fills them in Phases

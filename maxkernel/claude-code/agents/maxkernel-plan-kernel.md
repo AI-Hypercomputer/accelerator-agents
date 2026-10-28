@@ -246,13 +246,11 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
         single process.
     *   `prev.optimized_time_ms` — JSON number or `null`; iteration `N-1`'s
         measured latency in milliseconds.
-    *   `prior` — the best prior iteration `iter<k>` (`k < N-1`) in
-        `state.history` with `compile_ok == true`, `test_ok == true`, and
-        `speedup > 1.0` (i.e. `prev.base_choice` when `prev` built on a prior
-        iteration `iter<k>`, or the lowest-`optimized_time_ms` entry among
-        iterations `1 .. N-2` that beat `base.py`). If no iteration before `N-1`
-        achieved `speedup > 1.0` (for example when `N == 2`), `prior` is `none`
-        and the fallback is `<run_dir>/base.py`.
+    *   `prior` — if `prev.base_choice` is `"iter<k>"`, the entry in
+        `state.history` for iteration `k` (with its `prior.optimized_time_ms`).
+        If `prev.base_choice` is `"base"` (for example when `N == 2` or no
+        earlier iteration beat `base.py`), `prior` is `none` and the fallback is
+        `<run_dir>/base.py`.
 
     Apply this rule literally. Evaluate top to bottom and stop at the first row
     that matches:

@@ -41,10 +41,10 @@ Exit codes:
 import argparse
 import ast
 import io
-import tokenize
 import json
 import re
 import sys
+import tokenize
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -166,7 +166,7 @@ _LAUNCH = re.compile(
 
 
 _DIM3_DECL = re.compile(
-  r"\bdim3\s+(?P<name>\w+)\s*(?:\((?P<call>[^)]*)\)|=\s*dim3\s*\((?P<assign>[^)]*)\)|=\s*\{(?P<brace>[^}]*)\)|\{(?P<direct_brace>[^}]*)\})"
+  r"\bdim3\s+(?P<name>\w+)\s*(?:\((?P<call>[^)]*)\)|=\s*dim3\s*\((?P<assign>[^)]*)\)|=\s*\{(?P<brace>[^}]*)\}|\{(?P<direct_brace>[^}]*)\})"
 )
 _INT_DECL = re.compile(
   r"\b(?:const\s+)?(?:int|unsigned(?:\s+int)?|size_t|u?int(?:8|16|32|64)_t)\s+(?P<name>\w+)\s*=\s*(?P<value>[^;,]+)[;,]"
@@ -183,7 +183,13 @@ def resolve_dims(text):
   """
   table = {}
   for match in _DIM3_DECL.finditer(text):
-    args = match.group("call") or match.group("assign") or ""
+    args = (
+      match.group("call")
+      or match.group("assign")
+      or match.group("brace")
+      or match.group("direct_brace")
+      or ""
+    )
     table[match.group("name")] = {
       "expr": f"dim3({args.strip()})",
       "components": [a.strip() for a in split_params(args)],
@@ -246,7 +252,7 @@ _DEFINE = re.compile(
   re.M,
 )
 _CONSTEXPR = re.compile(
-  r"\b(?:static\s+)?(?:constexpr|const)\s+(?:int|unsigned|size_t|unsigned\s+int|long)\s+"
+  r"\b(?:static\s+)?(?:constexpr|const)\s+(?:int|unsigned(?:\s+int)?|size_t|long|u?int(?:8|16|32|64)_t)\s+"
   r"(?P<name>\w+)\s*=\s*(?P<value>[^;]+);"
 )
 _TEMPLATE_PARAM = re.compile(r"template\s*<(?P<params>[^>]*)>")
@@ -286,7 +292,7 @@ def find_constants(text):
 # ---------------------------------------------------------------------------
 
 _SHARED = re.compile(
-  r"(?:extern\s+)?__shared__\s+(?P<type>[\w:<>\s\*]+?)\s+(?P<name>\w+)\s*(?P<dims>(?:\[[^\]]*\])*)\s*;"
+  r"(?:extern\s+)?__shared__\s+(?P<type>[\w:<>\s\*\(\)]+?)\s+(?P<name>\w+)\s*(?P<dims>(?:\[[^\]]*\])*)\s*;"
 )
 _EXTERN_SHARED = re.compile(r"extern\s+__shared__")
 
@@ -570,7 +576,9 @@ def _param_records(fn, constant_marker, tree):
   }
   args = fn.args
   positional = args.posonlyargs + args.args
-  defaults = [None] * (len(positional) - len(args.defaults)) + list(args.defaults)
+  defaults = [None] * (len(positional) - len(args.defaults)) + list(
+    args.defaults
+  )
   params = []
   for arg, default in zip(positional, defaults):
     annotation = _src(arg.annotation)
@@ -595,7 +603,9 @@ def _assignments(tree):
     if isinstance(node, ast.Assign):
       for target in node.targets:
         if isinstance(target, ast.Name):
-          table.setdefault(target.id, []).append((node.lineno, _src(node.value)))
+          table.setdefault(target.id, []).append(
+            (node.lineno, _src(node.value))
+          )
     elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
       if node.value is not None:
         table.setdefault(node.target.id, []).append(
@@ -812,7 +822,9 @@ def analyze_triton(source, origin):
     "constants": find_py_constants(tree),
     "autotune_configs": autotune,
     "heuristics": heuristics,
-    "program_ids": _axis_calls(tree, tl_aliases, {"program_id", "num_programs"}),
+    "program_ids": _axis_calls(
+      tree, tl_aliases, {"program_id", "num_programs"}
+    ),
     "tile_shapes": sorted(tile_shapes, key=lambda t: t["line"]),
     "mechanisms": py_census(
       clean, TRITON_MECHANISMS, TRITON_COUNTERPART, tl_aliases

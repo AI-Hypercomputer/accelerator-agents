@@ -82,7 +82,10 @@ INLINE_CUDA_MARKERS = [
 # A Triton kernel is marked by its decorator, not by `import triton`: torch
 # code imports triton for utilities without defining any kernel.
 TRITON_MARKERS = [
-  (re.compile(r"@\s*triton\.(?:jit|autotune|heuristics)\b"), "@triton.jit kernel"),
+  (
+    re.compile(r"@\s*triton\.(?:jit|autotune|heuristics)\b"),
+    "@triton.jit kernel",
+  ),
 ]
 
 # NVIDIA cuTile Python (`import cuda.tile as ct`).

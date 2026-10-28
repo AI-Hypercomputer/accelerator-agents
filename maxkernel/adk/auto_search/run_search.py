@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import os
+import signal
 import sys
 import time
 from typing import Any, Optional, Tuple
@@ -396,6 +397,17 @@ def setup_logging(log_file: Optional[str]):
 
 
 def main():
+  def _sigterm_handler(signum, frame):
+    logger.warning(
+      "Received termination signal (SIGTERM). Initiating graceful shutdown..."
+    )
+    sys.exit(143)
+
+  try:
+    signal.signal(signal.SIGTERM, _sigterm_handler)
+  except (ValueError, AttributeError):
+    pass
+
   args = parse_args()
   setup_logging(args.log_file)
 

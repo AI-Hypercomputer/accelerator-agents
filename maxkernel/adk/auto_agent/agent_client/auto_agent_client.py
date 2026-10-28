@@ -79,7 +79,7 @@ class AutoAgentClient:
       raise ValueError(f"Key '{key}' not found in state")
     return state.get(key)
 
-  async def run_async(self) -> None:
+  async def run_async(self, on_event: Optional[Any] = None) -> None:
     if not self.session:
       await self.create_session()
 
@@ -108,7 +108,13 @@ class AutoAgentClient:
         session_id=self.session_id,
         new_message=new_message,
       ):
-        pass
+        if on_event:
+          try:
+            res = on_event(event)
+            if asyncio.iscoroutine(res):
+              await res
+          except Exception as cb_err:
+            logger.warning(f"Error in on_event callback: {cb_err}")
       logger.info(
         f"Finished in-process agent run for session {self.session_id}"
       )

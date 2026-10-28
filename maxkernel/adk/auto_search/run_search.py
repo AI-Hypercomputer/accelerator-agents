@@ -159,63 +159,70 @@ async def run_search(
       logger.info(f"Existing graph found for {problem_id}. Resuming...")
       orchestrator.resume()
 
-    await orchestrator.run()
-
-    best_result = save_optimized_kernel(orchestrator, optimized_file_path)
-
-    if run_subdir:
-      import shutil
-
-      from auto_search.utils.analyze_timing import analyze_path
-
-      dest_dir = os.path.join(problem_dir, os.path.basename(run_subdir))
-      shutil.copytree(run_subdir, dest_dir, dirs_exist_ok=True)
-      logger.info(f"Copied artifacts to {dest_dir}")
-
+    best_result = None
+    try:
+      await orchestrator.run()
+    finally:
       try:
-        logger.info("Generating timing summary...")
-        run_duration = time.time() - global_start_time
-        summary_text = analyze_path(dest_dir, real_wall_time=run_duration)
-        out_file = os.path.join(dest_dir, "timing_summary.md")
-        with open(out_file, "w") as f:
-          f.write("```text\n" + summary_text + "\n```\n")
-        logger.info(f"Saved metric summary to: {out_file}")
+        best_result = save_optimized_kernel(orchestrator, optimized_file_path)
+      except Exception as save_err:
+        logger.warning(
+          f"Failed to save optimized kernel in finally block: {save_err}"
+        )
 
-        logger.info("Generating token summary...")
+      if run_subdir:
+        import shutil
+
+        from auto_search.utils.analyze_timing import analyze_path
+
+        dest_dir = os.path.join(problem_dir, os.path.basename(run_subdir))
+        shutil.copytree(run_subdir, dest_dir, dirs_exist_ok=True)
+        logger.info(f"Copied artifacts to {dest_dir}")
+
         try:
-          from auto_search.utils.analyze_tokens import (
-            analyze_path as analyze_token_path,
-          )
+          logger.info("Generating timing summary...")
+          run_duration = time.time() - global_start_time
+          summary_text = analyze_path(dest_dir, real_wall_time=run_duration)
+          out_file = os.path.join(dest_dir, "timing_summary.md")
+          with open(out_file, "w") as f:
+            f.write("```text\n" + summary_text + "\n```\n")
+          logger.info(f"Saved metric summary to: {out_file}")
 
-          token_summary_text = analyze_token_path(dest_dir)
-          if token_summary_text:
-            token_out_file = os.path.join(dest_dir, "token.md")
-            with open(token_out_file, "w", encoding="utf-8") as f:
-              f.write(token_summary_text)
-            print(
-              f"\n\n====== TOKEN METRICS ======\n{token_summary_text}\n===========================\n"
+          logger.info("Generating token summary...")
+          try:
+            from auto_search.utils.analyze_tokens import (
+              analyze_path as analyze_token_path,
             )
-        except Exception as e:
-          logger.error(f"Failed to generate token summary: {e}")
-        logger.info("Generating search distribution summary...")
-        try:
-          from auto_search.utils.parse_search_distribution import (
-            analyze_distribution,
-          )
 
-          distribution_summary_text = analyze_distribution(dest_dir)
-          if distribution_summary_text:
-            dist_out_file = os.path.join(dest_dir, "search_distribution.md")
-            with open(dist_out_file, "w", encoding="utf-8") as f:
-              f.write("```text\n" + distribution_summary_text + "\n```\n")
-            print(
-              f"\n\n====== SEARCH DISTRIBUTION ======\n{distribution_summary_text}\n===========================\n"
+            token_summary_text = analyze_token_path(dest_dir)
+            if token_summary_text:
+              token_out_file = os.path.join(dest_dir, "token.md")
+              with open(token_out_file, "w", encoding="utf-8") as f:
+                f.write(token_summary_text)
+              print(
+                f"\n\n====== TOKEN METRICS ======\n{token_summary_text}\n===========================\n"
+              )
+          except Exception as e:
+            logger.error(f"Failed to generate token summary: {e}")
+          logger.info("Generating search distribution summary...")
+          try:
+            from auto_search.utils.parse_search_distribution import (
+              analyze_distribution,
             )
-        except Exception as e:
-          logger.error(f"Failed to generate search distribution summary: {e}")
 
-      except Exception as analyze_err:
-        logger.error(f"Failed to generate timing summary: {analyze_err}")
+            distribution_summary_text = analyze_distribution(dest_dir)
+            if distribution_summary_text:
+              dist_out_file = os.path.join(dest_dir, "search_distribution.md")
+              with open(dist_out_file, "w", encoding="utf-8") as f:
+                f.write("```text\n" + distribution_summary_text + "\n```\n")
+              print(
+                f"\n\n====== SEARCH DISTRIBUTION ======\n{distribution_summary_text}\n===========================\n"
+              )
+          except Exception as e:
+            logger.error(f"Failed to generate search distribution summary: {e}")
+
+        except Exception as analyze_err:
+          logger.error(f"Failed to generate timing summary: {analyze_err}")
 
     if best_result:
       best_id, speedup = best_result

@@ -117,6 +117,7 @@ class SimpleParallelSearchOrchestrator(SearchOrchestrator):
             reference_code=self.reference_code,
             agent_config=self.agent_config,
             events_compaction=self.events_compaction,
+            on_node_update=lambda n: self.graph.add_node(n),
           )
           if (
             node.execution_status == "SUCCESS"

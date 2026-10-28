@@ -89,8 +89,16 @@ class SearchGraph:
       )
       return
 
-    best_node = self.nodes[self.best_node_id]
-    best_speedup = best_node.evaluation.speedup
+    if self.best_node_id == node.node_id:
+      logger.info(f"Updated best node: {node.node_id} (speedup: {speedup}x)")
+      return
+
+    best_node = self.nodes.get(self.best_node_id)
+    best_speedup = (
+      best_node.evaluation.speedup
+      if best_node and best_node.evaluation
+      else None
+    )
     if best_speedup is None or speedup > best_speedup:
       old_best_id = self.best_node_id
       old_speedup = best_speedup

@@ -48,9 +48,10 @@ as `input_language`:
 - **cuTile** — cuTile kernels with a Python entry point (`Model`,
   `computation`, …).
 
-You can also hand over one **reference kernel** — a GPU implementation of the
-same computation in CUDA, Triton or cuTile (or another dialect, declared in a
-job file). A reference is never run or measured; the planner mines it for
+You can also hand over one **reference kernel**: a GPU implementation of the
+same computation in CUDA, Triton, cuTile, CuTe DSL or another GPU language, as
+a file or a directory. Say so in the prompt ("use `kernel.cu` as a
+reference"). A reference is never run or measured; the planner mines it for
 design ideas, after a reconciliation step checks that it computes what your
 primary computes.
 

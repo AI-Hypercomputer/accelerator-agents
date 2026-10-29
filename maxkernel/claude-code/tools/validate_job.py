@@ -44,7 +44,7 @@ SCHEMA = "maxkernel.job/1"
 # they are ported by an agent, never traced by torchax, and only Triton has an
 # oracle (its CPU interpreter). As a reference the type becomes
 # `references[].kind` in state.json.
-GPU_TYPES = {"cuda", "triton", "cutile", "gpu"}
+GPU_TYPES = {"cuda", "triton", "cutile", "cutedsl", "gpu"}
 INPUT_TYPES = GPU_TYPES | {"jax", "pytorch", "specification"}
 SYNTHESIS_TARGETS = {"pytorch", "jax"}
 REFERENCE_TYPES = GPU_TYPES | {"pallas", "jax", "pytorch"}
@@ -171,6 +171,11 @@ def validate(job, job_path):
     errors.append(
       f"has_reference is false but {len(refs)} reference(s) are listed. "
       "The references would be ignored; say which you meant."
+    )
+  if len(refs) > 1:
+    errors.append(
+      f"{len(refs)} references are listed; a run takes at most one. Keep the "
+      "one the planner should learn from."
     )
 
   for i, r in enumerate(refs):
@@ -358,7 +363,9 @@ def build_plan(job, itype, needs, method, emit, refs):
     ): "tools/capture_torch_golden.py (Triton interpreter on CPU)",
   }.get((effective, method))
   if effective in GPU_TYPES - {"triton"}:
-    name = {"cuda": "CUDA", "cutile": "cuTile"}.get(effective, "GPU kernels")
+    name = {"cuda": "CUDA", "cutile": "cuTile", "cutedsl": "CuTe DSL"}.get(
+      effective, "GPU kernels"
+    )
     oracle = f"none — a TPU host cannot execute {name}, so there is no oracle"
   if effective == "jax" and itype != "specification":
     oracle = "none — the input is already the reference"

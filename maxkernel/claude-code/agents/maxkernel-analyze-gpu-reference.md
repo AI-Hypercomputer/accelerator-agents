@@ -1,6 +1,6 @@
 ---
 name: maxkernel-analyze-gpu-reference
-description: Reads a GPU kernel (CUDA C++, Triton, cuTile, or any other GPU dialect) supplied as a REFERENCE (not as the source being converted) and writes ref/context.md — a structural brief plus per-item optimization notes, each tagged ALGORITHMIC (the idea transfers), STRUCTURAL (the purpose transfers, the value must be re-derived) or NON_PORTABLE (no TPU counterpart). Never writes base.py, never ports anything, never leaves ref/. Dispatched once per reference by maxkernel-worker.
+description: Reads a GPU kernel (CUDA C++, Triton, cuTile, CuTe DSL, or any other GPU dialect) supplied as a REFERENCE (not as the source being converted) and writes ref/context.md — a structural brief plus per-item optimization notes, each tagged ALGORITHMIC (the idea transfers), STRUCTURAL (the purpose transfers, the value must be re-derived) or NON_PORTABLE (no TPU counterpart). Never writes base.py, never ports anything, never leaves ref/. Dispatched once per reference by maxkernel-worker.
 tools: Read, Write, Glob, Bash
 model: inherit
 ---
@@ -51,9 +51,10 @@ written without reference to the primary. Describe what is in front of you.
 
 *   State file: `<run_dir>/state.json` — the single entry of the
     `references` array
-*   Dialect: that entry's `kind` — `cuda`, `triton`, `cutile`, or `gpu` (any
-    other dialect: CUTLASS/CuTe C++, CuTe-DSL, …)
-*   Reference source: that entry's `source_path`
+*   Dialect: that entry's `kind` — `cuda`, `triton`, `cutile`, `cutedsl`, or
+    `gpu` (several dialects mixed, CUTLASS/CuTe C++, or any other dialect)
+*   Reference source: that entry's `source_path` — a file, or a directory
+    holding a multi-file kernel project
 *   Extracted facts: that entry's `facts_path` (`<run_dir>/ref/gpu_facts.json`),
     or `null` in **generic mode** (below)
 *   Your only output: `<run_dir>/ref/context.md`
@@ -69,7 +70,7 @@ Do not write `state.json`.
 
 ```bash
 {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/gpu_static_facts.py \
-  <reference source paths> --dialect <kind> --json <run_dir>/ref/gpu_facts.json
+  <reference source_path> --json <run_dir>/ref/gpu_facts.json
 ```
 
 (The worker normally runs this for you. If `facts_path` already exists, just
@@ -99,6 +100,13 @@ parameters with the `ct.Constant` ones flagged, the decorator's options
 with `grid` resolved to the assignment it was built from, `ct.bid` axes, the
 `shape=` of every `ct.load` / `ct.store`, and the census.
 
+A CuTe DSL unit carries every `@cute.kernel` with its parameters, the
+`cutlass.Constexpr` ones flagged; the `@cute.jit` launchers; every
+`kernel(...).launch(grid=..., block=..., smem=...)` with `grid` and `block`
+resolved to the assignments they were built from; `cute.compile` calls; the
+`thread_idx` / `block_idx` calls; layout and tile shapes (`make_layout`,
+`local_tile`, `zipped_divide`, …); and the census.
+
 **Treat every number in that file as ground truth and restate it verbatim.**
 Grid dimensions are evidence about the decomposition; an analyst who
 paraphrases `dim3 grid((n + 255) / 256)` as "one block per 256 elements" has
@@ -108,9 +116,12 @@ error. If the extractor reports `resolved: null` for a field, say "not
 determined by the extractor" rather than reading a value out of the source
 yourself.
 
-**Generic mode.** When `kind` is `gpu`, or `facts_path` is `null`, there is no
-extractor for this dialect. Read the source directly, and mark every number you
-state as **"read from source, not extractor-verified"**.
+**Generic mode.** When `facts_path` is `null`, no part of the reference is in
+a dialect with an extractor. Read the source directly, and mark every number
+you state as **"read from source, not extractor-verified"**. A reference that
+is only partly in those dialects is partly covered: the facts file holds the
+units it could parse, and the rest is read from source under the same
+marking.
 
 ## Step 2: Read the source
 
@@ -121,8 +132,12 @@ KernelBench-style task keeps the kernel in a `cuda_sources` string inside a
 
 For Triton or cuTile, read the kernel **and** the Python that builds the grid
 and launches it (`kernel[grid](...)`, `ct.launch(...)`), plus any
-`@triton.autotune` config list. In generic mode, find the entry point and the
-launch site first.
+`@triton.autotune` config list. For CuTe DSL, read the `@cute.kernel`, the
+`@cute.jit` function that calls its `.launch(grid=..., block=...)`, and the
+`cute.compile` call. In generic mode, find the entry point and the launch
+site first. For a directory, start there too, then follow the imports to the
+kernels; a kernel library the project imports is part of the reference only
+if its source is in the directory.
 
 ## Step 3: Write `<run_dir>/ref/context.md`
 
@@ -219,16 +234,31 @@ statement that it has none:
 | `ct.assume_divisible_by` | Nothing — no counterpart on TPU |
 | `grid_dependency_control_*` | Nothing — no counterpart on TPU |
 
+| CuTe DSL mechanism present here | TPU / Pallas counterpart |
+| --- | --- |
+| `@cute.kernel` program, `cute.arch.block_idx()` | One Pallas program (one grid step), as a CUDA thread block above |
+| `.launch(grid=...)` | The Pallas `grid` itself |
+| `cute.arch.thread_idx()` lane arithmetic | Nothing — as `threadIdx` above |
+| `cutlass.Constexpr` tile sizes, `local_tile` / `zipped_divide` tilers | The `BlockSpec` block; the last two dims tiling to (8, 128) is what matters |
+| `SmemAllocator`, shared-memory tensors | The VMEM block Pallas already stages via `BlockSpec` |
+| `cp_async` copies, multi-stage pipelines | Pallas already double-buffers `BlockSpec` DMAs |
+| `make_tiled_mma`, `cute.gemm`, `Mma*Op` | As CUDA tensor cores above: the MXU |
+| `cute.arch.sync_threads()` / `barrier` | Nothing — as `__syncthreads()` above |
+| `make_swizzle` layouts | Nothing — as bank-conflict padding above |
+| `LdMatrix`, register fragments (`make_rmem_tensor`, `make_fragment_*`) | Nothing — per-thread register blocking has no counterpart on TPU |
+| `elem_less` / identity-tensor predication | In-kernel masking of the edge block |
+| `cute.math.*` | `jnp` equivalents; note the precision difference |
+
 For any other dialect (generic mode): map each construct onto its nearest
 row above by **purpose**, and name the row you used. CUTLASS/CuTe C++ is SIMT
 underneath: its tile shapes and stage counts are `STRUCTURAL` values, its
 swizzled layouts and copy atoms are `NON_PORTABLE`, and its `TiledMma` is the
 tensor-core row. If no row serves the purpose, say so and put it in §11.
 
-Use the table for this reference's dialect, and include only rows for
-mechanisms actually present. For each, say whether the counterpart is a real
-translation or an absence. If a construct has no row, list it in §11 instead
-of guessing.
+Use the table for each part's dialect (a mixed reference uses several), and
+include only rows for mechanisms actually present. For each, say whether the
+counterpart is a real translation or an absence. If a construct has no row,
+list it in §11 instead of guessing.
 
 ## 9. Candidate Ideas (raw material for the reconciler)
 

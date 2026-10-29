@@ -130,7 +130,8 @@ from inside the loop.
     -   `rtol` = `state.rtol` (default `1e-2`).
     -   `primary` = `state.primary` — the slot that defines the semantics.
         `state.primary.language` is `"pytorch"`, `"jax"`, a GPU dialect
-        (`"cuda"`, `"triton"`, `"cutile"`, `"gpu"`) or `"specification"` — the last meaning no source file was supplied and
+        (`"cuda"`, `"triton"`, `"cutile"`, `"cutedsl"`, `"gpu"`) or
+        `"specification"` — the last meaning no source file was supplied and
         Phase 0.1 must synthesize one, after which this field is rewritten to
         the synthesized kind. If the
         key is absent, fall back to the legacy flat fields
@@ -237,13 +238,11 @@ final report must say so.
 ### Phase 0.2: Capture Golden Values From a PyTorch Primary (ONCE — idempotent)
 
 **Run this only when `state.primary.language` is `"pytorch"` or `"triton"`.**
-Skip for `jax` and for the other GPU dialects — a TPU host cannot execute
-CUDA or cuTile, so there is nothing to capture. A Triton primary launches its
-kernels on torch tensors from a `Model` or `computation` entry point;
-`capture_torch_golden.py` runs them through Triton's CPU interpreter
-(`TRITON_INTERPRET=1`, set by the tool). Triton is always `reference_mode: "llm_port"`; torchax cannot trace a
-Triton kernel. If the interpreter cannot run a kernel, the tool exits 2 and
-the capture degrades exactly as below.
+Skip it for `jax` and the other GPU dialects: a TPU host cannot run them, so
+there is nothing to capture. For Triton, `capture_torch_golden.py` runs the
+kernels on CPU through Triton's interpreter, and the mode is always
+`llm_port` (torchax cannot trace a Triton kernel). If the interpreter cannot
+run a kernel, the tool exits 2 and the capture degrades as below.
 
 This is the phase that closes the hole Phase 0.9 cannot. Harness validation
 binds `base.py` as both sides of its own comparison, so it can never detect a
@@ -367,7 +366,8 @@ Phase 0.2, and Phase 0.7 produces the readable `base.py` from it when
 `emit_jnp_reference` is true. Dispatching the analyzer here as well would
 reintroduce exactly the LLM transcription that torchax mode exists to avoid.
 
-Otherwise the user handed the loop PyTorch or GPU kernel code as the *primary*. Neither
+Otherwise the user handed the loop PyTorch or GPU kernel code as the
+*primary*. Neither
 can be bound as `base_computation` — the harness `jax.jit`s it — so before
 anything can be measured, the source has to be understood and ported.
 
@@ -377,7 +377,7 @@ anything can be measured, the source has to be understood and ported.
     `cuda_context.md`), skip to Phase 0.5.
 2.  **Invoke the analyzer for this language**:
     -   `pytorch` → `maxkernel-analyze-torch-source`
-    -   `cuda`, `triton`, `cutile`, `gpu` → `maxkernel-analyze-source`
+    -   `cuda`, `triton`, `cutile`, `cutedsl`, `gpu` → `maxkernel-analyze-source`
     -   Prompt: `"Analyze the primary source for run_dir = <run_dir> (state file: <run_dir>/state.json)."`
 3.  **Verify on disk**: both `<run_dir>/base.py` and the brief must exist and
     be non-empty. Also check `base.py` binds correctly, since every later
@@ -417,27 +417,21 @@ validation re-dispatches the reconciler, which then cannot read the brief it is
 supposed to reconcile, and the phase fails its three attempts for a reason that
 looks nothing like its cause.
 
-A run has at most one reference, written in any GPU dialect: its `kind` is
-`cuda`, `triton`, `cutile`, or `gpu` for any other dialect.
+A run has at most one reference: a file or a directory. Its `kind` is
+`cuda`, `triton`, `cutile`, `cutedsl`, or `gpu` (mixed or other dialects).
 
 For each entry in `state.references`:
 
 1.  **Check if already done**: if that entry's `context_path` exists and is
     non-empty, skip it.
-2.  **Extract the facts deterministically, first** — when `kind` is `cuda`,
-    `triton` or `cutile`:
+2.  **Extract the facts deterministically, first**, whatever the `kind`:
     ```bash
     {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/gpu_static_facts.py \
-      <reference source_path> --dialect <kind> --json <run_dir>/ref/gpu_facts.json
+      <reference source_path> --json <run_dir>/ref/gpu_facts.json
     ```
-    Exit 3 means no kernel of that dialect was found in that file — drop the
-    reference from `state.references`, note it in
-    `<run_dir>/maxkernel_debug_history.md`, and continue. A reference that
-    cannot be parsed is not a run-stopping problem; it just means there is
-    nothing to borrow.
-
-    Any other `kind` has no extractor: skip this step and leave `facts_path`
-    `null`. The analyzer then works in generic mode, reading the source alone.
+    The tool detects each file's dialect itself. Exit 3 means nothing in the
+    reference could be extracted: leave `facts_path` `null` and continue; the
+    analyzer then reads the source alone.
 3.  **Invoke `maxkernel-analyze-gpu-reference`**:
     -   Prompt: `"Analyze the <kind> reference kernel at <source_path> for run_dir = <run_dir> (state file: <run_dir>/state.json)."`
 4.  **Verify on disk — and verify the prohibition held.**

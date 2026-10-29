@@ -19,7 +19,8 @@ source line, so a human or an agent can check it, and it never guesses at a
 value it could not find. A field it could not determine is `null`, never a
 plausible-looking default.
 
-Dialects (`--dialect`, default `auto`, which detects per unit):
+Dialects, detected per file (and per unit within a file, which may mix
+several):
 
   cuda    A regex extractor, not a C++ parser. Handles standalone `.cu`/`.cuh`
           files and CUDA carried inside a Python string for
@@ -29,9 +30,17 @@ Dialects (`--dialect`, default `auto`, which detects per unit):
   cutile  Python `ast` over NVIDIA cuTile (`import cuda.tile as ct`):
           `@ct.kernel` entry points, `ct.load`/`ct.store` tile shapes and
           `ct.launch(stream, grid, kernel, args)` sites.
+  cutedsl Python `ast` over NVIDIA CuTe DSL (`import cutlass.cute as cute`):
+          `@cute.kernel` entry points, `@cute.jit` launchers,
+          `kernel(...).launch(grid=..., block=...)` sites, `cute.compile`
+          calls and layout/tile shapes.
 
-The Python dialects are parsed, never imported or executed: neither triton nor
-cuda.tile needs to be installed, and nothing in the reference ever runs.
+The Python dialects are parsed, never imported or executed: none of triton,
+cuda.tile or cutlass needs to be installed, and nothing in the reference ever
+runs.
+
+A path may be a directory, searched recursively for source files, so a
+multi-file kernel project is extracted as one reference.
 
 Exit codes:
   0  parsed at least one unit with a kernel or a launch
@@ -166,7 +175,7 @@ _LAUNCH = re.compile(
 
 
 _DIM3_DECL = re.compile(
-  r"\bdim3\s+(?P<name>\w+)\s*(?:\((?P<call>[^)]*)\)|=\s*dim3\s*\((?P<assign>[^)]*)\)|=\s*\{(?P<brace>[^}]*)\}|\{(?P<direct_brace>[^}]*)\})"
+  r"\bdim3\s+(?P<name>\w+)\s*(?:\((?P<call>(?:[^()]|\([^()]*\))*)\)|=\s*dim3\s*\((?P<assign>(?:[^()]|\([^()]*\))*)\)|=\s*\{(?P<brace>[^}]*)\}|\{(?P<direct_brace>[^}]*)\})"
 )
 _INT_DECL = re.compile(
   r"\b(?:const\s+)?(?:int|unsigned(?:\s+int)?|size_t|u?int(?:8|16|32|64)_t)\s+(?P<name>\w+)\s*=\s*(?P<value>[^;,]+)[;,]"
@@ -503,6 +512,38 @@ CUTILE_COUNTERPART = {
   "grid_dependency_control": TPU_COUNTERPART["dynamic_parallelism"],
 }
 
+# CuTe DSL is SIMT underneath, like CUDA C++, so most mechanisms are CUDA's
+# under Python names and reuse CUDA's counterpart text.
+CUTEDSL_MECHANISMS = {
+  "block_index": r"\b{cute}\.arch\.(?:block_idx|grid_dim)\s*\(",
+  "thread_index": r"\b{cute}\.arch\.(?:thread_idx|block_dim)\s*\(",
+  "tensor_cores": r"\b{cute}\.gemm\s*\(|\bmake_tiled_mma\s*\(|\bMma\w*Op\b",
+  "shared_memory": r"\bSmemAllocator\b|\b{cute}\.struct\.MemRange\b",
+  "async_copy": r"\bcp_async\w*\s*\(|\bcpasync\.",
+  "syncthreads": r"\b{cute}\.arch\.(?:sync_threads|barrier)\s*\(",
+  "warp_shuffle": r"\b{cute}\.arch\.shuffle\w*\s*\(",
+  "atomics": r"\b{cute}\.arch\.atomic\w*\s*\(",
+  "swizzle": r"\b{cute}\.make_swizzle\s*\(",
+  "register_staging": r"\bLdMatrix\w*|\b{cute}\.make_(?:rmem_tensor|fragment)\w*\s*\(",
+  "predication": r"\b{cute}\.elem_less\s*\(|\b{cute}\.make_identity_tensor\s*\(",
+  "fast_math_intrinsics": r"\b{cute}\.math\.\w+\s*\(",
+}
+
+CUTEDSL_COUNTERPART = {
+  "block_index": TPU_COUNTERPART["grid_stride_loop"],
+  "thread_index": None,
+  "tensor_cores": TPU_COUNTERPART["tensor_cores"],
+  "shared_memory": TPU_COUNTERPART["shared_memory"],
+  "async_copy": TPU_COUNTERPART["async_copy"],
+  "syncthreads": TPU_COUNTERPART["syncthreads"],
+  "warp_shuffle": TPU_COUNTERPART["warp_shuffle"],
+  "atomics": TPU_COUNTERPART["atomics"],
+  "swizzle": None,
+  "register_staging": None,
+  "predication": TRITON_COUNTERPART["masked_memory_access"],
+  "fast_math_intrinsics": TPU_COUNTERPART["fast_math_intrinsics"],
+}
+
 
 def strip_py_comments(text):
   """Blanks `#` comments while preserving line numbering and strings."""
@@ -667,7 +708,9 @@ def py_census(text, mechanisms, counterparts, aliases):
     # text once per alias, and must be counted once.
     starts = set()
     for alias in aliases:
-      pattern = template.format(tl=re.escape(alias), ct=re.escape(alias))
+      pattern = template.format(
+        tl=re.escape(alias), ct=re.escape(alias), cute=re.escape(alias)
+      )
       starts.update(m.start() for m in re.finditer(pattern, text, re.S))
     if starts:
       found[name] = {
@@ -903,17 +946,149 @@ def analyze_cutile(source, origin):
   }
 
 
+def analyze_cutedsl(source, origin):
+  clean = strip_py_comments(source)
+  tree = ast.parse(clean)
+  cute_aliases = module_aliases(tree, "cutlass.cute") or {"cute"}
+
+  def is_cute(node, leaf):
+    return _call_name(node) in {f"{a}.{leaf}" for a in cute_aliases}
+
+  # @cute.kernel functions are the device code; @cute.jit functions are the
+  # host-side launchers that call kernel(...).launch(...). Either may be a
+  # method of a kernel class.
+  kernels, launchers = [], []
+  for node in ast.walk(tree):
+    if not isinstance(node, ast.FunctionDef):
+      continue
+    for dec in node.decorator_list:
+      if is_cute(dec, "kernel") or is_cute(dec, "jit"):
+        target = kernels if is_cute(dec, "kernel") else launchers
+        target.append(
+          {
+            "name": node.name,
+            "line": node.lineno,
+            "params": _param_records(node, "Constexpr", tree),
+          }
+        )
+        break
+
+  assignments = _assignments(tree)
+  launches, compiles, tile_shapes = [], [], []
+  for node in ast.walk(tree):
+    if not isinstance(node, ast.Call):
+      continue
+    func = node.func
+    # kernel(args).launch(grid=..., block=..., smem=..., stream=...)
+    if (
+      isinstance(func, ast.Attribute)
+      and func.attr == "launch"
+      and isinstance(func.value, ast.Call)
+    ):
+      kw = {k.arg: k.value for k in node.keywords if k.arg}
+      launches.append(
+        {
+          "kernel": _call_name(func.value),
+          "line": node.lineno,
+          "grid": _resolve_py(kw["grid"], assignments)
+          if "grid" in kw
+          else None,
+          "block": _resolve_py(kw["block"], assignments)
+          if "block" in kw
+          else None,
+          "smem": _src(kw.get("smem")),
+          "stream": _src(kw.get("stream")),
+          "raw": _src(func.value) + ".launch(...)",
+        }
+      )
+    elif is_cute(node, "compile"):
+      compiles.append(
+        {
+          "function": _src(node.args[0]) if node.args else None,
+          "line": node.lineno,
+        }
+      )
+    elif any(
+      is_cute(node, op)
+      for op in (
+        "make_layout",
+        "make_ordered_layout",
+        "local_tile",
+        "zipped_divide",
+        "tiled_divide",
+      )
+    ):
+      tile_shapes.append(
+        {
+          "call": func.attr,
+          "args": [_src(a) for a in node.args],
+          "options": _kwargs(node),
+          "line": node.lineno,
+        }
+      )
+
+  index_calls = [
+    {"call": node.func.attr, "line": node.lineno}
+    for node in ast.walk(tree)
+    if isinstance(node, ast.Call)
+    and isinstance(node.func, ast.Attribute)
+    and node.func.attr in ("thread_idx", "block_idx", "block_dim", "grid_dim")
+    and _src(node.func.value) in {f"{a}.arch" for a in cute_aliases}
+  ]
+
+  return {
+    "dialect": "cutedsl",
+    "origin": origin,
+    "lines": source.count("\n") + 1,
+    "kernels": kernels,
+    "launchers": launchers,
+    "launches": launches,
+    "compiles": compiles,
+    "constants": find_py_constants(tree),
+    "index_calls": sorted(index_calls, key=lambda c: c["line"]),
+    "tile_shapes": sorted(tile_shapes, key=lambda t: t["line"]),
+    "mechanisms": py_census(
+      clean, CUTEDSL_MECHANISMS, CUTEDSL_COUNTERPART, cute_aliases
+    ),
+  }
+
+
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
 
-DIALECTS = ("cuda", "triton", "cutile")
+# What a directory reference is searched for: a kernel project spreads its
+# kernels, bindings and launchers across these.
+SOURCE_SUFFIXES = {".py", ".cu", ".cuh", ".cc", ".cpp", ".h", ".hpp"}
+SKIP_DIRS = {"__pycache__", ".git", "build", "dist", ".ipynb_checkpoints"}
+
+
+def source_files(paths):
+  """Expands directories into their source files, in a stable order."""
+  for raw in paths:
+    path = Path(raw)
+    if path.is_dir():
+      yield from sorted(
+        p
+        for p in path.rglob("*")
+        if p.is_file()
+        and p.suffix in SOURCE_SUFFIXES
+        and not SKIP_DIRS.intersection(p.relative_to(path).parts)
+      )
+    else:
+      yield path
+
 
 _TRITON_DETECT = re.compile(
   r"^\s*(?:import\s+triton\b|from\s+triton\b)|@\s*(?:triton\.)?jit\b", re.M
 )
 _CUTILE_DETECT = re.compile(
   r"^\s*(?:import\s+cuda\.tile\b|from\s+cuda\.tile\b|from\s+cuda\s+import\s+tile\b)",
+  re.M,
+)
+_CUTEDSL_DETECT = re.compile(
+  r"^\s*(?:import\s+cutlass\.cute\b|from\s+cutlass\.cute\b"
+  r"|from\s+cutlass\s+import\s+[^\n]*\bcute\b)",
   re.M,
 )
 
@@ -945,15 +1120,17 @@ def detect_dialects(path, text):
     found.append("triton")
   if _CUTILE_DETECT.search(text):
     found.append("cutile")
+  if _CUTEDSL_DETECT.search(text):
+    found.append("cutedsl")
   if extract_inline_cuda(text):
     found.append("cuda")
   return found
 
 
-def analyze_path(path, dialect="auto"):
+def analyze_path(path):
   """Returns a list of unit records for one file (a .py may hold several)."""
   text = Path(path).read_text(errors="replace")
-  dialects = detect_dialects(path, text) if dialect == "auto" else [dialect]
+  dialects = detect_dialects(path, text)
   units = []
   for d in dialects:
     if d == "cuda":
@@ -968,7 +1145,11 @@ def analyze_path(path, dialect="auto"):
       else:
         units.append(analyze_source(text, str(path)))
       continue
-    analyzer = analyze_triton if d == "triton" else analyze_cutile
+    analyzer = {
+      "triton": analyze_triton,
+      "cutile": analyze_cutile,
+      "cutedsl": analyze_cutedsl,
+    }[d]
     try:
       units.append(analyzer(text, str(path)))
     except SyntaxError as e:
@@ -980,34 +1161,23 @@ def main():
   parser = argparse.ArgumentParser(
     description="Extract structural facts from GPU kernel source deterministically."
   )
-  parser.add_argument("paths", nargs="+")
-  parser.add_argument(
-    "--dialect",
-    choices=("auto",) + DIALECTS,
-    default="auto",
-    help="force one dialect instead of detecting it per file",
-  )
+  parser.add_argument("paths", nargs="+", help="files and/or directories")
   parser.add_argument("--json", help="write the report to this path")
   args = parser.parse_args()
 
   units = []
-  for raw in args.paths:
-    path = Path(raw)
+  for path in source_files(args.paths):
     if not path.is_file():
       print(f"Not a file, skipping: {path}", file=sys.stderr)
       continue
     try:
-      units.extend(analyze_path(path, args.dialect))
+      units.extend(analyze_path(path))
     except OSError as e:
       print(f"Could not read {path}: {e}", file=sys.stderr)
 
   units = [u for u in units if u["kernels"] or u["launches"]]
   if not units:
-    print(
-      "No GPU kernels found in the given paths "
-      f"(dialects tried: {args.dialect}).",
-      file=sys.stderr,
-    )
+    print("No GPU kernels found in the given paths.", file=sys.stderr)
     sys.exit(3)
 
   report = {

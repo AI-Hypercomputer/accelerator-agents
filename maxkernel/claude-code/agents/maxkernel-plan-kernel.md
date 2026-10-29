@@ -73,7 +73,7 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
 
     *   **`"jax"`** — `state.primary.context_path` is `null`. `base.py` *is*
         the user's own code; nothing else to read. Skip to step 2.
-    *   **`"pytorch"` or a GPU dialect (`"cuda"`, `"triton"`, `"cutile"`,
+    *   **`"pytorch"` or a GPU dialect (`"cuda"`, `"triton"`, `"cutile"`, `"cutedsl"`,
         `"gpu"`)** — `base.py` is a **port**, not the user's
         code. You MUST `Read` `state.primary.context_path`
         (`<run_dir>/torch_context.md` or `<run_dir>/<language>_context.md`) before

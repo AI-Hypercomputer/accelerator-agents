@@ -1,23 +1,10 @@
-# Design: PyTorch → Pallas, with a CUDA kernel as a reference donor
+# Design: PyTorch → Pallas, with a GPU kernel as a reference donor
 
-Status: implemented on branch `pytorch_cuda`
+Status: implemented
 Scope: extends the MaxKernel loop (`skill/SKILL.md`, `agents/maxkernel-*.md`)
 
-> **Generalized to any GPU dialect.** This document was written for a CUDA
-> reference, and its CUDA examples still stand. The reference spine now accepts
-> CUDA C++, Triton, cuTile, or any other GPU dialect (still at most one
-> reference per run). What changed relative to the text below:
->
-> *   `references[].kind` is `cuda`, `triton`, `cutile`, or `gpu` (no extractor;
->     the brief is written from source alone).
-> *   `tools/cuda_static_facts.py` is now `tools/gpu_static_facts.py
->     --dialect auto|cuda|triton|cutile`. The CUDA output is unchanged, with an
->     added `dialect` field; Triton and cuTile are parsed with Python `ast`.
-> *   `maxkernel-analyze-cuda-reference` is now `maxkernel-analyze-gpu-reference`.
->     It writes `ref/context.md` from `ref/gpu_facts.json`. Its §7 tables (one per
->     dialect) and §9 decision tree are the triage authority. The
->     `analyze_cuda_reference.md` and `cuda_to_pallas.md` documents cited below
->     were never checked in.
+> The reference may be in any GPU dialect: CUDA C++, Triton, cuTile, CuTe DSL
+> or another. CUDA is the running example below.
 
 ---
 
@@ -84,9 +71,9 @@ level that the planner is required to respect.
   ───────────────────────                    ───────────────────────────
   source_torch.py                            reference.cu
         │                                          │
-        │ analyze-torch-source                     │ analyze-cuda-reference
+        │ analyze-torch-source                     │ analyze-gpu-reference 
         ▼                                          ▼
-  torch_context.md ──────────┐          ┌──── ref_cuda_context.md
+  torch_context.md ──────────┐          ┌──── ref/context.md
         │                    │          │
         │ (port)             └──► reconcile-reference ◄─┘
         ▼                              │
@@ -204,7 +191,7 @@ so rather than reusing the CUDA section list:
 - **§8 Port Notes / risk list** — as today, but now it may cite the golden
   comparison instead of speculating.
 
-### Phase 0.25b — Analyze the reference *(`maxkernel-analyze-cuda-reference`)*
+### Phase 0.25b — Analyze the reference *(`maxkernel-analyze-gpu-reference`)*
 
 This is *not* the same agent as 0.25a with a different input, and making it one
 is the mistake to avoid. Its differences are contractual:
@@ -216,8 +203,8 @@ is the mistake to avoid. Its differences are contractual:
   measure against it.
 - It reads a deterministic facts file first:
   ```bash
-  {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/cuda_static_facts.py \
-    <run_dir>/ref/*.cu --json <run_dir>/ref/gpu_facts.json
+  {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/gpu_static_facts.py \
+    <run_dir>/ref/<name> --json <run_dir>/ref/gpu_facts.json
   ```
   which extracts `__global__` signatures, launch configurations, shared-memory
   byte counts, `#define`d tile constants and `wmma` fragment shapes by parsing,
@@ -225,7 +212,7 @@ is the mistake to avoid. Its differences are contractual:
   the decomposition; an LLM misreading `dim3 grid((n+255)/256)` poisons every
   inference built on it.
 
-Output: `<run_dir>/ref/ref_cuda_context.md`, structurally the sections 1, 4, 5,
+Output: `<run_dir>/ref/context.md`, structurally the sections 1, 4, 5,
 6, 7 and 9 of the reverted `maxkernel-analyze-source` brief — inventory,
 parallel decomposition, memory hierarchy, synchronization/numerics, CUDA→TPU
 translation table, and opportunities. Sections 2, 3 and 8 (specification, host
@@ -246,7 +233,7 @@ a different head dimension. If the planner borrows a tiling strategy justified
 by a fused epilogue that this problem does not have, it will produce a slower
 kernel and nobody will know why.
 
-Inputs: `torch_context.md` §2/§3/§5, `ref_cuda_context.md`, `gpu_facts.json`,
+Inputs: `torch_context.md` §2/§3/§5, `ref/context.md`, `gpu_facts.json`,
 `torch_golden.json`.
 
 Output 1 — `<run_dir>/reference_alignment.md`, whose header is a single verdict:
@@ -463,7 +450,7 @@ no number.
       "kind": "cuda",
       "source_path": "<abs>/ref/flash.cu",
       "facts_path": "<abs>/ref/gpu_facts.json",
-      "context_path": "<abs>/ref/ref_cuda_context.md"
+      "context_path": "<abs>/ref/context.md"
     }
   ],
   "reference_trust": "partial",
@@ -488,7 +475,7 @@ this schema fills `primary` from the flat fields and sets `references: []`.
 | --- | --- | --- |
 | `classify_inputs.py` | per-file language + entry point + slot candidacy | generalizes the missing `detect_input_language.py`; classification must be reproducible across resumes |
 | `capture_torch_golden.py` | run torch on CPU, record inputs/outputs/fp64 spread | executing code is not a judgement call |
-| `cuda_static_facts.py` | extract launch config, tile constants, `wmma` shapes from `.cu` | grid dims are evidence; an LLM must not paraphrase them |
+| `gpu_static_facts.py` | extract kernel signatures, launch configs and tile constants from CUDA, Triton, cuTile and CuTe DSL source | grid dims are evidence; an LLM must not paraphrase them |
 | `verify_port.py` | assemble + submit the golden check for `base.py` | gate must be mechanical |
 | `ledger.py` | read/append/transition `ideas_ledger.json` | status transitions are a state machine, not prose |
 
@@ -497,7 +484,7 @@ this schema fills `primary` from the flat fields and sets `references: []`.
 | Agent | Writes | Explicitly cannot |
 | --- | --- | --- |
 | `maxkernel-analyze-torch-source` | `torch_context.md`, `base.py` | write Pallas; read `<run_dir>/ref/` |
-| `maxkernel-analyze-cuda-reference` | `ref/ref_cuda_context.md` | write `base.py` or anything outside `ref/`; write Pallas |
+| `maxkernel-analyze-gpu-reference` | `ref/context.md` | write `base.py` or anything outside `ref/`; write Pallas |
 | `maxkernel-reconcile-reference` | `reference_alignment.md`, `ideas_ledger.json` | write code of any kind |
 | `maxkernel-fix-port` | `base.py` only | touch the optimized kernel or the harness |
 
@@ -556,7 +543,7 @@ influence one adjudicated claim at a time.**
    `capture_torch_golden.py`, `verify_port.py`, `fix-port`, the Phase 0.4 gate.
    This is independently valuable and ships without any CUDA-reference work.
 3. **Reference slot, inert.** Two-slot state schema, `classify_inputs.py`,
-   `analyze-cuda-reference`, `cuda_static_facts.py`. Brief is produced but the
+   `analyze-gpu-reference`, `gpu_static_facts.py`. Brief is produced but the
    planner does not read it yet. Lets the brief's quality be judged before it
    can affect a plan.
 4. **Reconciliation and ledger.** `reconcile-reference`, `ledger.py`, planner

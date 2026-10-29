@@ -103,17 +103,22 @@ Inputs come in two kinds, and they carry different authority.
 The **primary** is the thing being converted. It defines the semantics, the
 baseline `base.py`, and every number the run reports. A **reference** is an
 independent implementation of roughly the same computation — typically a GPU
-kernel someone already tuned, in CUDA, Triton, cuTile or another dialect —
-supplied so the planner can mine it for design ideas. A reference is never
-executed, never measured, and never compared against. A run takes at most one
-reference.
+kernel someone already tuned, in CUDA, Triton, cuTile, CuTe DSL or another
+dialect — supplied so the planner can mine it for design ideas. A reference is
+never executed, never measured, and never compared against.
 
-| reference dialect | How it is read |
-| --- | --- |
-| `cuda` | `.cu`/`.cuh`, or a `load_inline` string. Facts parsed by `tools/gpu_static_facts.py`. |
-| `triton` | `@triton.jit` kernels, autotune configs, `kernel[grid]` launches — parsed from the Python AST, never imported. |
-| `cutile` | `@ct.kernel` kernels and `ct.launch` sites (`import cuda.tile as ct`) — parsed the same way. |
-| `gpu` | Anything else (CUTLASS/CuTe, CuTe-DSL, …), declared in a job file. No extractor; the analyzer reads the source alone. |
+**Supplying a reference.** Name it in your request ("use `kernel.cu` as a
+reference"), or list it under `references` in a job file. A run takes at most
+one reference: a file, or a directory holding a multi-file kernel project.
+
+| Language | `kind` | How it is read |
+| --- | --- | --- |
+| CUDA C++ (`.cu` / `.cuh`, or a `load_inline` source string) | `cuda` | Facts extracted by `tools/gpu_static_facts.py` |
+| Triton (`@triton.jit`) | `triton` | Facts extracted from the Python AST; never imported |
+| cuTile (`import cuda.tile`, `@ct.kernel`) | `cutile` | Facts extracted the same way |
+| CuTe DSL (`import cutlass.cute`, `@cute.kernel`) | `cutedsl` | Facts extracted the same way |
+| Several of the above | `gpu` | Facts extracted for each part |
+| Any other GPU language | `gpu` | Read from source; name the file as the reference |
 
 `tools/classify_inputs.py` sorts every file you hand over by deterministic
 marker matching, not a model's opinion. When two files could each be the
@@ -126,7 +131,7 @@ would silently benchmark the wrong computation for five iterations.
 | `pytorch` | A `torch` module. It is executed on CPU to capture golden values, ported to a JAX `base.py`, and that port is then **verified against the golden values** before the loop starts. |
 | `cuda` | `.cu`/`.cuh`, or CUDA carried in a Python file for `load_inline`. Ported to `base.py` via `cuda_context.md`. No golden capture — a TPU host cannot execute CUDA. |
 | `triton` | Triton kernels launched on torch tensors from a Python entry point (`Model`, `computation`, …) with a `get_inputs()`. Golden values come from Triton's CPU interpreter, so the port **is verified**, as for `pytorch`. |
-| `cutile`, `gpu` | cuTile, or another GPU dialect declared in a job file. Ported like `cuda`, unverified. |
+| `cutile`, `cutedsl`, `gpu` | cuTile, CuTe DSL, or another GPU dialect. Ported like `cuda`, unverified. |
 
 A KernelBench-style file (a torch `Model` plus a `cuda_sources` string) fills
 both slots at once: the torch module is the primary, the embedded CUDA is a

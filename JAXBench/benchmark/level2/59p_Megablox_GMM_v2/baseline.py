@@ -1590,8 +1590,8 @@ def workload(
       preferred_element_type=lhs.dtype,
       maybe_quantize_lhs=True,
       zero_initialize=True,
-      # calculate_tiling's VMEM estimate undercounts by ~2 MiB on the
-      # dsv4_pro shapes; leave headroom so the chosen tiles compile.
+      # calculate_tiling's VMEM estimate undercounts (~2 MiB observed on the
+      # dsv4_pro shapes); reserve a generous 16 MiB so the chosen tiles compile.
       tile_info=lambda d, l, r, v, f: calculate_tiling(
           d, l, r, v - (16 << 20), f
       ),

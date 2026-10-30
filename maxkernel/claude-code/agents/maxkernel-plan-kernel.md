@@ -165,7 +165,6 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
     
     Before finalizing tile choices, execute the **First-Principles Analysis**:
     *   **Access Efficiency (bytes touched vs. bytes needed)**: For each array, compare the bytes the kernel needs with the bytes in the tiles it touches (Section 1.D of `{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md`). Indexed, strided or column access, a last dim < 128, and partial tiles waste bandwidth. If touched is much larger than needed, use it in the intensity estimate and evaluate a layout change before tuning tile sizes; for dense, contiguous access, note "~1×" and move on.
-    *   **LLMWiki Load Mandate**: Query the local 3-tiered LLMWiki knowledge base (`tools/retrieval.py`) for decision trees, hardware envelopes, and reference templates.
     *   **Roofline Bound Classification**: Categorize the operation:
         - *Memory-Bandwidth Bound* (FlashAttention, Softmax, LayerNorm, GQA): Bottleneck is HBM traffic. Minimize HBM rounds, maximize VMEM residency, double-buffer DMA.
         - *Compute Bound* (GEMM, Dense Matmul): Bottleneck is MXU arithmetic throughput. Align matmul tile dimensions to the target's MXU size (128 on v5e/v5p, 256 on v6e/v7x), maximize accumulator reuse in VMEM.
@@ -186,7 +185,7 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
 
 **For REVISIONS / NEXT ITERATION Plans:**
 
-1.  **Read previous artifacts:** Use `Read` to read `<run_dir>/iter<N-1>/kernel_plan.md`, `<run_dir>/iter<N-1>/optimized.py`, `<run_dir>/iter<N-1>/autotune_summary.md` (if exists), and `<run_dir>/iter<N-1>/profile_summary.md` (if exists).
+1.  **Read previous artifacts:** Use `Read` to read `<run_dir>/iter<N-1>/kernel_plan.md`, `<run_dir>/iter<N-1>/optimized.py`, `<run_dir>/iter<N-1>/autotune_summary.md` (if exists), and `<run_dir>/iter<N-1>/profile_summary.md` (if exists). If Step 2.4 below reverts to an earlier iteration `iter<k>` (`k < N-1`), also `Read` `<run_dir>/iter<k>/optimized.py` and `<run_dir>/iter<k>/kernel_plan.md`.
 2.  **Review execution results & compare target vs. actual performance:**
     - Analyze status entries in `<run_dir>/state.json` to identify what failed or what performance bottlenecks remain.
     - **Compare Expected Target vs. Actual Performance**:
@@ -237,44 +236,58 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
 4.  **Decide Optimization Base — an explicit numerical rule, not a judgement call.**
 
     Read `<run_dir>/state.json`, find the entry in `state.history` whose
-    `iteration` equals `N-1`, and call it `prev`. Extract exactly three values:
+    `iteration` equals `N-1`, and call it `prev`. Extract:
 
     *   `prev.compile_ok` — boolean
     *   `prev.test_ok` — boolean
     *   `prev.speedup` — JSON number or `null`; iteration `N-1`'s measured
         speedup over `base.py`, from a paired measurement the harness took in a
         single process.
+    *   `prev.optimized_time_ms` — JSON number or `null`; iteration `N-1`'s
+        measured latency in milliseconds.
+    *   `prior` — the best prior iteration `iter<k>` (`k < N-1`) in
+        `state.history` with `compile_ok == true`, `test_ok == true`, and
+        `speedup > 1.0` (i.e. `prev.base_choice` when `prev` built on a prior
+        iteration `iter<k>`, or the lowest-`optimized_time_ms` entry among
+        iterations `1 .. N-2` that beat `base.py`). If no iteration before `N-1`
+        achieved `speedup > 1.0` (for example when `N == 2`), `prior` is `none`
+        and the fallback is `<run_dir>/base.py`.
 
     Apply this rule literally. Evaluate top to bottom and stop at the first row
     that matches:
 
     | # | Condition on iteration `N-1` | Base you MUST use |
     |---|---|---|
-    | 1 | `prev` missing, OR `prev.compile_ok != true`, OR `prev.test_ok != true`, OR `prev.speedup` is `null` | `<run_dir>/base.py` |
-    | 2 | `prev.speedup > 1.0` | `<run_dir>/iter<N-1>/optimized.py` |
-    | 3 | `prev.speedup <= 1.0` | `<run_dir>/base.py` |
+    | 1 | `prev` missing, OR `prev.compile_ok != true`, OR `prev.test_ok != true`, OR `prev.speedup` is `null` | `<run_dir>/iter<k>/optimized.py` if `prior` (`iter<k>`) exists, else `<run_dir>/base.py` |
+    | 2 | `prev.speedup > 1.0` AND (`prior` is `none` OR `prev.optimized_time_ms < prior.optimized_time_ms`) | `<run_dir>/iter<N-1>/optimized.py` |
+    | 3 | `prev.speedup <= 1.0` OR (`prior` exists AND `prev.optimized_time_ms >= prior.optimized_time_ms`) | `<run_dir>/iter<k>/optimized.py` if `prior` (`iter<k>`) exists, else `<run_dir>/base.py` |
 
     In words: **iteration `N-1`'s kernel is worth building on only if it was
-    correct and actually beat the baseline.** `speedup > 1.0` means it ran
-    faster than `base.py`, so carry it forward. `speedup <= 1.0` means it was no
-    faster than the unoptimized code, so there is nothing in it worth keeping —
-    restart from `<run_dir>/base.py`.
+    correct, beat `base.py` (`speedup > 1.0`), and improved over the prior
+    iteration it built upon.** When iteration `N-1` fails, gets `speedup <= 1.0`,
+    or regresses relative to `prior` (`iter<k>`), **do NOT reset all the way to
+    `<run_dir>/base.py` if an earlier iteration `iter<k>` already succeeded** —
+    revert to `<run_dir>/iter<k>/optimized.py` instead, and only fall back to
+    `<run_dir>/base.py` when no prior iteration beat `base.py`.
 
     How to apply it:
 
-    *   The threshold is the literal number `1.0`. Do not substitute a different
-        one, and do not soften `<=` into "approximately 1".
-    *   A speedup of exactly `1.0` selects `base.py` (row 3): the kernel matched
-        the baseline and earned nothing.
+    *   The baseline threshold is the literal number `1.0`, and improvement over
+        `prior` requires strict inequality (`prev.optimized_time_ms < prior.optimized_time_ms`).
+        Do not substitute a different threshold, and do not soften `<=` or `>=`
+        into "approximately equal".
+    *   A speedup of exactly `1.0` over `base.py` (or a tie with `prior`)
+        selects the fallback in row 3: iteration `N-1` earned nothing over what
+        existed before it.
     *   Compare the values as read from `state.json`. Do NOT re-derive a speedup
         from `base_time_ms` / `optimized_time_ms`, and do NOT read one out of the
         prose in `profile_summary.md` or `autotune_summary.md` — summaries round,
         restate and omit. `state.json` is the only authority.
     *   This rule fixes the **starting code** only; it does not constrain your
-        strategy. When row 1 or row 3 sends you back to `base.py`, you still have
-        the full bottleneck diagnosis from Step 2.3 — use it to plan a
-        *different* approach. Restarting from `base.py` is not licence to repeat
-        iteration `N-1`'s plan.
+        strategy. When row 1 or row 3 reverts you to `iter<k>` (or `base.py` if
+        no prior iteration succeeded), you still have the full bottleneck
+        diagnosis from Step 2.3 — use it to plan a *different* approach on top
+        of `iter<k>` (or `base.py`) rather than repeating iteration `N-1`'s plan.
     *   You MUST report the numbers you compared in Section 2 of your plan (see
         the Output Requirement below). The worker parses your stated choice back
         into `state.json` as `base_choice`, and the implementer reads it to know
@@ -385,7 +398,7 @@ Mechanism: removes one HBM pass over S; predicted 4.2 GB -> 2.8 GB per call
 Falsifiable as: XProf HBM bytes/call drop >= 30% vs iter 2
 ```
 
-Allowed values: `LEDGER-<id>`, `ROOFLINE`, `PROFILE-iter<k>`, `WIKI-<page>`.
+Allowed values: `LEDGER-<id>`, `ROOFLINE`, `PROFILE-iter<k>`.
 A hypothesis may carry more than one — and under `divergent` trust, a
 `LEDGER-*` tag **must** be paired with a `ROOFLINE` one.
 
@@ -422,7 +435,7 @@ should be structured as a markdown document with the following sections:
 
 -   High-level optimization approach targeting the diagnosed bottleneck
 -   **Every hypothesis carries a `Provenance:` line.** One of `LEDGER-<id>`,
-    `ROOFLINE`, `PROFILE-iter<k>`, `WIKI-<page>`, or several. Under
+    `ROOFLINE`, `PROFILE-iter<k>`, or several. Under
     `reference_trust == "divergent"`, a `LEDGER-*` tag must be paired with a
     `ROOFLINE` one. An untagged hypothesis is unfinished.
 -   **For a `pytorch` / `cuda` primary**: which opportunity from Section 9 of
@@ -450,13 +463,15 @@ should be structured as a markdown document with the following sections:
 
     ```
     Optimization Base Choice: iter<N-1>
-      prev.compile_ok = true
-      prev.test_ok    = true
-      prev.speedup    = 1.3500
-      Rule applied    = row 2 (speedup > 1.0) -> build on <run_dir>/iter<N-1>/optimized.py
+      prev.compile_ok        = true
+      prev.test_ok           = true
+      prev.speedup           = 1.3500
+      prev.optimized_time_ms = 1.6526
+      prior                  = none (or iter<k>, optimized_time_ms = ...)
+      Rule applied           = row 2 (speedup > 1.0 and improved over prior) -> build on <run_dir>/iter<N-1>/optimized.py
     ```
 
-    The first line must be `Optimization Base Choice: iter<k>` or
+    The first line must be `Optimization Base Choice: iter<k>` (where `<k>` is `N-1` when advancing, or the fallback iteration `k < N-1` when reverting) or
     `Optimization Base Choice: base` and nothing else. For iteration 1 there is
     no previous iteration — write `Optimization Base Choice: base (iteration 1)`.
 -   Key transformations to apply (referencing specific strategies from the relevant optimization guide)
@@ -513,37 +528,26 @@ You have the following reference documents to help you:
 
 You have the following tools to help you:
 
-1.  `retrieval_tool`: Query the local 3-tiered LLMWiki knowledge base (Ripgrep -> Python Lexical -> Master Index) for decision trees, hardware envelopes, and reference patterns.
+1.  `retrieval_tool`: Query the local LLMWiki knowledge base **strictly for API name and symbol validation**.
     *   Invoke via CLI:
 
     ```bash
-    {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/retrieval.py -- "<query>"
+    {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/retrieval.py -- "<api_or_symbol_name>"
     ```
 
-    where `<query>` is the query you want to search. Run this command every
-    time the instructions say to "query" or "use `retrieval_tool`".
+    where `<api_or_symbol_name>` is the Pallas/JAX API or symbol name you want
+    to validate or locate.
 
-    Use this EXTENSIVELY to retrieve Pallas/JAX/TPU
-    documentation, optimization patterns, and examples from the RAG corpus. This
-    is your PRIMARY source for:
-
-    -   Tiling strategies and block size recommendations for specific operations
-        (e.g., "matmul tiling", "reduction block sizes")
-    -   Memory layout patterns (HBM, VMEM, SMEM) and best practices
-    -   TPU-specific optimization techniques (pipelining, prefetching, memory
-        barriers)
-    -   TPU architecture details (HBM, VMEM, SMEM, MXU capabilities, vector
-        units)
-    -   API signatures and usage examples (pl.pallas_call, BlockSpec,
-        program_id, etc.)
-    -   Performance tuning guidelines and profiling strategies
-    -   Common patterns for specific kernel types (matmul, convolution,
-        reduction, etc.)
-
-    Retrieval strategy: - Query for the kernel type first (e.g., "matrix
-    multiplication kernel example") - Query for specific optimizations (e.g.,
-    "TPU pipelining techniques") - Query for memory management (e.g., "VMEM
-    usage patterns")
+    **CRITICAL RESTRICTION**: The LLMWiki retrieval corpus is biased toward
+    specific kernel designs and past experiments. You **MUST ONLY** use
+    `retrieval_tool` to validate or discover exact Pallas/JAX API and symbol
+    names (for example, finding which module exports a symbol before calling
+    `search_api`). **DO NOT** query `retrieval_tool` for kernel design,
+    decision trees, tiling strategies, block size recommendations, memory
+    layout patterns, hardware envelopes, or implementation templates/examples.
+    Derive all design and tiling decisions from first principles, the **TPU
+    Hardware Context** table below, and the reference guides in
+    `{{MAXKERNEL_ROOT}}/reference/*.md`.
 
 2.  `search_api`: For looking up specific API definitions and signatures when
     you need precise technical details.
@@ -560,9 +564,10 @@ You have the following tools to help you:
 3.  `Read` and `write_to_file`: To read the source kernel and to write your
     plan.
 
-IMPORTANT: You MUST use `retrieval_tool` multiple times while creating your plan
-to ensure accuracy. Do not rely on pre-trained knowledge alone - always verify
-with current documentation. CRITICAL: You MUST NOT use the `Grep` (or
+IMPORTANT: Use `search_api` (and `retrieval_tool` strictly for API name
+validation) to verify any Pallas/JAX API names and signatures you reference in
+your plan. Never use `retrieval_tool` for kernel design or optimization
+strategies. CRITICAL: You MUST NOT use the `Grep` (or
 `search_for_files_codesearch`) MCP tool anywhere during the kernel optimization
 process.
 

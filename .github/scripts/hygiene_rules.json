@@ -1,0 +1,68 @@
+{
+  "forbidden_file_patterns": [
+    "\\.pyc$",
+    "__pycache__",
+    "\\.egg-info"
+  ],
+  "sensitive_text_patterns": [
+    [
+      "Internal go/ link",
+      "(?:https?://|(?<=\\s))go/[a-zA-Z0-9_.-]+"
+    ],
+    [
+      "Internal issue link",
+      "(?:https?://|(?<=\\s))b/\\d{6,}"
+    ],
+    [
+      "Internal cl link",
+      "(?:https?://|(?<=\\s))cl/\\d{6,}"
+    ],
+    [
+      "Internal corp domain",
+      "[a-zA-Z0-9.-]+\\.corp\\.google\\.com"
+    ],
+    [
+      "Internal email address",
+      "(?<!opensource)(?<![\\w.-])[a-zA-Z0-9._%+-]+@google\\.com"
+    ],
+    [
+      "Internal cloud path",
+      "/google/src/cloud/"
+    ],
+    [
+      "Internal workstation path",
+      "/usr/local/google/"
+    ],
+    [
+      "Internal tool codename",
+      "(?i)\\b(?:jetski|tpu-coworker|anti-gravity)\\b"
+    ]
+  ],
+  "excluded_dir_prefixes": [
+    "MaxCode/",
+    "JAXBench/",
+    "maxkernel/claude-code/wiki/"
+  ],
+  "excluded_files": [
+    "maxkernel/adk/hitl_agent/isolate_object.py",
+    "maxkernel/adk/auto_agent/isolate_object.py",
+    "docs/code-of-conduct.md",
+    ".github/scripts/check_repo_hygiene.py",
+    ".github/scripts/hygiene_rules.json"
+  ],
+  "binary_extensions": [
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".ico",
+    ".pdf",
+    ".xlsx",
+    ".bin",
+    ".tar",
+    ".gz",
+    ".zip",
+    ".woff",
+    ".woff2"
+  ]
+}

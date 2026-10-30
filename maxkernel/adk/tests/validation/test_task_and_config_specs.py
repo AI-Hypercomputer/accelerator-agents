@@ -31,6 +31,13 @@ def _eval_const_expr(
     return node.value
   if isinstance(node, ast.Name) and node.id in env:
     return env[node.id]
+  if isinstance(node, ast.UnaryOp):
+    operand = _eval_const_expr(node.operand, env)
+    if operand is not None:
+      if isinstance(node.op, ast.USub):
+        return -operand
+      if isinstance(node.op, ast.UAdd):
+        return operand
   if isinstance(node, ast.BinOp):
     left = _eval_const_expr(node.left, env)
     right = _eval_const_expr(node.right, env)
@@ -43,6 +50,10 @@ def _eval_const_expr(
         return left - right
       if isinstance(node.op, ast.FloorDiv):
         return left // right
+      if isinstance(node.op, ast.Div):
+        return left / right
+      if isinstance(node.op, ast.Pow):
+        return left**right
   return None
 
 
@@ -67,6 +78,10 @@ def _extract_vmem_limits_from_file(
         for target in stmt.targets:
           if isinstance(target, ast.Name):
             env[target.id] = val
+    elif isinstance(stmt, ast.AnnAssign) and stmt.value is not None:
+      val = _eval_const_expr(stmt.value, env)
+      if val is not None and isinstance(stmt.target, ast.Name):
+        env[stmt.target.id] = val
 
   limits: List[Tuple[int, int | float]] = []
   for node in ast.walk(tree):
@@ -77,6 +92,14 @@ def _extract_vmem_limits_from_file(
           val = _eval_const_expr(node.value, env)
           if val is not None:
             limits.append((node.lineno, val))
+    elif isinstance(node, ast.AnnAssign) and node.value is not None:
+      if (
+        isinstance(node.target, ast.Name)
+        and node.target.id == "vmem_limit_bytes"
+      ):
+        val = _eval_const_expr(node.value, env)
+        if val is not None:
+          limits.append((node.lineno, val))
     # Dictionary values: {'vmem_limit_bytes': ...}
     elif isinstance(node, ast.Dict):
       for key, value in zip(node.keys, node.values):
@@ -163,3 +186,29 @@ def test_reference_vmem_limit_bounds(reference_path: Path):
       f" {MIN_VMEM_LIMIT_BYTES} bytes / 64 MiB). This risks compile-time"
       " scoped VMEM OOMs."
     )
+
+
+def test_eval_const_expr_arithmetic_and_unary():
+  """Test constant expression evaluation with various operators."""
+  assert _eval_const_expr(ast.parse("10 / 2", mode="eval").body) == 5.0
+  assert _eval_const_expr(ast.parse("2 ** 3", mode="eval").body) == 8
+  assert _eval_const_expr(ast.parse("7 // 2", mode="eval").body) == 3
+  assert _eval_const_expr(ast.parse("2 * 3", mode="eval").body) == 6
+  assert _eval_const_expr(ast.parse("1 + 2", mode="eval").body) == 3
+  assert _eval_const_expr(ast.parse("5 - 2", mode="eval").body) == 3
+  assert _eval_const_expr(ast.parse("-5", mode="eval").body) == -5
+  assert _eval_const_expr(ast.parse("+5", mode="eval").body) == 5
+  assert _eval_const_expr(ast.parse("-(2 ** 3)", mode="eval").body) == -8
+
+
+def test_extract_vmem_limits_annotated_assignment(tmp_path: Path):
+  """Test extracting vmem limits with type annotations and constants."""
+  code = """
+VMEM_CAP: int = 128 * 1024 * 1024
+vmem_limit_bytes: int = VMEM_CAP // 2
+"""
+  test_file = tmp_path / "reference.py"
+  test_file.write_text(code, encoding="utf-8")
+  limits = _extract_vmem_limits_from_file(test_file)
+  assert len(limits) == 1
+  assert limits[0][1] == 64 * 1024 * 1024

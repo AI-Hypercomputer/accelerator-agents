@@ -83,8 +83,13 @@ def get_repo_root() -> Path:
 
 def get_tracked_files(repo_root: Path) -> list[str]:
     """List all files tracked by git."""
-    output = subprocess.check_output(["git", "ls-files"], cwd=repo_root, text=True)
-    return [line.strip() for line in output.splitlines() if line.strip()]
+    try:
+        output = subprocess.check_output(["git", "ls-files"], cwd=repo_root, text=True)
+        return [line.strip() for line in output.splitlines() if line.strip()]
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        raise SystemExit(
+            f"[FAIL] Git command failed. Ensure git is installed and run from within a git repository.\nDetail: {e}"
+        )
 
 
 def check_forbidden_tracked_files(tracked_files: list[str]) -> list[str]:

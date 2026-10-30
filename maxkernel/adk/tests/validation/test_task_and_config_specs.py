@@ -8,7 +8,31 @@ import pytest
 import yaml
 
 EVALUATION_DIR = Path(__file__).resolve().parents[2] / "evaluation"
-MIN_VMEM_LIMIT_BYTES = 67_108_864  # 64 MiB
+
+DEFAULT_MIN_VMEM_LIMIT_BYTES = (
+  67_108_864  # 64 MiB for complex attention kernels
+)
+MIN_VMEM_LIMIT_BYTES = DEFAULT_MIN_VMEM_LIMIT_BYTES  # Backward compatibility
+
+# Architecture-aware minimum VMEM limit mappings (in bytes).
+# Scoped vector memory (VMEM) capacity is required to prevent compile-time
+# scoped memory OOMs and avoid excessive spill loops for complex attention kernels.
+# Memory capacities vary across TPU accelerator generations:
+# - v4:  16 MiB per-core default scratchpad
+# - v5p: 32 MiB per-core default scratchpad / 64 MiB expanded capacity
+# - v6e: 64 MiB for large tile configurations (physical ceiling up to 128 MiB)
+# - default: 64 MiB baseline for complex attention benchmarks
+TPU_ARCH_MIN_VMEM_LIMIT_BYTES: Dict[str, int] = {
+  "v4": 16 * 1024 * 1024,
+  "v5p": 32 * 1024 * 1024,
+  "v6e": 64 * 1024 * 1024,
+  "default": DEFAULT_MIN_VMEM_LIMIT_BYTES,
+}
+
+
+def get_min_vmem_limit_bytes(arch: str = "default") -> int:
+  """Retrieve the minimum VMEM allocation threshold for a given accelerator architecture."""
+  return TPU_ARCH_MIN_VMEM_LIMIT_BYTES.get(arch, DEFAULT_MIN_VMEM_LIMIT_BYTES)
 
 
 def discover_kernel_task_yamls() -> List[Path]:
@@ -24,7 +48,16 @@ def discover_reference_files() -> List[Path]:
 def _eval_const_expr(
   node: ast.AST, env: Optional[Dict[str, Any]] = None
 ) -> Optional[int | float]:
-  """Evaluate constant arithmetic expressions in AST."""
+  """Evaluate constant arithmetic expressions in AST.
+
+  Design Rationale (AST vs. Runtime Sandbox):
+  Static AST evaluation is intentionally selected over sandboxed dynamic execution
+  (e.g., executing reference.py in an isolated subprocess). Dynamic execution would
+  require JAX, Pallas, and hardware accelerator runtimes/drivers (e.g., libtpu), which
+  are unavailable on lightweight CI runners. AST parsing is completely hermetic,
+  zero-dependency, safe from arbitrary code execution side effects, and executes
+  across the entire benchmark suite in under a second without hardware dependencies.
+  """
   if env is None:
     env = {}
   if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
@@ -178,14 +211,30 @@ def test_kernel_task_yaml_structure_and_specs(yaml_path: Path):
   ids=lambda p: str(p.relative_to(EVALUATION_DIR)),
 )
 def test_reference_vmem_limit_bounds(reference_path: Path):
-  """Assert that explicit vmem_limit_bytes in reference.py are >= 64 MiB."""
+  """Assert that explicit vmem_limit_bytes in reference.py are >= minimum thresholds."""
   vmem_limits = _extract_vmem_limits_from_file(reference_path)
+  min_limit = get_min_vmem_limit_bytes("default")
   for lineno, value in vmem_limits:
-    assert value >= MIN_VMEM_LIMIT_BYTES, (
+    assert value >= min_limit, (
       f"{reference_path}:{lineno} specifies vmem_limit_bytes={value} (<"
-      f" {MIN_VMEM_LIMIT_BYTES} bytes / 64 MiB). This risks compile-time"
+      f" {min_limit} bytes / {min_limit // (1024 * 1024)} MiB). This risks compile-time"
       " scoped VMEM OOMs."
     )
+
+
+def test_arch_aware_vmem_limits():
+  """Validate architecture-aware VMEM mappings and fallback behavior."""
+  assert TPU_ARCH_MIN_VMEM_LIMIT_BYTES["v4"] == 16 * 1024 * 1024
+  assert TPU_ARCH_MIN_VMEM_LIMIT_BYTES["v5p"] == 32 * 1024 * 1024
+  assert TPU_ARCH_MIN_VMEM_LIMIT_BYTES["v6e"] == 64 * 1024 * 1024
+  assert (
+    TPU_ARCH_MIN_VMEM_LIMIT_BYTES["default"] == DEFAULT_MIN_VMEM_LIMIT_BYTES
+  )
+  assert get_min_vmem_limit_bytes("v4") == 16 * 1024 * 1024
+  assert get_min_vmem_limit_bytes("v5p") == 32 * 1024 * 1024
+  assert get_min_vmem_limit_bytes("v6e") == 64 * 1024 * 1024
+  assert get_min_vmem_limit_bytes("default") == DEFAULT_MIN_VMEM_LIMIT_BYTES
+  assert get_min_vmem_limit_bytes("unknown") == DEFAULT_MIN_VMEM_LIMIT_BYTES
 
 
 def test_eval_const_expr_arithmetic_and_unary():

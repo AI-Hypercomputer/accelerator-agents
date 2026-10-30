@@ -1,0 +1,165 @@
+"""Pre-flight validation tests for kernel task YAML specs and VMEM limits."""
+
+import ast
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import pytest
+import yaml
+
+EVALUATION_DIR = Path(__file__).resolve().parents[2] / "evaluation"
+MIN_VMEM_LIMIT_BYTES = 67_108_864  # 64 MiB
+
+
+def discover_kernel_task_yamls() -> List[Path]:
+  """Discover all kernel_task.yaml files under the evaluation directory."""
+  return sorted(EVALUATION_DIR.glob("**/kernel_task.yaml"))
+
+
+def discover_reference_files() -> List[Path]:
+  """Discover all reference.py files under the evaluation directory."""
+  return sorted(EVALUATION_DIR.glob("**/reference.py"))
+
+
+def _eval_const_expr(
+  node: ast.AST, env: Optional[Dict[str, Any]] = None
+) -> Optional[int | float]:
+  """Evaluate constant arithmetic expressions in AST."""
+  if env is None:
+    env = {}
+  if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+    return node.value
+  if isinstance(node, ast.Name) and node.id in env:
+    return env[node.id]
+  if isinstance(node, ast.BinOp):
+    left = _eval_const_expr(node.left, env)
+    right = _eval_const_expr(node.right, env)
+    if left is not None and right is not None:
+      if isinstance(node.op, ast.Mult):
+        return left * right
+      if isinstance(node.op, ast.Add):
+        return left + right
+      if isinstance(node.op, ast.Sub):
+        return left - right
+      if isinstance(node.op, ast.FloorDiv):
+        return left // right
+  return None
+
+
+def _extract_vmem_limits_from_file(
+  file_path: Path,
+) -> List[Tuple[int, int | float]]:
+  """Extract numeric vmem_limit_bytes values and line numbers from reference.py."""
+  with open(file_path, "r", encoding="utf-8") as f:
+    source = f.read()
+
+  if "vmem_limit_bytes" not in source:
+    return []
+
+  tree = ast.parse(source, filename=str(file_path))
+  env: Dict[str, Any] = {}
+
+  # Collect module-level constant assignments first
+  for stmt in tree.body:
+    if isinstance(stmt, ast.Assign):
+      val = _eval_const_expr(stmt.value, env)
+      if val is not None:
+        for target in stmt.targets:
+          if isinstance(target, ast.Name):
+            env[target.id] = val
+
+  limits: List[Tuple[int, int | float]] = []
+  for node in ast.walk(tree):
+    # Variable assignments: vmem_limit_bytes = ...
+    if isinstance(node, ast.Assign):
+      for target in node.targets:
+        if isinstance(target, ast.Name) and target.id == "vmem_limit_bytes":
+          val = _eval_const_expr(node.value, env)
+          if val is not None:
+            limits.append((node.lineno, val))
+    # Dictionary values: {'vmem_limit_bytes': ...}
+    elif isinstance(node, ast.Dict):
+      for key, value in zip(node.keys, node.values):
+        if isinstance(key, ast.Constant) and key.value == "vmem_limit_bytes":
+          val = _eval_const_expr(value, env)
+          if val is not None:
+            limits.append((node.lineno, val))
+    # Call arguments: func(vmem_limit_bytes=...)
+    elif isinstance(node, ast.Call):
+      for kw in node.keywords:
+        if kw.arg == "vmem_limit_bytes":
+          val = _eval_const_expr(kw.value, env)
+          if val is not None:
+            limits.append((node.lineno, val))
+
+  return limits
+
+
+@pytest.mark.parametrize(
+  "yaml_path",
+  discover_kernel_task_yamls(),
+  ids=lambda p: str(p.relative_to(EVALUATION_DIR)),
+)
+def test_kernel_task_yaml_structure_and_specs(yaml_path: Path):
+  """Validate task_id, tolerance fields, and input generation code."""
+  with open(yaml_path, "r", encoding="utf-8") as f:
+    data = yaml.safe_load(f)
+
+  assert isinstance(data, dict), (
+    f"File {yaml_path} must be a valid YAML dictionary, got {type(data).__name__}."
+  )
+
+  required_keys = ("task_id", "input_gen_code", "atol", "rtol")
+  for key in required_keys:
+    assert key in data, f"File {yaml_path} is missing required key '{key}'."
+
+  assert isinstance(data["atol"], (int, float)), (
+    f"File {yaml_path}: atol must be a numeric float/int, got"
+    f" {type(data['atol']).__name__}."
+  )
+  assert data["atol"] >= 0, (
+    f"File {yaml_path}: atol must be non-negative, got {data['atol']}."
+  )
+
+  assert isinstance(data["rtol"], (int, float)), (
+    f"File {yaml_path}: rtol must be a numeric float/int, got"
+    f" {type(data['rtol']).__name__}."
+  )
+  assert data["rtol"] >= 0, (
+    f"File {yaml_path}: rtol must be non-negative, got {data['rtol']}."
+  )
+
+  input_code = data["input_gen_code"]
+  assert isinstance(input_code, str) and input_code.strip(), (
+    f"File {yaml_path}: input_gen_code must be a non-empty string."
+  )
+
+  try:
+    tree = ast.parse(input_code, filename=str(yaml_path))
+  except SyntaxError as e:
+    pytest.fail(f"File {yaml_path}: input_gen_code failed to parse: {e}")
+
+  defined_functions = {
+    node.name
+    for node in ast.walk(tree)
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+  }
+  assert "get_inputs" in defined_functions, (
+    f"File {yaml_path}: input_gen_code must define a 'get_inputs' function."
+  )
+
+
+@pytest.mark.parametrize(
+  "reference_path",
+  discover_reference_files(),
+  ids=lambda p: str(p.relative_to(EVALUATION_DIR)),
+)
+def test_reference_vmem_limit_bounds(reference_path: Path):
+  """Assert that explicit vmem_limit_bytes in reference.py are >= 64 MiB."""
+  vmem_limits = _extract_vmem_limits_from_file(reference_path)
+  for lineno, value in vmem_limits:
+    assert value >= MIN_VMEM_LIMIT_BYTES, (
+      f"{reference_path}:{lineno} specifies vmem_limit_bytes={value} (<"
+      f" {MIN_VMEM_LIMIT_BYTES} bytes / 64 MiB). This risks compile-time"
+      " scoped VMEM OOMs."
+    )

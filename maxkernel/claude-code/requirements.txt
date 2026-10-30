@@ -88,6 +88,14 @@ transformers
 # torchax nor torch_xla declares a torch dependency, so nothing pulls the CUDA
 # build back in.
 torch==2.9.0+cpu
+# Triton runs a Triton primary's kernels on CPU through its interpreter
+# (TRITON_INTERPRET=1, set by tools/capture_torch_golden.py), which is what
+# lets Phase 0.8 verify a Triton port. The CPU torch wheel does not depend on
+# triton, so it is listed here, as a range rather than a pin: a newer
+# interpreter runs kernels that use newer `tl` features. Verified: golden
+# capture of a Triton primary passes with torch 2.9.0+cpu and every triton
+# release from 3.4.0 to 3.9.0.
+triton>=3.4,<4
 torchax==0.0.13
 
 # torchax 0.0.13 imports flax but does not declare it -- without this,

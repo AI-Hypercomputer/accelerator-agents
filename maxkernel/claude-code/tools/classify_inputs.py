@@ -72,6 +72,13 @@ CUDA_MARKERS = [
   (re.compile(r"\bwmma\s*::"), "tensor-core wmma fragment"),
 ]
 
+# In a .py file only a kernel definition or launch counts as CUDA: Triton and
+# CuTe DSL code mentions `blockIdx` and friends in comments and docstrings.
+PY_CUDA_MARKERS = [
+  (re.compile(r"\b__global__\b"), "__global__ kernel entry point"),
+  (re.compile(r"<<<[^>]*>>>"), "kernel launch configuration"),
+]
+
 # CUDA carried inside a Python file for torch.utils.cpp_extension.load_inline
 # -- the KernelBench layout.
 INLINE_CUDA_MARKERS = [
@@ -80,14 +87,20 @@ INLINE_CUDA_MARKERS = [
   (re.compile(r"\bCUDAExtension\b"), "CUDAExtension build"),
 ]
 
-# A Triton kernel is marked by its decorator, not by `import triton`: torch
-# code imports triton for utilities without defining any kernel.
-TRITON_MARKERS = [
-  (
-    re.compile(r"@\s*triton\.(?:jit|autotune|heuristics)\b"),
-    "@triton.jit kernel",
-  ),
-]
+
+# A Triton kernel is marked by its decorator, not by `import triton` (torch
+# code imports triton for utilities). The decorator may be aliased:
+# `import triton as tr` -> `@tr.jit`; `from triton import jit` -> `@jit`.
+def _scan_triton(text):
+  names = [
+    "triton",
+    *re.findall(r"^\s*import\s+triton\s+as\s+(\w+)", text, re.M),
+  ]
+  pattern = rf"@\s*(?:{'|'.join(names)})\.(?:jit|autotune|heuristics)\b"
+  if re.search(r"^\s*from\s+triton\s+import\s+[^\n]*\bjit\b", text, re.M):
+    pattern += r"|@\s*jit\b(?!\.)"
+  return _scan(text, [(re.compile(pattern), "Triton kernel decorator")])
+
 
 # NVIDIA cuTile Python (`import cuda.tile as ct`).
 CUTILE_MARKERS = [
@@ -211,12 +224,12 @@ def classify_text(text, suffix):
                                  already a Pallas kernel
     unknown                   -- no marker of any known framework
   """
-  cuda_hits = _scan(text, CUDA_MARKERS)
+  cuda_hits = _scan(text, PY_CUDA_MARKERS if suffix == ".py" else CUDA_MARKERS)
   inline_hits = _scan(text, INLINE_CUDA_MARKERS)
   torch_hits = _scan(text, TORCH_MARKERS)
   jax_hits = _scan(text, JAX_MARKERS)
   pallas_hits = _scan(text, PALLAS_MARKERS)
-  triton_hits = _scan(text, TRITON_MARKERS)
+  triton_hits = _scan_triton(text)
   cutile_hits = _scan(text, CUTILE_MARKERS)
   cutedsl_hits = _scan(text, CUTEDSL_MARKERS)
 
@@ -428,6 +441,13 @@ def propose_slots(records):
         }
       )
 
+  if len(references) > 1 and ambiguity is None:
+    names = ", ".join(Path(r["path"]).name for r in references)
+    ambiguity = (
+      f"{len(references)} files could each be the reference ({names}). A run "
+      "takes at most one: ask the user which to keep, or treat a directory "
+      "they named as one reference."
+    )
   return primary, references, ambiguity
 
 

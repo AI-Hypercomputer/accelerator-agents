@@ -637,10 +637,18 @@ def _param_records(fn, constant_marker, tree):
   return params
 
 
-def _assignments(tree):
-  """name -> [(line, value_source)] for every simple assignment."""
+def _assignments(scope):
+  """name -> [(line, value_source)] for simple assignments made directly in
+  `scope` (a module or a function), not inside a nested function or class."""
   table = {}
-  for node in ast.walk(tree):
+  stack = list(ast.iter_child_nodes(scope))
+  while stack:
+    node = stack.pop()
+    if isinstance(
+      node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+    ):
+      continue
+    stack.extend(ast.iter_child_nodes(node))
     if isinstance(node, ast.Assign):
       for target in node.targets:
         if isinstance(target, ast.Name):
@@ -655,24 +663,46 @@ def _assignments(tree):
   return table
 
 
-def _resolve_py(node, assignments):
+def _enclosing_function(tree, lineno):
+  """The innermost function whose body spans `lineno`, or None."""
+  best = None
+  for node in ast.walk(tree):
+    if (
+      isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+      and node.lineno <= lineno <= node.end_lineno
+      and (best is None or node.lineno >= best.lineno)
+    ):
+      best = node
+  return best
+
+
+def _resolve_py(node, tree):
   """Annotates a launch grid with the assignment it was built from.
 
   `kernel[grid](...)` says nothing on its own; `grid = lambda META: (...)`
-  three lines above is the fact. The nearest assignment at or before the
-  launch wins; a name assigned only after it, or never, resolves to `null`.
+  three lines above is the fact. Only the launch's own function is searched,
+  nearest assignment at or before the launch first, then module-level
+  globals. A name that is one of the function's parameters, or is assigned
+  nowhere visible, resolves to `null`: its value comes from the caller.
   """
   raw = _src(node)
   if not isinstance(node, ast.Name):
     return {"raw": raw, "resolved": raw}
-  candidates = [
+  func = _enclosing_function(tree, node.lineno)
+  if func:
+    a = func.args
+    if node.id in {p.arg for p in a.posonlyargs + a.args + a.kwonlyargs}:
+      return {"raw": raw, "resolved": None}
+  found = [
     (line, value)
-    for line, value in assignments.get(node.id, [])
+    for line, value in _assignments(func or tree).get(node.id, [])
     if line <= node.lineno
   ]
-  if not candidates:
+  if not found and func:  # a module-level global
+    found = _assignments(tree).get(node.id, [])
+  if not found:
     return {"raw": raw, "resolved": None}
-  line, value = max(candidates)
+  line, value = max(found)
   return {"raw": raw, "resolved": value, "declared_line": line}
 
 
@@ -807,22 +837,31 @@ def analyze_triton(source, origin):
           }
         )
 
+  # A launch may be of a kernel defined in this file, or of one imported from
+  # another module of the same project (`from kernels import add_kernel`).
   kernel_names = {k["name"] for k in kernels}
-  assignments = _assignments(tree)
+  imported = {
+    a.asname or a.name
+    for node in ast.walk(tree)
+    if isinstance(node, ast.ImportFrom)
+    and not (node.module or "").startswith("triton")
+    for a in node.names
+  }
   launches = []
   for node in ast.walk(tree):
     if (
       isinstance(node, ast.Call)
       and isinstance(node.func, ast.Subscript)
       and isinstance(node.func.value, ast.Name)
-      and node.func.value.id in kernel_names
+      and node.func.value.id in kernel_names | imported
     ):
       kw = _kwargs(node)
       launches.append(
         {
           "kernel": node.func.value.id,
+          "kernel_defined_here": node.func.value.id in kernel_names,
           "line": node.lineno,
-          "grid": _resolve_py(node.func.slice, assignments),
+          "grid": _resolve_py(node.func.slice, tree),
           "args": [_src(a) for a in node.args],
           "launch_kwargs": kw,
           "raw": _src(node.func) + "(...)",
@@ -901,7 +940,6 @@ def analyze_cutile(source, origin):
       }
     )
 
-  assignments = _assignments(tree)
   launches, tile_shapes = [], []
   for node in ast.walk(tree):
     if not isinstance(node, ast.Call):
@@ -913,7 +951,7 @@ def analyze_cutile(source, origin):
         {
           "kernel": _src(kernel),
           "line": node.lineno,
-          "grid": _resolve_py(args[1], assignments) if len(args) > 1 else None,
+          "grid": _resolve_py(args[1], tree) if len(args) > 1 else None,
           "stream": _src(args[0]) if args else None,
           "args": _src(args[3]) if len(args) > 3 else None,
           "raw": _src(node),
@@ -973,7 +1011,6 @@ def analyze_cutedsl(source, origin):
         )
         break
 
-  assignments = _assignments(tree)
   launches, compiles, tile_shapes = [], [], []
   for node in ast.walk(tree):
     if not isinstance(node, ast.Call):
@@ -990,12 +1027,8 @@ def analyze_cutedsl(source, origin):
         {
           "kernel": _call_name(func.value),
           "line": node.lineno,
-          "grid": _resolve_py(kw["grid"], assignments)
-          if "grid" in kw
-          else None,
-          "block": _resolve_py(kw["block"], assignments)
-          if "block" in kw
-          else None,
+          "grid": _resolve_py(kw["grid"], tree) if "grid" in kw else None,
+          "block": _resolve_py(kw["block"], tree) if "block" in kw else None,
           "smem": _src(kw.get("smem")),
           "stream": _src(kw.get("stream")),
           "raw": _src(func.value) + ".launch(...)",

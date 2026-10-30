@@ -71,7 +71,7 @@ Proceed to read it with `Read` (to learn its signature and shapes -- not to copy
     adapt them into the required format below rather than inventing new ones.
 
     Read `state.primary.language` from `<run_dir>/state.json`. When it is
-    `"pytorch"` or `"cuda"`, `base.py` is a port, and the canonical shapes live
+    anything but `"jax"`, `base.py` is a port, and the canonical shapes live
     in the *original* source, not in it.
 
     **Prefer recorded shapes over described ones.** When

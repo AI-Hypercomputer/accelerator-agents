@@ -31,7 +31,7 @@ fast.
 Semantics spine — load-bearing. A defect here invalidates every number:
 *   `<run_dir>/source.*` or `<run_dir>/source/`: the user's original primary input, untouched (written by the orchestrator)
 *   `<run_dir>/torch_golden.npz` + `<run_dir>/torch_golden.json`: inputs and outputs recorded by running the user's PyTorch module on CPU — Phase 0.2, `pytorch` primary only
-*   `<run_dir>/torch_context.md` / `<run_dir>/cuda_context.md`: deep primary-source brief — Phase 0.4, only when `state.primary.language != "jax"`
+*   `<run_dir>/torch_context.md` / `<run_dir>/<language>_context.md`: deep primary-source brief — Phase 0.4, only when `state.primary.language != "jax"`
 *   `<run_dir>/base.py`: Baseline JAX kernel — copied from `source.py` by the orchestrator for a `jax` input, or ported from the primary in Phase 0.4 otherwise
 *   `<run_dir>/port_verification.json`: the Phase 0.8 gate's verdict on `base.py`
 *   `<run_dir>/get_inputs.py`: Harness input generator (LLM-authored)
@@ -42,8 +42,8 @@ reference:
 *   `<run_dir>/ref/`: everything derived from the reference kernels. **Nothing
     in this directory may ever be measured, bound as `base_computation`, or
     read by the implementer.**
-*   `<run_dir>/ref/cuda_facts.json`: parsed launch configs, tile constants, mechanism census — Phase 0.5
-*   `<run_dir>/ref/ref_cuda_context.md`: the reference brief — Phase 0.5
+*   `<run_dir>/ref/gpu_facts.json`: parsed launch configs, tile constants, mechanism census — Phase 0.5
+*   `<run_dir>/ref/context.md`: the reference brief — Phase 0.5
 *   `<run_dir>/reference_alignment.md`: the trust verdict — Phase 0.6
 *   `<run_dir>/ideas_ledger.json`: the triaged borrowable ideas — Phase 0.6
 
@@ -129,7 +129,8 @@ from inside the loop.
     -   `atol` = `state.atol` (default `1e-2`).
     -   `rtol` = `state.rtol` (default `1e-2`).
     -   `primary` = `state.primary` — the slot that defines the semantics.
-        `state.primary.language` is `"pytorch"`, `"cuda"`, `"jax"` or
+        `state.primary.language` is `"pytorch"`, `"jax"`, a GPU dialect
+        (`"cuda"`, `"triton"`, `"cutile"`, `"cutedsl"`, `"gpu"`) or
         `"specification"` — the last meaning no source file was supplied and
         Phase 0.1 must synthesize one, after which this field is rewritten to
         the synthesized kind. If the
@@ -236,9 +237,12 @@ final report must say so.
 
 ### Phase 0.2: Capture Golden Values From a PyTorch Primary (ONCE — idempotent)
 
-**Run this only when `state.primary.language == "pytorch"`.** Skip for `jax`
-and for `cuda` — a TPU host cannot execute CUDA, so there is nothing to
-capture.
+**Run this only when `state.primary.language` is `"pytorch"` or `"triton"`.**
+Skip it for `jax` and the other GPU dialects: a TPU host cannot run them, so
+there is nothing to capture. For Triton, `capture_torch_golden.py` runs the
+kernels on CPU through Triton's interpreter, and the mode is always
+`llm_port` (torchax cannot trace a Triton kernel). If the interpreter cannot
+run a kernel, the tool exits 2 and the capture degrades as below.
 
 This is the phase that closes the hole Phase 0.9 cannot. Harness validation
 binds `base.py` as both sides of its own comparison, so it can never detect a
@@ -362,16 +366,18 @@ Phase 0.2, and Phase 0.7 produces the readable `base.py` from it when
 `emit_jnp_reference` is true. Dispatching the analyzer here as well would
 reintroduce exactly the LLM transcription that torchax mode exists to avoid.
 
-Otherwise the user handed the loop PyTorch or CUDA as the *primary*. Neither
+Otherwise the user handed the loop PyTorch or GPU kernel code as the
+*primary*. Neither
 can be bound as `base_computation` — the harness `jax.jit`s it — so before
 anything can be measured, the source has to be understood and ported.
 
 1.  **Check if already done**: if `<run_dir>/base.py` exists AND the context
     brief exists (`<run_dir>/torch_context.md` for `pytorch`,
-    `<run_dir>/cuda_context.md` for `cuda`), skip to Phase 0.5.
+    `<run_dir>/<language>_context.md` for a GPU dialect, e.g.
+    `cuda_context.md`), skip to Phase 0.5.
 2.  **Invoke the analyzer for this language**:
     -   `pytorch` → `maxkernel-analyze-torch-source`
-    -   `cuda` → `maxkernel-analyze-source`
+    -   `cuda`, `triton`, `cutile`, `cutedsl`, `gpu` → `maxkernel-analyze-source`
     -   Prompt: `"Analyze the primary source for run_dir = <run_dir> (state file: <run_dir>/state.json)."`
 3.  **Verify on disk**: both `<run_dir>/base.py` and the brief must exist and
     be non-empty. Also check `base.py` binds correctly, since every later
@@ -411,31 +417,33 @@ validation re-dispatches the reconciler, which then cannot read the brief it is
 supposed to reconcile, and the phase fails its three attempts for a reason that
 looks nothing like its cause.
 
+A run has at most one reference: a file or a directory. Its `kind` is
+`cuda`, `triton`, `cutile`, `cutedsl`, or `gpu` (mixed or other dialects).
+
 For each entry in `state.references`:
 
 1.  **Check if already done**: if that entry's `context_path` exists and is
     non-empty, skip it.
-2.  **Extract the facts deterministically, first**:
+2.  **Extract the facts deterministically, first**, whatever the `kind`:
     ```bash
-    {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/cuda_static_facts.py \
-      <reference source_path> --json <run_dir>/ref/cuda_facts.json
+    {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/gpu_static_facts.py \
+      <reference source_path> --json <run_dir>/ref/gpu_facts.json
     ```
-    Exit 3 means no CUDA kernel was found in that file — drop the reference
-    from `state.references`, note it in `<run_dir>/maxkernel_debug_history.md`,
-    and continue. A reference that cannot be parsed is not a run-stopping
-    problem; it just means there is nothing to borrow.
-3.  **Invoke `maxkernel-analyze-cuda-reference`**:
-    -   Prompt: `"Analyze the reference kernel at <source_path> for run_dir = <run_dir> (state file: <run_dir>/state.json)."`
+    The tool detects each file's dialect itself. Exit 3 means nothing in the
+    reference could be extracted: leave `facts_path` `null` and continue; the
+    analyzer then reads the source alone.
+3.  **Invoke `maxkernel-analyze-gpu-reference`**:
+    -   Prompt: `"Analyze the <kind> reference kernel at <source_path> for run_dir = <run_dir> (state file: <run_dir>/state.json)."`
 4.  **Verify on disk — and verify the prohibition held.**
-    `<run_dir>/ref/ref_cuda_context.md` must exist and be non-empty, AND the
+    `<run_dir>/ref/context.md` must exist and be non-empty, AND the
     agent must not have written outside `ref/`. Confirm that
     `<run_dir>/base.py` is unchanged (compare its mtime or hash against the
     value from Phase 0.4). If the reference analyzer wrote `base.py`, that
     is a serious failure: delete what it wrote, restore the Phase 0.4
     `base.py`, log it, and re-dispatch. The reference must never become the
     measured baseline.
-5.  **Record it in state**: set that reference entry's `facts_path` and
-    `context_path` to ABSOLUTE paths.
+5.  **Record it in state**: set that reference entry's `facts_path` (or
+    `null` in generic mode) and `context_path` to ABSOLUTE paths.
 
 ### Phase 0.6: Reconcile the Reference Against the Primary (ONCE — idempotent)
 
@@ -447,7 +455,7 @@ usable brief.**
     exits 0, skip to Phase 0.8 — and seal `ref/` on the way past (step 6), since
     a resume may have cleared it.
 1b. **Otherwise clear the seal before dispatching**: `rm -f <run_dir>/ref/.sealed`.
-    The reconciler must be able to read `<run_dir>/ref/ref_cuda_context.md`.
+    The reconciler must be able to read `<run_dir>/ref/context.md`.
 2.  **Invoke `maxkernel-reconcile-reference`**:
     -   Prompt: `"Reconcile the reference against the primary for run_dir = <run_dir> (state file: <run_dir>/state.json)."`
 3.  **Verify on disk**: `<run_dir>/reference_alignment.md` and

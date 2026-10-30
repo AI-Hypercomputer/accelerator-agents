@@ -65,6 +65,10 @@ from pathlib import Path
 # must not: the golden values have to be reproducible on the machine running
 # the loop, which is a TPU host with no CUDA device.
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
+# A Triton primary launches its kernels from forward(). Triton's interpreter
+# runs them on CPU, which is what makes golden values possible without a GPU;
+# it has no effect on code that never imports triton.
+os.environ.setdefault("TRITON_INTERPRET", "1")
 
 # `--device xla` runs the reference on the TPU through torch_xla instead of in
 # eager CPU. Detected before torch is imported, because torch_xla has to come

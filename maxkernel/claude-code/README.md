@@ -29,7 +29,7 @@ Read the **[User Guide](user_guide.md)** — a short walkthrough of how to use M
 | `skill/SKILL.md` | The `maxkernel` skill — the orchestrator. It only reads state and dispatches the worker; it never writes kernel code itself. |
 | `skill/general_rules.md` | The invariants every subagent loads before doing anything. |
 | `agents/maxkernel-*.md` | 19 subagent prompts: one worker plus eighteen single-phase specialists. |
-| `tools/` | The agent's CLI surface: TPU client, input classification, golden capture and port verification, CUDA fact extraction, the ideas ledger, test-harness assembly, autotune config selection, XProf trace analysis, HLO dumps, RAG retrieval. |
+| `tools/` | The agent's CLI surface: TPU client, input classification, golden capture and port verification, GPU kernel fact extraction (CUDA, Triton, cuTile), the ideas ledger, test-harness assembly, autotune config selection, XProf trace analysis, HLO dumps, RAG retrieval. |
 | `server/tpu_server.py` | The job-queue daemon that runs on (or beside) the TPU VM. |
 | `hooks/` | Optional `PreToolUse` guard — see [Workspace guard](#workspace-guard-optional). |
 | `reference/` | The TPU knowledge base the planner and implementer read by explicit path: `tpu_memory_overlapping.md`, `tpu_mxu_and_register_optimization.md`, `tpu_profiling_and_diagnostics.md`, `pallas_xla_interaction.md`. |
@@ -60,7 +60,7 @@ you ──▶ maxkernel skill (orchestrator)
              │                      ─▶ ref.hlo.txt     what XLA actually did
              │
              │ 0.4  analyze-torch-source / analyze-source   (llm_port mode only)
-             │ 0.5  cuda_static_facts.py + analyze-cuda-reference   (if a ref)
+             │ 0.5  gpu_static_facts.py + analyze-gpu-reference     (if a ref)
              │ 0.6  reconcile-reference ─▶ ideas_ledger.json, then ref/ SEALED
              │
              │ 0.7  write-jnp-reference ─▶ base.py     (torchax mode, optional)
@@ -102,10 +102,23 @@ Inputs come in two kinds, and they carry different authority.
 
 The **primary** is the thing being converted. It defines the semantics, the
 baseline `base.py`, and every number the run reports. A **reference** is an
-independent implementation of roughly the same computation — typically a CUDA
-kernel someone already tuned — supplied so the planner can mine it for design
-ideas. A reference is never executed, never measured, and never compared
-against.
+independent implementation of roughly the same computation — typically a GPU
+kernel someone already tuned, in CUDA, Triton, cuTile, CuTe DSL or another
+dialect — supplied so the planner can mine it for design ideas. A reference is
+never executed, never measured, and never compared against.
+
+**Supplying a reference.** Name it in your request ("use `kernel.cu` as a
+reference"), or list it under `references` in a job file. A run takes at most
+one reference: a file, or a directory holding a multi-file kernel project.
+
+| Language | `kind` | How it is read |
+| --- | --- | --- |
+| CUDA C++ (`.cu` / `.cuh`, or a `load_inline` source string) | `cuda` | Facts extracted by `tools/gpu_static_facts.py` |
+| Triton (`@triton.jit`) | `triton` | Facts extracted from the Python AST; never imported |
+| cuTile (`import cuda.tile`, `@ct.kernel`) | `cutile` | Facts extracted the same way |
+| CuTe DSL (`import cutlass.cute`, `@cute.kernel`) | `cutedsl` | Facts extracted the same way |
+| Several of the above | `gpu` | Facts extracted for each part |
+| Any other GPU language | `gpu` | Read from source; name the file as the reference |
 
 `tools/classify_inputs.py` sorts every file you hand over by deterministic
 marker matching, not a model's opinion. When two files could each be the
@@ -117,6 +130,8 @@ would silently benchmark the wrong computation for five iterations.
 | `jax` | Your file becomes `base.py` unchanged. This is the original path. |
 | `pytorch` | A `torch` module. It is executed on CPU to capture golden values, ported to a JAX `base.py`, and that port is then **verified against the golden values** before the loop starts. |
 | `cuda` | `.cu`/`.cuh`, or CUDA carried in a Python file for `load_inline`. Ported to `base.py` via `cuda_context.md`. No golden capture — a TPU host cannot execute CUDA. |
+| `triton` | Triton kernels launched on torch tensors from a Python entry point (`Model`, `computation`, …) with a `get_inputs()`. Golden values come from Triton's CPU interpreter, so the port **is verified**, as for `pytorch`. |
+| `cutile`, `cutedsl`, `gpu` | cuTile, CuTe DSL, or another GPU dialect. Ported like `cuda`, unverified. |
 
 A KernelBench-style file (a torch `Model` plus a `cuda_sources` string) fills
 both slots at once: the torch module is the primary, the embedded CUDA is a
@@ -140,12 +155,13 @@ triaged into one of three classes:
 - **ALGORITHMIC** — survives the hardware change. An online softmax recurrence,
   the fusion boundary the author chose, which operand stays resident. These
   are statements about the problem, not about the GPU, and they are the reason
-  to read a CUDA kernel at all.
+  to read a GPU kernel at all.
 - **STRUCTURAL** — a real decision whose value is hardware-specific. `BLOCK_M=128`
   is evidence about the working set; it says nothing about what fits in TPU
   VMEM. The planner re-derives its own tiles and may cite the reference only
   as corroboration.
-- **NON_PORTABLE** — warp shuffles, `__syncthreads`, bank-conflict padding.
+- **NON_PORTABLE** — warp shuffles, `__syncthreads`, bank-conflict padding,
+  Triton `num_warps`.
   Recorded explicitly so a plan can show the mechanism was considered and
   discarded — a stronger defence against transliteration than silence.
 
@@ -157,7 +173,7 @@ adopted idea's falsifiable claim against the XProf trace and marks it
 actually produced speedups instead of asserting that the reference helped.
 
 Once reconciliation is done, `ref/` is sealed and the guard hook denies further
-reads: the implementer works from the plan, never from the raw CUDA.
+reads: the implementer works from the plan, never from the raw GPU source.
 
 One thing to keep straight when reading the results: a TPU cannot run CUDA, so
 the baseline every speedup is measured against is the **JAX port**, not the

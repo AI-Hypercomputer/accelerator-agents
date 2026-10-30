@@ -18,7 +18,7 @@ This skill covers how to diagnose when a JAX/Pallas TPU kernel is memory-bound a
 Before writing or modifying a kernel, compute its arithmetic intensity (FLOPs / bytes transferred) and compare it against the target TPU hardware limitations.
 
 #### Hardware Limits Reference
-Retrieve peak performance metrics from the target specifications or [tpu_info.py](../../third_party/py/jax/_src/pallas/mosaic/tpu_info.py).
+Retrieve peak performance metrics from the target specifications or [tpu_info.py](https://github.com/jax-ml/jax/blob/main/jax/_src/pallas/mosaic/tpu_info.py).
 
 *   **TPU v5e (Viperlite)**:
     *   Peak BF16 performance: 197 TFLOP/s

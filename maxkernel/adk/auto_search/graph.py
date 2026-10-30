@@ -26,16 +26,18 @@ class Node(BaseModel):
   plan: str
   depth: int
   strategy_applied: Optional[str] = None
-  execution_status: str = "FAIL"  # SUCCESS, FAIL
+  execution_status: str = "FAIL"  # SUCCESS, FAIL, IN_PROGRESS, INTERRUPTED
   execution_error: Optional[str] = None
   evaluation: EvaluationResult = Field(default_factory=EvaluationResult)
 
   @property
   def is_valid_candidate(self) -> bool:
     return (
-      self.execution_status == "SUCCESS"
+      self.execution_status != "FAIL"
       and self.evaluation.compiled
       and self.evaluation.correct
+      and self.evaluation.speedup is not None
+      and self.evaluation.speedup > 0
     )
 
 

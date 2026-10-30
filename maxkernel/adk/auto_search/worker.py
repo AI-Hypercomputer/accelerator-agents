@@ -54,6 +54,7 @@ class ADKSessionWorker:
         strategy=strategy,
         state=state,
         session_dir=session_dir,
+        execution_status="SUCCESS",
       )
       if on_node_update:
         on_node_update(node)
@@ -72,6 +73,7 @@ class ADKSessionWorker:
               strategy=strategy,
               state=curr_state,
               session_dir=session_dir,
+              execution_status="INTERRUPTED",
             )
             if candidate.is_valid_candidate:
               salvaged_node = candidate
@@ -186,6 +188,7 @@ class ADKSessionWorker:
               strategy=strategy,
               state=curr_state,
               session_dir=session_dir,
+              execution_status="IN_PROGRESS",
             )
             on_node_update(partial_node)
           except Exception as err:
@@ -213,6 +216,7 @@ class ADKSessionWorker:
     strategy: Optional[str],
     state: Dict[str, Any],
     session_dir: str,
+    execution_status: str = "SUCCESS",
   ) -> Node:
     """Reads optimized code/plan and extracts metrics to construct a new Node."""
     history = state.get("history", [])
@@ -303,7 +307,7 @@ class ADKSessionWorker:
       plan=optimized_plan,
       depth=parent_node.depth + 1,
       strategy_applied=strategy,
-      execution_status="SUCCESS",
+      execution_status=execution_status,
       evaluation=EvaluationResult(
         compiled=compiled,
         correct=correct,

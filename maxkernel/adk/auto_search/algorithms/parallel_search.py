@@ -120,7 +120,7 @@ class SimpleParallelSearchOrchestrator(SearchOrchestrator):
             on_node_update=lambda n: self.graph.add_node(n),
           )
           if (
-            node.execution_status == "SUCCESS"
+            node.execution_status in ("SUCCESS", "INTERRUPTED")
             or attempt == self.max_worker_retries
           ):
             self.graph.add_node(node)

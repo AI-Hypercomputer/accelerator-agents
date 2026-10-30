@@ -147,7 +147,13 @@ def test_worker_triggers_on_node_update_on_intermediate_history_events(
       n.node_id == "child_1" and n.evaluation.speedup == 1.5
       for n in updated_nodes
     )
-    # Result node should also match
+    # Intermediate partial node should have IN_PROGRESS
+    intermediate_nodes = [
+      n for n in updated_nodes if n.execution_status == "IN_PROGRESS"
+    ]
+    assert len(intermediate_nodes) >= 1
+    # Result node should also match and have SUCCESS
+    assert result_node.execution_status == "SUCCESS"
     assert result_node.evaluation.speedup == 1.5
     assert result_node.code == "def opt_iter0(): pass"
 
@@ -279,8 +285,10 @@ def test_worker_interruption_salvages_partial_candidate(temp_dir):
 
     # Check that salvaged node was sent to callback and returned
     assert len(salvaged_nodes) >= 1
+    assert salvaged_nodes[-1].execution_status == "INTERRUPTED"
     assert salvaged_nodes[-1].evaluation.speedup == 2.5
     assert salvaged_nodes[-1].code == "def salvaged_kernel(): pass"
+    assert result_node.execution_status == "INTERRUPTED"
     assert result_node.evaluation.speedup == 2.5
     assert result_node.is_valid_candidate
 

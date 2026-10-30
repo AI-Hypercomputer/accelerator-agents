@@ -176,42 +176,44 @@ class SearchOrchestrator(abc.ABC):
       f"Starting search orchestration for problem: {self.graph.problem_id}"
     )
 
-    while not self._should_terminate():
-      # 1. Select nodes to expand
-      nodes_to_expand = self._select_nodes_to_expand()
-      if not nodes_to_expand:
-        break
+    try:
+      while not self._should_terminate():
+        # 1. Select nodes to expand
+        nodes_to_expand = self._select_nodes_to_expand()
+        if not nodes_to_expand:
+          break
 
-      # 2. Generate strategies
-      tasks = self._generate_expansion_tasks(nodes_to_expand)
-      if not tasks:
-        break
+        # 2. Generate strategies
+        tasks = self._generate_expansion_tasks(nodes_to_expand)
+        if not tasks:
+          break
 
-      # 3. Parallel Execution (Workers compile, test, and profile)
-      new_nodes = await self._execute_expansions(tasks)
+        # 3. Parallel Execution (Workers compile, test, and profile)
+        new_nodes = await self._execute_expansions(tasks)
 
-      # 4. Add any nodes not already saved during execution
-      for node in new_nodes:
-        if node.node_id not in self.graph.nodes:
+        # 4. Add any nodes not already saved during execution
+        for node in new_nodes:
           self.graph.add_node(node)
 
-      # 5. Update Search Algorithm State
-      self._update_search_state(new_nodes)
+        # 5. Update Search Algorithm State
+        self._update_search_state(new_nodes)
 
-      # Log progress
-      best_id = self.graph.best_node_id
-      best_speedup = "N/A"
-      if best_id:
-        best_node = self.graph.get_node(best_id)
-        if best_node and best_node.evaluation.speedup is not None:
-          best_speedup = f"{best_node.evaluation.speedup:.3f}x"
-      logger.info(
-        f"Step completed. Total nodes in graph: {len(self.graph.nodes)}. "
-        f"Current best speedup: {best_speedup}"
-      )
+        # Log progress
+        best_id = self.graph.best_node_id
+        best_speedup = "N/A"
+        if best_id:
+          best_node = self.graph.get_node(best_id)
+          if best_node and best_node.evaluation.speedup is not None:
+            best_speedup = f"{best_node.evaluation.speedup:.3f}x"
+        logger.info(
+          f"Step completed. Total nodes in graph: {len(self.graph.nodes)}. "
+          f"Current best speedup: {best_speedup}"
+        )
 
-      # 6. Step Cleanup
-      self._post_step_hook()
+        # 6. Step Cleanup
+        self._post_step_hook()
+    finally:
+      self.graph.save()
 
     best_id = self.graph.best_node_id
     return (

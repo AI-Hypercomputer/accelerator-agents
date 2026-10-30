@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from auto_agent.agent import create_root_agent
 from auto_agent.agent_client.auto_agent_client import AutoAgentClient
@@ -11,6 +11,9 @@ logger = logging.getLogger(__name__)
 
 
 class ADKSessionWorker:
+  def __init__(self):
+    pass
+
   async def expand_node(
     self,
     node_id: str,
@@ -20,6 +23,7 @@ class ADKSessionWorker:
     strategy: Optional[str] = None,
     agent_config: Optional[Dict[str, Any]] = None,
     events_compaction: bool = False,
+    on_node_update: Optional[Callable[[Node], None]] = None,
   ) -> Node:
     """Expand an ADK session to get a new optimized kernel."""
     os.makedirs(session_dir, exist_ok=True)
@@ -30,36 +34,73 @@ class ADKSessionWorker:
     initial_state = self._prepare_initial_state(parent_node)
 
     # Run the agent and process results
+    salvaged_node = None
+    active_client_container: list[AutoAgentClient] = []
     try:
       state = await self._run_agent(
         node_id=node_id,
+        parent_node=parent_node,
         session_dir=session_dir,
         strategy=strategy,
         agent_config=agent_config,
         initial_state=initial_state,
         events_compaction=events_compaction,
+        on_node_update=on_node_update,
+        active_client_container=active_client_container,
       )
-      return self._process_results(
+      node = self._process_results(
         node_id=node_id,
         parent_node=parent_node,
         strategy=strategy,
         state=state,
         session_dir=session_dir,
+        execution_status="SUCCESS",
       )
-    except Exception as e:
-      logger.exception(f"Node {node_id} expansion failed: {e}")
-      return Node(
-        node_id=node_id,
-        parent_id=parent_node.node_id,
-        session_dir=session_dir,
-        code="",
-        plan="",
-        depth=parent_node.depth + 1,
-        strategy_applied=strategy,
-        execution_status="FAIL",
-        execution_error=str(e),
-        evaluation=EvaluationResult(correct=False),
+      if on_node_update:
+        on_node_update(node)
+      return node
+    except BaseException as e:
+      active_client = (
+        active_client_container[0] if active_client_container else None
       )
+      if active_client and active_client.session:
+        try:
+          curr_state = active_client.get_state()
+          if curr_state and curr_state.get("history"):
+            candidate = self._process_results(
+              node_id=node_id,
+              parent_node=parent_node,
+              strategy=strategy,
+              state=curr_state,
+              session_dir=session_dir,
+              execution_status="INTERRUPTED",
+            )
+            if candidate.is_valid_candidate:
+              salvaged_node = candidate
+              if on_node_update:
+                on_node_update(salvaged_node)
+        except Exception as se:
+          logger.warning(f"Failed to salvage node state on interruption: {se}")
+
+      if isinstance(e, Exception):
+        logger.exception(f"Node {node_id} expansion failed: {e}")
+        if salvaged_node is not None:
+          return salvaged_node
+        return Node(
+          node_id=node_id,
+          parent_id=parent_node.node_id,
+          session_dir=session_dir,
+          code="",
+          plan="",
+          depth=parent_node.depth + 1,
+          strategy_applied=strategy,
+          execution_status="FAIL",
+          execution_error=str(e),
+          evaluation=EvaluationResult(correct=False),
+        )
+      else:
+        # BaseException like KeyboardInterrupt, SystemExit, CancelledError
+        raise e
 
   def _prepare_inputs(
     self, session_dir: str, parent_node: Node, reference_code: str
@@ -99,11 +140,14 @@ class ADKSessionWorker:
   async def _run_agent(
     self,
     node_id: str,
+    parent_node: Node,
     session_dir: str,
     strategy: Optional[str],
     agent_config: Optional[Dict[str, Any]] = None,
     initial_state: Optional[Dict[str, Any]] = None,
     events_compaction: bool = False,
+    on_node_update: Optional[Callable[[Node], None]] = None,
+    active_client_container: Optional[list] = None,
   ) -> Dict[str, Any]:
     """Sets up a custom AutonomousPipelineAgent and runs the client."""
     agent_config = agent_config or {}
@@ -126,10 +170,35 @@ class ADKSessionWorker:
       agent=custom_agent,
       events_compaction=events_compaction,
     )
+    if active_client_container is not None:
+      active_client_container.append(client)
+
+    def handle_event(event: Any) -> None:
+      if not on_node_update:
+        return
+      actions = getattr(event, "actions", None)
+      if actions and hasattr(actions, "state_delta") and actions.state_delta:
+        state_delta = actions.state_delta
+        if "history" in state_delta:
+          try:
+            curr_state = client.get_state()
+            partial_node = self._process_results(
+              node_id=node_id,
+              parent_node=parent_node,
+              strategy=strategy,
+              state=curr_state,
+              session_dir=session_dir,
+              execution_status="IN_PROGRESS",
+            )
+            on_node_update(partial_node)
+          except Exception as err:
+            logger.warning(
+              f"Error updating intermediate node for {node_id}: {err}"
+            )
 
     await client.create_session(initial_state)
     try:
-      await client.run_async()
+      await client.run_async(on_event=handle_event)
     finally:
       try:
         session_json_path = os.path.join(session_dir, "session.json")
@@ -147,6 +216,7 @@ class ADKSessionWorker:
     strategy: Optional[str],
     state: Dict[str, Any],
     session_dir: str,
+    execution_status: str = "SUCCESS",
   ) -> Node:
     """Reads optimized code/plan and extracts metrics to construct a new Node."""
     history = state.get("history", [])
@@ -158,7 +228,22 @@ class ADKSessionWorker:
         (run for run in history if run.get("iteration") == best_iter), {}
       )
     elif history:
-      best_run = history[-1]
+      # Find best valid run with highest speedup among completed runs
+      valid_runs = [
+        run
+        for run in history
+        if run.get("compilation_status", {}).get("success", False)
+        and run.get("test_status", {}).get("success", False)
+      ]
+      if valid_runs:
+        best_run = max(
+          valid_runs,
+          key=lambda r: (
+            r.get("speedup") if r.get("speedup") is not None else -float("inf")
+          ),
+        )
+      else:
+        best_run = history[-1]
 
     comp_status = best_run.get("compilation_status") or {}
     compiled = comp_status.get("success", False)
@@ -177,19 +262,42 @@ class ADKSessionWorker:
     autotuning_summary = best_run.get("autotuning_summary")
     profiling_summary = best_run.get("profiling_summary")
 
-    # Read optimized code if it exists
-    opt_path = state.get("optimized_kernel_path")
+    # Read optimized code: prefer best_run["kernel_code"], then optimized_kernel_{iteration}.py, then opt_path
     optimized_code = ""
-    if opt_path and os.path.exists(opt_path):
-      with open(opt_path, "r") as f:
-        optimized_code = f.read()
+    iteration = best_run.get("iteration")
+    if best_run.get("kernel_code"):
+      optimized_code = best_run["kernel_code"]
+    elif iteration is not None:
+      iter_kernel_path = os.path.join(
+        session_dir, f"optimized_kernel_{iteration}.py"
+      )
+      if os.path.exists(iter_kernel_path):
+        with open(iter_kernel_path, "r") as f:
+          optimized_code = f.read()
 
-    # Read optimized plan if it exists
-    plan_path = state.get("kernel_plan_path")
+    if not optimized_code:
+      opt_path = state.get("optimized_kernel_path")
+      if opt_path and os.path.exists(opt_path):
+        with open(opt_path, "r") as f:
+          optimized_code = f.read()
+
+    # Read optimized plan: prefer best_run["plan"], then base_kernel_plan_{iteration}.md, then plan_path
     optimized_plan = ""
-    if plan_path and os.path.exists(plan_path):
-      with open(plan_path, "r") as f:
-        optimized_plan = f.read()
+    if best_run.get("plan"):
+      optimized_plan = best_run["plan"]
+    elif iteration is not None:
+      iter_plan_path = os.path.join(
+        session_dir, f"base_kernel_plan_{iteration}.md"
+      )
+      if os.path.exists(iter_plan_path):
+        with open(iter_plan_path, "r") as f:
+          optimized_plan = f.read()
+
+    if not optimized_plan:
+      plan_path = state.get("kernel_plan_path")
+      if plan_path and os.path.exists(plan_path):
+        with open(plan_path, "r") as f:
+          optimized_plan = f.read()
 
     return Node(
       node_id=node_id,
@@ -199,7 +307,7 @@ class ADKSessionWorker:
       plan=optimized_plan,
       depth=parent_node.depth + 1,
       strategy_applied=strategy,
-      execution_status="SUCCESS",
+      execution_status=execution_status,
       evaluation=EvaluationResult(
         compiled=compiled,
         correct=correct,

@@ -23,7 +23,7 @@ from JAXBench.harness.tpu_specs import get_tpu_spec
 
 
 def evaluate_kernel(workload_name, kernel_path, tpu='auto', num_warmup=5,
-                    num_iters=50):
+                    num_iters=50, level='level1'):
     """Evaluate an agent-generated kernel against a workload.
 
     Steps:
@@ -40,6 +40,7 @@ def evaluate_kernel(workload_name, kernel_path, tpu='auto', num_warmup=5,
         tpu: TPU target ('v5e', 'v6e', or 'auto')
         num_warmup: Number of warmup iterations
         num_iters: Number of benchmark iterations
+        level: Workload level ('level1' or 'level2', default: 'level1')
 
     Returns:
         dict with evaluation results (see below for schema).
@@ -49,13 +50,14 @@ def evaluate_kernel(workload_name, kernel_path, tpu='auto', num_warmup=5,
 
     result = {
         'workload': workload_name,
+        'level': level,
         'status': 'error',
         'tpu': tpu_name,
     }
 
     try:
         # --- Step 1: Load baseline ---
-        workload_dir = get_workload_dir(workload_name)
+        workload_dir = get_workload_dir(workload_name, level=level)
         baseline_path = os.path.join(workload_dir, 'baseline.py')
         baseline_mod = load_module(baseline_path, f'{workload_name}.baseline')
 
@@ -161,7 +163,7 @@ def evaluate_kernel(workload_name, kernel_path, tpu='auto', num_warmup=5,
         result['pallas_reference'] = None
         result['speedup_vs_pallas'] = None
 
-        if has_optimized(workload_name):
+        if has_optimized(workload_name, level=level):
             try:
                 jax.clear_caches()
                 opt_path = os.path.join(workload_dir, 'optimized.py')

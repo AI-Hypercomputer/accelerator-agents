@@ -71,7 +71,11 @@ python -m JAXBench evaluate \
 
 The evaluation pipeline:
 1. **Compile** — JIT-compiles the candidate kernel
-2. **Correctness** — Checks output against baseline (`np.allclose`, atol=1e-2, rtol=1e-2)
+2. **Correctness** — Checks integer outputs for exact equality and floating outputs
+   against baseline with `np.allclose` (atol=1e-2, rtol=1e-2). Integer outputs
+   retain their precision, including int64/uint64 values; integer and non-integer
+   output dtypes cannot be mixed. Equal integer values may use different widths
+   or signedness, and floating-point tolerances do not apply to integer outputs.
 3. **Benchmark** — Device-side profiling via `jax.profiler.trace()` (Perfetto traces)
 4. **Compare** — Reports speedup vs baseline XLA and Pallas reference (if present)
 
@@ -156,6 +160,24 @@ All benchmarks use **device-side timing** via `jax.profiler.trace()`:
 
 Use `--tpu auto` (default) to auto-detect from `jax.devices()`.
 
+## Correctness Regression Tests
+
+The correctness regression tests run on CPU without a TPU. From the repository
+root, use an environment with NumPy and a CPU-capable JAX installation:
+
+```bash
+JAX_PLATFORMS=cpu python -B -m unittest discover -s JAXBench/tests -v
+```
+
+The tests cover exact integer comparison, integer dtype compatibility, large
+values and signed/unsigned boundaries, overflow-safe error reporting, and
+floating-point tolerance behavior. The 64-bit boundary cases use NumPy arrays
+to preserve their values independently of JAX's `jax_enable_x64` setting.
+Evaluator integration tests execute JAX computations on CPU and verify that
+incorrect candidates are rejected before benchmarking. Workload discovery, TPU
+metadata, and timing are stubbed in those tests; they do not measure TPU
+performance or validate TPU kernel execution.
+
 ## Directory Structure
 
 ```
@@ -176,7 +198,7 @@ JAXBench/
 │   └── ...
 └── harness/
     ├── __init__.py
-    ├── correctness.py       # Output comparison (atol=1e-2, rtol=1e-2)
+    ├── correctness.py       # Exact integers; floats: atol=1e-2, rtol=1e-2
     ├── evaluator.py         # Agent evaluation pipeline
     ├── loader.py            # Dynamic module loading
     ├── profiler.py          # Device-side profiling (Perfetto)

@@ -1,13 +1,15 @@
 """Pre-flight validation tests for kernel task YAML specs and VMEM limits."""
 
 import ast
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
 import yaml
 
-EVALUATION_DIR = Path(__file__).resolve().parents[2] / "evaluation"
+ADK_DIR = Path(__file__).resolve().parents[2]
+EVALUATION_DIR = ADK_DIR / "evaluation"
 
 DEFAULT_MIN_VMEM_LIMIT_BYTES = (
   67_108_864  # 64 MiB for complex attention kernels
@@ -19,20 +21,35 @@ MIN_VMEM_LIMIT_BYTES = DEFAULT_MIN_VMEM_LIMIT_BYTES  # Backward compatibility
 # scoped memory OOMs and avoid excessive spill loops for complex attention kernels.
 # Memory capacities vary across TPU accelerator generations:
 # - v4:  16 MiB per-core default scratchpad
+# - v5e: 16 MiB per-core default scratchpad
 # - v5p: 32 MiB per-core default scratchpad / 64 MiB expanded capacity
 # - v6e: 64 MiB for large tile configurations (physical ceiling up to 128 MiB)
+# - v7x: 64 MiB (physical ceiling up to 128 MiB per chip)
+# - 7x:  64 MiB
 # - default: 64 MiB baseline for complex attention benchmarks
 TPU_ARCH_MIN_VMEM_LIMIT_BYTES: Dict[str, int] = {
   "v4": 16 * 1024 * 1024,
+  "v5e": 16 * 1024 * 1024,
   "v5p": 32 * 1024 * 1024,
   "v6e": 64 * 1024 * 1024,
+  "v7x": 64 * 1024 * 1024,
+  "7x": 64 * 1024 * 1024,
   "default": DEFAULT_MIN_VMEM_LIMIT_BYTES,
 }
 
 
 def get_min_vmem_limit_bytes(arch: str = "default") -> int:
   """Retrieve the minimum VMEM allocation threshold for a given accelerator architecture."""
-  return TPU_ARCH_MIN_VMEM_LIMIT_BYTES.get(arch, DEFAULT_MIN_VMEM_LIMIT_BYTES)
+  if not arch:
+    return DEFAULT_MIN_VMEM_LIMIT_BYTES
+  clean_arch = arch.strip().lower()
+  if clean_arch.startswith("tpu"):
+    clean_arch = clean_arch[3:].strip(" -_")
+  if clean_arch in TPU_ARCH_MIN_VMEM_LIMIT_BYTES:
+    return TPU_ARCH_MIN_VMEM_LIMIT_BYTES[clean_arch]
+  if f"v{clean_arch}" in TPU_ARCH_MIN_VMEM_LIMIT_BYTES:
+    return TPU_ARCH_MIN_VMEM_LIMIT_BYTES[f"v{clean_arch}"]
+  return DEFAULT_MIN_VMEM_LIMIT_BYTES
 
 
 def discover_kernel_task_yamls() -> List[Path]:
@@ -225,16 +242,57 @@ def test_reference_vmem_limit_bounds(reference_path: Path):
 def test_arch_aware_vmem_limits():
   """Validate architecture-aware VMEM mappings and fallback behavior."""
   assert TPU_ARCH_MIN_VMEM_LIMIT_BYTES["v4"] == 16 * 1024 * 1024
+  assert TPU_ARCH_MIN_VMEM_LIMIT_BYTES["v5e"] == 16 * 1024 * 1024
   assert TPU_ARCH_MIN_VMEM_LIMIT_BYTES["v5p"] == 32 * 1024 * 1024
   assert TPU_ARCH_MIN_VMEM_LIMIT_BYTES["v6e"] == 64 * 1024 * 1024
+  assert TPU_ARCH_MIN_VMEM_LIMIT_BYTES["v7x"] == 64 * 1024 * 1024
+  assert TPU_ARCH_MIN_VMEM_LIMIT_BYTES["7x"] == 64 * 1024 * 1024
   assert (
     TPU_ARCH_MIN_VMEM_LIMIT_BYTES["default"] == DEFAULT_MIN_VMEM_LIMIT_BYTES
   )
   assert get_min_vmem_limit_bytes("v4") == 16 * 1024 * 1024
+  assert get_min_vmem_limit_bytes("v5e") == 16 * 1024 * 1024
+  assert get_min_vmem_limit_bytes("TPU v5e") == 16 * 1024 * 1024
   assert get_min_vmem_limit_bytes("v5p") == 32 * 1024 * 1024
   assert get_min_vmem_limit_bytes("v6e") == 64 * 1024 * 1024
+  assert get_min_vmem_limit_bytes("v7x") == 64 * 1024 * 1024
+  assert get_min_vmem_limit_bytes("TPU 7x") == 64 * 1024 * 1024
+  assert get_min_vmem_limit_bytes("7x") == 64 * 1024 * 1024
+  assert get_min_vmem_limit_bytes("  tpu   7x  ") == 64 * 1024 * 1024
   assert get_min_vmem_limit_bytes("default") == DEFAULT_MIN_VMEM_LIMIT_BYTES
   assert get_min_vmem_limit_bytes("unknown") == DEFAULT_MIN_VMEM_LIMIT_BYTES
+
+
+def test_tpu_specs_hardware_generations_contract():
+  """Verify that TPU specs exist, are valid JSON, and contain full specs for all TPU generations."""
+  spec_files = [
+    ADK_DIR / "auto_agent" / "tpu_specs.json",
+    ADK_DIR / "hitl_agent" / "tpu_specs.json",
+  ]
+  required_generations = ("TPU v4", "TPU v5e", "TPU v5p", "TPU v6e", "TPU 7x")
+  required_sections = ("performance", "memory", "interconnect", "architecture")
+
+  for path in spec_files:
+    assert path.is_file(), f"Specification file does not exist: {path}"
+    with open(path, "r", encoding="utf-8") as f:
+      try:
+        data = json.load(f)
+      except json.JSONDecodeError as e:
+        pytest.fail(f"File {path} is not valid JSON: {e}")
+
+    assert isinstance(data, dict), f"Root of {path} must be a dictionary"
+    for gen in required_generations:
+      assert gen in data, f"{path} is missing TPU generation '{gen}'"
+      assert "specs" in data[gen], f"{path} generation '{gen}' missing 'specs' field"
+      specs = data[gen]["specs"]
+      assert isinstance(specs, dict), f"{path} generation '{gen}' specs must be a dictionary"
+      for section in required_sections:
+        assert section in specs, (
+          f"{path} generation '{gen}' missing required spec section '{section}'"
+        )
+        assert isinstance(specs[section], dict) and specs[section], (
+          f"{path} generation '{gen}' section '{section}' must be a non-empty dictionary"
+        )
 
 
 def test_eval_const_expr_arithmetic_and_unary():

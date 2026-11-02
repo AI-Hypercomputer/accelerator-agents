@@ -1,12 +1,12 @@
-name: Unit Tests & Hygiene
+name: Unit Tests & Integrity
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
 
 jobs:
-  hygiene:
-    name: Repository Hygiene
+  integrity:
+    name: Repository Integrity Check
     runs-on: ubuntu-latest
     permissions:
       contents: read

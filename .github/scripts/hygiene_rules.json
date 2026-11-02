@@ -32,10 +32,6 @@
     [
       "Internal workstation path",
       "/usr/local/google/"
-    ],
-    [
-      "Internal tool codename",
-      "(?i)\\b(?:jetski|tpu-coworker|anti-gravity)\\b"
     ]
   ],
   "excluded_dir_prefixes": [

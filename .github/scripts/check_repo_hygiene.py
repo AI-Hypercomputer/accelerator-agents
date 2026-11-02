@@ -33,10 +33,6 @@ DEFAULT_SENSITIVE_TEXT_PATTERNS: list[tuple[str, str]] = [
     ),
     ("Internal cloud path", r"/google/src/cloud/"),
     ("Internal workstation path", r"/usr/local/google/"),
-    (
-        "Internal tool codename",
-        r"(?i)\b(?:jetski|tpu-coworker|anti-gravity)\b",
-    ),
 ]
 
 DEFAULT_EXCLUDED_DIR_PREFIXES: tuple[str, ...] = (

@@ -443,6 +443,7 @@ class JAXKernelEvaluator:
       "atol": effective_atol,
       "rtol": effective_rtol,
       "sort_before_compare": task.sort_before_compare,
+      "donate_args": task.donate_args,
     }
     with open(local_path, "w") as f:
       json.dump(task_info, f)

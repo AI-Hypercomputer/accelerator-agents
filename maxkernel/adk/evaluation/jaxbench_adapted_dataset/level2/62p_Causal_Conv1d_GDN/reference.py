@@ -2672,6 +2672,10 @@ def get_inputs(dtype=jnp.bfloat16):
   ]
 
 
+# Evaluation contract (see `donate_args` in kernel_task.yaml): the harness
+# donates `conv_state` and `recurrent_state` and expects them back, updated,
+# as the first two output leaves with unchanged shape and dtype, so update
+# them in place (e.g. pallas_call input_output_aliases) instead of copying.
 def computation(
     qkv,
     b,

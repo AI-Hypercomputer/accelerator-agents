@@ -148,6 +148,10 @@ def update_kv_cache(
 
     return cache_kv
 
+# Evaluation contract (see `donate_args` in kernel_task.yaml): the harness
+# donates `cache_kv` and expects it back, updated, as the second output
+# with unchanged shape and dtype, so update it in place (e.g. pallas_call
+# input_output_aliases) instead of copying.
 @partial(
     jax.jit,
     donate_argnames=("cache_kv",),

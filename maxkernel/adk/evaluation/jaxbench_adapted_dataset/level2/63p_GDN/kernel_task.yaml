@@ -55,3 +55,7 @@ input_gen_code: |-
 
 rtol: 0.01
 atol: 0.01
+# In-place buffers the harness donates (and recycles across benchmark runs):
+# recurrent_state (dynamic arg 3) comes back updated as output 0.
+donate_args:
+  3: 0

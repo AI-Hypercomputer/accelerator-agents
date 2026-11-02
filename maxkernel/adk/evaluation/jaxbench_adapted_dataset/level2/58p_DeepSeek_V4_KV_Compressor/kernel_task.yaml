@@ -444,3 +444,8 @@ input_gen_code: |-
 
 rtol: 0.01
 atol: 0.01
+# In-place buffers the harness donates (and recycles across benchmark runs):
+# cache (arg 0) and rope_cache (arg 7) come back updated as outputs 0 and 1.
+donate_args:
+  0: 0
+  7: 1

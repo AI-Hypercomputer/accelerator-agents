@@ -1,12 +1,12 @@
-name: Pre-flight & Contract Validation
+name: Contract & Integrity Validation
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
 
 jobs:
-  hygiene:
-    name: Repository Hygiene
+  integrity:
+    name: Repository Integrity Check
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -21,8 +21,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Run Hygiene Scanner
-        run: python .github/scripts/check_repo_hygiene.py
+      - name: Run Integrity Scanner
+        run: python .github/scripts/check_repo_integrity.py
 
   validation-tests:
     name: Task Specs & Benchmark Contracts
@@ -45,6 +45,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest pytest-asyncio "google-adk~=1.0" pyyaml matplotlib pandas tensorflow-cpu
 
-      - name: Run Pre-flight Validation Tests
+      - name: Run Contract Validation Tests
         run: |
           PYTHONPATH=maxkernel/adk pytest -v maxkernel/adk/tests/validation/

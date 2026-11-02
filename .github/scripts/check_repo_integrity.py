@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Repository hygiene and secret/leak scanner.
+"""Repository integrity and compliance scanner.
 
 Ensures that:
 1. No bytecode caches (.pyc, __pycache__) or build artifacts (.egg-info) are tracked in git.
-2. Tracked text files do not contain accidental internal URLs, internal paths, or internal credentials.
+2. Tracked text files do not contain accidental internal URLs, internal paths, or corporate credentials.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Built-in fallback rule sets if hygiene_rules.json is absent
+# Built-in fallback rule sets if integrity_rules.json is absent
 DEFAULT_FORBIDDEN_TRACKED_PATTERNS: list[str] = [
     r"\.pyc$",
     r"__pycache__",
@@ -45,8 +45,8 @@ DEFAULT_EXCLUDED_FILES: tuple[str, ...] = (
     "maxkernel/adk/hitl_agent/isolate_object.py",
     "maxkernel/adk/auto_agent/isolate_object.py",
     "docs/code-of-conduct.md",
-    ".github/scripts/check_repo_hygiene.py",
-    ".github/scripts/hygiene_rules.json",
+    ".github/scripts/check_repo_integrity.py",
+    ".github/scripts/integrity_rules.json",
 )
 
 DEFAULT_BINARY_EXTENSIONS: tuple[str, ...] = (
@@ -66,7 +66,7 @@ DEFAULT_BINARY_EXTENSIONS: tuple[str, ...] = (
 )
 
 
-def load_hygiene_rules(
+def load_integrity_rules(
     config_path: Path | None = None,
 ) -> tuple[
     list[re.Pattern[str]],
@@ -75,9 +75,9 @@ def load_hygiene_rules(
     set[str],
     tuple[str, ...],
 ]:
-    """Load hygiene rules from JSON config file or fall back to built-in defaults."""
+    """Load integrity rules from JSON config file or fall back to built-in defaults."""
     if config_path is None:
-        config_path = Path(__file__).resolve().parent / "hygiene_rules.json"
+        config_path = Path(__file__).resolve().parent / "integrity_rules.json"
 
     forbidden_raw = list(DEFAULT_FORBIDDEN_TRACKED_PATTERNS)
     sensitive_raw = list(DEFAULT_SENSITIVE_TEXT_PATTERNS)
@@ -125,7 +125,7 @@ def load_hygiene_rules(
     EXCLUDED_DIR_PREFIXES,
     EXCLUDED_FILES,
     BINARY_EXTENSIONS,
-) = load_hygiene_rules()
+) = load_integrity_rules()
 
 
 def get_repo_root() -> Path:
@@ -229,11 +229,11 @@ def check_sensitive_content(
 
 
 def main() -> int:
-    """Run repository hygiene checks and exit with appropriate status code."""
+    """Run repository integrity checks and exit with appropriate status code."""
     repo_root = get_repo_root()
     tracked_files = get_tracked_files(repo_root)
 
-    print(f"[Hygiene] Checking {len(tracked_files)} tracked files in {repo_root}...")
+    print(f"[Integrity] Checking {len(tracked_files)} tracked files in {repo_root}...")
 
     # 1. Bytecode and cache check
     tracked_violations = check_forbidden_tracked_files(
@@ -271,7 +271,7 @@ def main() -> int:
     if tracked_violations or content_violations:
         return 1
 
-    print("\n[SUCCESS] Repository hygiene check clean.")
+    print("\n[SUCCESS] Repository integrity check clean.")
     return 0
 
 

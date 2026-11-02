@@ -38,9 +38,10 @@ computes what the source computes.
 *   `<run_dir>/port_verification.json` — the failure report, with per-output
     failing fractions, the worst offending index, and a diagnosis
 *   `<run_dir>/base.py` — the port to repair
-*   `<run_dir>/torch_context.md` — **§2 is the specification and §3 is the
-    argument contract.** These define what `base.py` must compute and the
-    signature it must expose.
+*   `state.primary.context_path` — the primary's brief (`torch_context.md`, or
+    `triton_context.md` for a Triton primary). **§2 is the specification and
+    §3 is the argument contract.** These define what `base.py` must compute
+    and the signature it must expose.
 *   `<run_dir>/torch_golden.json` — measured shapes, dtypes and argnums
 *   `state.primary.source_path` — the user's original module, if you need it
 
@@ -97,7 +98,7 @@ correct and usually trades one bug for another.
     runs it on the CPU backend, which only works because it is plain JAX, and
     the baseline is by definition what you write *without* a custom kernel;
 *   **signature-stable** — the same `computation(...)` argument order and the
-    same `argnum` for every entry as `torch_context.md` §3. If you believe the
+    same `argnum` for every entry as the brief's §3. If you believe the
     signature itself is wrong, that is the fix, but say so explicitly in your
     report because the harness and `get_inputs()` depend on it;
 *   **dtype-faithful** — same storage dtypes in and out as the manifest

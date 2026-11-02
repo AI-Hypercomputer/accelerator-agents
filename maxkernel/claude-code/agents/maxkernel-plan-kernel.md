@@ -33,14 +33,14 @@ All artifacts for this task are strictly confined within `<run_dir>`:
 
 *   State file: `<run_dir>/state.json` (contains `primary`, `references`, `reference_trust`, and absolute paths to all previous history)
 *   Base kernel: `<run_dir>/base.py`
-*   Primary context brief: `state.primary.context_path` — `<run_dir>/torch_context.md` or `<run_dir>/cuda_context.md`. Present only when `state.primary.language != "jax"`; `null` otherwise.
+*   Primary context brief: `state.primary.context_path` — `<run_dir>/torch_context.md` or `<run_dir>/<language>_context.md`. Present only when `state.primary.language != "jax"`; `null` otherwise.
 *   Original primary source: `state.primary.source_path` (the user's untouched input)
 *   Reference jaxpr: `state.jaxpr_path` and `state.jaxpr_facts_path` — present
     only when `state.reference_mode == "torchax"`; `null` otherwise.
 *   Optimized HLO: `state.hlo_path` — what XLA actually did with the reference.
 *   Ideas ledger: `state.ideas_ledger_path` — `<run_dir>/ideas_ledger.json`. Present only when the user supplied a reference kernel; `null` otherwise.
 *   Reference alignment: `state.reference_alignment_path` — the trust verdict and the difference list.
-*   **`<run_dir>/ref/` is OFF LIMITS to you.** The reference briefs in there have already been reconciled against the primary and distilled into the ledger, with each idea tagged by how much it can be trusted. Reading the raw CUDA behind the ledger's back reintroduces exactly the anchoring the ledger exists to prevent.
+*   **`<run_dir>/ref/` is OFF LIMITS to you.** The reference briefs in there have already been reconciled against the primary and distilled into the ledger, with each idea tagged by how much it can be trusted. Reading the raw GPU source (CUDA, Triton, cuTile, …) behind the ledger's back reintroduces exactly the anchoring the ledger exists to prevent.
 *   Shared test harness: `<run_dir>/test_kernel.py`
 *   Target plan output: `<run_dir>/iter<N>/kernel_plan.md`
 
@@ -73,9 +73,10 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
 
     *   **`"jax"`** — `state.primary.context_path` is `null`. `base.py` *is*
         the user's own code; nothing else to read. Skip to step 2.
-    *   **`"pytorch"` or `"cuda"`** — `base.py` is a **port**, not the user's
+    *   **`"pytorch"` or a GPU dialect (`"cuda"`, `"triton"`, `"cutile"`, `"cutedsl"`,
+        `"gpu"`)** — `base.py` is a **port**, not the user's
         code. You MUST `Read` `state.primary.context_path`
-        (`<run_dir>/torch_context.md` or `<run_dir>/cuda_context.md`) before
+        (`<run_dir>/torch_context.md` or `<run_dir>/<language>_context.md`) before
         planning anything. It was written once, at the front of the run, by an
         agent that read the original source line by line; it is the only place
         the original's intent survives. Planning from `base.py` alone throws
@@ -339,7 +340,7 @@ non-portable entries — they are informative — but never to adopt one.
     the ones that attack the bottleneck you identified.
 
 *   **`STRUCTURAL`** — a real decision whose *value* is hardware-specific.
-    **Never adopt the constant.** A CUDA `BLOCK_M=128, BLOCK_N=64` is evidence
+    **Never adopt the constant.** A CUDA or Triton `BLOCK_M=128, BLOCK_N=64` is evidence
     about the shape of the working set and about what the author believed fit
     in fast memory. It says nothing about what fits in the target's VMEM budget
     or aligns to its MXU size. Take the *ratio and the reason*; re-derive your own tile
@@ -347,14 +348,15 @@ non-portable entries — they are informative — but never to adopt one.
     corroboration. A plan that copies a tile constant has transliterated, not
     translated.
 
-When an entry's TPU translation is unclear, `{{MAXKERNEL_ROOT}}/cuda_to_pallas.md`
-is the lookup table the reconciler used: §1–6 by construct, §7 by kernel family
-(what a GEMM, FlashAttention, paged-attention, normalization, quantized-GEMM or
-MoE design usually keeps versus drops). `{{MAXKERNEL_ROOT}}/analyze_cuda_reference.md`
-gives the principle behind the split.
+When an entry's TPU translation is unclear, the lookup tables the reconciler
+used are the §7 translation tables (one per GPU dialect, construct by
+construct) in `{{CLAUDE_DIR}}/agents/maxkernel-analyze-gpu-reference.md`, and
+its §9 decision tree gives the principle behind the split. Those tables are
+prose rules, not reference source — reading them is not reading `ref/`.
 
 *   **`NON_PORTABLE`** — warp shuffles, `__syncthreads`, bank-conflict padding,
-    per-thread register blocking, occupancy targets, atomics-as-reduction.
+    per-thread register blocking, occupancy targets, Triton `num_warps`,
+    atomics-as-reduction.
     `ledger.py` will refuse to adopt these. Read them anyway: knowing that the
     author spent forty lines on a warp-level transpose *because* shared-memory
     bank conflicts punish the naive layout tells you that the layout mattered
@@ -402,7 +404,7 @@ should be structured as a markdown document with the following sections:
 
 -   **Source Provenance** (one line, always present):
     `Input language: <cuda|pytorch|jax>` — and when it is not `jax`, the brief
-    you read (`<run_dir>/cuda_context.md` / `torch_context.md`) plus a
+    you read (`<run_dir>/<language>_context.md` / `torch_context.md`) plus a
     one-sentence statement of what the original kernel computes, taken from its
     Section 2. If Section 2 and `<run_dir>/base.py` disagree about the
     semantics, flag it here explicitly.

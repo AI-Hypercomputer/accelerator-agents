@@ -81,11 +81,11 @@ Two files matter here, and you must read both.
     semantics your kernel must reproduce and the `computation` signature it must
     expose. Read it every time, whichever base the plan selected.
 
-    When `state.primary.language` is `"pytorch"` or `"cuda"`, `base.py` is a JAX
+    When `state.primary.language` is anything but `"jax"`, `base.py` is a JAX
     **port** of the user's original source, not the original itself. It is still
     the contract you must match — the harness compares against it and nothing
     else. Read `state.primary.context_path`
-    (`<run_dir>/torch_context.md` / `cuda_context.md`) only when the plan cites
+    (`<run_dir>/torch_context.md` / `<language>_context.md`) only when the plan cites
     it or when `base.py` leaves a dtype, layout or edge case ambiguous; its
     Section 2 is the authoritative specification and its numerics section fixes
     the accumulator precision. Do not port source constructs across literally —
@@ -104,7 +104,10 @@ Two files matter here, and you must read both.
     natural next step is to reproduce what you see, and what you see is warp
     shuffles, `__syncthreads`, per-thread register blocking and bank-conflict
     padding — machinery with no TPU counterpart, which becomes scalar `jnp`
-    busywork when transliterated. `hooks/workspace-guard.py` denies you reads
+    busywork when transliterated. A Triton or cuTile reference is no safer:
+    it *looks* like a Pallas kernel, so its GPU-tuned tile sizes, warp counts
+    and stage counts get copied without anyone noticing they were never
+    derived for a TPU. `hooks/workspace-guard.py` denies you reads
     under `ref/`; if you find yourself wanting one, the answer is that the plan
     is underspecified. Say so in your report instead.
 

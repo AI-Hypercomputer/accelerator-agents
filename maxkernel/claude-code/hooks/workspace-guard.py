@@ -8,7 +8,7 @@ Three jobs:
      lookups of the same -- so kernels get written, not copied.
   3. Seal a run's `ref/` directory once the reference has been reconciled, so
      the planner and implementer work from the distilled ideas ledger rather
-     than from raw CUDA.
+     than from raw GPU source (CUDA, Triton, cuTile, ...).
 
 Deliberately NOT blocked: the word "pallas" in workspace files, in code the
 agent writes, or in `from jax.experimental import pallas as pl` imports.
@@ -258,9 +258,10 @@ REF_SEALED = (
   "the ones it adopted; those citations are the supported way to use the "
   "reference.\n\n"
   "Reading the raw source at this point is how a TPU kernel ends up "
-  "transliterating SIMT machinery -- warp shuffles, __syncthreads, "
-  "per-thread register blocking -- that has no counterpart here and becomes "
-  "scalar busywork in Pallas.\n\n"
+  "transliterating GPU machinery -- warp shuffles, __syncthreads, "
+  "per-thread register blocking, or a Triton kernel's GPU-tuned block "
+  "sizes and warp counts -- that has no counterpart here or was never "
+  "derived for a TPU.\n\n"
   "If the plan does not say enough to implement from, report that instead."
 )
 

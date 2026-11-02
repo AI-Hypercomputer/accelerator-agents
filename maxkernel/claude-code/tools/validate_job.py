@@ -40,9 +40,14 @@ from pathlib import Path
 
 SCHEMA = "maxkernel.job/1"
 
-INPUT_TYPES = {"jax", "pytorch", "cuda", "specification"}
+# GPU kernel dialects; "gpu" is any other (CUTLASS/CuTe, ...). As an input
+# they are ported by an agent, never traced by torchax, and only Triton has an
+# oracle (its CPU interpreter). As a reference the type becomes
+# `references[].kind` in state.json.
+GPU_TYPES = {"cuda", "triton", "cutile", "cutedsl", "gpu"}
+INPUT_TYPES = GPU_TYPES | {"jax", "pytorch", "specification"}
 SYNTHESIS_TARGETS = {"pytorch", "jax"}
-REFERENCE_TYPES = {"cuda", "triton", "pallas", "jax", "pytorch"}
+REFERENCE_TYPES = GPU_TYPES | {"pallas", "jax", "pytorch"}
 CONVERSION_METHODS = {"torchax", "llm_port", "none"}
 RELATIONSHIPS = {"same_operation", "same_family", "unknown"}
 
@@ -167,6 +172,11 @@ def validate(job, job_path):
       f"has_reference is false but {len(refs)} reference(s) are listed. "
       "The references would be ignored; say which you meant."
     )
+  if len(refs) > 1:
+    errors.append(
+      f"{len(refs)} references are listed; a run takes at most one. Keep the "
+      "one the planner should learn from."
+    )
 
   for i, r in enumerate(refs):
     if not isinstance(r, dict):
@@ -213,10 +223,10 @@ def validate(job, job_path):
         "needs_jax_conversion is true. A synthesized JAX baseline IS "
         "base.py; there is nothing further to convert."
       )
-    if itype == "cuda" and method == "torchax":
+    if itype in GPU_TYPES and method == "torchax":
       errors.append(
-        "jax_conversion.method 'torchax' cannot convert a CUDA input. "
-        "torchax traces PyTorch modules; CUDA C++ has to be ported by "
+        f"jax_conversion.method 'torchax' cannot convert a {itype} input. "
+        "torchax traces PyTorch modules; GPU kernels have to be ported by "
         "an agent — use 'llm_port'."
       )
   elif needs is False:
@@ -275,11 +285,15 @@ def validate(job, job_path):
       "synthesize_as 'pytorch' if you want that measurement."
     )
 
-  if itype == "cuda" and _get(job, "evaluation.compare_against_source") is True:
+  if (
+    itype in GPU_TYPES
+    and _get(job, "evaluation.compare_against_source") is True
+  ):
     errors.append(
-      "evaluation.compare_against_source is true for a CUDA input. A TPU "
-      "host cannot execute CUDA, so there is nothing to compare against. "
-      "Every number for a CUDA input is measured against the JAX port."
+      f"evaluation.compare_against_source is true for a {itype} input. A TPU "
+      "host cannot execute GPU kernels at speed, so there is nothing to "
+      "compare against. Every number for a GPU input is measured against "
+      "the JAX port."
     )
 
   # ---- correctness / target ------------------------------------------
@@ -343,9 +357,16 @@ def build_plan(job, itype, needs, method, emit, refs):
       "pytorch",
       "llm_port",
     ): "tools/capture_torch_golden.py (eager PyTorch on CPU)",
+    (
+      "triton",
+      "llm_port",
+    ): "tools/capture_torch_golden.py (Triton interpreter on CPU)",
   }.get((effective, method))
-  if effective == "cuda":
-    oracle = "none — a TPU host cannot execute CUDA, so there is no oracle"
+  if effective in GPU_TYPES - {"triton"}:
+    name = {"cuda": "CUDA", "cutile": "cuTile", "cutedsl": "CuTe DSL"}.get(
+      effective, "GPU kernels"
+    )
+    oracle = f"none — a TPU host cannot execute {name}, so there is no oracle"
   if effective == "jax" and itype != "specification":
     oracle = "none — the input is already the reference"
   if itype == "specification" and synth == "jax":
@@ -377,7 +398,7 @@ def build_plan(job, itype, needs, method, emit, refs):
   phases = ["0 read state"]
   if itype == "specification":
     phases.append(f"0.1 synthesize {synth} baseline + USER APPROVAL GATE")
-  if effective == "pytorch":
+  if effective in ("pytorch", "triton"):
     phases.append("0.2 oracle")
   if method == "torchax":
     phases.append("0.3 jaxpr + HLO export")

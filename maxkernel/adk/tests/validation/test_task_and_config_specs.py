@@ -25,7 +25,6 @@ MIN_VMEM_LIMIT_BYTES = DEFAULT_MIN_VMEM_LIMIT_BYTES  # Backward compatibility
 # - v5p: 32 MiB per-core default scratchpad / 64 MiB expanded capacity
 # - v6e: 64 MiB for large tile configurations (physical ceiling up to 128 MiB)
 # - v7x: 64 MiB (physical ceiling up to 128 MiB per chip)
-# - 7x:  64 MiB
 # - default: 64 MiB baseline for complex attention benchmarks
 TPU_ARCH_MIN_VMEM_LIMIT_BYTES: Dict[str, int] = {
   "v4": 16 * 1024 * 1024,
@@ -33,7 +32,6 @@ TPU_ARCH_MIN_VMEM_LIMIT_BYTES: Dict[str, int] = {
   "v5p": 32 * 1024 * 1024,
   "v6e": 64 * 1024 * 1024,
   "v7x": 64 * 1024 * 1024,
-  "7x": 64 * 1024 * 1024,
   "default": DEFAULT_MIN_VMEM_LIMIT_BYTES,
 }
 
@@ -246,7 +244,7 @@ def test_arch_aware_vmem_limits():
   assert TPU_ARCH_MIN_VMEM_LIMIT_BYTES["v5p"] == 32 * 1024 * 1024
   assert TPU_ARCH_MIN_VMEM_LIMIT_BYTES["v6e"] == 64 * 1024 * 1024
   assert TPU_ARCH_MIN_VMEM_LIMIT_BYTES["v7x"] == 64 * 1024 * 1024
-  assert TPU_ARCH_MIN_VMEM_LIMIT_BYTES["7x"] == 64 * 1024 * 1024
+  assert "7x" not in TPU_ARCH_MIN_VMEM_LIMIT_BYTES
   assert (
     TPU_ARCH_MIN_VMEM_LIMIT_BYTES["default"] == DEFAULT_MIN_VMEM_LIMIT_BYTES
   )
@@ -256,7 +254,10 @@ def test_arch_aware_vmem_limits():
   assert get_min_vmem_limit_bytes("v5p") == 32 * 1024 * 1024
   assert get_min_vmem_limit_bytes("v6e") == 64 * 1024 * 1024
   assert get_min_vmem_limit_bytes("v7x") == 64 * 1024 * 1024
-  assert get_min_vmem_limit_bytes("TPU 7x") == 64 * 1024 * 1024
+  assert get_min_vmem_limit_bytes("TPU v7x") == 64 * 1024 * 1024
+  assert (
+    get_min_vmem_limit_bytes("TPU 7x") == 64 * 1024 * 1024
+  )  # handles legacy name in tpu_specs.json
   assert get_min_vmem_limit_bytes("7x") == 64 * 1024 * 1024
   assert get_min_vmem_limit_bytes("  tpu   7x  ") == 64 * 1024 * 1024
   assert get_min_vmem_limit_bytes("default") == DEFAULT_MIN_VMEM_LIMIT_BYTES

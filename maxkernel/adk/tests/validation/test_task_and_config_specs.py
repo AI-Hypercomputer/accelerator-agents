@@ -283,15 +283,20 @@ def test_tpu_specs_hardware_generations_contract():
     assert isinstance(data, dict), f"Root of {path} must be a dictionary"
     for gen in required_generations:
       assert gen in data, f"{path} is missing TPU generation '{gen}'"
-      assert "specs" in data[gen], f"{path} generation '{gen}' missing 'specs' field"
+      assert "specs" in data[gen], (
+        f"{path} generation '{gen}' missing 'specs' field"
+      )
       specs = data[gen]["specs"]
-      assert isinstance(specs, dict), f"{path} generation '{gen}' specs must be a dictionary"
+      assert isinstance(specs, dict), (
+        f"{path} generation '{gen}' specs must be a dictionary"
+      )
       for section in required_sections:
         assert section in specs, (
           f"{path} generation '{gen}' missing required spec section '{section}'"
         )
         assert isinstance(specs[section], dict) and specs[section], (
-          f"{path} generation '{gen}' section '{section}' must be a non-empty dictionary"
+          f"{path} generation '{gen}' section '{section}' must be a"
+          " non-empty dictionary"
         )
 
 

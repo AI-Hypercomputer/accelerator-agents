@@ -11,10 +11,12 @@ from google.adk.events import Event, EventActions
 from google.adk.sessions import Session
 
 from auto_agent.agent_client.auto_agent_client import AutoAgentClient
+from auto_search.algorithms.beam_search import BeamSearchOrchestrator
 from auto_search.algorithms.parallel_search import (
   SimpleParallelSearchOrchestrator,
 )
 from auto_search.graph import EvaluationResult, Node, SearchGraph
+from auto_search.run_search import run_search
 from auto_search.worker import ADKSessionWorker
 
 
@@ -333,5 +335,279 @@ def test_search_orchestrator_run_finally_saves_graph(temp_dir):
     # Ensure graph.save() was invoked in the finally block
     assert len(save_calls) >= 1
     assert os.path.exists(db_path)
+
+  asyncio.run(_run())
+
+
+def test_orchestrator_initial_kernel_code_root_seeding(temp_dir):
+  """Test SearchOrchestrator correctly seeds root node from initial_kernel_code."""
+  db_path = os.path.join(temp_dir, "search_graph.json")
+  seed_code = "def seed_kernel(): pass"
+  ref_code = "def reference_kernel(): pass"
+
+  orch = SimpleParallelSearchOrchestrator(
+    num_parallel_runs=1,
+    problem_id="test_seed_orch",
+    reference_code=ref_code,
+    graph_db_path=db_path,
+    initial_kernel_code=seed_code,
+  )
+
+  assert orch.graph.root_id is not None
+  root_node = orch.graph.get_node(orch.graph.root_id)
+  assert root_node is not None
+  assert root_node.code == seed_code
+  assert root_node.strategy_applied == "seed_kernel"
+  assert orch.graph.best_node_id == root_node.node_id
+
+  base_kernel_file = os.path.join(root_node.session_dir, "base_kernel.py")
+  assert os.path.exists(base_kernel_file)
+  with open(base_kernel_file) as f:
+    assert f.read() == seed_code
+
+  # Check persistence
+  with open(db_path) as f:
+    saved = json.load(f)
+  assert saved["best_node_id"] == root_node.node_id
+  assert saved["nodes"][root_node.node_id]["strategy_applied"] == "seed_kernel"
+
+
+def test_worker_prepare_inputs_and_query_with_seed_kernel(temp_dir):
+  """Test worker prepares optimized_kernel.py and includes seed_hint in query for seed/optimized parent."""
+  worker = ADKSessionWorker()
+
+  # 1. Baseline root node: should NOT create optimized_kernel.py
+  baseline_dir = os.path.join(temp_dir, "baseline_session")
+  baseline_node = Node(
+    node_id="root",
+    parent_id=None,
+    session_dir=temp_dir,
+    code="def base(): pass",
+    plan="",
+    depth=0,
+    strategy_applied="baseline",
+    execution_status="SUCCESS",
+    evaluation=EvaluationResult(compiled=True, correct=True, speedup=0.0),
+  )
+  worker._prepare_inputs(baseline_dir, baseline_node, "def base(): pass")
+  assert not os.path.exists(os.path.join(baseline_dir, "optimized_kernel.py"))
+
+  # 2. Seed kernel root node: SHOULD create optimized_kernel.py
+  seed_dir = os.path.join(temp_dir, "seed_session")
+  seed_node = Node(
+    node_id="root",
+    parent_id=None,
+    session_dir=temp_dir,
+    code="def seed(): pass",
+    plan="",
+    depth=0,
+    strategy_applied="seed_kernel",
+    execution_status="SUCCESS",
+    evaluation=EvaluationResult(compiled=True, correct=True, speedup=0.0),
+  )
+  worker._prepare_inputs(seed_dir, seed_node, "def ref(): pass")
+  opt_path = os.path.join(seed_dir, "optimized_kernel.py")
+  assert os.path.exists(opt_path)
+  with open(opt_path) as f:
+    assert f.read() == "def seed(): pass"
+
+  # 3. Evaluated child node with speedup > 0: SHOULD create optimized_kernel.py
+  evaluated_dir = os.path.join(temp_dir, "eval_session")
+  evaluated_node = Node(
+    node_id="eval_0",
+    parent_id="root",
+    session_dir=temp_dir,
+    code="def eval_opt(): pass",
+    plan="",
+    depth=0,
+    strategy_applied="custom",
+    execution_status="SUCCESS",
+    evaluation=EvaluationResult(compiled=True, correct=True, speedup=1.8),
+  )
+  worker._prepare_inputs(evaluated_dir, evaluated_node, "def ref(): pass")
+  assert os.path.exists(os.path.join(evaluated_dir, "optimized_kernel.py"))
+
+  # 4. Check query contains seed_hint in _run_agent
+  async def _check_query():
+    captured_query = None
+
+    def fake_client_init(*args, **kwargs):
+      nonlocal captured_query
+      captured_query = kwargs.get("query", "")
+      client = MagicMock()
+      client.session = MagicMock()
+      client.create_session = AsyncMock()
+      client.run_async = AsyncMock()
+      client.get_session_data = MagicMock(return_value={})
+      client.get_state = MagicMock(return_value={})
+      return client
+
+    with (
+      patch("auto_search.worker.create_root_agent", return_value=MagicMock()),
+      patch("auto_search.worker.AutoAgentClient", side_effect=fake_client_init),
+    ):
+      await worker._run_agent(
+        node_id="child_seed",
+        parent_node=seed_node,
+        session_dir=seed_dir,
+        strategy="tiling",
+      )
+
+    expected_hint = "An existing candidate kernel is provided at optimized_kernel.py. Hill-climb and optimize this kernel further."
+    assert expected_hint in captured_query
+    assert "Focus on: tiling." in captured_query
+
+  asyncio.run(_check_query())
+
+
+def test_parallel_search_resume_node_id_frontier_selection(temp_dir):
+  """Test SimpleParallelSearchOrchestrator selects resume_node_id for expansion."""
+  db_path = os.path.join(temp_dir, "search_graph.json")
+  graph = SearchGraph("test_parallel_resume", db_path)
+
+  root = Node(
+    node_id="node_000",
+    parent_id=None,
+    session_dir=temp_dir,
+    code="def base(): pass",
+    plan="",
+    depth=0,
+    strategy_applied="baseline",
+    execution_status="SUCCESS",
+    evaluation=EvaluationResult(compiled=True, correct=True, speedup=1.0),
+  )
+  child = Node(
+    node_id="node_001",
+    parent_id="node_000",
+    session_dir=temp_dir,
+    code="def child(): pass",
+    plan="",
+    depth=1,
+    strategy_applied="tiling",
+    execution_status="SUCCESS",
+    evaluation=EvaluationResult(compiled=True, correct=True, speedup=2.0),
+  )
+  graph.add_node(root)
+  graph.add_node(child)
+
+  orch = SimpleParallelSearchOrchestrator(
+    num_parallel_runs=2,
+    strategies=["strat_a", "strat_b"],
+    problem_id="test_parallel_resume",
+    reference_code="def base(): pass",
+    graph_db_path=db_path,
+    resume_node_id="node_001",
+  )
+
+  # Check selection
+  selected = orch._select_nodes_to_expand()
+  assert len(selected) == 1
+  assert selected[0].node_id == "node_001"
+
+  # Check task generation targeting the resumed node
+  tasks = orch._generate_expansion_tasks(selected)
+  assert len(tasks) == 2
+  for parent_node, strategy in tasks:
+    assert parent_node.node_id == "node_001"
+    assert strategy in ["strat_a", "strat_b"]
+
+
+def test_beam_search_resume_node_id_frontier_selection(temp_dir):
+  """Test BeamSearchOrchestrator resumes from resume_node_id."""
+  db_path = os.path.join(temp_dir, "search_graph.json")
+  graph = SearchGraph("test_beam_resume", db_path)
+
+  root = Node(
+    node_id="node_000",
+    parent_id=None,
+    session_dir=temp_dir,
+    code="def base(): pass",
+    plan="",
+    depth=0,
+    strategy_applied="baseline",
+    execution_status="SUCCESS",
+    evaluation=EvaluationResult(compiled=True, correct=True, speedup=1.0),
+  )
+  node1 = Node(
+    node_id="node_001",
+    parent_id="node_000",
+    session_dir=temp_dir,
+    code="def n1(): pass",
+    plan="",
+    depth=1,
+    strategy_applied="strat1",
+    execution_status="SUCCESS",
+    evaluation=EvaluationResult(compiled=True, correct=True, speedup=1.5),
+  )
+  node2 = Node(
+    node_id="node_002",
+    parent_id="node_000",
+    session_dir=temp_dir,
+    code="def n2(): pass",
+    plan="",
+    depth=1,
+    strategy_applied="strat2",
+    execution_status="SUCCESS",
+    evaluation=EvaluationResult(compiled=True, correct=True, speedup=1.8),
+  )
+  graph.add_node(root)
+  graph.add_node(node1)
+  graph.add_node(node2)
+  graph.metadata["current_depth"] = 1
+  graph.metadata["beam_node_ids"] = ["node_001"]
+  graph.save()
+
+  orch = BeamSearchOrchestrator(
+    beam_size=2,
+    branches_per_node=2,
+    max_depth=3,
+    problem_id="test_beam_resume",
+    reference_code="def base(): pass",
+    graph_db_path=db_path,
+    resume_node_id="node_002",
+  )
+  orch.resume()
+
+  assert orch.current_depth == 1
+  assert len(orch.beam) == 1
+  assert orch.beam[0].node_id == "node_002"
+
+  selected = orch._select_nodes_to_expand()
+  assert len(selected) == 1
+  assert selected[0].node_id == "node_002"
+
+
+def test_run_search_with_initial_kernel_path(temp_dir):
+  """Test run_search correctly reads initial_kernel_path and seeds search."""
+
+  async def _run():
+    ref_file = os.path.join(temp_dir, "ref.py")
+    with open(ref_file, "w") as f:
+      f.write("def reference(): pass")
+
+    seed_file = os.path.join(temp_dir, "seed.py")
+    with open(seed_file, "w") as f:
+      f.write("def seeded_solution(): pass")
+
+    db_path = os.path.join(temp_dir, "search_graph.json")
+
+    with patch(
+      "auto_search.algorithms.parallel_search.SimpleParallelSearchOrchestrator.run",
+      new_callable=AsyncMock,
+    ):
+      prob_id, status = await run_search(
+        reference_file_path=ref_file,
+        graph_db_path=db_path,
+        initial_kernel_path=seed_file,
+        algorithm="parallel",
+      )
+
+    with open(db_path) as f:
+      saved = json.load(f)
+
+    root_id = saved["root_id"]
+    assert saved["nodes"][root_id]["code"] == "def seeded_solution(): pass"
+    assert saved["nodes"][root_id]["strategy_applied"] == "seed_kernel"
+    assert saved["best_node_id"] == root_id
 
   asyncio.run(_run())

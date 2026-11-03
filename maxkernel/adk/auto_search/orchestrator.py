@@ -19,6 +19,8 @@ class SearchOrchestrator(abc.ABC):
     max_concurrency: int = 2,
     max_worker_retries: int = 1,
     events_compaction: bool = False,
+    initial_kernel_code: Optional[str] = None,
+    resume_node_id: Optional[str] = None,
   ):
     if max_worker_retries < 1:
       raise ValueError(
@@ -46,6 +48,8 @@ class SearchOrchestrator(abc.ABC):
     self._node_counter = 0
 
     self.reference_code = reference_code
+    self.initial_kernel_code = initial_kernel_code
+    self.resume_node_id = resume_node_id
 
     # Initialization of search graph
     self.graph = SearchGraph(problem_id, graph_db_path)
@@ -58,18 +62,28 @@ class SearchOrchestrator(abc.ABC):
       # Start from scratch, create root node
       node_id, session_dir = self.get_next_session_node()
       os.makedirs(session_dir, exist_ok=True)
-      # Write reference code to the root node directory
+
+      root_code = (
+        initial_kernel_code
+        if initial_kernel_code is not None
+        else reference_code
+      )
+      strategy_applied = (
+        "seed_kernel" if initial_kernel_code is not None else "baseline"
+      )
+
+      # Write reference code (or initial kernel code) to the root node directory
       with open(os.path.join(session_dir, "base_kernel.py"), "w") as f:
-        f.write(reference_code)
+        f.write(root_code)
 
       root_node = Node(
         node_id=node_id,
         parent_id=None,
         session_dir=session_dir,
-        code=reference_code,
+        code=root_code,
         plan="",
         depth=0,
-        strategy_applied="baseline",
+        strategy_applied=strategy_applied,
         execution_status="SUCCESS",
         evaluation=EvaluationResult(
           compiled=True,
@@ -80,6 +94,9 @@ class SearchOrchestrator(abc.ABC):
       )
 
       self.graph.add_node(root_node)
+      if initial_kernel_code is not None:
+        self.graph.best_node_id = root_node.node_id
+        self.graph.save()
 
   def get_next_session_node(
     self, suffix: Optional[str] = None

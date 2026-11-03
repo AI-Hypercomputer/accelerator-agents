@@ -106,11 +106,20 @@ class ADKSessionWorker:
     self, session_dir: str, parent_node: Node, reference_code: str
   ) -> None:
     """Writes the reference code and parent's optimized code (if any) to session directory."""
+    os.makedirs(session_dir, exist_ok=True)
     base_kernel_path = os.path.join(session_dir, "base_kernel.py")
     with open(base_kernel_path, "w") as f:
       f.write(reference_code)
 
-    if parent_node.depth > 0 and parent_node.code:
+    if parent_node.code and (
+      parent_node.depth > 0
+      or parent_node.strategy_applied == "seed_kernel"
+      or (
+        parent_node.evaluation
+        and parent_node.evaluation.speedup
+        and parent_node.evaluation.speedup > 0
+      )
+    ):
       optimized_kernel_path = os.path.join(session_dir, "optimized_kernel.py")
       with open(optimized_kernel_path, "w") as f:
         f.write(parent_node.code)
@@ -158,9 +167,18 @@ class ADKSessionWorker:
     )
 
     strategy_query = f"Focus on: {strategy}. " if strategy else ""
+    seed_hint = ""
+    if parent_node.code and (
+      parent_node.depth > 0 or parent_node.strategy_applied == "seed_kernel"
+    ):
+      seed_hint = (
+        "An existing candidate kernel is provided at optimized_kernel.py. "
+        "Hill-climb and optimize this kernel further. "
+      )
     query = (
       "Optimize the code for peak performance with pallas kernel. "
       f"{strategy_query}"
+      f"{seed_hint}"
       "Base code is at base_kernel.py."
     )
     client = AutoAgentClient(

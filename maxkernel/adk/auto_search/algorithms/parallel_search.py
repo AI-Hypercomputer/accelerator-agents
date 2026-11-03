@@ -17,6 +17,8 @@ class SimpleParallelSearchOrchestrator(SearchOrchestrator):
     num_parallel_runs: int = 2,
     strategies: Optional[List[str]] = None,
     agent_config: Optional[dict] = None,
+    initial_kernel_code: Optional[str] = None,
+    resume_node_id: Optional[str] = None,
     **kwargs,
   ):
     if num_parallel_runs <= 0:
@@ -41,17 +43,22 @@ class SimpleParallelSearchOrchestrator(SearchOrchestrator):
     self.agent_config = agent_config
     self.worker = ADKSessionWorker()
 
-    super().__init__(**kwargs)
+    super().__init__(
+      initial_kernel_code=initial_kernel_code,
+      resume_node_id=resume_node_id,
+      **kwargs,
+    )
 
   def _resume(self) -> None:
-    if not self.graph.root_id:
+    target_id = self.resume_node_id or self.graph.root_id
+    if not target_id:
       logger.warning("Cannot resume: root_id is not set in graph.")
       return
 
     existing_children = [
       node
       for node in self.graph.nodes.values()
-      if node.parent_id == self.graph.root_id
+      if node.parent_id == target_id
     ]
 
     for node in existing_children:
@@ -66,6 +73,13 @@ class SimpleParallelSearchOrchestrator(SearchOrchestrator):
   def _select_nodes_to_expand(self) -> List[Node]:
     if self._should_terminate():
       return []
+    if self.resume_node_id:
+      resume_node = self.graph.get_node(self.resume_node_id)
+      if resume_node:
+        return [resume_node]
+      logger.warning(
+        f"resume_node_id '{self.resume_node_id}' not found in graph. Falling back to root."
+      )
     if not self.graph.root_id:
       logger.error(
         "Cannot select nodes to expand: root_id is not set in graph."
@@ -83,14 +97,16 @@ class SimpleParallelSearchOrchestrator(SearchOrchestrator):
       )
       return []
 
-    root_node = self.graph.get_node(self.graph.root_id)
-    if not root_node:
+    target_node = (
+      nodes[0] if nodes else self.graph.get_node(self.graph.root_id)
+    )
+    if not target_node:
       return []
 
     logger.info(
-      f"Launching {len(self.remaining_strategies)} parallel runs for root node."
+      f"Launching {len(self.remaining_strategies)} parallel runs for node {target_node.node_id}."
     )
-    return [(root_node, strategy) for strategy in self.remaining_strategies]
+    return [(target_node, strategy) for strategy in self.remaining_strategies]
 
   def _update_search_state(self, new_nodes: List[Node]) -> None:
     for node in new_nodes:

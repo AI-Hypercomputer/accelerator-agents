@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import random
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from auto_search.graph import Node
 from auto_search.orchestrator import SearchOrchestrator
@@ -20,6 +20,8 @@ class BeamSearchOrchestrator(SearchOrchestrator):
     keep_factor: float = 1,
     strategies: List[str] = TPU_PALLAS_OPTIMIZATION_STRATEGIES,
     agent_config: dict = None,
+    initial_kernel_code: Optional[str] = None,
+    resume_node_id: Optional[str] = None,
     **kwargs,
   ):
     self._validate_args(beam_size, branches_per_node, max_depth, keep_factor)
@@ -34,10 +36,20 @@ class BeamSearchOrchestrator(SearchOrchestrator):
     self.current_depth = 0
     self.beam: List[Node] = []
 
-    super().__init__(**kwargs)
+    super().__init__(
+      initial_kernel_code=initial_kernel_code,
+      resume_node_id=resume_node_id,
+      **kwargs,
+    )
 
     if not self.graph.metadata:
-      self.beam = [self.graph.get_node(self.graph.root_id)]
+      start_node = None
+      if self.resume_node_id:
+        start_node = self.graph.get_node(self.resume_node_id)
+      if not start_node:
+        start_node = self.graph.get_node(self.graph.root_id)
+      self.beam = [start_node] if start_node else []
+      self.current_depth = start_node.depth if start_node else 0
       self.update_metadata("current_depth", self.current_depth)
       self.update_metadata(
         "beam_node_ids", [node.node_id for node in self.beam]
@@ -62,6 +74,23 @@ class BeamSearchOrchestrator(SearchOrchestrator):
       raise ValueError(f"keep_factor must be positive, got {keep_factor}.")
 
   def _resume(self) -> None:
+    if self.resume_node_id:
+      resume_node = self.graph.get_node(self.resume_node_id)
+      if resume_node:
+        self.beam = [resume_node]
+        self.current_depth = resume_node.depth
+        self.update_metadata("current_depth", self.current_depth)
+        self.update_metadata(
+          "beam_node_ids", [node.node_id for node in self.beam]
+        )
+        logger.info(
+          f"Resumed Beam Search at depth {self.current_depth} from resume_node_id: {self.resume_node_id}"
+        )
+        return
+      logger.warning(
+        f"resume_node_id '{self.resume_node_id}' not found in graph. Falling back to metadata."
+      )
+
     self.current_depth = self.graph.metadata.get("current_depth", 0)
     beam_ids = self.graph.metadata.get("beam_node_ids", [])
     self.beam = [
@@ -74,6 +103,16 @@ class BeamSearchOrchestrator(SearchOrchestrator):
     )
 
   def _select_nodes_to_expand(self) -> List[Node]:
+    if self.resume_node_id:
+      resume_node = self.graph.get_node(self.resume_node_id)
+      if resume_node:
+        self.resume_node_id = None
+        self.beam = [resume_node]
+        return [resume_node]
+      logger.warning(
+        f"resume_node_id '{self.resume_node_id}' not found in graph. Falling back to beam."
+      )
+      self.resume_node_id = None
     return self.beam
 
   def _generate_expansion_tasks(

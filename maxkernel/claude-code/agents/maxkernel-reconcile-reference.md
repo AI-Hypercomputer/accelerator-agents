@@ -93,6 +93,14 @@ evidence from both sides.
 | Special-case paths | Divisibility, power-of-two, minimum sizes |
 | Boundary handling | Ragged tails, partial tiles |
 
+**Autodiff backward runs** (`state.backward.from == "autodiff"`): the primary
+is the forward, but the run optimizes its backward (and the forward too unless
+`state.backward.optimize_forward` is false). Compare a backward reference
+against the primary's gradient, not its forward signature: the cotangent plus
+forward inputs or saved values in, the gradients for `state.backward.wrt` out.
+A backward that is not the true gradient (a straight-through estimator, a
+dropped term) is a difference. Its ideas apply only to the pass it implements.
+
 Number each real difference `D1`, `D2`, … Each gets a one-line statement of
 what it is and which side has it.
 

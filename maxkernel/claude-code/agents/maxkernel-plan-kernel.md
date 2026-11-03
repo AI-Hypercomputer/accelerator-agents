@@ -68,6 +68,8 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
 **For NEW and REVISION Plans alike:**
 
 1.  **Read base kernel:** Use `Read` to inspect the original source code at `<run_dir>/base.py`.
+    If it defines `training_step`, the kernel is a `forward_pass` /
+    `backward_pass` pair: plan both passes and what `saved` holds.
 1b. **Read the primary context brief, when there is one.** Read
     `state.primary.language` from `<run_dir>/state.json` first:
 

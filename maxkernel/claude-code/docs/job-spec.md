@@ -137,6 +137,43 @@ readable `base.py` is produced in torchax mode.
 > instead. Otherwise it is an error, raised before a TPU is touched rather than
 > four phases in.
 
+### `backward` — optional
+
+By default a run optimizes the input as written. Add a `backward` object to
+optimize for training instead, and say where the backward comes from:
+
+| `backward.from` | `input` is | What happens |
+| --- | --- | --- |
+| `"source"` | a **backward** implementation, of any input type | No extra phase: the backward goes through the same steps as any input of its type. The result is a backward kernel, timed on the backward alone. |
+| `"autodiff"` | the **forward** | The forward is ported and checked as usual, then Phase 0.85 (`tools/make_vjp_base.py`) rewrites `base.py` using `jax.vjp` as `computation(cotangent, *forward_args) -> (forward_output, gradients)`, or `-> gradients` when the forward stays fixed. No agent writes the backward baseline; it is as trustworthy as the forward port. |
+
+| Field | Meaning |
+| --- | --- |
+| `backward.optimize_forward` | `autodiff` only. `true` (default): both passes are optimized, and the result is `forward_pass(*forward_args) -> (forward_output, saved)` and `backward_pass(saved, cotangent) -> gradients`, a ready `jax.custom_vjp` pair. `false`: your forward stays fixed and the result is a backward kernel returning `gradients`. |
+| `backward.wrt` | `autodiff` only. Names of the forward's arguments to differentiate, as named in your source. Default: every floating-point array argument and, for a PyTorch module, every trainable parameter; buffers are never differentiated. |
+| `backward.forward_context` | `source` only. Path to the forward code, read when generating inputs so the saved forward values a backward consumes (activations, gather indices, routing scores) are consistent rather than independent random arrays. |
+
+Use `source` when your backward is JAX or Pallas (it becomes `base.py` as is) or
+PyTorch or Triton (its port is golden-checked). Use `autodiff` when you have
+only the forward, or when your backward is CUDA, CuTe DSL or another GPU
+language, which could never be checked: supply that backward as the job's
+reference instead and the planner still gets its ideas. The gradient is only
+checked if the forward port is, so this helps when the forward is JAX,
+PyTorch or Triton.
+
+Two things to know about an `autodiff` run:
+
+- What is timed. By default, forward + backward together, as one training
+  step. The two passes are kept apart as in training: the backward sees only
+  what the forward saved and the cotangent, and no work on the cotangent can be
+  merged into the forward. With `optimize_forward: false`, the backward alone:
+  it receives only the forward inputs (all a fixed forward is guaranteed to
+  hand it) and recomputes the rest, exactly as the `jax.vjp` baseline does. Use
+  it as the backward of a `jax.custom_vjp` whose forward saves its inputs.
+- It assumes your source's gradient is the true gradient of its forward. If
+  the source defines its own (`autograd.Function`, a gradient hook), you have
+  a backward: use `source`. Phase 0.85 stops if it finds one.
+
 ### Everything else — optional, with defaults
 
 | Field | Default | Meaning |
@@ -154,7 +191,7 @@ readable `base.py` is produced in torchax mode.
 
 ## What the validator checks
 
-Beyond required fields and enum membership, it rejects eight contradictions
+Beyond required fields and enum membership, it rejects twelve contradictions
 that are each a real failure mode:
 
 1. `has_reference: true` with no `references` — a silently reference-less run.
@@ -169,6 +206,15 @@ that are each a real failure mode:
 7. `evaluation.compare_against_source: true` on a GPU input — nothing to
    compare against on a TPU.
 8. More than one entry in `references` — a run takes at most one.
+9. A `backward` object without a valid `from`, or with an unknown key — the
+   intent is ambiguous.
+10. `backward.wrt` or `backward.optimize_forward` with `from: "source"`, or
+    `backward.forward_context` with `from: "autodiff"` — each would be silently
+    ignored.
+11. `from: "autodiff"` with torchax and `emit_readable_reference: false` —
+    there is no `base.py` to differentiate.
+12. `from: "autodiff"` with `evaluation.compare_against_source: true` — it
+    would compare a backward kernel against the forward source.
 
 On success it prints the plan the job implies, so you can see what will happen
 before it happens:

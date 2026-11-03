@@ -90,6 +90,7 @@ class BeamSearchOrchestrator(SearchOrchestrator):
       logger.warning(
         f"resume_node_id '{self.resume_node_id}' not found in graph. Falling back to metadata."
       )
+      self.resume_node_id = None
 
     self.current_depth = self.graph.metadata.get("current_depth", 0)
     beam_ids = self.graph.metadata.get("beam_node_ids", [])

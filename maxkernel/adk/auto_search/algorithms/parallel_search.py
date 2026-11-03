@@ -50,15 +50,23 @@ class SimpleParallelSearchOrchestrator(SearchOrchestrator):
     )
 
   def _resume(self) -> None:
-    target_id = self.resume_node_id or self.graph.root_id
+    target_id = None
+    if self.resume_node_id:
+      if self.graph.get_node(self.resume_node_id):
+        target_id = self.resume_node_id
+      else:
+        logger.warning(
+          f"resume_node_id '{self.resume_node_id}' not found in graph. Falling back to root."
+        )
+    if not target_id:
+      target_id = self.graph.root_id
+
     if not target_id:
       logger.warning("Cannot resume: root_id is not set in graph.")
       return
 
     existing_children = [
-      node
-      for node in self.graph.nodes.values()
-      if node.parent_id == target_id
+      node for node in self.graph.nodes.values() if node.parent_id == target_id
     ]
 
     for node in existing_children:
@@ -76,10 +84,12 @@ class SimpleParallelSearchOrchestrator(SearchOrchestrator):
     if self.resume_node_id:
       resume_node = self.graph.get_node(self.resume_node_id)
       if resume_node:
+        self.resume_node_id = None
         return [resume_node]
       logger.warning(
         f"resume_node_id '{self.resume_node_id}' not found in graph. Falling back to root."
       )
+      self.resume_node_id = None
     if not self.graph.root_id:
       logger.error(
         "Cannot select nodes to expand: root_id is not set in graph."
@@ -97,9 +107,7 @@ class SimpleParallelSearchOrchestrator(SearchOrchestrator):
       )
       return []
 
-    target_node = (
-      nodes[0] if nodes else self.graph.get_node(self.graph.root_id)
-    )
+    target_node = nodes[0] if nodes else self.graph.get_node(self.graph.root_id)
     if not target_node:
       return []
 

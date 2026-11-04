@@ -186,7 +186,7 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
 
 **For REVISIONS / NEXT ITERATION Plans:**
 
-1.  **Read previous artifacts:** Use `Read` to read `<run_dir>/iter<N-1>/kernel_plan.md`, `<run_dir>/iter<N-1>/optimized.py`, `<run_dir>/iter<N-1>/autotune_summary.md` (if exists), and `<run_dir>/iter<N-1>/profile_summary.md` (if exists). If Step 2.4 below reverts to an earlier iteration `iter<k>` (`k < N-1`), also `Read` `<run_dir>/iter<k>/optimized.py` and `<run_dir>/iter<k>/kernel_plan.md`.
+1.  **Read previous artifacts:** Use `Read` to read `<run_dir>/iter<N-1>/kernel_plan.md`, `<run_dir>/iter<N-1>/optimized.py`, `<run_dir>/iter<N-1>/autotune_summary.md` (if exists), and `<run_dir>/iter<N-1>/profile_summary.md` (if exists). If the **Decide Optimization Base** step (item 4 below) reverts to an earlier iteration `iter<k>` (`k < N-1`) instead of building on `iter<N-1>`, also `Read` `<run_dir>/iter<k>/optimized.py` and `<run_dir>/iter<k>/kernel_plan.md`.
 2.  **Review execution results & compare target vs. actual performance:**
     - Analyze status entries in `<run_dir>/state.json` to identify what failed or what performance bottlenecks remain.
     - **Compare Expected Target vs. Actual Performance**:

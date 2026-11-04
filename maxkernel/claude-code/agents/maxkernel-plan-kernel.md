@@ -186,7 +186,7 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
 
 **For REVISIONS / NEXT ITERATION Plans:**
 
-1.  **Read previous artifacts:** Use `Read` to read `<run_dir>/iter<N-1>/kernel_plan.md`, `<run_dir>/iter<N-1>/optimized.py`, `<run_dir>/iter<N-1>/autotune_summary.md` (if exists), and `<run_dir>/iter<N-1>/profile_summary.md` (if exists). If Step 2.4 below reverts to an earlier iteration `iter<k>` (`k < N-1`), also `Read` `<run_dir>/iter<k>/optimized.py` and `<run_dir>/iter<k>/kernel_plan.md`.
+1.  **Read previous artifacts:** Use `Read` to read `<run_dir>/iter<N-1>/kernel_plan.md`, `<run_dir>/iter<N-1>/optimized.py`, `<run_dir>/iter<N-1>/autotune_summary.md` (if exists), and `<run_dir>/iter<N-1>/profile_summary.md` (if exists). If the **Decide Optimization Base** step (item 4 below) reverts to an earlier iteration `iter<k>` (`k < N-1`) instead of building on `iter<N-1>`, also `Read` `<run_dir>/iter<k>/optimized.py` and `<run_dir>/iter<k>/kernel_plan.md`.
 2.  **Review execution results & compare target vs. actual performance:**
     - Analyze status entries in `<run_dir>/state.json` to identify what failed or what performance bottlenecks remain.
     - **Compare Expected Target vs. Actual Performance**:
@@ -246,13 +246,11 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
         single process.
     *   `prev.optimized_time_ms` — JSON number or `null`; iteration `N-1`'s
         measured latency in milliseconds.
-    *   `prior` — the best prior iteration `iter<k>` (`k < N-1`) in
-        `state.history` with `compile_ok == true`, `test_ok == true`, and
-        `speedup > 1.0` (i.e. `prev.base_choice` when `prev` built on a prior
-        iteration `iter<k>`, or the lowest-`optimized_time_ms` entry among
-        iterations `1 .. N-2` that beat `base.py`). If no iteration before `N-1`
-        achieved `speedup > 1.0` (for example when `N == 2`), `prior` is `none`
-        and the fallback is `<run_dir>/base.py`.
+    *   `prior` — if `prev.base_choice` is `"iter<k>"`, the entry in
+        `state.history` for iteration `k` (with its `prior.optimized_time_ms`).
+        If `prev.base_choice` is `"base"` (for example when `N == 2` or no
+        earlier iteration beat `base.py`), `prior` is `none` and the fallback is
+        `<run_dir>/base.py`.
 
     Apply this rule literally. Evaluate top to bottom and stop at the first row
     that matches:

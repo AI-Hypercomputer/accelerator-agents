@@ -15,7 +15,7 @@ import make_vjp_base
 # A forward with a static argument used as a shape, an integer index input
 # (never differentiated) and a tuple output with an integer leaf -- the
 # shapes that break a naive `jax.vjp(computation, *args)`.
-FORWARD = '''
+FORWARD = """
 import jax
 import jax.numpy as jnp
 
@@ -27,7 +27,7 @@ def _helper(x, w):
 def computation(x, w, idx, n):
   h = _helper(x, w)[idx]
   return h.reshape(n, -1), jnp.sum(h), jnp.argmax(h, axis=-1)
-'''
+"""
 
 
 def _exec(src):
@@ -74,7 +74,9 @@ class TestMakeVjpBase(unittest.TestCase):
     bwd = _exec(make_vjp_base.generate(FORWARD, ["w"]))["computation"]
     _, got = jax.jit(bwd, static_argnums=(4,))(ct, x, w, idx, 2)
     self.assertEqual(len(got), 1)
-    self.assertTrue(jnp.allclose(got[0], _expected(x, w, idx, ct)[1], atol=1e-5))
+    self.assertTrue(
+      jnp.allclose(got[0], _expected(x, w, idx, ct)[1], atol=1e-5)
+    )
 
   def test_default_returns_forward_output(self):
     x, w, idx, ct = _inputs()
@@ -147,9 +149,7 @@ class TestMakeVjpBase(unittest.TestCase):
     with self.assertRaises(make_vjp_base.VjpError):
       make_vjp_base.generate(make_vjp_base.generate(FORWARD))
     with self.assertRaises(make_vjp_base.VjpError):
-      make_vjp_base.generate(
-        "def computation(*a):\n  return a\n", ["x"]
-      )
+      make_vjp_base.generate("def computation(*a):\n  return a\n", ["x"])
     with self.assertRaises(make_vjp_base.VjpError):
       make_vjp_base.generate(
         "def computation(x):\n  return pl.pallas_call(k)(x)\n"
@@ -175,6 +175,33 @@ class TestMakeVjpBase(unittest.TestCase):
     self.assertEqual(len(got), 2)
     self.assertEqual(got[1]["w"].shape, w.shape)
 
+  def test_mixed_pytree_differentiates_float_leaves(self):
+    src = (
+      "import jax.numpy as jnp\n"
+      "def computation(x, params):\n"
+      "  return (x @ params['w'])[params['idx']]\n"
+    )
+    x, w, _, _ = _inputs()
+    params = {"w": w, "idx": jnp.array([2, 0])}
+    for optimize_forward in (True, False):
+      gen = make_vjp_base.generate(src, optimize_forward=optimize_forward)
+      step = _exec(gen)
+      got = jax.jit(step["computation"])(jnp.ones((2, 6)), x, params)
+      gx, gp = got[1] if optimize_forward else got
+      self.assertIsNone(gp["idx"])  # int leaf: held fixed, no float0 gradient
+      want = jax.grad(lambda w: jnp.sum((x @ w)[params["idx"]]))(w)
+      self.assertTrue(jnp.allclose(gp["w"], want, atol=1e-5))
+
+  def test_python_number_outputs(self):
+    # jax.vjp passes Python-number outputs through as plain floats and ints.
+    src = "def computation(x):\n  return x * 2.0, 3.0, 4\n"
+    x = jnp.ones((3,))
+    for optimize_forward in (True, False):
+      gen = make_vjp_base.generate(src, optimize_forward=optimize_forward)
+      got = _exec(gen)["computation"]((jnp.ones((3,)), 0.0, 0), x)
+      (g,) = got[1] if optimize_forward else got
+      self.assertTrue(jnp.allclose(g, 2.0))
+
   def test_nothing_to_differentiate_fails(self):
     src = "import jax.numpy as jnp\ndef computation(i):\n  return i * 2.0\n"
     bwd = _exec(make_vjp_base.generate(src, optimize_forward=False))
@@ -193,7 +220,9 @@ class TestMakeVjpBase(unittest.TestCase):
     x, w, idx, ct = _inputs()
     bwd = _exec(make_vjp_base.generate(src))["computation"]
     _, got = jax.jit(bwd, static_argnums=(4,))(ct, x, w, idx, 2)
-    self.assertTrue(jnp.allclose(got[1], _expected(x, w, idx, ct)[1], atol=1e-5))
+    self.assertTrue(
+      jnp.allclose(got[1], _expected(x, w, idx, ct)[1], atol=1e-5)
+    )
 
   def test_cli_failure_leaves_forward_untouched(self):
     with tempfile.TemporaryDirectory() as d:
@@ -215,7 +244,11 @@ class TestMakeVjpBase(unittest.TestCase):
     with tempfile.TemporaryDirectory() as d:
       base = Path(d) / "base.py"
       base.write_text(FORWARD)
-      cmd = [sys.executable, os.path.join(tools_dir, "make_vjp_base.py"), str(base)]
+      cmd = [
+        sys.executable,
+        os.path.join(tools_dir, "make_vjp_base.py"),
+        str(base),
+      ]
       for _ in range(2):
         subprocess.run(cmd, check=True, capture_output=True)
       self.assertEqual((Path(d) / "base_fwd.py").read_text(), FORWARD)

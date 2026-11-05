@@ -371,7 +371,12 @@ def validate(job, job_path):
           "backward.optimize_forward is only meaningful with backward.from "
           "'autodiff'. A backward source has no forward to optimize."
         )
-      if bwd.get("forward_context") is not None and bfrom != "source":
+      fctx = bwd.get("forward_context")
+      if fctx is not None and not (isinstance(fctx, str) and fctx):
+        errors.append(
+          f"backward.forward_context must be a path string, got {fctx!r}"
+        )
+      if fctx is not None and bfrom != "source":
         errors.append(
           "backward.forward_context is only meaningful with backward.from "
           "'source'. With 'autodiff' the input already is the forward."

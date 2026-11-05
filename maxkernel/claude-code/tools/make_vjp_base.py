@@ -42,11 +42,12 @@ differentiated argument, in forward-argument order.
 
 Which arguments are differentiated:
   --wrt NAME ...  those parameters of the forward `computation`, by name
-  (default)       every argument that is an array, or a pytree of arrays, with
-                  a floating dtype, decided at trace time; integer arrays and
-                  scalars (static arguments) are never differentiated, and a
-                  forward with no such argument fails instead of returning
-                  no gradients
+  (default)       every argument that is, or holds, a floating-point array,
+                  decided at trace time. Within a pytree argument only the
+                  floating-point leaves are differentiated; the others get
+                  None. Integer arrays and scalars (static arguments) are
+                  never differentiated, and a forward with nothing to
+                  differentiate fails instead of returning no gradients
 
 Idempotent: base_fwd.py is written only on success, and once it exists it is
 the source, so a re-run never wraps an already-wrapped base.py.
@@ -75,6 +76,7 @@ RESERVED = (
   "training_step",
   "_vjp",
   "_differentiable",
+  "_float_leaf",
   "_pull",
   "_vjp_jax",
   "_vjp_jnp",
@@ -82,7 +84,7 @@ RESERVED = (
   "_WRT_POSITIONS",
 )
 
-_HEADER = '''
+_HEADER = """
 
 # =====================================================================
 {marker} from the forward above
@@ -108,14 +110,15 @@ import numpy as _vjp_np
 _WRT_POSITIONS = {positions!r}
 
 
-def _differentiable(a):
+def _float_leaf(l):
   # Arrays only: a NumPy scalar has a dtype too, but it is a static argument.
-  leaves = _vjp_jax.tree_util.tree_leaves(a)
-  return bool(leaves) and all(
-    isinstance(l, (_vjp_jax.Array, _vjp_np.ndarray))
-    and _vjp_jnp.issubdtype(l.dtype, _vjp_jnp.floating)
-    for l in leaves
-  )
+  return isinstance(
+    l, (_vjp_jax.Array, _vjp_np.ndarray)
+  ) and _vjp_jnp.issubdtype(l.dtype, _vjp_jnp.floating)
+
+
+def _differentiable(a):
+  return any(_float_leaf(l) for l in _vjp_jax.tree_util.tree_leaves(a))
 
 
 def _vjp(args):
@@ -129,31 +132,55 @@ def _vjp(args):
   else:
     pos = _WRT_POSITIONS
 
-  def _fwd(*diff_args):
+  # Only the floating-point leaves of each argument are differentiated; the
+  # others (index tables in a params dict, ...) are held fixed and get None
+  # in place of a gradient.
+  split = [_vjp_jax.tree_util.tree_flatten(args[i]) for i in pos]
+  masks = [[_float_leaf(l) for l in leaves] for leaves, _ in split]
+
+  def _fwd(*diff_leaves):
+    it = iter(diff_leaves)
     full = list(args)
-    for i, d in zip(pos, diff_args):
-      full[i] = d
+    for i, (leaves, tree), mask in zip(pos, split, masks):
+      full[i] = tree.unflatten(
+        [next(it) if m else l for l, m in zip(leaves, mask)]
+      )
     return {forward}(*full)
 
-  return _vjp_jax.vjp(_fwd, *(args[i] for i in pos))
+  trees = [tree for _, tree in split]  # static structure only, no tracers
+
+  def _regroup(vjp, cotangent):
+    it = iter(vjp(cotangent))
+    return tuple(
+      tree.unflatten([next(it) if m else None for m in mask])
+      for tree, mask in zip(trees, masks)
+    )
+
+  diff = [l for (leaves, _), mask in zip(split, masks)
+          for l, m in zip(leaves, mask) if m]
+  out, vjp = _vjp_jax.vjp(_fwd, *diff)
+  # A Partial stays a pytree, so the pullback's saved arrays still go through
+  # training_step's barrier.
+  return out, _vjp_jax.tree_util.Partial(_regroup, vjp)
 
 
 def _pull(vjp, out, cotangent):
   # Non-float outputs (indices, counts) carry no gradient; jax.vjp wants a
-  # float0 cotangent for them, which cannot be a jit argument.
+  # float0 cotangent for them, which cannot be a jit argument. result_type
+  # and np.shape also cover outputs returned as plain Python numbers.
   cotangent = _vjp_jax.tree_util.tree_map(
     lambda o, c: (
       c
-      if _vjp_jnp.issubdtype(o.dtype, _vjp_jnp.inexact)
-      else _vjp_np.zeros(o.shape, dtype=_vjp_jax.dtypes.float0)
+      if _vjp_jnp.issubdtype(_vjp_jnp.result_type(o), _vjp_jnp.inexact)
+      else _vjp_np.zeros(_vjp_np.shape(o), dtype=_vjp_jax.dtypes.float0)
     ),
     out,
     cotangent,
   )
   return vjp(cotangent)
-'''
+"""
 
-_TRAINING_STEP = '''
+_TRAINING_STEP = """
 
 def forward_pass(*args):
   out, vjp = _vjp(args)
@@ -182,19 +209,19 @@ def training_step(forward_pass, backward_pass):
 
 
 computation = training_step(forward_pass, backward_pass)
-'''
+"""
 
-_FIXED_FORWARD = '''
+_FIXED_FORWARD = """
 
 def computation(cotangent, *args):
   out, vjp = _vjp(args)
   return _pull(vjp, out, cotangent)
-'''
+"""
 
 _SUMMARIES = {
   True: (
     "(forward_output, gradients)",
-    '''# One training step, built from two passes kept apart as in training:
+    """# One training step, built from two passes kept apart as in training:
 #   forward_pass(*forward_args) -> (forward_output, saved)
 #   backward_pass(saved, cotangent) -> gradients
 # An optimized version defines both, choosing what `saved` holds (static
@@ -202,7 +229,7 @@ _SUMMARIES = {
 # `computation = training_step(forward_pass, backward_pass)` (copy
 # training_step). The harness scores its forward_pass and backward_pass
 # through the training_step below, so they can be used as a
-# jax.custom_vjp pair.''',
+# jax.custom_vjp pair.""",
     _TRAINING_STEP,
   ),
   False: (
@@ -233,7 +260,9 @@ def _computation_params(tree):
   for n in tree.body:
     if (
       isinstance(n, ast.Assign)
-      and any(isinstance(t, ast.Name) and t.id == "computation" for t in n.targets)
+      and any(
+        isinstance(t, ast.Name) and t.id == "computation" for t in n.targets
+      )
       and isinstance(n.value, ast.Name)
     ):
       target = n.value.id
@@ -266,18 +295,20 @@ def generate(fwd_src, wrt=None, optimize_forward=True):
       "jax.vjp needs a pure-JAX forward"
     )
 
-  defined = {
-    n.id for n in ast.walk(tree) if isinstance(n, ast.Name)
-  } | {
-    n.name
-    for n in ast.walk(tree)
-    if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-  } | {
-    (a.asname or a.name).split(".")[0]
-    for n in ast.walk(tree)
-    if isinstance(n, (ast.Import, ast.ImportFrom))
-    for a in n.names
-  }
+  defined = (
+    {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+    | {
+      n.name
+      for n in ast.walk(tree)
+      if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    }
+    | {
+      (a.asname or a.name).split(".")[0]
+      for n in ast.walk(tree)
+      if isinstance(n, (ast.Import, ast.ImportFrom))
+      for a in n.names
+    }
+  )
   for name in RESERVED:
     if name in defined:
       raise VjpError(

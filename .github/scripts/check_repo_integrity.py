@@ -37,7 +37,6 @@ DEFAULT_SENSITIVE_TEXT_PATTERNS: list[tuple[str, str]] = [
 
 DEFAULT_EXCLUDED_DIR_PREFIXES: tuple[str, ...] = (
     "MaxCode/",
-    "JAXBench/",
     "maxkernel/claude-code/wiki/",
 )
 

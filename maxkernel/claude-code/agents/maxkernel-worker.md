@@ -34,7 +34,7 @@ Semantics spine — load-bearing. A defect here invalidates every number:
 *   `<run_dir>/torch_context.md` / `<run_dir>/<language>_context.md`: deep primary-source brief — Phase 0.4, only when `state.primary.language != "jax"`
 *   `<run_dir>/base.py`: Baseline JAX kernel — copied from `source.py` by the orchestrator for a `jax` input, or ported from the primary in Phase 0.4 otherwise
 *   `<run_dir>/port_verification.json`: the Phase 0.8 gate's verdict on `base.py`
-*   `<run_dir>/base_fwd.py`: the forward port, kept unchanged when Phase 0.85 rewrites `base.py` — `backward.from: "autodiff"` only
+*   `<run_dir>/base_fwd.py`: a copy of the forward port, made by Phase 0.85 before it turns `base.py` into a training step — `backward.from: "autodiff"` only. `make_vjp_base.py` builds `base.py` from this file. To fix the forward, edit this file and rebuild `base.py` (Phase 0.9, step 5); do not edit `base.py` directly
 *   `<run_dir>/get_inputs.py`: Harness input generator (LLM-authored)
 *   `<run_dir>/test_kernel.py`: Assembled test harness (assembled deterministically by `{{MAXKERNEL_ROOT}}/tools/assemble_test_harness.py`)
 
@@ -696,8 +696,19 @@ the backward alone when the forward stays fixed, with the gradients derived by
             back-to-back in one process on every iteration, and that paired
             ratio is the number of record.
     -   If failed, invoke `maxkernel-fix-test-script` with `"Fix get_inputs() for run_dir = <run_dir>."` and re-assemble.
-        Exception: an error raised inside `jax.vjp` or by `make_vjp_base:` is
-        a `base.py` problem, not a `get_inputs()` one; STOP and report it.
+        Exception: an error raised inside `jax.vjp` or by `make_vjp_base:`, or
+        a failure or timeout compiling `base.py`, is a `base.py` problem, not a
+        `get_inputs()` one. Without `base_fwd.py`, STOP and report it. With
+        `base_fwd.py`, the forward may need a form whose gradient compiles
+        (e.g. a reshape in place of a strided slice), so repair it, up to 3 attempts:
+        1.  Edit `base_fwd.py` only, keeping the values the same.
+        2.  If `state.primary.golden_path` is set, re-run the Phase 0.8 check
+            on the forward and record the result in `port_verified`:
+            `verify_port.py <run_dir>/base_fwd.py <run_dir>/torch_golden.npz <run_dir>/torch_golden.json --atol <atol> --rtol <rtol> --out <run_dir>/port_verification.json`.
+            If it does not exit 0, undo the edit.
+        3.  Re-run the Phase 0.85 `make_vjp_base.py` command, re-assemble
+            (step 4), and validate again.
+        Log each edit in `maxkernel_debug_history.md`. If the repair fails, STOP and report it.
 6.  **What this validation does and does not prove.** It binds `base.py` as both
     sides, so it proves the harness runs and the shapes are consistent — it
     compares the baseline against itself and therefore can never detect a

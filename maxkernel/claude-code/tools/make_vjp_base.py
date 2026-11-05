@@ -220,8 +220,9 @@ class VjpError(Exception):
 def _computation_params(tree):
   """Positional parameter names of the module-level `computation`.
 
-  Follows one alias (`computation = workload`). Returns None when the
-  signature takes *args, so names cannot be mapped to positions.
+  Follows one alias (`computation = workload`). Returns None when names
+  cannot be mapped to positions: the signature takes *args, or `computation`
+  is bound to something other than a module-level function (`jax.jit(f)`).
   """
   funcs = {
     n.name: n
@@ -237,12 +238,7 @@ def _computation_params(tree):
     ):
       target = n.value.id
   fn = funcs.get(target)
-  if fn is None:
-    raise VjpError(
-      "no module-level `computation` function (or `computation = <function>` "
-      "alias) found in the forward base.py"
-    )
-  if fn.args.vararg is not None:
+  if fn is None or fn.args.vararg is not None:
     return None
   return [a.arg for a in fn.args.posonlyargs + fn.args.args]
 
@@ -254,17 +250,21 @@ def generate(fwd_src, wrt=None, optimize_forward=True):
       "the forward source is already a generated base.py; restore "
       "the forward (base_fwd.py) instead of wrapping twice"
     )
-  if "pallas_call" in fwd_src:
-    raise VjpError(
-      "the forward base.py calls pallas_call, which has no autodiff rule; "
-      "jax.vjp needs a pure-JAX forward"
-    )
   if not re.search(r"^(?:def\s+computation\b|computation\s*=)", fwd_src, re.M):
     raise VjpError(
       "no module-level `computation` function (or `computation = ...`) found "
       "in the forward base.py"
     )
   tree = ast.parse(fwd_src)
+  if any(
+    (isinstance(n, ast.Attribute) and n.attr == "pallas_call")
+    or (isinstance(n, ast.Name) and n.id == "pallas_call")
+    for n in ast.walk(tree)
+  ):
+    raise VjpError(
+      "the forward base.py calls pallas_call, which has no autodiff rule; "
+      "jax.vjp needs a pure-JAX forward"
+    )
 
   defined = {
     n.id for n in ast.walk(tree) if isinstance(n, ast.Name)
@@ -289,8 +289,8 @@ def generate(fwd_src, wrt=None, optimize_forward=True):
     params = _computation_params(tree)
     if params is None:
       raise VjpError(
-        "--wrt names cannot be resolved: the forward `computation` takes "
-        "*args. Omit --wrt to differentiate every floating-point input."
+        "--wrt names cannot be resolved from the forward `computation`'s "
+        "signature. Omit --wrt to differentiate every floating-point input."
       )
     unknown = [w for w in wrt if w not in params]
     if unknown:

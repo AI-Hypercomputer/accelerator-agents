@@ -616,7 +616,9 @@ ends in a confident, wrong speedup.
 
 ### Phase 0.85: Derive the Backward Baseline (ONCE — autodiff backward only)
 
-**Skip unless `state.backward.from == "autodiff"`.** The input is the forward
+**Skip unless `state.backward.from == "autodiff"`, or when
+`<run_dir>/base_fwd.py` already exists** (Phase 0.9's repair re-runs the
+generator itself). The input is the forward
 and `base.py` is its port, checked in Phase 0.8 (or 0.7) when a check was possible.
 This phase rewrites `base.py` as a training step (forward + backward), or as
 the backward alone when the forward stays fixed, with the gradients derived by
@@ -629,9 +631,9 @@ the backward alone when the forward stays fixed, with the gradients derived by
     `state.backward.wrt` is `null` and the primary is `pytorch`, pass the
     floating-point forward arguments and the trainable parameters, never
     buffers (running statistics, RoPE tables, masks); otherwise omit `--wrt`.
-2.  **Check for a hand-written backward** (skip for a `jax` primary: its
-    `custom_vjp` is in `base.py` already, or when that backward is already
-    the reference, per SKILL step 3c's GPU row). If `state.primary.source_path`
+2.  **Check for a hand-written backward.** Skip this for a `jax` primary (its
+    `custom_vjp` is already in `base.py`) and when the user's backward is the
+    reference (SKILL step 3c's GPU row). If `state.primary.source_path`
     defines its own gradient (`autograd.Function`, `register_hook`), the user
     supplied a backward, so this is not an autodiff job. STOP and report
     `SOURCE_HAS_BACKWARD` with the `file:line` locations; the orchestrator

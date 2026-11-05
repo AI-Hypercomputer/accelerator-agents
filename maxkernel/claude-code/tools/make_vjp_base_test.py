@@ -154,6 +154,10 @@ class TestMakeVjpBase(unittest.TestCase):
       make_vjp_base.generate(
         "def computation(x):\n  return pl.pallas_call(k)(x)\n"
       )
+    # A mention in a docstring is not a call.
+    make_vjp_base.generate(
+      '"""No pallas_call here."""\ndef computation(x):\n  return x\n'
+    )
 
   def test_default_wrt_pytrees_and_statics(self):
     # A params pytree is differentiated; a NumPy scalar static is not.

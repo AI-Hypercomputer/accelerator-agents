@@ -392,7 +392,7 @@ def validate(job, job_path):
         and _get(job, "evaluation.compare_against_source") is True
       ):
         errors.append(
-          "backward.from is 'autodiff', so the result is a backward kernel, "
+          "backward.from is 'autodiff', so the result computes gradients, "
           "but evaluation.compare_against_source would compare it against "
           "the forward source. Set compare_against_source false."
         )

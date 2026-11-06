@@ -418,6 +418,8 @@ Before you call `write_to_file`, verify your implementation has:
 -   ✅ **NO error handling** - Let errors surface naturally
 -   ✅ `kernel` function at module level
 -   ✅ `computation` function at module level
+-   ✅ When `base.py` defines `training_step`: `forward_pass`, `backward_pass`,
+    and `computation = training_step(forward_pass, backward_pass)`
 -   ✅ Comprehensive shape and memory annotations
 -   ✅ Follows exact specifications from the plan
 -   ✅ Includes a `main()` function for testing

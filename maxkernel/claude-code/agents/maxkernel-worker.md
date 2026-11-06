@@ -704,10 +704,15 @@ the backward alone when the forward stays fixed, with the gradients derived by
         `base_fwd.py`, the forward may need a form whose gradient compiles
         (e.g. a reshape in place of a strided slice), so repair it, up to 3 attempts:
         1.  Edit `base_fwd.py` only, keeping the values the same.
-        2.  If `state.primary.golden_path` is set, re-run the Phase 0.8 check
-            on the forward and record the result in `port_verified`:
-            `verify_port.py <run_dir>/base_fwd.py <run_dir>/torch_golden.npz <run_dir>/torch_golden.json --atol <atol> --rtol <rtol> --out <run_dir>/port_verification.json`.
-            If it does not exit 0, undo the edit.
+        2.  If `state.primary.golden_path` is set, re-check the forward
+            against the oracle and record the result in `port_verified`. If
+            the check does not exit 0, undo the edit.
+            -   `reference_mode: "llm_port"`: the Phase 0.8 check,
+                `verify_port.py <run_dir>/base_fwd.py <run_dir>/torch_golden.npz <run_dir>/torch_golden.json --atol <atol> --rtol <rtol> --out <run_dir>/port_verification.json`.
+            -   `reference_mode: "torchax"`: the Phase 0.7 check without
+                `--strict`, since the edit changes the structure on purpose
+                and the values decide:
+                `jaxpr_compare.py <state.primary.source_path> <run_dir>/base_fwd.py --entry computation --seed <state.seed or 1024> --atol <atol> --rtol <rtol> --out <run_dir>/jaxpr_comparison.json`.
         3.  Re-run the Phase 0.85 `make_vjp_base.py` command, re-assemble
             (step 4), and validate again.
         Log each edit in `maxkernel_debug_history.md`. If the repair fails, STOP and report it.

@@ -167,7 +167,9 @@ information. Use those results to guide your fixes.
         persists, try a different approach.
 3.  **Maintain Structure:**
     -   Keep the two-level structure: `kernel` function and `computation`
-        function.
+        function. When `base.py` defines `training_step`, also keep
+        `forward_pass`, `backward_pass`, `training_step` and
+        `computation = training_step(forward_pass, backward_pass)`.
     -   Preserve the `main` function that demonstrates kernel usage.
     -   Keep all inline documentation and shape/memory annotations.
     -   Maintain variable names from the original implementation.

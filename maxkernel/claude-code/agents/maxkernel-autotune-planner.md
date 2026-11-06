@@ -83,7 +83,9 @@ To prepare for autotuning, you must:
     -   Keep the entry point named exactly `computation`, as in
         `<run_dir>/iter<N>/optimized.py` -- the maxkernel-worker aliases it to
         `opt_computation` when assembling each trial, matching how
-        `maxkernel-generate-test-file` names things.
+        `maxkernel-generate-test-file` names things. When `optimized.py`
+        defines `forward_pass`, `backward_pass` and `training_step`, keep
+        all three: for a training-step `base.py`.
 4.  Define a highly optimized, high-probability search space as a dictionary
     mapping placeholder names to lists of suggested values. You MUST follow
     these rules to minimize evaluation time and avoid sub-optimal

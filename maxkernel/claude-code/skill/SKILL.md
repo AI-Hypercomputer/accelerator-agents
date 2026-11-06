@@ -231,6 +231,7 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     | `correctness.atol` / `.rtol` / `.seed` | `atol`, `rtol`, `seed` |
     | `target.tpu_version` | `tpu_version` |
     | `loop.max_iterations` | `max_iterations` |
+    | `backward` | `backward`, copied as is except that `forward_context` becomes an absolute path. `null` when the job has no `backward`. |
 
     For a `jax` input, `needs_jax_conversion` is false and `base.py` is a copy
     of the source — the same path the loop has always taken.
@@ -410,6 +411,26 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     which reads like a missing package but is not — see
     `{{MAXKERNEL_ROOT}}/docs/torchax-oracle-pipeline.md`.
 
+3c. **Forward or backward pass.** Set `backward` to `null` unless the user
+    asks for a backward-pass (gradient) kernel. If they do, choose the row
+    matching what they supplied. The row also decides the slots in step 3:
+    which file is the primary, and whether their backward is the reference.
+
+    | The user supplied | `backward` |
+    | --- | --- |
+    | Only the forward code | `{"from": "autodiff", "wrt": <arguments they named, else null>}`; the forward is the primary |
+    | Backward code in JAX or Pallas (becomes `base.py` as is), or in PyTorch or Triton (ported, then checked against golden values) | `{"from": "source", "forward_context": <absolute path of their forward code in <run_dir>/inbox/, else null>}`; the backward is the primary, and the forward file is neither primary nor reference |
+    | Backward code in CUDA, cuTile, CuTe DSL or another GPU language, plus the forward | As in the first row, with their backward as the reference. Tell the user why: their backward cannot be checked on this host, while the gradient of the forward port can. |
+    | Backward code in CUDA, cuTile, CuTe DSL or another GPU language, without the forward | `{"from": "source", "forward_context": null}`; the backward is the primary. Tell the user its port cannot be checked. |
+
+    In the `autodiff` rows, the run optimizes both passes together. Add
+    `"optimize_forward": false` only when the user wants to keep their forward
+    fixed; the run then optimizes the backward alone.
+
+    Forward code that defines its own gradient (`autograd.Function`,
+    `register_hook`) counts as supplying the backward. If you cannot tell
+    which file is the forward and which the backward, ask.
+
 4.  **Determine `atol` and `rtol`**:
     -   If the user supplied `atol` and/or `rtol` in their message, use those values.
     -   Otherwise, default `atol` to `1e-2` and `rtol` to `1e-2`.
@@ -474,6 +495,8 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
           "reference_alignment_path": null,
           "ideas_ledger_path": null,
 
+          "backward": null,
+
           "input_language": "pytorch",
           "source_path": "{{MAXKERNEL_ROOT}}/workspace/<run_id>/source.py",
           "source_context_path": null,
@@ -517,6 +540,19 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
         `context_path` (`ref/context.md`) in Phase 0.5.
     -   `reference_trust`, `reference_alignment_path` and `ideas_ledger_path`
         stay `null` here; the worker sets them in Phase 0.6.
+    -   `backward` is `null` for a normal (forward) run. It is set only when the
+        user asks for a backward-pass kernel (step 1b or 3c), and
+        `backward.from` says how:
+        -   `"source"`: the input is the user's backward code, and the result
+            is a backward kernel. No extra phase is needed: the backward code
+            is ported, checked and optimized with the same steps as any input.
+            `forward_context`, if set, is used only to build realistic inputs
+            for it.
+        -   `"autodiff"`: the input is the forward code. The worker ports it
+            as usual, then in Phase 0.85 derives the backward with `jax.vjp`.
+            The result is a `forward_pass` and a `backward_pass` kernel,
+            usable as a `jax.custom_vjp` pair; with `optimize_forward: false`
+            it is a backward kernel, with the user's forward kept fixed.
     -   **`input_language`, `source_path` and `source_context_path` are legacy
         aliases** of the corresponding `primary.*` fields. Write them on every
         state update and keep them in sync. They exist so the agents that
@@ -549,6 +585,7 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
         `source_context_path`; `golden_path`, `golden_meta_path` and
         `port_verified` all `null`) and set `references: []`. A resumed run
         never acquires a reference it did not start with.
+    -   If it has no `backward` key, set `"backward": null`.
 
 ## Control loop — mechanical, follow exactly
 
@@ -667,6 +704,20 @@ Once `state.iteration == 5`:
     failure or a torch/torchax version conflict — say that too, and give the
     reason from `<run_dir>/maxkernel_debug_history.md`. It changes how much the
     denominator is worth.
+
+    **If `state.backward` is set, say what kind of kernel the run produced.**
+    -   `"source"`: a backward kernel, built from the user's backward code.
+        Report how the port was checked the same way as for any other input.
+    -   `"autodiff"`: a `forward_pass` and a `backward_pass` kernel, usable
+        as a `jax.custom_vjp` pair; or, with `optimize_forward: false`, a
+        backward kernel for the user's fixed forward. The input was the
+        forward code. Tell the user two things:
+        -   The baseline is the gradient of the forward port
+            (`<run_dir>/base_fwd.py`), so it is only as correct as that port.
+        -   What the speedup covers: forward + backward as one training
+            step, with the passes kept apart as in training; or, with
+            `optimize_forward: false`, the backward alone, with both sides
+            recomputing what they need from the forward inputs.
 4.  Report a short table to the user with one row per `state.history` entry:
     iteration, `compile_ok`, `test_ok`, `base_time_ms`, `optimized_time_ms`,
     `speedup`, `base_choice`. Below the table, state `state.best_speedup`,

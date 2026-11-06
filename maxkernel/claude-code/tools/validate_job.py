@@ -16,6 +16,12 @@ The four supported shapes:
     specification -> Pallas,  when there is no source file at all and the
                               baseline has to be synthesized from a description
 
+Any of them can target the backward pass instead by adding a `backward`
+object: either the input *is* a backward implementation (`backward.from:
+"source"`), or it is the forward and Phase 0.85 derives the backward from its
+port with `jax.vjp` (`backward.from: "autodiff"`; both passes are optimized
+unless `backward.optimize_forward` is false).
+
 Two rules govern the whole schema:
 
   * **Redundant fields are checksums, not duplication.** `has_reference` repeats
@@ -50,6 +56,8 @@ SYNTHESIS_TARGETS = {"pytorch", "jax"}
 REFERENCE_TYPES = GPU_TYPES | {"pallas", "jax", "pytorch"}
 CONVERSION_METHODS = {"torchax", "llm_port", "none"}
 RELATIONSHIPS = {"same_operation", "same_family", "unknown"}
+BACKWARD_FROM = {"source", "autodiff"}
+BACKWARD_KEYS = {"from", "wrt", "optimize_forward", "forward_context"}
 
 
 class JobError(Exception):
@@ -314,6 +322,86 @@ def validate(job, job_path):
       f"loop.max_iterations must be a positive integer, got {iters!r}"
     )
 
+  # ---- backward --------------------------------------------------------
+  # A `backward` object makes this a backward-pass run; without one the run
+  # optimizes the input as written.
+  bwd = job.get("backward")
+  bfrom = None
+  if bwd is not None:
+    if not isinstance(bwd, dict):
+      errors.append(
+        "backward must be an object with `from`: 'source' (the input is a "
+        "backward implementation) or 'autodiff' (the input is the forward; "
+        "Phase 0.85 wraps it in jax.vjp)."
+      )
+    else:
+      bfrom = bwd.get("from")
+      wrt = bwd.get("wrt")
+      unknown = sorted(set(bwd) - BACKWARD_KEYS)
+      if unknown:
+        errors.append(
+          f"backward has unknown keys {unknown}; allowed: "
+          f"{sorted(BACKWARD_KEYS)}"
+        )
+      if bfrom not in BACKWARD_FROM:
+        errors.append(
+          f"backward.from must be one of {sorted(BACKWARD_FROM)}, got {bfrom!r}"
+        )
+      if wrt is not None and bfrom != "autodiff":
+        errors.append(
+          "backward.wrt is only meaningful with backward.from 'autodiff'. "
+          "A backward source already decides which gradients it returns."
+        )
+      if wrt is not None and (
+        not isinstance(wrt, list)
+        or not wrt
+        or not all(isinstance(w, str) and w for w in wrt)
+      ):
+        errors.append(
+          "backward.wrt must be a non-empty list of argument names; omit it "
+          "to differentiate with respect to every floating-point input"
+        )
+      optfwd = bwd.get("optimize_forward")
+      if optfwd is not None and not isinstance(optfwd, bool):
+        errors.append(
+          f"backward.optimize_forward must be true or false, got {optfwd!r}"
+        )
+      if optfwd is not None and bfrom != "autodiff":
+        errors.append(
+          "backward.optimize_forward is only meaningful with backward.from "
+          "'autodiff'. A backward source has no forward to optimize."
+        )
+      fctx = bwd.get("forward_context")
+      if fctx is not None and not (isinstance(fctx, str) and fctx):
+        errors.append(
+          f"backward.forward_context must be a path string, got {fctx!r}"
+        )
+      if fctx is not None and bfrom != "source":
+        errors.append(
+          "backward.forward_context is only meaningful with backward.from "
+          "'source'. With 'autodiff' the input already is the forward."
+        )
+      if (
+        bfrom == "autodiff"
+        and needs is True
+        and method == "torchax"
+        and emit is False
+      ):
+        errors.append(
+          "backward.from is 'autodiff', which differentiates base.py, but "
+          "emit_readable_reference is false so no base.py is produced. Set "
+          "emit_readable_reference true."
+        )
+      if (
+        bfrom == "autodiff"
+        and _get(job, "evaluation.compare_against_source") is True
+      ):
+        errors.append(
+          "backward.from is 'autodiff', so the result computes gradients, "
+          "but evaluation.compare_against_source would compare it against "
+          "the forward source. Set compare_against_source false."
+        )
+
   if errors:
     return errors, warnings, None
 
@@ -331,13 +419,18 @@ def validate(job, job_path):
   for i, r in enumerate(refs):
     if not _resolve(r["path"]).exists():
       missing.append(f"references[{i}].path: {_resolve(r['path'])}")
+  fctx = _get(job, "backward.forward_context")
+  if fctx and not _resolve(fctx).exists():
+    missing.append(f"backward.forward_context: {_resolve(fctx)}")
 
-  plan = build_plan(job, itype, needs, method, emit, refs)
+  plan = build_plan(job, itype, needs, method, emit, refs, bfrom)
+  if bfrom == "autodiff":
+    plan["optimize_forward"] = _get(job, "backward.optimize_forward", True)
   plan["missing_paths"] = missing
   return errors, warnings, plan
 
 
-def build_plan(job, itype, needs, method, emit, refs):
+def build_plan(job, itype, needs, method, emit, refs, bfrom=None):
   """What the orchestrator will actually do, derived from the declaration."""
   synth = (
     _get(job, "input.specification.synthesize_as", "pytorch")
@@ -394,6 +487,8 @@ def build_plan(job, itype, needs, method, emit, refs):
   else:
     base_py = "NONE — the internal timing harness cannot run"
     producer = None
+  if bfrom == "autodiff" and producer:
+    base_py += ", then turned into a training step (or backward) in Phase 0.85"
 
   phases = ["0 read state"]
   if itype == "specification":
@@ -413,11 +508,14 @@ def build_plan(job, itype, needs, method, emit, refs):
     phases.append("0.7 write jnp reference + jaxpr_compare gate")
   if method == "llm_port" and effective != "jax":
     phases.append("0.8 verify_port gate")
+  if bfrom == "autodiff":
+    phases.append("0.85 derive the backward with jax.vjp")
   phases += ["0.9 harness", "1-6 plan/implement/compile/test/autotune/profile"]
 
   return {
     "input_type": itype,
     "synthesize_as": synth,
+    "backward_from": bfrom,
     "reference_count": len(refs),
     "advisory_spine": bool(refs),
     "oracle": oracle,
@@ -477,6 +575,15 @@ def main():
       + _get(job, "input.specification.operation", "(unnamed operation)")
     )
     print(f"  input        : {plan['input_type']}  ({where})")
+    if plan["backward_from"] == "source":
+      print("  backward     : from source (the input is the backward)")
+    elif plan["backward_from"] == "autodiff":
+      kernel = (
+        "forward + backward, optimized together"
+        if plan["optimize_forward"]
+        else "backward only, the forward stays fixed"
+      )
+      print(f"  backward     : from autodiff ({kernel})")
     print(
       f"  references   : {plan['reference_count']}"
       f"{'  (advisory spine ON)' if plan['advisory_spine'] else ''}"

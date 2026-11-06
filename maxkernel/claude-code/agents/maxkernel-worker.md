@@ -34,6 +34,7 @@ Semantics spine — load-bearing. A defect here invalidates every number:
 *   `<run_dir>/torch_context.md` / `<run_dir>/<language>_context.md`: deep primary-source brief — Phase 0.4, only when `state.primary.language != "jax"`
 *   `<run_dir>/base.py`: Baseline JAX kernel — copied from `source.py` by the orchestrator for a `jax` input, or ported from the primary in Phase 0.4 otherwise
 *   `<run_dir>/port_verification.json`: the Phase 0.8 gate's verdict on `base.py`
+*   `<run_dir>/base_fwd.py`: a copy of the forward port, made by Phase 0.85 before it turns `base.py` into a training step — `backward.from: "autodiff"` only. `make_vjp_base.py` builds `base.py` from this file. To fix the forward, edit this file and rebuild `base.py` (Phase 0.9, step 5); do not edit `base.py` directly
 *   `<run_dir>/get_inputs.py`: Harness input generator (LLM-authored)
 *   `<run_dir>/test_kernel.py`: Assembled test harness (assembled deterministically by `{{MAXKERNEL_ROOT}}/tools/assemble_test_harness.py`)
 
@@ -162,6 +163,8 @@ from inside the loop.
         the orchestrator that this combination needs the external harness at
         `{{MAXKERNEL_ROOT}}/evaluation/compare_kernel.py` rather than the
         internal loop — do not discover it four phases later.
+    -   `backward` = `state.backward` (`null` for a forward run).
+        `backward.from == "autodiff"` enables Phase 0.85.
     -   Previous iteration artifacts from `state.history` (if present).
 2.  **Create Iteration Subfolder**: Create dedicated subfolder `<run_dir>/iter<n>`.
 
@@ -503,7 +506,7 @@ When both hold, the agent writes a readable `jnp` reference and it becomes
 
 1.  **Check if already done**: if `<run_dir>/base.py` exists and
     `<run_dir>/jaxpr_comparison.json` reports a passing verdict, skip to
-    Phase 0.9.
+    Phase 0.85.
 2.  **Invoke `maxkernel-write-jnp-reference`**:
     -   Prompt: `"Write the jnp reference for run_dir = <run_dir> (state file: <run_dir>/state.json)."`
 3.  **Run both checks with one command:**
@@ -559,6 +562,11 @@ reason and continue.
 gate is Phase 0.7, which checks the same `base.py` against the same oracle and
 additionally compares its structure against the torchax jaxpr. Running both
 would double-check the value side and leave the structural side unowned.
+
+**Also skip when `<run_dir>/base_fwd.py` exists**: Phase 0.85 has replaced
+the forward in `base.py`, and this gate's verdict on the forward is
+already in `state.primary.port_verified`.
+
 `verify_port.py` reads the `torch_golden.json` schema; the torchax oracle uses
 a different one with the opposite argument order, so pointing it at
 `torchax_oracle.json` would not work anyway.
@@ -588,7 +596,7 @@ ends in a confident, wrong speedup.
     submits source text only, so there is no channel for a binary `.npz` and
     the data has to travel base64-encoded inside the source.
 2.  **Branch on the exit code:**
-    -   **0** → set `"port_verified": true` in state and proceed to Phase 0.9.
+    -   **0** → set `"port_verified": true` in state and proceed to Phase 0.85.
         The run's denominator is now evidence-backed rather than assumed.
     -   **1 (MISMATCH)** or **2 (PORT_UNRUNNABLE)** → invoke
         `maxkernel-fix-port` with prompt
@@ -606,6 +614,42 @@ ends in a confident, wrong speedup.
 4.  **Record it in state**: `"port_verified": true | false`, plus
     `"port_verification_path"`.
 
+### Phase 0.85: Derive the Backward Baseline (ONCE — autodiff backward only)
+
+**Skip unless `state.backward.from == "autodiff"`, or when
+`<run_dir>/base_fwd.py` already exists** (Phase 0.9's repair re-runs the
+generator itself). The input is the forward
+and `base.py` is its port, checked in Phase 0.8 (or 0.7) when a check was possible.
+This phase rewrites `base.py` as a training step (forward + backward), or as
+the backward alone when the forward stays fixed, with the gradients derived by
+`jax.vjp`, so the baseline is exactly as trustworthy as the port.
+
+1.  **Resolve `wrt`.** The names follow the user's source; the port may name
+    arguments differently (a PyTorch module's parameters become `computation`
+    arguments). Map each name to the matching parameter of `base.py`'s
+    `computation`; the context brief's argument contract says which. When
+    `state.backward.wrt` is `null` and the primary is `pytorch`, pass the
+    floating-point forward arguments and the trainable parameters, never
+    buffers (running statistics, RoPE tables, masks); otherwise omit `--wrt`.
+2.  **Check for a hand-written backward.** Skip this for a `jax` primary (its
+    `custom_vjp` is already in `base.py`) and when the user's backward is the
+    reference (SKILL step 3c's GPU row). If `state.primary.source_path`
+    defines its own gradient (`autograd.Function`, `register_hook`), the user
+    supplied a backward, so this is not an autodiff job. STOP and report
+    `SOURCE_HAS_BACKWARD` with the `file:line` locations; the orchestrator
+    re-routes it by SKILL step 3c.
+3.  **Run the generator**:
+    ```bash
+    {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/make_vjp_base.py <run_dir>/base.py \
+      [--wrt <resolved names>] [--fixed-forward]
+    ```
+    Pass `--fixed-forward` when `state.backward.optimize_forward` is false.
+    On exit 0, `base.py` is `computation(cotangent, *forward_args)` returning
+    `(forward_output, gradients)`, built from `forward_pass` and
+    `backward_pass` (or only the gradients with `--fixed-forward`); the
+    forward is kept verbatim above the wrapper and in `base_fwd.py`. On
+    exit 1, STOP and report the `VJP_BASE_FAILED` reason to the orchestrator.
+
 ### Phase 0.9: Prepare Shared Base Kernel & Test Harness (Execute ONCE — idempotent)
 
 1.  **Check if already done**: If `<run_dir>/base.py` AND `<run_dir>/test_kernel.py` both exist, skip to Phase 1.
@@ -615,7 +659,9 @@ ends in a confident, wrong speedup.
     -   `reference_mode: "llm_port"` — hand-written in Phase 0.4 and gated in
         Phase 0.8;
     -   `reference_mode: "torchax"` — written from the jaxpr in Phase 0.7 and
-        gated there by `jaxpr_compare.py`.
+        gated there by `jaxpr_compare.py`;
+    -   `backward.from: "autodiff"` — any of the above, then rewritten as a
+        training step (or the backward alone) in Phase 0.85.
 
     If it is missing, STOP and report that; do not write a baseline yourself.
     The likeliest cause is `reference_mode: "torchax"` with
@@ -652,6 +698,24 @@ ends in a confident, wrong speedup.
             back-to-back in one process on every iteration, and that paired
             ratio is the number of record.
     -   If failed, invoke `maxkernel-fix-test-script` with `"Fix get_inputs() for run_dir = <run_dir>."` and re-assemble.
+        Exception: an error raised inside `jax.vjp` or by `make_vjp_base:`, or
+        a failure or timeout compiling `base.py`, is a `base.py` problem, not a
+        `get_inputs()` one. Without `base_fwd.py`, STOP and report it. With
+        `base_fwd.py`, the forward may need a form whose gradient compiles
+        (e.g. a reshape in place of a strided slice), so repair it, up to 3 attempts:
+        1.  Edit `base_fwd.py` only, keeping the values the same.
+        2.  If `state.primary.golden_path` is set, re-check the forward
+            against the oracle and record the result in `port_verified`. If
+            the check does not exit 0, undo the edit.
+            -   `reference_mode: "llm_port"`: the Phase 0.8 check,
+                `verify_port.py <run_dir>/base_fwd.py <run_dir>/torch_golden.npz <run_dir>/torch_golden.json --atol <atol> --rtol <rtol> --out <run_dir>/port_verification.json`.
+            -   `reference_mode: "torchax"`: the Phase 0.7 check without
+                `--strict`, since the edit changes the structure on purpose
+                and the values decide:
+                `jaxpr_compare.py <state.primary.source_path> <run_dir>/base_fwd.py --entry computation --seed <state.seed or 1024> --atol <atol> --rtol <rtol> --out <run_dir>/jaxpr_comparison.json`.
+        3.  Re-run the Phase 0.85 `make_vjp_base.py` command, re-assemble
+            (step 4), and validate again.
+        Log each edit in `maxkernel_debug_history.md`. If the repair fails, STOP and report it.
 6.  **What this validation does and does not prove.** It binds `base.py` as both
     sides, so it proves the harness runs and the shapes are consistent — it
     compares the baseline against itself and therefore can never detect a

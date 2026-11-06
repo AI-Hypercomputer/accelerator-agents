@@ -97,6 +97,21 @@ Proceed to read it with `Read` (to learn its signature and shapes -- not to copy
     to their `jnp` equivalents and nothing more. Never substitute your own
     dimensions (general_rules #6).
 
+    **Backward runs** (`state.backward` is set):
+    -   `backward.from == "autodiff"`: `base.py` is
+        `computation(cotangent, *forward_args)`, generated around the forward
+        `forward_computation` above it. Build the forward's cases as described
+        above, then prepend the cotangent as the first dynamic argument:
+        `([cotangent, *forward_dynamic_args], forward_static_args)`. It must
+        match `forward_computation`'s output in pytree structure, shape and
+        dtype: random normal values for floating-point outputs, zeros for
+        integer outputs (their values are ignored).
+    -   `backward.from == "source"` with `backward.forward_context` set: the
+        dynamic arguments are values saved by the forward (activations, gather
+        indices, routing scores). Compute them inside `get_inputs()` by
+        writing that forward in plain `jnp`, so they are consistent with each
+        other rather than independent random arrays.
+
 3.  **Write `get_inputs()`**:
     -   Import necessary libraries (`jax`, `jax.numpy as jnp`).
     -   Define `def get_inputs():` returning a **list of

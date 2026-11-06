@@ -144,6 +144,14 @@ argument order, shapes, and any static (non-traced) parameters exactly with
 what `get_inputs()` produces — a mismatch here fails every test for reasons
 unrelated to the kernel's actual correctness.
 
+**Training-step base.** When `base.py` defines `training_step`, define
+`forward_pass(*forward_args) -> (forward_output, saved)` and
+`backward_pass(saved, cotangent) -> gradients`, copy `training_step`
+verbatim, and end with `computation = training_step(forward_pass,
+backward_pass)`. This replaces the single `computation` of the two-level
+structure below. The harness scores the two passes through `base.py`'s own
+`training_step` and rejects a kernel without them.
+
 ### Your Task
 
 Implement the optimized Pallas kernel by:
@@ -401,6 +409,8 @@ Before you call `write_to_file`, verify your implementation has:
 -   ✅ **NO error handling** - Let errors surface naturally
 -   ✅ `kernel` function at module level
 -   ✅ `computation` function at module level
+-   ✅ When `base.py` defines `training_step`: `forward_pass`, `backward_pass`,
+    and `computation = training_step(forward_pass, backward_pass)`
 -   ✅ Comprehensive shape and memory annotations
 -   ✅ Follows exact specifications from the plan
 -   ✅ Includes a `main()` function for testing

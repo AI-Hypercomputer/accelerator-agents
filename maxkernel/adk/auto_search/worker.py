@@ -102,6 +102,21 @@ class ADKSessionWorker:
         # BaseException like KeyboardInterrupt, SystemExit, CancelledError
         raise e
 
+  @staticmethod
+  def _has_candidate_kernel(parent_node: Node) -> bool:
+    """Returns True if the parent node contains a candidate kernel to optimize from."""
+    if not parent_node.code:
+      return False
+    return (
+      parent_node.depth > 0
+      or parent_node.strategy_applied == "seed_kernel"
+      or (
+        parent_node.evaluation
+        and parent_node.evaluation.speedup is not None
+        and parent_node.evaluation.speedup > 0
+      )
+    )
+
   def _prepare_inputs(
     self, session_dir: str, parent_node: Node, reference_code: str
   ) -> None:
@@ -111,9 +126,7 @@ class ADKSessionWorker:
     with open(base_kernel_path, "w") as f:
       f.write(reference_code)
 
-    if parent_node.code and (
-      parent_node.depth > 0 or parent_node.strategy_applied == "seed_kernel"
-    ):
+    if self._has_candidate_kernel(parent_node):
       optimized_kernel_path = os.path.join(session_dir, "optimized_kernel.py")
       with open(optimized_kernel_path, "w") as f:
         f.write(parent_node.code)
@@ -162,9 +175,7 @@ class ADKSessionWorker:
 
     strategy_query = f"Focus on: {strategy}. " if strategy else ""
     seed_hint = ""
-    if parent_node.code and (
-      parent_node.depth > 0 or parent_node.strategy_applied == "seed_kernel"
-    ):
+    if self._has_candidate_kernel(parent_node):
       seed_hint = (
         "An existing candidate kernel is provided at optimized_kernel.py. "
         "Hill-climb and optimize this kernel further. "

@@ -31,6 +31,8 @@ def get_orchestrator(
   problem_id: str,
   reference_code: str,
   graph_db_path: str,
+  initial_kernel_code: Optional[str] = None,
+  resume_node_id: Optional[str] = None,
   **kwargs: Any,
 ) -> SearchOrchestrator:
   """Factory function to instantiate the requested search orchestrator."""
@@ -39,6 +41,8 @@ def get_orchestrator(
       problem_id=problem_id,
       reference_code=reference_code,
       graph_db_path=graph_db_path,
+      initial_kernel_code=initial_kernel_code,
+      resume_node_id=resume_node_id,
       max_concurrency=kwargs.get("max_concurrency", 2),
       num_parallel_runs=kwargs.get("num_parallel_runs", 2),
       strategies=kwargs.get("strategies"),
@@ -55,6 +59,8 @@ def get_orchestrator(
       problem_id=problem_id,
       reference_code=reference_code,
       graph_db_path=graph_db_path,
+      initial_kernel_code=initial_kernel_code,
+      resume_node_id=resume_node_id,
       max_concurrency=kwargs.get("max_concurrency", 2),
       max_worker_retries=kwargs.get("max_worker_retries", 2),
       beam_size=kwargs.get("beam_size", 2),
@@ -103,6 +109,8 @@ async def run_search(
   algorithm: str = "parallel",
   graph_db_path: Optional[str] = None,
   problem_id: Optional[str] = None,
+  initial_kernel_path: Optional[str] = None,
+  resume_node_id: Optional[str] = None,
   **kwargs: Any,
 ) -> Tuple[str, str]:
   """Executes the search algorithm asynchronously for a single reference file."""
@@ -126,6 +134,14 @@ async def run_search(
 
   with open(reference_file_path, "r") as f:
     reference_code = f.read()
+
+  initial_kernel_code = None
+  if initial_kernel_path:
+    if not os.path.exists(initial_kernel_path):
+      logger.error(f"Initial kernel file {initial_kernel_path} not found")
+      return problem_id, f"Failed: {initial_kernel_path} missing"
+    with open(initial_kernel_path, "r") as f:
+      initial_kernel_code = f.read()
 
   run_subdir = None
   if not graph_db_path:
@@ -152,6 +168,8 @@ async def run_search(
       problem_id=problem_id,
       reference_code=reference_code,
       graph_db_path=graph_db_path,
+      initial_kernel_code=initial_kernel_code,
+      resume_node_id=resume_node_id,
       **kwargs,
     )
 
@@ -321,6 +339,18 @@ def parse_args() -> argparse.Namespace:
     action="store_true",
     help="Enable event compaction",
   )
+  orch_group.add_argument(
+    "--initial_kernel_path",
+    type=str,
+    default=None,
+    help="Path to an existing kernel file to seed the search from.",
+  )
+  orch_group.add_argument(
+    "--resume_node_id",
+    type=str,
+    default=None,
+    help="Node ID to resume expansion from when resuming a search graph.",
+  )
   # Parallel Search Arguments
   parallel_group = parser.add_argument_group(
     "Parallel Search Arguments",
@@ -451,6 +481,8 @@ def main():
       algorithm=args.algorithm,
       graph_db_path=args.graph_db_path,
       problem_id=args.problem_id,
+      initial_kernel_path=args.initial_kernel_path,
+      resume_node_id=args.resume_node_id,
       **kwargs,
     )
   )

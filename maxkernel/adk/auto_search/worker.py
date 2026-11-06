@@ -112,13 +112,7 @@ class ADKSessionWorker:
       f.write(reference_code)
 
     if parent_node.code and (
-      parent_node.depth > 0
-      or parent_node.strategy_applied == "seed_kernel"
-      or (
-        parent_node.evaluation
-        and parent_node.evaluation.speedup is not None
-        and parent_node.evaluation.speedup > 0
-      )
+      parent_node.depth > 0 or parent_node.strategy_applied == "seed_kernel"
     ):
       optimized_kernel_path = os.path.join(session_dir, "optimized_kernel.py")
       with open(optimized_kernel_path, "w") as f:
@@ -169,13 +163,7 @@ class ADKSessionWorker:
     strategy_query = f"Focus on: {strategy}. " if strategy else ""
     seed_hint = ""
     if parent_node.code and (
-      parent_node.depth > 0
-      or parent_node.strategy_applied == "seed_kernel"
-      or (
-        parent_node.evaluation
-        and parent_node.evaluation.speedup is not None
-        and parent_node.evaluation.speedup > 0
-      )
+      parent_node.depth > 0 or parent_node.strategy_applied == "seed_kernel"
     ):
       seed_hint = (
         "An existing candidate kernel is provided at optimized_kernel.py. "

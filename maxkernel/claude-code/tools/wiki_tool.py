@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# LLMWiki toolset for MaxKernel autonomous TPU kernel optimization (Google3).
+# LLMWiki toolset for MaxKernel autonomous TPU kernel optimization.
 
 import argparse
 import datetime
@@ -11,7 +11,7 @@ import shutil
 import subprocess
 from typing import Optional
 
-# Resolve WIKI_DIR dynamically inside Google3 or standalone environment
+# Resolve WIKI_DIR relative to this checkout unless overridden by $WIKI_DIR
 DEFAULT_WIKI_DIR = os.path.join(
   os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "wiki"
 )

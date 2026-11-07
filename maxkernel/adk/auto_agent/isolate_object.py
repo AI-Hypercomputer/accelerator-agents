@@ -28,7 +28,6 @@ The script distinguishes between two types of dependencies:
 
 2. LOCAL WORKSPACE PACKAGES (Recursively Searched and Extracted):
    - Packages in your workspace (MaxText, tpu_commons, vllm, etc.)
-   - Files in third_party/ directories
    - Custom local modules
 
    Example: "from MaxText.layers import Attention" → Extracts Attention class source code
@@ -37,7 +36,6 @@ The script distinguishes between two types of dependencies:
    - Module name starts with a known local package (see local_package_names list)
    - OR module files exist in workspace paths:
      * workspace_root/module_name/
-     * workspace_root/third_party/module_name/
 
    What gets extracted:
    - The imported object's source code
@@ -47,7 +45,6 @@ The script distinguishes between two types of dependencies:
 KNOWN LOCAL PACKAGES:
 ---------------------
 The script maintains a hardcoded list of known local packages for quick detection:
-- google3 (Google's internal codebase - auto-detected via 'g4 g4d')
 - tpu_commons, MaxText, maxtext
 - JetStream, jetstream
 - vllm, whisper_jax, torchprime
@@ -55,9 +52,6 @@ The script maintains a hardcoded list of known local packages for quick detectio
 
 This list is an optimization hint, NOT a limitation. The script will still find and recursively
 process any package that exists in your workspace, even if it's not in this list.
-
-For google3 imports, the script automatically runs 'g4 g4d' to find the google3 root directory
-and resolves imports like 'from google3.foo.bar import X' to the correct file paths.
 
 SPECIAL FEATURES:
 -----------------
@@ -90,10 +84,7 @@ Extract a class to a file:
     python isolate_object.py path/to/file.py MyClass -o isolated_class.py
 
 Extract with custom recursion depth and debug output:
-    python isolate_object.py third_party/vllm/model.py Attention -d 3 --debug
-
-Extract from google3:
-    python isolate_object.py third_party/google3/path/to/module.py MyFunction -o output.py
+    python isolate_object.py vllm/model.py Attention -d 3 --debug
 """
 
 import argparse
@@ -167,7 +158,7 @@ class ImportCollector(ast.NodeVisitor):
       pattern = f"{node.value.id}.{node.attr}"
       self.module_attributes.add(pattern)
 
-      # If this is an aliased import (e.g., e.f where e is from google3.a.b.c import d as e)
+      # If this is an aliased import (e.g., e.f where e is from a.b.c import d as e)
       # Also track the resolved full path
       if node.value.id in self.import_aliases:
         module, original_name = self.import_aliases[node.value.id]
@@ -250,8 +241,6 @@ class ObjectExtractor:
   def __init__(self, filename: str, debug: bool = False):
     self.filename = filename
     self.debug = debug
-    self._google3_root_cache = None  # Cache for google3 root
-    self._google3_root_checked = False  # Track if we've tried to get it
 
     abs_path = os.path.abspath(filename)
     if self.debug:
@@ -527,16 +516,14 @@ class ObjectExtractor:
     # Also search the entire workspace for packages
     workspace_root = self._find_workspace_root(base_dir)
 
-    # Don't get google3 root here - will be fetched lazily only if we see google3 imports
-
-    # Process module_attributes for full module paths (e.g., google3.a.b.c.d.f)
-    # This handles cases like: from google3.a.b.c import d as e; f = e.f
+    # Process module_attributes for full module paths (e.g., a.b.c.d.f)
+    # This handles cases like: from a.b.c import d as e; f = e.f
     if module_attributes:
       for attr_pattern in sorted(module_attributes):
         parts = attr_pattern.split(".")
         # For patterns with multiple parts, try to resolve as module paths
         # We need at least 2 parts (module.attribute), but we'll try any pattern that might resolve
-        if len(parts) >= 2:  # e.g., fa_util.exp2, google3.a.b, etc.
+        if len(parts) >= 2:  # e.g., fa_util.exp2, a.b.c, etc.
           # Try progressively shorter module paths (e.g., a.b.c.d.f -> try a.b.c.d, a.b.c, etc.)
           for i in range(
             len(parts) - 1, 0, -1
@@ -546,48 +533,12 @@ class ObjectExtractor:
             # Check if this looks like a local package import
             is_local = self._is_local_package(module_path, workspace_root)
             if is_local:
-              possible_paths = []
-
-              # Special handling for google3
-              if module_path.startswith("google3."):
-                google3_root = self._get_google3_root()
-                if google3_root:
-                  module_path_without_google3 = module_path[
-                    8:
-                  ]  # Remove 'google3.'
-                  possible_paths.append(
-                    os.path.join(
-                      google3_root,
-                      "google3",
-                      module_path_without_google3.replace(".", os.sep) + ".py",
-                    )
-                  )
-                  possible_paths.append(
-                    os.path.join(
-                      google3_root,
-                      "google3",
-                      module_path_without_google3.replace(".", os.sep),
-                      "__init__.py",
-                    )
-                  )
-              else:
-                # Try standard paths
-                module_as_path = module_path.replace(".", os.sep)
-                possible_paths.extend(
-                  [
-                    os.path.join(workspace_root, module_as_path + ".py"),
-                    os.path.join(workspace_root, module_as_path, "__init__.py"),
-                    os.path.join(
-                      workspace_root, "third_party", module_as_path + ".py"
-                    ),
-                    os.path.join(
-                      workspace_root,
-                      "third_party",
-                      module_as_path,
-                      "__init__.py",
-                    ),
-                  ]
-                )
+              # Try standard paths
+              module_as_path = module_path.replace(".", os.sep)
+              possible_paths = [
+                os.path.join(workspace_root, module_as_path + ".py"),
+                os.path.join(workspace_root, module_as_path, "__init__.py"),
+              ]
 
               for path in possible_paths:
                 if os.path.exists(path) and path not in local_files:
@@ -608,14 +559,7 @@ class ObjectExtractor:
           os.path.join(base_dir, f"{module_name.lower()}.py"),
           os.path.join(workspace_root, f"{module_name}.py"),
           os.path.join(workspace_root, f"{module_name.lower()}.py"),
-          os.path.join(workspace_root, "third_party", f"{module_name}.py"),
-          os.path.join(
-            workspace_root, "third_party", f"{module_name.lower()}.py"
-          ),
         ]
-
-        # Only check google3 if we might actually need it (don't call g4 g4d unnecessarily)
-        # We'll add google3 paths lazily if needed in the main import loop
 
         # Only check packages that might actually contain this module
         # based on the current file's location or known patterns
@@ -624,7 +568,6 @@ class ObjectExtractor:
 
         # If current file is in a package, check that package
         for pkg in [
-          "google3",
           "tpu_commons",
           "MaxText",
           "maxtext",
@@ -645,12 +588,6 @@ class ObjectExtractor:
             [
               os.path.join(workspace_root, pkg, f"{module_name}.py"),
               os.path.join(workspace_root, pkg, f"{module_name.lower()}.py"),
-              os.path.join(
-                workspace_root, "third_party", pkg, f"{module_name}.py"
-              ),
-              os.path.join(
-                workspace_root, "third_party", pkg, f"{module_name.lower()}.py"
-              ),
             ]
           )
 
@@ -683,33 +620,6 @@ class ObjectExtractor:
                 # Try multiple search strategies for local files
                 possible_paths = []
 
-                # Handle google3 imports specially - ONLY call g4 g4d if we see google3
-                if module_path.startswith("google3."):
-                  google3_root = (
-                    self._get_google3_root()
-                  )  # Lazy: only called for google3 imports
-                  if google3_root:
-                    # For google3.foo.bar, look for /path/to/google3/foo/bar.py
-                    module_path_without_google3 = module_path[
-                      8:
-                    ]  # Remove 'google3.'
-                    possible_paths.append(
-                      os.path.join(
-                        google3_root,
-                        "google3",
-                        module_path_without_google3.replace(".", os.sep)
-                        + ".py",
-                      )
-                    )
-                    possible_paths.append(
-                      os.path.join(
-                        google3_root,
-                        "google3",
-                        module_path_without_google3.replace(".", os.sep),
-                        "__init__.py",
-                      )
-                    )
-
                 # Direct module path conversion
                 possible_paths.append(
                   os.path.join(
@@ -722,85 +632,41 @@ class ObjectExtractor:
                   )
                 )
 
-                # Search specifically in third_party directories
-                for third_party_root in ["third_party"]:
-                  third_party_path = os.path.join(
-                    workspace_root,
-                    third_party_root,
-                    module_path.replace(".", os.sep) + ".py",
-                  )
-                  possible_paths.append(third_party_path)
-
-                  third_party_pkg_path = os.path.join(
-                    workspace_root,
-                    third_party_root,
-                    module_path.replace(".", os.sep),
-                    "__init__.py",
-                  )
-                  possible_paths.append(third_party_pkg_path)
-
-                  # Handle packages with duplicated directory structure (e.g., third_party/pkg/pkg/...)
-                  # Extract the first component of the module path
-                  first_component = module_path.split(".")[0]
-                  duplicated_path = os.path.join(
-                    workspace_root,
-                    third_party_root,
-                    first_component,
-                    module_path.replace(".", os.sep) + ".py",
-                  )
-                  possible_paths.append(duplicated_path)
-
-                  duplicated_pkg_path = os.path.join(
-                    workspace_root,
-                    third_party_root,
-                    first_component,
-                    module_path.replace(".", os.sep),
-                    "__init__.py",
-                  )
-                  possible_paths.append(duplicated_pkg_path)
-
                 # For packages with different structures, try common patterns
                 package_parts = module_path.split(".")
 
-                # Special handling for google3 - DON'T search in other packages!
-                if module_path.startswith("google3."):
-                  # For google3, we already handled it above, no need to check other packages
-                  known_packages = []
-                else:
-                  # Determine which known packages are relevant for this module
-                  # Only check packages that match the module prefix or current file location
-                  all_known_packages = [
-                    "tpu_commons",
-                    "MaxText",
-                    "maxtext",
-                    "JetStream",
-                    "jetstream",
-                    "vllm",
-                    "whisper_jax",
-                    "torchprime",
-                    "maxdiffusion",
-                    "RecML",
-                  ]
+                # Determine which known packages are relevant for this module
+                # Only check packages that match the module prefix or current file location
+                all_known_packages = [
+                  "tpu_commons",
+                  "MaxText",
+                  "maxtext",
+                  "JetStream",
+                  "jetstream",
+                  "vllm",
+                  "whisper_jax",
+                  "torchprime",
+                  "maxdiffusion",
+                  "RecML",
+                ]
 
-                  relevant_packages = []
-                  # Check if module starts with a known package name
+                relevant_packages = []
+                # Check if module starts with a known package name
+                for pkg in all_known_packages:
+                  if module_path.startswith(pkg + ".") or module_path == pkg:
+                    relevant_packages.append(pkg)
+
+                # If no match, check if current file is within a known package
+                if not relevant_packages:
+                  file_path_lower = self.filename.lower()
                   for pkg in all_known_packages:
-                    if module_path.startswith(pkg + ".") or module_path == pkg:
+                    if pkg.lower() in file_path_lower:
                       relevant_packages.append(pkg)
 
-                  # If no match, check if current file is within a known package
-                  if not relevant_packages:
-                    file_path_lower = self.filename.lower()
-                    for pkg in all_known_packages:
-                      if pkg.lower() in file_path_lower:
-                        relevant_packages.append(pkg)
-
-                  # Use relevant packages, or fall back to first component as hint
-                  known_packages = (
-                    relevant_packages
-                    if relevant_packages
-                    else [package_parts[0]]
-                  )
+                # Use relevant packages, or fall back to first component as hint
+                known_packages = (
+                  relevant_packages if relevant_packages else [package_parts[0]]
+                )
 
                 for i in range(len(package_parts)):
                   partial_path = os.path.join(*package_parts[: i + 1])
@@ -832,32 +698,6 @@ class ObjectExtractor:
                     if os.path.exists(target_file_path):
                       possible_paths.append(target_file_path)
 
-                  # Try in third_party
-                  if remaining_path:
-                    full_file_path = os.path.join(
-                      workspace_root,
-                      "third_party",
-                      partial_path,
-                      remaining_path + ".py",
-                    )
-                    if os.path.exists(full_file_path):
-                      possible_paths.append(full_file_path)
-                    full_pkg_path = os.path.join(
-                      workspace_root,
-                      "third_party",
-                      partial_path,
-                      remaining_path,
-                      "__init__.py",
-                    )
-                    if os.path.exists(full_pkg_path):
-                      possible_paths.append(full_pkg_path)
-                  else:
-                    target_file_path = os.path.join(
-                      workspace_root, "third_party", partial_path + ".py"
-                    )
-                    if os.path.exists(target_file_path):
-                      possible_paths.append(target_file_path)
-
                   # Try within known packages
                   for pkg in known_packages:
                     if remaining_path:
@@ -871,27 +711,6 @@ class ObjectExtractor:
                         possible_paths.append(full_file_path)
                       full_pkg_path = os.path.join(
                         workspace_root,
-                        pkg,
-                        partial_path,
-                        remaining_path,
-                        "__init__.py",
-                      )
-                      if os.path.exists(full_pkg_path):
-                        possible_paths.append(full_pkg_path)
-
-                      # Also try in third_party/pkg
-                      full_file_path = os.path.join(
-                        workspace_root,
-                        "third_party",
-                        pkg,
-                        partial_path,
-                        remaining_path + ".py",
-                      )
-                      if os.path.exists(full_file_path):
-                        possible_paths.append(full_file_path)
-                      full_pkg_path = os.path.join(
-                        workspace_root,
-                        "third_party",
                         pkg,
                         partial_path,
                         remaining_path,
@@ -924,123 +743,61 @@ class ObjectExtractor:
               if is_local_package:
                 possible_paths = []
 
-                # Special handling for google3 - resolve and skip other package checks
-                if module_name.startswith("google3."):
-                  google3_root = self._get_google3_root()
-                  if google3_root:
-                    module_path_without_google3 = module_name[
-                      8:
-                    ]  # Remove 'google3.'
-                    possible_paths.append(
-                      os.path.join(
-                        google3_root,
-                        "google3",
-                        module_path_without_google3.replace(".", os.sep)
-                        + ".py",
-                      )
-                    )
-                    possible_paths.append(
-                      os.path.join(
-                        google3_root,
-                        "google3",
-                        module_path_without_google3.replace(".", os.sep),
-                        "__init__.py",
-                      )
-                    )
-                  # Don't search in other packages for google3 imports
-                  known_packages = []
-                else:
-                  # Try to find local file for this import
-                  possible_paths.append(
-                    os.path.join(
-                      base_dir, module_name.replace(".", os.sep) + ".py"
-                    )
+                # Try to find local file for this import
+                possible_paths.append(
+                  os.path.join(
+                    base_dir, module_name.replace(".", os.sep) + ".py"
                   )
-                  possible_paths.append(
-                    os.path.join(
-                      workspace_root, module_name.replace(".", os.sep) + ".py"
-                    )
+                )
+                possible_paths.append(
+                  os.path.join(
+                    workspace_root, module_name.replace(".", os.sep) + ".py"
                   )
-                  possible_paths.append(
-                    os.path.join(
-                      workspace_root,
-                      module_name.replace(".", os.sep),
-                      "__init__.py",
-                    )
+                )
+                possible_paths.append(
+                  os.path.join(
+                    workspace_root,
+                    module_name.replace(".", os.sep),
+                    "__init__.py",
                   )
+                )
 
-                  # Search in third_party
-                  possible_paths.append(
-                    os.path.join(
-                      workspace_root,
-                      "third_party",
-                      module_name.replace(".", os.sep) + ".py",
-                    )
-                  )
-                  possible_paths.append(
-                    os.path.join(
-                      workspace_root,
-                      "third_party",
-                      module_name.replace(".", os.sep),
-                      "__init__.py",
-                    )
-                  )
+                # Only search in relevant package directories (not all packages)
+                # Determine relevant packages based on module name or current file location
+                all_known_packages = [
+                  "tpu_commons",
+                  "MaxText",
+                  "maxtext",
+                  "JetStream",
+                  "jetstream",
+                  "vllm",
+                  "whisper_jax",
+                  "torchprime",
+                  "maxdiffusion",
+                  "RecML",
+                ]
 
-                  # Only search in relevant package directories (not all packages)
-                  # Determine relevant packages based on module name or current file location
-                  all_known_packages = [
-                    "tpu_commons",
-                    "MaxText",
-                    "maxtext",
-                    "JetStream",
-                    "jetstream",
-                    "vllm",
-                    "whisper_jax",
-                    "torchprime",
-                    "maxdiffusion",
-                    "RecML",
-                  ]
+                relevant_packages = []
+                for pkg in all_known_packages:
+                  if module_name.startswith(pkg + ".") or module_name == pkg:
+                    relevant_packages.append(pkg)
 
-                  relevant_packages = []
+                # If no match, check current file location
+                if not relevant_packages:
+                  file_path_lower = self.filename.lower()
                   for pkg in all_known_packages:
-                    if module_name.startswith(pkg + ".") or module_name == pkg:
+                    if pkg.lower() in file_path_lower:
                       relevant_packages.append(pkg)
-
-                  # If no match, check current file location
-                  if not relevant_packages:
-                    file_path_lower = self.filename.lower()
-                    for pkg in all_known_packages:
-                      if pkg.lower() in file_path_lower:
-                        relevant_packages.append(pkg)
-                        break  # Only add the one we're in
-
-                  # Use relevant packages or just check the module's first component
-                  known_packages = (
-                    relevant_packages if relevant_packages else []
-                  )
+                      break  # Only add the one we're in
 
                 module_as_path = module_name.replace(".", os.sep)
-                for pkg in known_packages:
+                for pkg in relevant_packages:
                   possible_paths.append(
                     os.path.join(workspace_root, pkg, module_as_path + ".py")
                   )
                   possible_paths.append(
                     os.path.join(
                       workspace_root, pkg, module_as_path, "__init__.py"
-                    )
-                  )
-                  possible_paths.append(
-                    os.path.join(
-                      workspace_root, "third_party", pkg, module_as_path + ".py"
-                    )
-                  )
-                  possible_paths.append(
-                    os.path.join(
-                      workspace_root,
-                      "third_party",
-                      pkg,
-                      module_as_path,
-                      "__init__.py",
                     )
                   )
 
@@ -1083,46 +840,11 @@ class ObjectExtractor:
     # If no markers found, return the start directory
     return start_dir
 
-  def _get_google3_root(self) -> Optional[str]:
-    """Get the google3 root directory by running 'g4 g4d'. Only called when needed and cached."""
-    # Return cached value if already fetched
-    if self._google3_root_checked:
-      return self._google3_root_cache
-
-    # Mark as checked so we don't try again
-    self._google3_root_checked = True
-
-    try:
-      import subprocess
-
-      result = subprocess.run(
-        ["g4", "g4d"], capture_output=True, text=True, timeout=5
-      )
-      if result.returncode == 0:
-        g4d_output = result.stdout.strip()
-        # Remove the 'google3' suffix to get the parent directory
-        if g4d_output.endswith("google3"):
-          self._google3_root_cache = g4d_output[: -len("google3")].rstrip("/")
-        elif g4d_output.endswith("/google3"):
-          self._google3_root_cache = g4d_output[: -len("/google3")]
-        else:
-          self._google3_root_cache = None
-        return self._google3_root_cache
-      return None
-    except Exception as e:
-      self._google3_root_cache = None
-      return None
-
   def _is_local_package(self, module_path: str, workspace_root: str) -> bool:
     """Check if a module path refers to a local package in the workspace."""
 
-    # Check if this is a google3 import
-    if module_path.startswith("google3."):
-      return True
-
     # List of known local packages in common ML workspaces
     local_package_names = [
-      "google3",
       "tpu_commons",
       "MaxText",
       "maxtext",
@@ -1147,29 +869,13 @@ class ObjectExtractor:
     for i in range(len(module_parts)):
       partial_path = os.path.join(*module_parts[: i + 1])
 
-      # Check in common locations
-      potential_locations = [
-        os.path.join(workspace_root, partial_path),
-        os.path.join(workspace_root, "third_party", partial_path),
-      ]
-
-      # Only check google3 root if the module could plausibly be in google3
-      # This avoids calling g4 g4d for every single import
-      if (
-        module_path.startswith("google3") or "google3" in self.filename.lower()
-      ):
-        google3_root = self._get_google3_root()
-        if google3_root:
-          potential_locations.append(
-            os.path.join(google3_root, "google3", partial_path)
-          )
-
-      for location in potential_locations:
-        if os.path.exists(location):
-          return True
-        # Also check with .py extension
-        if os.path.exists(location + ".py"):
-          return True
+      # Check in the workspace root
+      location = os.path.join(workspace_root, partial_path)
+      if os.path.exists(location):
+        return True
+      # Also check with .py extension
+      if os.path.exists(location + ".py"):
+        return True
 
     # If we can't find any evidence this is local, assume it's external
     return False
@@ -1214,29 +920,7 @@ class ObjectExtractor:
     possible_paths = [
       os.path.join(workspace_root, module_as_path + ".py"),
       os.path.join(workspace_root, module_as_path, "__init__.py"),
-      os.path.join(workspace_root, "third_party", module_as_path + ".py"),
-      os.path.join(
-        workspace_root, "third_party", module_as_path, "__init__.py"
-      ),
     ]
-
-    # For nested packages, also try with duplicated directory structure
-    # e.g., tpu_commons.mock.vllm_logger -> third_party/tpu_commons/tpu_commons/mock/vllm_logger.py
-    first_component = module_path.split(".")[0]
-    possible_paths.extend(
-      [
-        os.path.join(
-          workspace_root, "third_party", first_component, module_as_path + ".py"
-        ),
-        os.path.join(
-          workspace_root,
-          "third_party",
-          first_component,
-          module_as_path,
-          "__init__.py",
-        ),
-      ]
-    )
 
     for path in possible_paths:
       if os.path.exists(path):
@@ -1249,7 +933,6 @@ class ObjectExtractor:
 
     # List of known local package patterns
     local_package_patterns = [
-      "google3",
       "tpu_commons",
       "MaxText",
       "maxtext",
@@ -1260,7 +943,6 @@ class ObjectExtractor:
       "torchprime",
       "maxdiffusion",
       "RecML",
-      "third_party",
     ]
 
     # Check if the file path contains any local package patterns
@@ -1973,44 +1655,6 @@ def isolate_object(
                   ):
                     is_match = True
 
-                  # For google3 imports, also check without the google3 prefix
-                  if not is_match and node.module.startswith("google3."):
-                    # Remove google3. prefix and check again
-                    module_without_google3 = node.module[
-                      8:
-                    ]  # Remove 'google3.'
-                    module_as_path_no_g3 = module_without_google3.replace(
-                      ".", os.sep
-                    )
-                    if local_file_normalized.endswith(
-                      module_as_path_no_g3 + ".py"
-                    ) or local_file_normalized.endswith(
-                      os.path.join(module_as_path_no_g3, "__init__.py")
-                    ):
-                      is_match = True
-                    # Also check if the file contains google3/ in the path
-                    if (
-                      not is_match
-                      and "google3" + os.sep in local_file_normalized
-                    ):
-                      # Extract the part after google3/
-                      google3_idx = local_file_normalized.find(
-                        "google3" + os.sep
-                      )
-                      if google3_idx != -1:
-                        path_after_google3 = local_file_normalized[
-                          google3_idx + 8 :
-                        ]  # Skip 'google3/'
-                        if (
-                          path_after_google3 == module_as_path_no_g3 + ".py"
-                          or path_after_google3
-                          == os.path.join(module_as_path_no_g3, "__init__.py")
-                          or path_after_google3.startswith(
-                            module_as_path_no_g3 + os.sep
-                          )
-                        ):
-                          is_match = True
-
                   # Fallback: check if module_as_path is contained in the file path
                   if not is_match and module_as_path in local_file_normalized:
                     is_match = True
@@ -2040,42 +1684,6 @@ def isolate_object(
                       os.path.join(module_as_path, "__init__.py")
                     ):
                       is_match = True
-
-                    # For google3 imports, also check without the google3 prefix
-                    if not is_match and alias.name.startswith("google3."):
-                      module_without_google3 = alias.name[
-                        8:
-                      ]  # Remove 'google3.'
-                      module_as_path_no_g3 = module_without_google3.replace(
-                        ".", os.sep
-                      )
-                      if local_file_normalized.endswith(
-                        module_as_path_no_g3 + ".py"
-                      ) or local_file_normalized.endswith(
-                        os.path.join(module_as_path_no_g3, "__init__.py")
-                      ):
-                        is_match = True
-                      # Also check if the file contains google3/ in the path
-                      if (
-                        not is_match
-                        and "google3" + os.sep in local_file_normalized
-                      ):
-                        google3_idx = local_file_normalized.find(
-                          "google3" + os.sep
-                        )
-                        if google3_idx != -1:
-                          path_after_google3 = local_file_normalized[
-                            google3_idx + 8 :
-                          ]  # Skip 'google3/'
-                          if (
-                            path_after_google3 == module_as_path_no_g3 + ".py"
-                            or path_after_google3
-                            == os.path.join(module_as_path_no_g3, "__init__.py")
-                            or path_after_google3.startswith(
-                              module_as_path_no_g3 + os.sep
-                            )
-                          ):
-                            is_match = True
 
                     # Fallback: check if module_as_path is contained in the file path
                     if not is_match and module_as_path in local_file_normalized:
@@ -2454,25 +2062,13 @@ def isolate_object(
   )
   output_lines.append("")
 
-  # Add final imports, filtering out any remaining google3 imports and consolidating duplicates
+  # Add final imports, consolidating duplicates
   if final_imports:
-    # First pass: remove google3 imports
-    non_google3_imports = []
-    for import_stmt in final_imports:
-      # Skip any imports from google3
-      if (
-        "from google3." in import_stmt
-        or "import google3." in import_stmt
-        or import_stmt.strip().startswith("import google3")
-      ):
-        continue
-      non_google3_imports.append(import_stmt)
-
-    # Second pass: consolidate imports from the same module and remove duplicate names
+    # Consolidate imports from the same module and remove duplicate names
     from_imports = {}  # module -> set of (name, alias) tuples
     direct_imports = []  # List of direct "import X" statements
 
-    for import_stmt in non_google3_imports:
+    for import_stmt in final_imports:
       try:
         import_tree = ast.parse(import_stmt)
         for node in ast.walk(import_tree):

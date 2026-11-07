@@ -1,29 +1,17 @@
 #!/usr/bin/env python3
-# Standalone CLI for querying the MaxKernel LLMWiki knowledge base in Google3.
+# Standalone CLI for querying the MaxKernel LLMWiki knowledge base.
 # Drop-in replacement for the previous Vertex AI RAG retrieval tool.
 
 import argparse
 import os
 import sys
 
-# Support relative and absolute imports
+# Make the sibling wiki_tool module importable regardless of the caller's cwd
 tools_dir = os.path.dirname(os.path.abspath(__file__))
 if tools_dir not in sys.path:
   sys.path.insert(0, tools_dir)
 
-try:
-  from wiki_tool import DEFAULT_MODE, query_wiki
-except ImportError:
-  try:
-    from experimental.MaxKernel.tools.wiki_tool import (
-      DEFAULT_MODE,
-      query_wiki,
-    )
-  except ImportError:
-    from third_party.py.accelerator_agents.MaxKernel.tools.wiki_tool import (
-      DEFAULT_MODE,
-      query_wiki,
-    )
+from wiki_tool import DEFAULT_MODE, query_wiki
 
 
 def retrieve(

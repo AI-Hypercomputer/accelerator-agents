@@ -1,4 +1,6 @@
-MODEL_NAME = "gemini-3.1-pro-preview"
+import os
+
+MODEL_NAME = os.environ.get("MODEL_NAME", "gemini-3.1-pro-preview")
 MAX_ITERATIONS = 5
 LLM_GEN_RETRY_COUNT = 3
 TEMPERATURE = 0.1

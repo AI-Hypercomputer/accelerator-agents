@@ -156,3 +156,11 @@ still visible.
    of optimality. If the leading explanation for the residual was never
    experimentally attacked, say so plainly rather than asserting the kernel is
    at its limit.
+
+---
+
+## See also
+
+- `reference/strategies/` rules STRAT-MLA-07 (a roofline ratio that widens as
+  you optimize means fixed cost binds) and STRAT-MLA-11 (localize the fixed
+  cost before building a grid lever).

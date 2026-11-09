@@ -738,6 +738,14 @@ the backward alone when the forward stays fixed, with the gradients derived by
 1.  **Plan Optimization**:
     -   Invoke `maxkernel-plan-kernel` subagent.
     -   Prompt: `"Create optimization plan for run_dir = <run_dir>, iteration = <n>."`
+    -   **Check the plan is complete.** `Read` `<run_dir>/iter<n>/kernel_plan.md`
+        and confirm its "Design Method Sections" part has all five required
+        parts: cost classes, implementation affordances, unit trading,
+        contract questions, and facts needed. If any is missing, invoke
+        `maxkernel-plan-kernel` once more with the prompt
+        `"Revise the optimization plan for run_dir = <run_dir>, iteration = <n>: Section 8 (Design Method Sections) is missing <parts>."`
+        Proceed after one revision either way, and note any part still
+        missing in `<run_dir>/maxkernel_debug_history.md`.
 2.  **Implement Kernel**:
     -   Invoke `maxkernel-implement-kernel` subagent.
     -   Prompt: `"Implement optimized kernel for run_dir = <run_dir>, iteration = <n>."`

@@ -65,6 +65,21 @@ All artifacts for this task are strictly confined within `<run_dir>`:
         where `<api_name>` is the API you want to search. Run this command
         every time these instructions say to "query" or "use `search_api`".
 
+3. `run_probe`: Settle whether a construct lowers at all on this TPU and
+    toolchain, instead of guessing from the error.
+
+    *   Invoke via CLI:
+
+        ```bash
+        {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --pick <probe_name> --run_dir <run_dir>
+        ```
+
+        Lowering and legality probes live in the `lowering`, `hardware` and
+        `sparsecore` groups; `{{MAXKERNEL_ROOT}}/reference/probe_catalog.md`
+        lists each with its question. Use one when the error is about whether
+        an op, dtype or index form is supported, not about your usage of it.
+        Never pass `--allow-destructive`.
+
 --------------------------------------------------------------------------------
 
 ## Your Task
@@ -103,6 +118,22 @@ understand:
 **Learn from previous fix attempts:** If previous attempts show a pattern (e.g.,
 "Fix: Changed block size" but error persists), this suggests the approach isn't
 working and you need a different strategy.
+
+### Step 2.4: Check the Known Legality Rules and Error Catalogue
+
+Before changing code, check whether the error is a known rule:
+
+-   `{{MAXKERNEL_ROOT}}/reference/tpu_hardware_facts.md` covers block-shape
+    legality, what may be a runtime value (DMA extents and offsets, lane vs
+    sublane indices), and DMAs that must be waited.
+-   For a SparseCore kernel, `{{MAXKERNEL_ROOT}}/reference/design/sparsecore.md`
+    has a table of error messages and the fix for each.
+-   **If an error message names a compiler flag** (for example
+    `needs_layout_passes`), retry with that flag before concluding the
+    construct is unsupported.
+-   A rejected construct is a fact about your usage until an upstream test
+    (via `search_api`) or a lowering probe (via `run_probe`) shows it failing
+    too.
 
 ### Step 2.5: MANDATORY API Verification (DO THIS BEFORE WRITING ANY CODE)
 

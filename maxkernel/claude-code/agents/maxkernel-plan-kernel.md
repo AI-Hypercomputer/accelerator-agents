@@ -185,6 +185,8 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
         where the VMEM budget is the target's default scoped limit, or the
         `vmem_limit_bytes` the plan sets (which must stay below physical VMEM).
     *   **Formulate Falsifiable Hypothesis**: State the exact mechanism (e.g. *"By tiling M=128, K=128 and keeping accumulator in VMEM across K-iterations, HBM traffic is reduced by 4.2x"*).
+    *   **Design Method & Hardware Facts**: Read `{{MAXKERNEL_ROOT}}/reference/tpu_hardware_facts.md` whole, then `{{MAXKERNEL_ROOT}}/reference/kernel_design_method.md`, then `{{MAXKERNEL_ROOT}}/reference/strategies/INDEX.md` and open only the strategy rules whose row matches this kernel. Work the method's sections into the plan's required **Section 8** (cost classes, affordances, unit trading, the 16 contract questions, facts needed). For each bottleneck you identify, also read its design reference under `{{MAXKERNEL_ROOT}}/reference/design/` (see Reference Guides).
+    *   **Facts Needed — measure, never assume**: Any hardware or toolchain number the plan depends on (VMEM ceiling, per-call or per-step cost, achieved bandwidth, whether a construct lowers) comes from a probe run in this environment, not from memory or a past run. Find the probe in `{{MAXKERNEL_ROOT}}/reference/probe_catalog.md` and run it with `run_probe` (see Tool Usage). At most 4 uncached probes per plan; cached results are free. Cite each answer by its file under `<run_dir>/probes/`.
 
 **For REVISIONS / NEXT ITERATION Plans:**
 
@@ -515,6 +517,28 @@ should be structured as a markdown document with the following sections:
 -   Rationale for block dimensions and tiling choices
 -   Explanation of any non-obvious indexing or memory access patterns
 
+## 8. Design Method Sections (required)
+
+Required in every plan, new or revised. The formats are in
+`{{MAXKERNEL_ROOT}}/reference/kernel_design_method.md` §5–§9. A plan missing
+any of these is incomplete, and the worker will send it back.
+
+-   **Cost classes**: all eight rows, each `examined: <work> → <critical-path
+    contribution>` or `UNEXAMINED: <why>`.
+-   **Implementation affordances**: every row scored `planned`, `NA: <reason>`
+    or `absent: <reason>`.
+-   **Unit trading**: one row per VPU/XLU pass on the critical path, ending in
+    a candidate, "linear part too small to pay", or "no formulation found".
+-   **Contract questions**: all 16 (L1–L7, W1–W3, T1–T5, R1), each answered,
+    marked `NA: <reason>`, or answered by a probe you ran. `unmodelled` is not
+    an answer.
+-   **Facts needed**: each fact the plan relies on, with its source: a
+    source-read rule from `reference/`, or a probe output file under
+    `<run_dir>/probes/`.
+-   **For revisions**: when a measured number contradicted a modelled one the
+    previous plan relied on, open this section with a `modelled → measured`
+    table and recompute what depended on it.
+
 ### Reference Guides
 
 You have the following reference documents to help you:
@@ -525,6 +549,23 @@ You have the following reference documents to help you:
     *   **Memory Optimization**: `{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md` (for memory-bound kernels, access efficiency under tiled layouts, pipelining, double buffering, VMEM fusion).
     *   **Compute & Register Optimization**: `{{MAXKERNEL_ROOT}}/reference/tpu_mxu_and_register_optimization.md` (for compute-bound kernels, MXU queuing, VALU/MXU overlap, Mosaic vector layouts, register spill prevention).
     *   **XLA Interaction**: `{{MAXKERNEL_ROOT}}/reference/pallas_xla_interaction.md` (for manual fusion, cost estimates, async HLO execution).
+
+**Design Method, Hardware Facts & Probes** (read for every new plan):
+    *   **Hardware Facts**: `{{MAXKERNEL_ROOT}}/reference/tpu_hardware_facts.md` (what `get_tpu_info()` describes, legality rules, what may be traced, instruments that lie, SparseCore architecture). Read whole.
+    *   **Design Method**: `{{MAXKERNEL_ROOT}}/reference/kernel_design_method.md` (system context, two floors, cost classes, affordances, unit trading, the 16 contract questions, measurement rules, routing from the profile).
+    *   **Probe Catalog**: `{{MAXKERNEL_ROOT}}/reference/probe_catalog.md` (which probe answers which design question, and how to read its verdict).
+    *   **Strategy Rules**: `{{MAXKERNEL_ROOT}}/reference/strategies/INDEX.md` (one row per rule; open only the matching rules).
+
+**Design References by Topic** (read the one matching each bottleneck):
+    *   **Fusion boundary**: `{{MAXKERNEL_ROOT}}/reference/design/fusion_boundary.md`
+    *   **Partitioning (grid, blocks, what fits)**: `{{MAXKERNEL_ROOT}}/reference/design/partitioning.md`
+    *   **Pipelining (bandwidth, DMA, emit_pipeline)**: `{{MAXKERNEL_ROOT}}/reference/design/pipelining.md`
+    *   **Layout & precision**: `{{MAXKERNEL_ROOT}}/reference/design/layout_precision.md`
+    *   **Compute units (MXU/VPU)**: `{{MAXKERNEL_ROOT}}/reference/design/compute_units.md`
+    *   **Algorithm changes**: `{{MAXKERNEL_ROOT}}/reference/design/algorithm.md`
+    *   **Precomputation & metadata (SMEM, scalar prefetch)**: `{{MAXKERNEL_ROOT}}/reference/design/precomputation.md`
+    *   **SparseCore**: `{{MAXKERNEL_ROOT}}/reference/design/sparsecore.md`
+    *   **Cross-area moves**: `{{MAXKERNEL_ROOT}}/reference/design/cross_area_moves.md`
 
 ### Tool Usage
 
@@ -563,7 +604,26 @@ You have the following tools to help you:
         where `<api_name>` is the API you want to search. Run this command
         every time these instructions say to "query" or "use `search_api`".
 
-3.  `Read` and `write_to_file`: To read the source kernel and to write your
+3.  `run_probe`: Measure a hardware or toolchain fact on the target TPU
+    instead of assuming it.
+
+    *   Invoke via CLI:
+
+        ```bash
+        {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --list
+        {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --pick <probe_name> [--pick <probe_name>] --run_dir <run_dir>
+        ```
+
+        `--list` runs locally. `--pick` runs the named probe(s) on the TPU and
+        writes each result to `<run_dir>/probes/<probe_name>.txt`; results are
+        cached per TPU and toolchain, so repeating a question costs no job.
+        Names are exact; find them in
+        `{{MAXKERNEL_ROOT}}/reference/probe_catalog.md`. Read the verdict
+        (`PASS`, `FAIL`, `UNSUPPORTED`, `INVALID`) before the number: an
+        `INVALID` probe withheld its number on purpose. Never pass
+        `--allow-destructive`.
+
+4.  `Read` and `write_to_file`: To read the source kernel and to write your
     plan.
 
 IMPORTANT: Use `search_api` (and `retrieval_tool` strictly for API name

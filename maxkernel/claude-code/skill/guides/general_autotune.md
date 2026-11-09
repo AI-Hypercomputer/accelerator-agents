@@ -437,3 +437,12 @@ configuration on one shape while regressing or failing on others, and get reject
 for that reason — where a per-case policy would have captured it. If several
 shapes each want a different value, that is a signal your output should be a
 policy, not a constant.
+
+---
+
+## See also
+
+- `reference/strategies/` rules STRAT-MLA-02 (a truncation knob has an
+  interior optimum), STRAT-MLA-03 (a shortened axis biases the sweep) and
+  STRAT-MLA-10 (a module-level constant must pay on the shapes you did not
+  measure).

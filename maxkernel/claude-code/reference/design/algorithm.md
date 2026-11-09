@@ -301,8 +301,9 @@ declare it as a `dot_general` **batch** dimension:
 
 ```python
 # [N, C, C] x [N, C, D] -> [N, C, D]: one matmul op for all N items
-out = jax.lax.dot_general(a, b, (((2,), (1,)), ((0,), (0,))),
-                          preferred_element_type=jnp.float32)
+out = jax.lax.dot_general(
+  a, b, (((2,), (1,)), ((0,), (0,))), preferred_element_type=jnp.float32
+)
 ```
 
 Same einsum test. Same FLOPs, bytes and per-item matmul shapes; only the number of ops issued

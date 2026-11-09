@@ -43,15 +43,22 @@ on the target. The shape of a partition:
 
 ```python
 pl.pallas_call(
-    body,                                   # body(*in_refs, *out_refs, *scratch_refs)
-    grid=(gm, gn, gk),                      # step counts; body runs once per grid point
-    in_specs=[pl.BlockSpec((bm, bk), lambda i, j, k: (i, k)),   # block coords, not elements
-              pl.BlockSpec((bk, bn), lambda i, j, k: (k, j))],
-    out_specs=pl.BlockSpec((bm, bn), lambda i, j, k: (i, j)),
-    out_shape=jax.ShapeDtypeStruct((M, N), out_dtype),          # full array, not the block
-    scratch_shapes=[pltpu.VMEM((bm, bn), jnp.float32)],         # persists across steps
-    compiler_params=pltpu.CompilerParams(
-        dimension_semantics=("parallel", "parallel", "arbitrary")),
+  body,  # body(*in_refs, *out_refs, *scratch_refs)
+  grid=(gm, gn, gk),  # step counts; body runs once per grid point
+  in_specs=[
+    pl.BlockSpec(
+      (bm, bk), lambda i, j, k: (i, k)
+    ),  # block coords, not elements
+    pl.BlockSpec((bk, bn), lambda i, j, k: (k, j)),
+  ],
+  out_specs=pl.BlockSpec((bm, bn), lambda i, j, k: (i, j)),
+  out_shape=jax.ShapeDtypeStruct(
+    (M, N), out_dtype
+  ),  # full array, not the block
+  scratch_shapes=[pltpu.VMEM((bm, bn), jnp.float32)],  # persists across steps
+  compiler_params=pltpu.CompilerParams(
+    dimension_semantics=("parallel", "parallel", "arbitrary")
+  ),
 )
 ```
 

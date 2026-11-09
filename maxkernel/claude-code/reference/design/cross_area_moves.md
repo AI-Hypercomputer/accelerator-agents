@@ -103,9 +103,9 @@ turns two passes into one and loads the shared operand once. Probes for the merg
 ```python
 # Two branches contract against the same stationary operand w: [K, N].
 # Stack the varying operands on the row axis, contract once, split after.
-ab = jnp.concatenate([a, b], axis=0)              # [2*R, K]
+ab = jnp.concatenate([a, b], axis=0)  # [2*R, K]
 ab_w = jnp.dot(ab, w, preferred_element_type=jnp.float32)  # [2*R, N]
-a_w = ab_w[:R] * scale_a                          # per-branch scaling on the VPU
+a_w = ab_w[:R] * scale_a  # per-branch scaling on the VPU
 b_w = ab_w[R:] * scale_b
 ```
 

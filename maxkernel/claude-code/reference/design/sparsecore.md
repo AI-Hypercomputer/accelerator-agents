@@ -152,8 +152,12 @@ unreachable when it is not.
 
 ```python
 scalar_mesh = plsc.ScalarSubcoreMesh(axis_name="core", num_cores=n_cores)
-vector_mesh = plsc.VectorSubcoreMesh(core_axis_name="core", subcore_axis_name="subcore",
-                                     num_cores=n_cores, num_subcores=n_subcores)
+vector_mesh = plsc.VectorSubcoreMesh(
+  core_axis_name="core",
+  subcore_axis_name="subcore",
+  num_cores=n_cores,
+  num_subcores=n_subcores,
+)
 ```
 
 `VectorSubcoreMesh` is two-dimensional: `core` across SparseCores, `subcore` across each core's
@@ -322,24 +326,31 @@ shape only):
 info = plsc.get_sparse_core_info()
 L = info.num_lanes
 
+
 @pl.kernel(
-    out_type=jax.ShapeDtypeStruct((n,), jnp.int32),
-    mesh=plsc.VectorSubcoreMesh(core_axis_name="core", subcore_axis_name="subcore",
-                                num_cores=info.num_cores, num_subcores=info.num_subcores),
-    scratch_types=[pltpu.VMEM((chunk,), jnp.int32),   # in/out staging
-                   pltpu.SMEM((8,), jnp.int32),        # named scalar slots
-                   pltpu.SemaphoreType.DMA],
-    compiler_params=pltpu.CompilerParams(needs_layout_passes=False),
+  out_type=jax.ShapeDtypeStruct((n,), jnp.int32),
+  mesh=plsc.VectorSubcoreMesh(
+    core_axis_name="core",
+    subcore_axis_name="subcore",
+    num_cores=info.num_cores,
+    num_subcores=info.num_subcores,
+  ),
+  scratch_types=[
+    pltpu.VMEM((chunk,), jnp.int32),  # in/out staging
+    pltpu.SMEM((8,), jnp.int32),  # named scalar slots
+    pltpu.SemaphoreType.DMA,
+  ],
+  compiler_params=pltpu.CompilerParams(needs_layout_passes=False),
 )
 def kernel(x_hbm, o_hbm, vbuf, smem, sem):
-    off = worker_offset()                               # from axis_index on both axes
-    pltpu.sync_copy(x_hbm.at[pl.ds(off, chunk)], vbuf)  # in
+  off = worker_offset()  # from axis_index on both axes
+  pltpu.sync_copy(x_hbm.at[pl.ds(off, chunk)], vbuf)  # in
 
-    @pl.loop(0, chunk, step=L)                          # work, one lane group at a time
-    def _(i):
-        vbuf[pl.ds(i, L)] = vbuf[pl.ds(i, L)] * 2 + 1
+  @pl.loop(0, chunk, step=L)  # work, one lane group at a time
+  def _(i):
+    vbuf[pl.ds(i, L)] = vbuf[pl.ds(i, L)] * 2 + 1
 
-    pltpu.sync_copy(vbuf, o_hbm.at[pl.ds(off, chunk)])  # out
+  pltpu.sync_copy(vbuf, o_hbm.at[pl.ds(off, chunk)])  # out
 ```
 
 Deviating from this skeleton, for example by reading or writing `x_hbm[...]` directly, is what
@@ -532,12 +543,13 @@ dependence between them**. Public guide: https://docs.jax.dev/en/latest/pallas/t
 ```python
 @jax.jit
 def step(a, b, ids):
-    return a @ b, sc_route(ids)          # independent: can overlap
+  return a @ b, sc_route(ids)  # independent: can overlap
+
 
 @jax.jit
 def step_serial(a, b, ids):
-    counts, perm = sc_route(ids)         # dependent: the matmul waits
-    return a[perm] @ b, counts
+  counts, perm = sc_route(ids)  # dependent: the matmul waits
+  return a[perm] @ b, counts
 ```
 
 Both compile and run; only the first can hide anything. The second is how an MoE layer looks when
@@ -708,8 +720,8 @@ step. Measure it with the three-arm pattern above.
 **Histogram / count-by-key.** This is the most useful idiom on the unit, and it is wrong by default:
 
 ```python
-run, last = plsc.scan_count(keys)                        # run is 1-based
-plsc.addupdate_scatter(hist, (keys,), run, mask=last)    # run, NOT run + 1
+run, last = plsc.scan_count(keys)  # run is 1-based
+plsc.addupdate_scatter(hist, (keys,), run, mask=last)  # run, NOT run + 1
 ```
 
 **Stable placement uses the same primitive to position rather than count.** The first duplicate
@@ -728,7 +740,9 @@ the mask is a compaction, and the same mask discards lanes with meaningless dest
 
 ```python
 rank = plsc.cumsum(jnp.where(mask, 1, 0))
-dest = jnp.minimum(base + rank - 1, limit - 1)   # clamp keeps an overrun in bounds
+dest = jnp.minimum(
+  base + rank - 1, limit - 1
+)  # clamp keeps an overrun in bounds
 plsc.store_scatter(buf, (dest,), value, mask=mask)
 ```
 
@@ -741,7 +755,9 @@ window. It must be SMEM, not VMEM, because a scalar store is a swap. Name the sl
 SparseCore kernel accumulates many of them:
 
 ```python
-_R, _LO, _HI, _RUN, _FOUND, _COUNT, _OFF, _USED = range(8)   # indices into pltpu.SMEM((8,), jnp.int32)
+_R, _LO, _HI, _RUN, _FOUND, _COUNT, _OFF, _USED = range(
+  8
+)  # indices into pltpu.SMEM((8,), jnp.int32)
 ```
 
 **bf16 travels as packed uint32 and is widened in the bit pattern.** SparseCore arithmetic is

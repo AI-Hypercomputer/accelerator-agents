@@ -62,7 +62,7 @@ kk = pl.program_id(2)
 # Good
 td = cfg.tile_d
 nd = D // td
-d_i = pl.program_id(2)      # which D tile this step handles
+d_i = pl.program_id(2)  # which D tile this step handles
 ```
 
 **A padded extent gets its own name.** `T` and `T_pad` are different numbers and the bugs live
@@ -96,8 +96,8 @@ Rules for the brackets:
   more than intended.
 
   ```python
-      x_hbm_ref,      # [B, T, D] f32    whole array, pl.ANY
-      x_vmem_ref,     # [tt, td] f32     one block, copied from x_hbm_ref
+  (x_hbm_ref,)  # [B, T, D] f32    whole array, pl.ANY
+  (x_vmem_ref,)  # [tt, td] f32     one block, copied from x_hbm_ref
   ```
 
 - **Dtype whenever it is not obvious, and always on scratch.** An f32 accumulator under bf16 inputs
@@ -105,8 +105,8 @@ Rules for the brackets:
 - **Note what the `index_map` did that the body cannot see**: permuted, padded, aliased.
 
   ```python
-      w_ref,          # [td, tn]  transposed by index_map; caller passes [N, D]
-      mask_ref,       # [tt, T_pad]  padded extent, not T
+  (w_ref,)  # [td, tn]  transposed by index_map; caller passes [N, D]
+  (mask_ref,)  # [tt, T_pad]  padded extent, not T
   ```
 
 No `Args:` docstring restating parameter names: the shape is the information, and a docstring is
@@ -163,6 +163,8 @@ axis (`"T t"`: query and key length); `#` = broadcastable against its namesake.
 def kernel(x_ref: jax.Array, o_ref: jax.Array): ...
 # Bad: correct but adds nothing the name did not
 def kernel(x_ref: jax.Ref, o_ref: jax.Ref): ...
+
+
 # Good: bare refs with shape comments, as in section 2
 ```
 
@@ -188,7 +190,7 @@ A single character is allowed only for:
 k = pl.program_id(2)
 
 # Good
-k_i = pl.program_id(2)          # which K tile
+k_i = pl.program_id(2)  # which K tile
 n_start = pl.program_id(1) * tn
 ```
 
@@ -244,7 +246,7 @@ buffer.
 Init and finalize sit at fixed positions, so a reader finds them without tracing control flow.
 
 ```python
-def kernel(x_ref, w_ref, o_ref, acc_scratch):   # shape comments elided here only
+def kernel(x_ref, w_ref, o_ref, acc_scratch):  # shape comments elided here only
   d_i = pl.program_id(2)
   tt, tn = o_ref.shape
 
@@ -253,7 +255,8 @@ def kernel(x_ref, w_ref, o_ref, acc_scratch):   # shape comments elided here onl
     acc_scratch[...] = jnp.zeros((tt, tn), jnp.float32)
 
   acc_scratch[...] += jnp.dot(
-      x_ref[...], w_ref[...], preferred_element_type=jnp.float32)
+    x_ref[...], w_ref[...], preferred_element_type=jnp.float32
+  )
 
   @pl.when(d_i == nd - 1)
   def _():

@@ -214,7 +214,9 @@ HBM refs. Inside, `emit_pipeline` configures a block pipeline and returns a func
 runs the pipeline:
 
 ```python
-pipeline = pltpu.emit_pipeline(inner_body, grid=..., in_specs=..., out_specs=...)
+pipeline = pltpu.emit_pipeline(
+  inner_body, grid=..., in_specs=..., out_specs=...
+)
 pipeline(x_hbm, w_hbm, o_hbm, scratches=(acc_vmem,))
 ```
 

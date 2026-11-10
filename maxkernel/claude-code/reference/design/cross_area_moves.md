@@ -76,12 +76,13 @@ Forms the answer takes (shapes to look for, not a list to walk):
    is never formed and a 2-D move becomes a scalar multiply.
 4. **Reassociate so the needed axis is already the contracting axis.** Same FLOPs, different
    output layout. Check numerical equivalence with `split_contraction_accuracy`.
-5. **Broadcast and repeat last, and on a leading axis.** Free on a leading axis, a real relayout on
-   sublane or lane, and interleaving is worse than blocking. Probes:
-   `expand_axis_leading_vs_sublane_vs_lane`, `expand_blocked_vs_interleaved`,
-   `elementwise_before_vs_after_expand`, `expand_before_vs_after_matmul`. **Tile alignment, not
-   just the axis, sets the cost**: a shift or split landing on a native-tile multiple is cheap, one
-   that does not is not — probe `lane_split_alignment`.
+5. **Broadcast and repeat last, and prefer the blocked form.** The cost of an expansion is set by
+   its spelling more than its axis: hypothesis: a blocked expansion is near-free on any axis, and
+   the interleaved form (e.g. `jnp.repeat` along a minor axis) is the one that costs. Probes:
+   `expand_blocked_vs_interleaved`, `expand_axis_leading_vs_sublane_vs_lane`,
+   `elementwise_before_vs_after_expand`, `expand_before_vs_after_matmul`. For a **roll**, tile
+   alignment can matter. For a **split**, hypothesis: the split point's alignment is not a lever;
+   verify with `lane_split_alignment` before restructuring to align one.
 6. **Spend FLOPs to buy layout** — licence reason 3, applied.
 7. **Do the move on the VPU**: iota mask × multiply × sum, when the XLU is the bottleneck and the
    VPU is not. Last resort. Probe: `degenerate_transpose_via_masked_sum`.
@@ -176,8 +177,10 @@ A TensorCore/SparseCore split feels like a fact, but the *schedule* is a decisio
 two units joined by a data dependence run back to back, and the idle unit is invisible in a profile
 of the busy one. Roofline both sides; one kernel's floor is not the block's floor.
 
-- One Pallas program hosting both a TensorCore and a SparseCore body is toolchain-dependent;
-  verify with `sc_tc_one_kernel_two_meshes` before planning a cross-unit handshake.
+- One Pallas kernel cannot host both a TensorCore and a SparseCore body (see
+  [sparsecore.md](sparsecore.md), "Piping SparseCore with the TensorCore"); the handoff between
+  units is never intra-kernel. Re-check with `sc_tc_one_kernel_two_meshes` after a toolchain
+  upgrade before planning a cross-unit handshake.
 - Whether two *independent* `pallas_call`s on different units overlap: `sc_tc_independent_overlap`,
   `sc_tc_overlap_vs_neighbour_kind`. Cost of handing a result across: `sc_tc_dependent_handoff`.
 - Where independent calls overlap, S6 is a **scheduling** problem whose work is removing the

@@ -1212,6 +1212,9 @@ def _sc_subcore_barrier_minimal() -> str:
   _GROUP,
   "sc_wide_get_vs_lane_loop",
   "Where a wide Get lowers, is it faster than the lane-group loop, or only shorter?",
+  # On some chips the wide spelling aborts the whole process (SIGABRT), which
+  # would take every later probe in a group run down with it.
+  destructive=True,
 )
 def _sc_wide_get_vs_lane_loop() -> str:
   """Times the wide spelling against the lane-group loop.

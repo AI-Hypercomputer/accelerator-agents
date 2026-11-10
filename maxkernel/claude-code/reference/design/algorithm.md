@@ -23,7 +23,7 @@ Related probes in other modules: `mxu_peak_by_dtype`, `vpu_fma_rate`, `mxu_block
 `dot_dtype_matrix` (what lowers on integer blocks and which `jnp.dot` dtype pairs are accepted);
 `xla_reference_vs_f64_oracle` (whether the reference is better than the kernel it judges);
 `dispatch_floor` (per-call and per-grid-step fixed cost). Run with
-`{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --pick <probe_name> --run_dir <run_dir>`.
+`tools/run_probe.py --pick <probe_name> --run_dir <run_dir>`.
 
 ---
 

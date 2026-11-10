@@ -25,7 +25,7 @@ description: >-
 Run any of them with:
 
 ```bash
-{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --pick <probe_name> --run_dir <run_dir>
+tools/run_probe.py --pick <probe_name> --run_dir <run_dir>
 ```
 
 Related probes owned elsewhere: `block_sublane_legality_by_dtype`, `vmem_limit_bytes_raises_ceiling`

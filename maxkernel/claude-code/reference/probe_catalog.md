@@ -45,17 +45,20 @@ Budget: at most four uncached probes per plan.
 
 ## How to run
 
+Paths below are relative to the MaxKernel root. Run the tool with the MaxKernel venv
+interpreter, exactly as the `run_probe` entry under Tool Usage in your agent prompt shows.
+
 List what exists (local, no TPU; imports the registry and prints it):
 
 ```bash
-{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --list
-{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --list --group partitioning
+tools/run_probe.py --list
+tools/run_probe.py --list --group partitioning
 ```
 
 Run one or more probes on the TPU (submitted through `tools/tpu_client.py`):
 
 ```bash
-{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py \
+tools/run_probe.py \
     --pick vmem_limit_bytes_raises_ceiling --pick dispatch_floor --run_dir <run_dir>
 ```
 

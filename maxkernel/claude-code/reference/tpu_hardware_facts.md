@@ -17,7 +17,7 @@ description: >-
 - **The file holds no measured numbers.** Any capacity, bandwidth, rate, latency or threshold
   comes from `pltpu.get_tpu_info()` / `plsc.get_sparse_core_info()` (`SparseCoreInfo`) read at run
   time, or from the named probe run on the target:
-  `{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --pick <probe_name> --run_dir <run_dir>`.
+  `tools/run_probe.py --pick <probe_name> --run_dir <run_dir>`.
   [probe_catalog.md](probe_catalog.md) lists every probe.
 - **Rules marked *toolchain-dependent*** must be re-verified by their probe on the current image
   (`software_versions` records the toolchain).
@@ -64,21 +64,26 @@ is its chiplet's, and it has no path to the other chiplet's HBM.
 | --- | --- |
 | theoretical peak, as reported | `get_tpu_info().mem_bw_bytes_per_second`: a rounded constant, not an achieved rate |
 | practical peak (after protocol and on-chip network overhead) | plateau of `hbm_bandwidth_arms`, `block_size_bandwidth_curve` |
-| SparseCore streaming, one core and all cores | `sc_vs_tc_streaming_bandwidth`, `sc_subcore_scaling` |
+| SparseCore streaming *achieved* at your access width, one core and all cores | `sc_vs_tc_streaming_bandwidth`, `sc_subcore_scaling`, `sc_gather_row_width_scaling`: an achieved rate, not a ceiling |
 | TensorCore and SparseCore reading concurrently | not established (§11) |
 
-- **Build the roofline on the achieved plateau, not the reported constant.** No transfer reaches
-  the reported peak. A design whose modelled bandwidth falls between the practical and theoretical
-  peaks is already over the ceiling, not running on thin headroom. The roofline method is in
+- **Build the roofline on the achieved plateau, not the reported constant.** The reported
+  constant is a rounded theoretical peak. hypothesis: no transfer reaches it, and a modelled
+  bandwidth between the measured plateau and the reported peak is already over the practical
+  ceiling; verify with `hbm_bandwidth_arms` on your chip. The roofline method is in
   [tpu_memory_overlapping.md](tpu_memory_overlapping.md) §1.
-- **A SparseCore's ceiling belongs to the unit, not the chiplet**: a command rate, not a data
-  rate, so wider accesses do not lift it. On SC-only work the binding constraint moves from unit to
-  memory system somewhere between one core and all of them.
-- **Read-modify-write is not priced at twice the one-way figure**: budget both streams' sum
-  against a measured concurrent read+write rate (this is how scatter-add is priced).
-- **Mixing TC and SC traffic on one stack costs more than either alone**, because the units use
-  different access sizes. The size of the penalty is unquantified, so price an overlap with a probe
-  (`sc_tc_independent_overlap`, `sc_tc_overlap_vs_neighbour_kind`), not by subtraction.
+- **SparseCore: keep the unit's ceiling and the achieved rate apart.** Unverified (vendor figures,
+  no probe): a SparseCore's hardware ceiling is a per-unit command limit rather than a data rate,
+  and sits far above typical achieved streaming. What the probes measure is the *achieved* rate,
+  which depends on access width: rows spanning many whole DMA granules achieve more than narrow
+  reads ([STRAT-MLA-06](strategies/STRAT-MLA-06-sparsecore-bandwidth-is-width-dependent.md)). Never
+  treat an achieved figure measured at one width as a ceiling for another.
+- **Read-modify-write**: unverified (vendor figure): a concurrent read+write stream may sustain
+  less than twice the one-way rate. Price scatter-add against a measured read+write rate, not by
+  doubling a one-way figure.
+- **Mixing TC and SC traffic on one stack**: unverified (vendor guidance, direction only): it may
+  cost more than either alone, because the units use different access sizes. Price an overlap with
+  a probe (`sc_tc_independent_overlap`, `sc_tc_overlap_vs_neighbour_kind`), not by subtraction.
 - **Check units before reconciling capacities** (vendor GiB vs decimal `hbm_capacity_bytes`);
   budget against what the runtime reports (`device_memory_stats`).
 
@@ -110,16 +115,18 @@ precision multiplies in bf16 on the MXU. A Pallas kernel that contracts on the V
 is reported against the kernel. Loosening the tolerance then ships a false claim about the wrong
 side. The tell: the kernel fails the XLA reference but matches an f64 oracle to many digits, which
 a broken kernel does not do.
-- Pin `Precision.HIGHEST` in any reference that contracts in f32. Also check the reference against
-  an f64 (numpy) oracle, so the wrong side is proven, not argued (`xla_reference_vs_f64_oracle`).
+- Pin `Precision.HIGHEST` in any reference that contracts in f32, but do not assume XLA honours it
+  (unverified; see §11): also check the reference against an f64 (numpy) oracle, so the wrong side
+  is proven, not argued (`xla_reference_vs_f64_oracle`).
 - **CPU interpret mode has no MXU and cannot catch this**: it passes locally and fails on
   hardware. Accumulator trade-offs: `accumulator_precision`,
   [design/layout_precision.md](design/layout_precision.md).
 
 ## 4. Sublane tiling and block legality
 
-**Sublane tiling is a closed form in jax source, not a measurement of the chip.** On recent
-generations, `jax/_src/pallas/mosaic/tpu_info.py:get_sublane_tiling` returns
+**Sublane tiling is a closed form in jax source, not a measurement of the chip.** For generation 7
+(the case that was verified; on other generations confirm with `sublane_tiling_is_a_formula`),
+`jax/_src/pallas/mosaic/tpu_info.py:get_sublane_tiling` returns
 `num_sublanes * (32 // bitwidth)`. With `num_sublanes = 8` that gives f32 → 8, bf16/f16 → 16,
 int8/fp8 → 32, int4 → 64.
 - Bitwidth is `dtypes.itemsize_bits`; recomputing `itemsize * 8` gets sub-byte dtypes wrong.
@@ -328,7 +335,8 @@ Read parameters from `SparseCoreInfo` at run time or measure them with the named
   `fetch_and_add` live in SMEM, so this budget binds them.
 
 **VMEM is banked, and conflicts serialize linearly in ways.** When a lane-private table's per-lane
-stride shares a factor with the bank count, every lane lands on one bank, and cost grows linearly
+stride shares a factor with the bank count, lanes fold onto fewer banks (onto a single bank when the
+stride is a multiple of the bank count), and cost grows linearly
 with the number of colliding ways. `SparseCoreInfo` does not declare the bank count; it was
 inferred from a conflict ladder. To check a kernel, time it with its lane-private stride and with
 stride + 1 at fixed work. Do not confuse the bank count with the subcore count. Rule:

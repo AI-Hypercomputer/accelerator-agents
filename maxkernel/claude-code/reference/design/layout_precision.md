@@ -15,7 +15,7 @@ asked for without noticing. Precision belongs here because choosing a dtype is c
 bytes cross HBM.
 
 Probes run with
-`{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --pick <probe_name> --run_dir <run_dir>`.
+`tools/run_probe.py --pick <probe_name> --run_dir <run_dir>`.
 
 ## Questions and probes
 
@@ -70,9 +70,10 @@ is wrong.
 
 ## Lane and sublane are not symmetric
 
-- **Lanes:** a block narrower than 128 lanes is padded to the lane width; whatever you did not ask
-  for, you paid for. Below the lane width the lane extent is effectively free, so a narrow trailing
-  dim is wasted bandwidth and wasted VPU work.
+- **Lanes:** hypothesis: below a threshold of a couple of lane widths, the lane extent is
+  effectively free, because a small block's cost is dominated by the fixed per-step cost rather
+  than by its bytes. Whatever you did not ask for, you paid for anyway: a narrow trailing dim does
+  not save time. Find the threshold on your chip with `native_tile_granularity`.
 - **Sublanes:** a short sublane extent wastes less per element, but still pays the per-step cost.
 - **Moves:** what costs is the permutation a move generates, not the axis it names. See
   "Arranging so the relayout never exists" below.
@@ -135,8 +136,8 @@ measures the reduction only, not a transpose to enable one.
 
 `mask_versus_pad` runs a ragged f32 array (rows not dividing the block) three ways: masked tail,
 same grid unmasked (control, isolates the iota-and-select cost), and padded to a multiple.
-Hypothesis: masking may beat padding, by a small margin, and both are near the control. **Mask**: it
-is about free and does not require owning the allocation. Do not restructure a call site to pad.
+Hypothesis: masking and padding are within noise of each other and of the unmasked control.
+**Mask**: it is about free and does not require owning the allocation. Do not restructure a call site to pad.
 
 Masking idioms:
 

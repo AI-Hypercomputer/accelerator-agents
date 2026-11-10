@@ -19,10 +19,10 @@ headroom or that you have none.
 **Mechanism.** Cost is paid per DMA granule (read the granule size from `SparseCoreInfo`), so a read
 touching part of a granule wastes the rest. Narrow or partial-granule reads sit at the bad end of the
 curve; a wide contiguous row is many whole granules and sits at the good end. The two regimes are the
-same hardware fact at different widths, which is why one number cannot serve both. The unit's
-hardware ceiling (see [tpu_hardware_facts.md](../tpu_hardware_facts.md)) is far above typical
-achieved figures, so hypothesis: no narrow-read measurement is close enough to the wall to serve as a
-roofline.
+same hardware fact at different widths, which is why one number cannot serve both. Hypothesis
+(the unit's ceiling is an unverified vendor figure; see [tpu_hardware_facts.md](../tpu_hardware_facts.md)
+§2): the hardware ceiling sits far above typical achieved figures, so no narrow-read measurement is
+close enough to the wall to serve as a roofline.
 
 **Scope.** SparseCore indirect reads. The mechanism — granule utilization sets achieved bandwidth — is
 general; any specific number is a property of one width, one geometry and one byte accounting. Settle

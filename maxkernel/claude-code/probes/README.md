@@ -26,8 +26,8 @@ Agents never call `run_probes.py` directly. They go through the MaxKernel tool, 
 job through `tools/tpu_client.py` to the TPU server on a GCE TPU VM:
 
 ```bash
-{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --list
-{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --pick <name> --run_dir <run_dir>
+tools/run_probe.py --list
+tools/run_probe.py --pick <name> --run_dir <run_dir>
 ```
 
 Each run is stamped with the live TPU type and toolchain. Results are cached under

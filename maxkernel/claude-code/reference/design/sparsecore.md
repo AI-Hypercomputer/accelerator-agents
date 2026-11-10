@@ -12,7 +12,7 @@ description: >-
 ## Questions and probes
 
 Run any probe with
-`{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --pick <probe_name> --run_dir <run_dir>`.
+`tools/run_probe.py --pick <probe_name> --run_dir <run_dir>`.
 Every answer below is toolchain-dependent. Re-run the probe on the current image before relying on
 an answer that came from another image. [../probe_catalog.md](../probe_catalog.md) lists every probe.
 
@@ -797,7 +797,8 @@ defensible ([algorithm.md](algorithm.md)). See
 [STRAT-SC-07](../strategies/STRAT-SC-07-distribution-sensitivity-is-a-conflict.md).
 
 **Mind the wave and the banks.** A wave of vector subcores costs as much as its longest row, and
-lane-private tables whose stride shares a factor with the bank count serialise. See
+lane-private tables whose stride shares a factor with the bank count fold onto fewer banks and
+serialise (onto one bank when the stride is a multiple of the bank count). See
 [STRAT-SC-05](../strategies/STRAT-SC-05-wave-longest-row.md),
 [STRAT-SC-06](../strategies/STRAT-SC-06-pad-scatter-stride-off-bank-count.md).
 

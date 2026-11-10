@@ -46,7 +46,7 @@ The job's operating points are its **cases**: the input sets `get_inputs()` in
    and toolchain. Record the axis and configuration, or the null hardens into a false constraint.
 8. **Learn every API from upstream.** Pallas and Mosaic APIs move between toolchains, and a
    remembered signature is the most common source of wasted compiles. Find a working example with
-   `{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/search_api.py -- "<api_name>"` and copy its shape.
+   `tools/search_api.py -- "<api_name>"` and copy its shape.
 9. **Upstream is an example, not an oracle.** jax and tokamax kernels target other generations,
    dtypes and shapes. Take the mechanism, the API usage and the test structure; re-derive the buffer
    arithmetic for this job.

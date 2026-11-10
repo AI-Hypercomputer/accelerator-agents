@@ -27,7 +27,7 @@ Related probes in other modules: `smem_scratch_bisect` (module `partitioning`: h
 scalars fit in an SMEM scratch), `traced_dma_offset_by_dtype`, `traced_dma_length` and
 `dynamic_index_lane_versus_sublane` (module `hardware`: which runtime values a DMA or index accepts),
 `dispatch_floor` (per-call and per-step fixed cost). Run with
-`{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --pick <probe_name> --run_dir <run_dir>`.
+`tools/run_probe.py --pick <probe_name> --run_dir <run_dir>`.
 
 **Scope.** Scalar and index metadata, and grid-invariant tables: tile counts, group offsets, block
 masks, sequence-to-tile maps, index arithmetic derived from shapes. Whether to keep a *tensor*
@@ -113,8 +113,8 @@ Level 4 needs scratch to survive across grid steps (it is allocated per `pallas_
 step); confirm with `scratch_persists_across_grid_steps`. Had it been false, the pattern would read
 stale-but-plausible values rather than fail.
 
-**What level 4 buys:** no extra HLO op, no transfer, no reliance on CSE, metadata available from
-grid step zero. **What it costs:** a sequential scalar loop at the head of every invocation.
+**What level 4 buys:** no extra HLO op, no transfer, no reliance on CSE, metadata available to the
+body and to `index_map`s from grid step zero. **What it costs:** a sequential scalar loop at the head of every invocation.
 
 ### Level 5 — what not hoisting costs
 
@@ -142,7 +142,7 @@ folded, so the probe then underestimates the cost for metadata derived from runt
   - level 3 is easier to write, test and read, composes with jax, and parallelizes prefix sums in
     XLA — prefer it once the entry count is large enough that the scalar-loop slope matters;
   - level 4 removes the dependence on CSE and on operand plumbing, and keeps metadata available to
-    the body without extra prefetch operands.
+    the body and to `index_map`s without `num_scalar_prefetch`.
 
 ---
 
@@ -245,8 +245,8 @@ operand:
 2. **Place it at the outermost level that axis allows.** Static shapes and config only → level 1,
    memoized if rebuilt per layer. Weights → level 2 (say so even if out of scope). This call's data →
    level 3 or 4.
-3. **Between 3 and 4, do not decide on speed at modest sizes.** Decide on: does an `index_map` need
-   it; is CSE across layers load-bearing (4 does not depend on it); is the entry count large enough
+3. **Between 3 and 4, do not decide on speed at modest sizes.** Both levels can feed
+   `index_map`s. Decide on: is CSE across layers load-bearing (4 does not depend on it); is the entry count large enough
    that the per-scalar fill slope (`smem_scalar_fill_cost`) argues for XLA's parallel build (3).
 4. **Hoist the value you consume, not the intermediate.** If the kernel consumes a scalar, hoist the
    scalar.

@@ -22,7 +22,7 @@ description: >-
 Run any of them with:
 
 ```bash
-{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --pick <probe_name> --run_dir <run_dir>
+tools/run_probe.py --pick <probe_name> --run_dir <run_dir>
 ```
 
 The mechanics of fusion across the Pallas/XLA boundary (the fuser API, `allow_input_fusion`,

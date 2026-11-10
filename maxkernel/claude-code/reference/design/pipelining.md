@@ -17,7 +17,7 @@ not repeat it.
 Every quantity below that depends on the chip or the toolchain is a probe, not a number. Run it with
 
 ```bash
-{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --pick <probe_name> --run_dir <run_dir>
+tools/run_probe.py --pick <probe_name> --run_dir <run_dir>
 ```
 
 ## Questions and probes
@@ -77,8 +77,8 @@ and reports the fraction of the ceiling at each size. From it, read two values f
 
 The block-size target is therefore a range, not a maximum. Size every operand block above the knee,
 stop at the plateau, and check the double-buffered total against the VMEM budget in
-[`partitioning.md`](partitioning.md). Past the VMEM ceiling the call fails at run time rather than
-slowing down.
+[`partitioning.md`](partitioning.md). Past the VMEM ceiling the kernel fails to compile (a scoped-VMEM
+out-of-memory error) rather than slowing down.
 
 The curve is measured on a pure copy. A kernel with compute in each step may reach the knee at a
 different size, because the transfer has more to hide behind (see Gaps).

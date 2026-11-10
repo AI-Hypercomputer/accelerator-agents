@@ -312,7 +312,7 @@ def _build_topk(n: int, k: int):
       for round_index in range(4):
         shift = 24 - 8 * round_index
 
-        @pl.loop(0, 16)
+        @pl.loop(0, 256 // vec)
         def _(c):
           hist[pl.ds(c * vec, vec)] = jnp.zeros(vec, jnp.int32)
 
@@ -339,7 +339,7 @@ def _build_topk(n: int, k: int):
         smem[_RUN] = jnp.int32(0)
         smem[_FOUND] = jnp.int32(255)
 
-        @pl.loop(0, 16)
+        @pl.loop(0, 256 // vec)
         def _(c):
           h = hist[pl.ds(c * vec, vec)]
           inclusive = plsc.cumsum(h) + smem[_RUN]
@@ -356,7 +356,7 @@ def _build_topk(n: int, k: int):
         # is what the next round refines.
         smem[_COUNT] = jnp.int32(0)
 
-        @pl.loop(0, 16)
+        @pl.loop(0, 256 // vec)
         def _(c):
           h = hist[pl.ds(c * vec, vec)]
           above = (c * vec + lane) < smem[_FOUND]

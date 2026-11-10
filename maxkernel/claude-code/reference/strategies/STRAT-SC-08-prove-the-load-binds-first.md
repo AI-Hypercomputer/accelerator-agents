@@ -23,8 +23,9 @@ does not exist, and that invented headroom is usually what made the lever look w
 **Scope.** General as a gating rule. On SparseCore, streaming bandwidth is shared by all subcores —
 there is no per-subcore escape hatch — and achieved bandwidth depends on row width (see
 [STRAT-MLA-06](STRAT-MLA-06-sparsecore-bandwidth-is-width-dependent.md)). An achieved bandwidth is
-not a ceiling: price it against the rated figure for the **same scope** (per core vs per chip) from
-[tpu_hardware_facts.md](../tpu_hardware_facts.md), never an aggregate against one core.
+not a ceiling. Compare it only with a figure for the **same scope** (per core vs all cores), never
+an aggregate against one core; the unit's own ceiling is an unverified vendor figure, not something
+the probes measure (see [tpu_hardware_facts.md](../tpu_hardware_facts.md) §2).
 Hypothesis: on a compute-bound SparseCore kernel `emit_pipeline` and a hand-rolled double buffer are
 indistinguishable; verify on the target (probes `emit_pipeline_vs_blockspec_grid` and
 `manual_dma_vs_managed` ask the TensorCore version of this question). When several transfer arms all move together, suspect a shared confound

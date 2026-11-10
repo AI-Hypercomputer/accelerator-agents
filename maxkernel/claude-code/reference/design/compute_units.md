@@ -24,7 +24,7 @@ Related probes in other modules: `tpu_info_reported_constants` and `tpu_info_sca
 `native_matmul_dtype_matrix` and `f32_default_is_one_bf16_pass` (which dtype pairs are native, what
 `DEFAULT` precision does to f32), `arithmetic_intensity_crossover` (where a kernel stops being
 bandwidth-bound). Run any of them with
-`{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --pick <probe_name> --run_dir <run_dir>`.
+`tools/run_probe.py --pick <probe_name> --run_dir <run_dir>`.
 
 **Scope.** This file is about *placement and cost models*: which unit, what a pass costs, what the
 design should compute before writing code. The mechanics of driving the MXU once work is placed on
@@ -133,8 +133,9 @@ fit that shape and have not been separated:
 - at that row count the matmul is not compute-bound, and every arm is measuring operand movement
   or a fixed per-call cost (would give bumps and non-monotonicity).
 
-What survives either reading, and is what a plan acts on: **at a full row block, widening K or N
-toward a few times `mxu_column_size` is nearly free; take the larger extent.** It is also why
+What survives either reading, and is what a plan acts on: **at a full row block, hypothesis: widening K or N
+up to about twice `mxu_column_size` is nearly free (the largest width checked); take the larger
+extent, and probe before going wider.** It is also why
 production kernels put a floor of a small multiple of `mxu_column_size` under the N tile "to avoid
 stalling the MXU", and why shrinking a K or N tile below `mxu_column_size` to save VMEM is rarely
 worth it. Verify at the kernel's shape with `mxu_contraction_and_column_granularity`; the probe

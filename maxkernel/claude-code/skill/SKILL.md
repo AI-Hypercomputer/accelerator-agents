@@ -41,7 +41,16 @@ All project resources must be referenced by absolute path:
     `{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md`,
     `{{MAXKERNEL_ROOT}}/reference/tpu_mxu_and_register_optimization.md`,
     `{{MAXKERNEL_ROOT}}/reference/tpu_profiling_and_diagnostics.md`,
-    `{{MAXKERNEL_ROOT}}/reference/pallas_xla_interaction.md`
+    `{{MAXKERNEL_ROOT}}/reference/pallas_xla_interaction.md`,
+    `{{MAXKERNEL_ROOT}}/reference/tpu_hardware_facts.md`,
+    `{{MAXKERNEL_ROOT}}/reference/kernel_design_method.md`,
+    `{{MAXKERNEL_ROOT}}/reference/probe_catalog.md`,
+    `{{MAXKERNEL_ROOT}}/reference/pallas_code_style.md`,
+    `{{MAXKERNEL_ROOT}}/reference/design/` (one design reference per topic) and
+    `{{MAXKERNEL_ROOT}}/reference/strategies/INDEX.md` (strategy rules)
+*   Hardware probes (run by the planning, compile-fix and profiling agents to
+    measure a hardware or toolchain fact on the target instead of assuming it):
+    `{{MAXKERNEL_ROOT}}/tools/run_probe.py`, suite in `{{MAXKERNEL_ROOT}}/probes/`
 *   Job file format — the declaration a run starts from, and the seven
     contradictions the validator rejects:
     `{{MAXKERNEL_ROOT}}/docs/job-spec.md`,

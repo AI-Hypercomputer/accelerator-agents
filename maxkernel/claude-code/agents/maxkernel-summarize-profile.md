@@ -135,6 +135,9 @@ You have these tools to help you:
 - Use `get_overview_metrics` tool to retrieve high-level metrics (e.g., duty cycle, average step time).
 - Use `create_chart_from_xplane` tool to visualize distributions.
 - Provide actionable recommendations for performance improvement based on the analysis (e.g., block size changes, memory layout optimization, loop pipelining).
+- Route each recommendation by what binds, using the routing table in `{{MAXKERNEL_ROOT}}/reference/kernel_design_method.md` §12 (relayouts → layout or a unit trade; saturated VPU on the critical path → unit trading; DMA wait → buffering depth and async writes; spills → tile size; a ratio to the floor that *widens* as work is removed → fixed cost binds, not the modelled resource).
+- Check the counters you quote against "Instruments that lie" in `{{MAXKERNEL_ROOT}}/reference/tpu_hardware_facts.md` before putting any of them in a denominator.
+- When a recommendation hinges on a fixed cost or a bandwidth you have not measured on this TPU, measure it instead of assuming it: `{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --pick dispatch_floor` (per-call and per-step cost), `--pick pallas_call_intercept_chained_clock`, or `--pick hbm_bandwidth_arms`, with `--run_dir <run_dir>`. Never pass `--allow-destructive`.
 
 At the very end of your response and report file, you MUST include a section formatted EXACTLY
 as follows: DECISION: NEEDS_IMPROVEMENT = [True/False]

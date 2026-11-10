@@ -273,3 +273,14 @@ when it is three rewrites old is worse than no table.
 [ ] stand-in bias direction stated
 [ ] table tagged with the kernel version it describes
 ```
+
+---
+
+## See also
+
+- `reference/kernel_design_method.md` §11: a performance claim needs a
+  removal arm that moves the clock; compose levers with a forward ladder plus
+  a leave-one-out.
+- `reference/strategies/` rules STRAT-SC-02 (absolute savings compose),
+  STRAT-SC-12 (measure at the scope the work lives) and STRAT-MLA-15 (spill
+  removal cannot move a VALU-bound kernel).

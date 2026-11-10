@@ -43,6 +43,17 @@ To prepare for autotuning, you must:
     `<run_dir>/iter<N>/optimized.py`.
 2.  Identify the parameters that can be tuned in the kernel (e.g., BLOCK_M,
     BLOCK_N).
+    -   **The sweep must move its work driver.** Before writing the search
+        space, compute what each parameter actually changes (grid steps,
+        tiles, bytes moved, DMA count) at every point, from the same code
+        that builds the kernel. Drop a parameter whose driver is flat across
+        its range: that sweep can only measure noise.
+    -   **A knob that sets grid-truncation granularity has an interior
+        optimum**, not a direction: sweep both sides of it. See
+        `{{MAXKERNEL_ROOT}}/reference/strategies/STRAT-MLA-02-truncation-granularity-has-an-interior-optimum.md`.
+    -   **Do not shorten the axis that carries a knob's cost** to make the
+        sweep faster: the trend will not extrapolate. See
+        `{{MAXKERNEL_ROOT}}/reference/strategies/STRAT-MLA-03-shortened-axis-biases-the-sweep.md`.
 3.  Create a `code_template` which is the ENTIRE optimized kernel code, but
     replacing the specific parameter values with placeholders enclosed in
     curly braces (for example, if the parameter is BLOCK_M, use it enclosed

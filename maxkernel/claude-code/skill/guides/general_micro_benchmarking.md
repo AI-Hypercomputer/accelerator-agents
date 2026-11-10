@@ -366,3 +366,18 @@ decision. The disappointment is not.
 [ ] chained timings verified idempotent, and not slower than unchained
 [ ] table records date, kernel version, and what decision it changes
 ```
+
+---
+
+## See also
+
+- `reference/kernel_design_method.md` §11: the measurement rules for TPU
+  kernels (build every callable before the timing loop; barrier the loop
+  carry and check the custom-call count; same artifact and same surrounding
+  work in every arm; predictions frozen before dispatch; a sweep must move
+  its driver).
+- `reference/strategies/` rules STRAT-SC-03, STRAT-MLA-04 (chained clocks),
+  STRAT-SC-10 (arms that agree share a confound) and STRAT-SC-13 (gate the
+  estimator, not the samples).
+- `reference/probe_catalog.md`: ready-made probes for common hardware
+  questions, run with `tools/run_probe.py`.

@@ -160,6 +160,8 @@ Implement the optimized Pallas kernel by:
 2.  **Reading** the reference baseline (`<run_dir>/base.py`), the starting point named by the plan's `Optimization Base Choice:` line (see **Source Kernel** above), and the shared test harness (`<run_dir>/test_kernel.py`) to confirm the exact inputs/shapes/static args your `computation` function must accept
 3.  **Implementing** the optimizations specified in the plan
 4.  **Following** the exact specifications from the plan (block sizes, grid configuration, memory layout, etc.)
+5.  **Writing it in the house style** of `{{MAXKERNEL_ROOT}}/reference/pallas_code_style.md`: name dimensions once, shape comments, extents derived from refs, and hardware constants read from `pltpu.get_tpu_info()` / `pltpu.get_sublane_tiling(dtype)` at run time, never hardcoded
+6.  **Auditing affordances** against the plan's Section 8: every affordance the plan marks `planned` (double-buffered critical-path transfers, async writes waited as late as possible, a narrower tail-tile path, hoisted per-call setup, a resident accumulator, `parallel` semantics on independent axes, scalar-prefetched indices) must be visible in your code. An affordance declared `planned` and missing from the code is a bug; see `{{MAXKERNEL_ROOT}}/reference/kernel_design_method.md` §6 and §10
 
 ### Critical Requirements
 
@@ -273,6 +275,11 @@ these Mosaic lowering constraints:
     respectively, or that they match the array dimensions exactly.
 -   **Rank Constraint**: The Pallas TPU lowering supports only blocks of rank
     **>= 1**. Do not generate zero-dimensional blocks.
+-   **More legality rules**: what may be a runtime value (DMA extents and
+    offsets, lane vs sublane indices), when a DMA must be waited, and
+    SparseCore memory-space rules are in
+    `{{MAXKERNEL_ROOT}}/reference/tpu_hardware_facts.md`. For a SparseCore
+    kernel, read `{{MAXKERNEL_ROOT}}/reference/design/sparsecore.md` first.
 
 ### Important Notes
 
@@ -413,6 +420,8 @@ Before you call `write_to_file`, verify your implementation has:
     and `computation = training_step(forward_pass, backward_pass)`
 -   ✅ Comprehensive shape and memory annotations
 -   ✅ Follows exact specifications from the plan
+-   ✅ Every affordance the plan marks `planned` is present in the code
+-   ✅ No hardcoded hardware constants (lane width, sublane tiling, VMEM size)
 -   ✅ Includes a `main()` function for testing
 
 **REMEMBER: The validation loop depends on seeing raw compilation errors. Do not

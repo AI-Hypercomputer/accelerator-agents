@@ -44,11 +44,36 @@ All artifacts for this task are strictly confined within `<run_dir>`:
 *   Shared test harness: `<run_dir>/test_kernel.py`
 *   Target plan output: `<run_dir>/iter<N>/kernel_plan.md`
 
+**Baseline characterization — measured once, in Phase 0.95, before any
+optimization, and load-bearing for every iteration** (`<run_dir>/baseline/`):
+
+*   `baseline_measurements.json` — per-case latency of `base.py` on this TPU
+*   `profile_summary.md` + `profile_metrics.json` + `hlo_dump.txt` — per-case
+    per-XLA-op device time, and what the compiler actually emitted
+*   `floor.json` — compute-only, transfer-only, floor, gap, binding half
+*   `attribution.json` — ranked cost breakdown of the binding half, plus the
+    calibrated vector rate ("the ruler")
+*   `microbenchmarks.json` — the dispatch floor measured at this kernel's
+    arity, the HBM bandwidth plateau (taken from `run_probe`'s
+    `hbm_bandwidth_arms`), isolated rates for
+    the components attribution handed off, and any optimization direction a
+    control arm already killed
+*   `roofline.json` — per-case roofs (bandwidth against the measured plateau as
+    well as the spec figure), bound classification, pass count, and the
+    **target range** that is this run's stopping rule
+
 If iteration `N > 1`:
 *   Previous plan: `<run_dir>/iter<N-1>/kernel_plan.md`
 *   Previous optimized kernel: `<run_dir>/iter<N-1>/optimized.py`
-*   Previous autotune summary: `<run_dir>/iter<N-1>/autotune_summary.md` (if present)
 *   Previous profile summary: `<run_dir>/iter<N-1>/profile_summary.md` (if present)
+*   Previous floor: `<run_dir>/iter<N-1>/floor.json` — **present only if
+    iteration `N-1`'s change was kept.** A rejected change did not move the
+    kernel, so no floor was re-measured; the most recent floor is then the last
+    kept one. Find it by walking `state.history` backwards.
+*   Previous gap probe: `<run_dir>/iter<N-1>/gap_probe.json` (if the gap was
+    large enough to trigger one)
+*   Previous autotune summary: `<run_dir>/iter<N-1>/autotune_summary.md` (if a
+    trigger fired)
 
 
 --------------------------------------------------------------------------------
@@ -163,15 +188,126 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
         only works for the exact numbers the harness happens to use. The
         harness's job is to sample representative cases, not to define the
         universe of valid inputs.
-3.  **Baseline Architectural Analysis & First-Principles Protocol (for NEW plans):**
-    For iteration 1, calculate theoretical arithmetic intensity (FLOPs/byte) using Section 1 of `{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md` and check against target TPU hardware limits. Adhere to Mosaic vector layout rules in Section 2 of `{{MAXKERNEL_ROOT}}/reference/tpu_mxu_and_register_optimization.md` (e.g. tiling last two dimensions to $8 \times 128$ VREGs, avoiding trailing singleton dimensions).
-    
-    Before finalizing tile choices, execute the **First-Principles Analysis**:
+3.  **Start from the measured baseline characterization — not from first principles.**
+
+    This is the most important instruction in this document, and it applies to
+    NEW and REVISION plans alike. Before this loop reached you, Phase 0.95
+    measured this exact kernel on this exact TPU: per-case latencies, a per-op
+    profile, a floor, an attribution breakdown, calibrated rates, and a
+    roofline. **Read all of `<run_dir>/baseline/` before you theorize.** A plan
+    that reasons from the hardware datasheet while a measurement of the same
+    quantity sits unread on disk is the failure mode this phase exists to
+    prevent.
+
+    Read `{{MAXKERNEL_ROOT}}/skill/guides/general_profile_reasoning.md` in
+    full. It is the specification for how you turn those numbers into the next
+    experiment. The condensed form:
+
+    > **The hypothesis lives in the discrepancy, not in the magnitude.**
+
+    *"This matmul costs 175 µs"* suggests only "do fewer matmuls" — the wrong
+    fix when the volume is already minimal. *"This matmul costs 175 µs where the
+    identical shape costs 76 µs standing alone"* is a ~100 µs discrepancy that
+    must have a cause, and the search for that cause is a real experiment with a
+    real outcome.
+
+    So every time a measurement localizes a cost, establish what that cost
+    **ought** to be. Three sources of "ought", in increasing cost:
+    1.  an analytic bound — already computed for you in `roofline.json`. Free.
+    2.  the same shape measured in isolation — already in
+        `microbenchmarks.json` for whatever attribution handed off. Minutes, if
+        you need another.
+    3.  an earlier measurement of the same quantity under different conditions —
+        free if it was kept, which is why `state.history` and the per-iteration
+        `floor.json` files exist.
+
+    **The reasoning moves, in the order they pay off:**
+
+    *   **Validate the instrument before reasoning from it.** Check the
+        dispatch floor in `microbenchmarks.json` against the magnitudes you are
+        about to discriminate between. If the effect you want to chase is
+        smaller than the floor, it is invisible to this setup and planning
+        around it is wasted. A common failure is to discover the metric is
+        inadequate and respond by *building* a replacement without first
+        checking what the environment already provides — inventory
+        `<run_dir>/baseline/` and `<run_dir>/probes/` before proposing new
+        measurement.
+    *   **Read which half binds, and honour the prohibition.** `floor.json`'s
+        `label` gives you a direction *and* an explicit prohibition. The
+        prohibition is worth as much as the direction: knowing the kernel is
+        compute-bound is what justifies not touching the fetch path, and the
+        discipline to honour that is where the time is saved.
+    *   **Chase the largest unexplained residual.** Subtract what
+        `attribution.json` prices from the binding half. Enumerate what could
+        plausibly fill what remains. Stop when the residual falls below the size
+        of what you are already working on.
+    *   **Price the localized cost against a reference — the hinge.** Take the
+        largest attributed component and divide its in-situ cost by its isolated
+        cost. **The ratio, not the magnitude, is what you act on:**
+
+        | ratio | meaning | next |
+        |---|---|---|
+        | ≈ 1× | the cost is intrinsic | reduce the work, or accept it |
+        | 2–3× | the formulation is wrong | find what differs *in situ* — operand layout, dependency structure, surrounding code |
+        | ≫ 5× | something structural is badly broken | look for serialization, spills, or a pathological access pattern |
+
+    *   **Read the absence of a discrepancy — the highest-value move, because it
+        kills work rather than creating it.** If `microbenchmarks.json`'s
+        `killed_directions` is non-empty, those directions are closed: a control
+        arm in which the component cost *literally nothing* came within a few
+        percent of the status quo, which bounds the entire optimization
+        direction regardless of how large that component's attributed cost was.
+        **Do not plan into a killed direction.** If you believe one should be
+        reopened, say why, in writing, with the number you dispute.
+    *   **Compare the same quantity across configurations** to detect *coupled
+        knobs*. If a transfer-only floor got worse at a smaller block size while
+        compute got better, one parameter is being asked to satisfy two opposing
+        constraints. The hypothesis that follows is not "pick a better value"
+        but **"split the knob"** — decouple the two granularities so each can be
+        set independently.
+    *   **When a prediction fails, name and quantify the missing term.** Do not
+        discard the model. Divide the unexplained time by the count of whatever
+        the change multiplied; a figure like "≈63 ns per request issue" is a
+        reusable constant that constrains every later decision. The
+        disappointment is the least interesting part of the result.
+
+    **Refutation is progress.** Most links in a good reasoning chain are
+    refutations, and each has its own follow-up: a cheap hypothesis refuted
+    cheaply means stop theorizing in that direction; an ablation that finds no
+    culprit means **change the class of explanation** (if no code change
+    explains a regression, suspect the *parameters* — a tuning table calibrated
+    for the old cost model is now stale); and two or three consecutive
+    experiments returning ≤1% is a stop signal, *if* they were against distinct
+    hypotheses.
+
+    **Audit your own chain before writing the plan.** Four weaknesses, all
+    easier to see in someone else's reasoning:
+    *   a conclusion resting on a single comparison — if one number carried a
+        redirect, it deserved a second measurement;
+    *   a conclusion resting on a model later shown to be incomplete — the
+        omission does not politely confine itself to the result that exposed it;
+    *   **a residual attributed to a mechanism that was never probed** — the most
+        common form of a sentence that reads like a finding and is an assertion.
+        Name the mechanisms tested and the ones not;
+    *   a breakdown that stopped being refreshed (see REVISIONS step 3).
+
+3a. **Apply the hardware envelope as a constraint on the design, not as its
+    source.** Once the measurements have told you *what* to change, these bound
+    *how* you may express it. Adhere to Mosaic vector layout rules in Section 2
+    of `{{MAXKERNEL_ROOT}}/reference/tpu_mxu_and_register_optimization.md`
+    (e.g. tiling last two dimensions to $8 \times 128$ VREGs, avoiding trailing
+    singleton dimensions), and check every tiling choice against the following.
+
+    Note the ordering. `roofline.json` already classified each case as
+    memory-bound / compute-bound / latency-bound **from measurements**; do not
+    re-derive that classification from the operation's name. A case the roofline
+    marked latency-bound at ≥20× its largest roof will not respond to tiling at
+    all — it is paying fixed per-grid-step cost, and the plan for it is to
+    coarsen the grid, not to align it better. Use arithmetic intensity (Section 1
+    of `{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md`) to explain or
+    check that classification, never to replace it.
+
     *   **Access Efficiency (bytes touched vs. bytes needed)**: For each array, compare the bytes the kernel needs with the bytes in the tiles it touches (Section 1.D of `{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md`). Indexed, strided or column access, a last dim < 128, and partial tiles waste bandwidth. If touched is much larger than needed, use it in the intensity estimate and evaluate a layout change before tuning tile sizes; for dense, contiguous access, note "~1×" and move on.
-    *   **Roofline Bound Classification**: Categorize the operation:
-        - *Memory-Bandwidth Bound* (FlashAttention, Softmax, LayerNorm, GQA): Bottleneck is HBM traffic. Minimize HBM rounds, maximize VMEM residency, double-buffer DMA.
-        - *Compute Bound* (GEMM, Dense Matmul): Bottleneck is MXU arithmetic throughput. Align matmul tile dimensions to the target's MXU size (128 on v5e/v5p, 256 on v6e/v7x), maximize accumulator reuse in VMEM.
-        - *Dispatch / Latency Bound* (small sequence lengths, high grid counts): Coarsen grid, reduce tile count.
     *   **Hardware Envelope Constraints** — take every number from the
         **TPU Hardware Context** table at the end of this file for the target's
         `tpu_version`; do not assume v6e:
@@ -180,26 +316,74 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
         - *VMEM Capacity*: two numbers matter. The **physical** VMEM per TensorCore is the hard wall; the **default scoped limit** is what Mosaic allows when the kernel does not set `pltpu.CompilerParams(vmem_limit_bytes=...)`. A plan whose working set exceeds the default scoped limit must say so and set `vmem_limit_bytes` explicitly, leaving headroom below the physical wall for Mosaic's internal scratch.
         - *DMA Double-Buffering*: Pallas double-buffers every pipelined `BlockSpec` operand by default, so each block costs 2× its size in VMEM.
     *   **Analytical VMEM Sizing Equation**:
-        Explicitly calculate the tile memory footprint in your plan:
+        Explicitly calculate the tile memory footprint in the *Memory Layout and Tiling* section of your plan:
         $$\text{Total Tile VMEM} = 2 \times \sum_{\text{pipelined blocks}} (\text{Block Dimension Product} \times \text{sizeof}(\text{dtype})) + \sum \text{scratch} \le \text{VMEM budget}$$
         where the VMEM budget is the target's default scoped limit, or the
         `vmem_limit_bytes` the plan sets (which must stay below physical VMEM).
-    *   **Formulate Falsifiable Hypothesis**: State the exact mechanism (e.g. *"By tiling M=128, K=128 and keeping accumulator in VMEM across K-iterations, HBM traffic is reduced by 4.2x"*).
-    *   **Design Method & Hardware Facts**: Read `{{MAXKERNEL_ROOT}}/reference/tpu_hardware_facts.md` whole, then `{{MAXKERNEL_ROOT}}/reference/kernel_design_method.md`, then `{{MAXKERNEL_ROOT}}/reference/strategies/INDEX.md` and open only the strategy rules whose row matches this kernel. Work the method's sections into the plan's required **Section 8** (cost classes, affordances, unit trading, the 16 contract questions, facts needed). For each bottleneck you identify, also read its design reference under `{{MAXKERNEL_ROOT}}/reference/design/` (see Reference Guides).
+    *   **Design Method & Hardware Facts**: Read `{{MAXKERNEL_ROOT}}/reference/tpu_hardware_facts.md` whole, then `{{MAXKERNEL_ROOT}}/reference/kernel_design_method.md`, then `{{MAXKERNEL_ROOT}}/reference/strategies/INDEX.md` and open only the strategy rules whose row matches this kernel. Work the method's sections into the plan's required **Section 10** (cost classes, affordances, unit trading, the 16 contract questions, facts needed). For each bottleneck you identify, also read its design reference under `{{MAXKERNEL_ROOT}}/reference/design/` (see Reference Guides).
     *   **Facts Needed — measure, never assume**: Any hardware or toolchain number the plan depends on (VMEM ceiling, per-call or per-step cost, achieved bandwidth, whether a construct lowers) comes from a probe run in this environment, not from memory or a past run. Find the probe in `{{MAXKERNEL_ROOT}}/reference/probe_catalog.md` and run it with `run_probe` (see Tool Usage). At most 4 uncached probes per plan; cached results are free. Cite each answer by its file under `<run_dir>/probes/`.
 
 **For REVISIONS / NEXT ITERATION Plans:**
 
-1.  **Read previous artifacts:** Use `Read` to read `<run_dir>/iter<N-1>/kernel_plan.md`, `<run_dir>/iter<N-1>/optimized.py`, `<run_dir>/iter<N-1>/autotune_summary.md` (if exists), and `<run_dir>/iter<N-1>/profile_summary.md` (if exists). If the **Decide Optimization Base** step (item 4 below) reverts to an earlier iteration `iter<k>` (`k < N-1`) instead of building on `iter<N-1>`, also `Read` `<run_dir>/iter<k>/optimized.py` and `<run_dir>/iter<k>/kernel_plan.md`.
+1.  **Read previous artifacts:** Use `Read` to read `<run_dir>/iter<N-1>/kernel_plan.md`, `<run_dir>/iter<N-1>/optimized.py`, `<run_dir>/iter<N-1>/profile_summary.md`, `<run_dir>/iter<N-1>/floor.json`, `<run_dir>/iter<N-1>/gap_probe.json` and `<run_dir>/iter<N-1>/autotune_summary.md` — each if it exists. Which of them exist is itself information: a missing `floor.json` means the change was **rejected**, a missing `gap_probe.json` means the gap did not warrant probing, and a missing `autotune_summary.md` means no tuning trigger fired. If the **Decide Optimization Base** step (item 4 below) reverts to an earlier iteration `iter<k>` (`k < N-1`) instead of building on `iter<N-1>`, also `Read` `<run_dir>/iter<k>/optimized.py` and `<run_dir>/iter<k>/kernel_plan.md`.
 2.  **Review execution results & compare target vs. actual performance:**
     - Analyze status entries in `<run_dir>/state.json` to identify what failed or what performance bottlenecks remain.
     - **Compare Expected Target vs. Actual Performance**:
-      - Extract the **expected target speedup and latency** projected in the previous iteration's plan (`<run_dir>/iter<N-1>/kernel_plan.md` under Section 6: *Expected Performance Impact*).
+      - Extract the **expected target speedup and latency** projected in the previous iteration's plan (the *Expected Performance Impact* section of `<run_dir>/iter<N-1>/kernel_plan.md` — Section 8 in the current format).
       - Extract the **actual measured speedup and latency** from the `state.history` entry for iteration `N-1` in `<run_dir>/state.json` — fields `base_time_ms`, `optimized_time_ms` and `speedup`. The worker records these straight from the test harness's STDOUT, so they are authoritative. Treat `<run_dir>/iter<N-1>/profile_summary.md` as commentary on those numbers, not as a second source for them.
       - Compare expected vs. actual metrics, quantify the performance delta/gap (e.g. expected 2-5x speedup vs. actual 1.35x speedup), and evaluate whether the optimization hypothesis held or fell short.
       - Identify the root architectural cause for any shortfall (e.g. unexpected memory transfer overhead, unhidden systolic array draining latency, or register spills) to directly drive the revised plan.
-3.  **Profile Summary Analysis & Bottleneck Diagnosis:**
-    When `<run_dir>/iter<N-1>/profile_summary.md` is available, you MUST analyze it following the guide below to classify the performance bottleneck and consult the appropriate optimization guide:
+3.  **Re-read the floor and the gap. Never carry a classification forward.**
+
+    Any label derived from a measurement — *compute-bound*, *the bottleneck is
+    the unpack*, *this cause is refuted* — describes **one kernel state**. It
+    expires the moment the kernel changes, and the binding half in particular
+    flips for non-obvious reasons: a pure tuning-parameter change that touches
+    neither the arithmetic nor the transfer code can cut compute enough to hand
+    the constraint to the other side. In one representative trajectory:
+
+    ```
+    state A    compute 311.2   transfer 253.6   -> compute-bound
+    state B    compute 242.9   transfer 276.4   -> transfer-bound   <- flipped
+    state C    compute 238.9   transfer 252.9   -> transfer-bound
+    ```
+
+    The flip at B was caused by a block-size retune. Trusting the stale label
+    would have aimed the next change at the wrong half; the relabelling is what
+    produced the session's last structural win.
+
+    So: take `label`, `floor_ms`, `gap_ms` and `gap_frac_of_floor` from the
+    **most recent** `floor.json` — the last *kept* iteration's, or the
+    baseline's if nothing has been kept — and state in your plan which file you
+    read them from. Do not quote the baseline's label after three kept changes.
+
+    Then read the gap:
+
+    | gap | what to plan |
+    |---|---|
+    | **< ~20% of floor**, floor near a hardware limit | little left structurally; say so, and see Section 8 |
+    | **large**, and `gap_probe.json` names a confirmed cause | attack that cause |
+    | **large**, no gap probe run yet | the worker will trigger one; plan work reduction on the binding half meanwhile |
+    | **large**, floor far from any hardware roof | the binding half is badly formulated — go back to `attribution.json`, not to the schedule |
+
+    **Attribution expires too, and more dangerously**, because it is expensive
+    enough that nobody re-runs it. After one structural rewrite of an inner
+    loop, four of six attributed components changed meaning — the masking
+    applied to fewer operands, the matmuls were batched differently, the
+    reduction became one stacked computation, the epilogue was sliced. Loop
+    overhead and unpack survived; nothing else did. Check the `kernel_version`
+    tag on `attribution.json` against the kernel you are planning from, and if
+    they differ, **say in your plan that the breakdown is stale and which parts
+    of it you are still relying on**. A table quoted as current when it is three
+    rewrites old is worse than no table.
+
+    If `gap_probe.json` exists, also read `floor_formula_still_valid`. If it is
+    `false`, contention was confirmed and `max(compute-only, transfer-only)` is
+    the wrong floor formula — every gap figure in the run is overstated, and
+    part of what looks recoverable is not.
+
+3b. **Profile Summary Analysis & Bottleneck Diagnosis:**
+    When `<run_dir>/iter<N-1>/profile_summary.md` is available, you MUST analyze it following the guide below to classify the performance bottleneck and consult the appropriate optimization guide. Use it to *explain* the floor's label, not to override it: the floor is two absolute measurements of this kernel, the profile is an attribution of ratios inside one of them.
     *   **Case A: Memory-Bound (High SyncWait / DMA Dominance)**
         *   *Where to look*: In Xprof/Perfetto timeline / `profile_summary.md`, inspect `Tensor Core Sync Flag` track, `DMA_AND_MEMORY_TRANSFERS_RATIO`, and `COMPUTE_RATIO`.
         *   *What to look for*: **`SyncWait`** blocks.
@@ -286,12 +470,25 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
         from `base_time_ms` / `optimized_time_ms`, and do NOT read one out of the
         prose in `profile_summary.md` or `autotune_summary.md` — summaries round,
         restate and omit. `state.json` is the only authority.
+    *   This is the same predicate the worker records as `prev.kept` in Phase 5
+        when it decides whether to keep iteration `N-1`'s hypothesis. If
+        `prev.kept` is present in `state.history` it must agree with the row you
+        selected; if it does not, trust the table above and note the
+        disagreement in your plan.
     *   This rule fixes the **starting code** only; it does not constrain your
         strategy. When row 1 or row 3 reverts you to `iter<k>` (or `base.py` if
         no prior iteration succeeded), you still have the full bottleneck
-        diagnosis from Step 2.3 — use it to plan a *different* approach on top
+        diagnosis from Steps 2.3 and 2.3b — use it to plan a *different* approach on top
         of `iter<k>` (or `base.py`) rather than repeating iteration `N-1`'s plan.
-    *   You MUST report the numbers you compared in Section 2 of your plan (see
+    *   **A rejected hypothesis is a result, and it constrains you.** Read the
+        `Hypothesis` section of `<run_dir>/iter<N-1>/kernel_plan.md`. If it was
+        refuted, do not re-attack the same suspected cause with a third variant
+        of the same idea and call it a new hypothesis — per
+        `{{MAXKERNEL_ROOT}}/skill/guides/general_stopping.md` §3, failures
+        against one cause refute that cause, they do not exhaust the space. Pick
+        a *distinct* hypothesis, and say explicitly in Section 2 (its
+        `Distinct from:` line) how it differs from the refuted one.
+    *   You MUST report the numbers you compared in Section 3 (*Optimization Strategy*) of your plan (see
         the Output Requirement below). The worker parses your stated choice back
         into `state.json` as `base_choice`, and the implementer reads it to know
         which file to open.
@@ -319,7 +516,9 @@ trick first will construct a plan around it and find reasons afterwards. A
 planner who has already written *"memory-bandwidth bound; the naive form moves
 4.2 GB per call; the floor is 0.9 GB"* evaluates that same trick against a
 number, and can tell whether it attacks the actual bottleneck or an irrelevant
-one. If you have not done the roofline yet, go back to step 3 and do it.
+one. If you have not done that yet, go back to steps 3 and 3a — read
+`baseline/roofline.json` and `baseline/floor.json`, and write the
+classification and the VMEM arithmetic into the plan — and do it.
 
 #### Read the alignment verdict first
 
@@ -359,7 +558,7 @@ non-portable entries — they are informative — but never to adopt one.
     about the shape of the working set and about what the author believed fit
     in fast memory. It says nothing about what fits in the target's VMEM budget
     or aligns to its MXU size. Take the *ratio and the reason*; re-derive your own tile
-    sizes from the VMEM equation in step 3, and cite the reference only as
+    sizes from the VMEM equation in step 3a, and cite the reference only as
     corroboration. A plan that copies a tile constant has transliterated, not
     translated.
 
@@ -393,16 +592,23 @@ re-proposed, and keeps the history that the final report is built from.
 
 #### Every hypothesis in your plan carries a provenance tag
 
-This is mandatory for all plans, with or without a ledger:
+This is mandatory for all plans, with or without a ledger. The tag goes on the
+`Provenance:` line of the Section 2 hypothesis block (and on each secondary
+change, if any):
 
 ```markdown
-### Hypothesis 2 — fuse the rescale into the KV loop
-Provenance: LEDGER-003 (ALGORITHMIC, trust=aligned)
-Mechanism: removes one HBM pass over S; predicted 4.2 GB -> 2.8 GB per call
-Falsifiable as: XProf HBM bytes/call drop >= 30% vs iter 2
+Hypothesis: the rescale is a separate HBM pass over S that the KV loop can absorb
+  Discrepancy:  ...
+  Prediction:   HBM bytes/call 4.2 GB -> 2.8 GB; case0 1.10 ms
+  Refuted if:   XProf HBM bytes/call drop < 30% vs iter 2
+  Provenance:   LEDGER-003 (ALGORITHMIC, trust=aligned), BASELINE-attribution
+  Distinct from: ...
 ```
 
-Allowed values: `LEDGER-<id>`, `ROOFLINE`, `PROFILE-iter<k>`.
+Allowed values: `LEDGER-<id>`, `ROOFLINE`, `PROFILE-iter<k>`,
+`BASELINE-<artifact>` (a file under `<run_dir>/baseline/`, e.g.
+`BASELINE-floor`, `BASELINE-attribution`, `BASELINE-microbenchmarks`,
+`BASELINE-roofline`).
 A hypothesis may carry more than one — and under `divergent` trust, a
 `LEDGER-*` tag **must** be paired with a `ROOFLINE` one.
 
@@ -425,8 +631,30 @@ should be structured as a markdown document with the following sections:
     semantics, flag it here explicitly.
 -   Brief description of what the kernel does
 -   Current implementation approach
+-   **Measured Evidence Table** — the numbers you are planning from, each with
+    the file it came from, so a reader can tell measurement from assertion:
+
+    | quantity | value | source file | kernel version it describes |
+    |---|---|---|---|
+    | per-case measured latency | | `baseline/baseline_measurements.json` | |
+    | compute-only / transfer-only | | most recent `floor.json` | |
+    | floor, gap, gap % | | most recent `floor.json` | |
+    | binding half (label) | | most recent `floor.json` | |
+    | top attributed components | | `attribution.json` | |
+    | calibrated one-pass time | | `attribution.json` ruler | |
+    | dispatch floor | | `microbenchmarks.json` | |
+    | isolated rate for the top component | | `microbenchmarks.json` | |
+    | binding roof + pass count | | `roofline.json` | |
+    | target range | | `roofline.json` | |
+    | gap-probe verdicts | | `gap_probe.json` | |
+
+    Mark any row whose `kernel_version` differs from the kernel you are planning
+    from as **STALE**, and say whether you are still relying on it.
+-   **Directions already closed** — copy `killed_directions` from
+    `microbenchmarks.json` and any `refuted` cause from `gap_probe.json`. Plans
+    that re-enter a closed direction are the main way iterations get wasted.
 -   **Expected vs. Actual Performance Delta (for revisions)**:
-    -   Expected target speedup / latency projected in previous plan (`<run_dir>/iter<N-1>/kernel_plan.md` Section 6).
+    -   Expected target speedup / latency projected in previous plan (the *Expected Performance Impact* section of `<run_dir>/iter<N-1>/kernel_plan.md`).
     -   Actual measured speedup / latency from previous profile summary (`<run_dir>/iter<N-1>/profile_summary.md` and `state.json`).
     -   Performance delta analysis explaining why the target was or was not reached.
 -   **Profile Trace Diagnosis & Bottleneck Classification**:
@@ -435,11 +663,47 @@ should be structured as a markdown document with the following sections:
     -   Reference guide consulted (`reference/tpu_memory_overlapping.md`, `reference/tpu_mxu_and_register_optimization.md`, and/or `reference/pallas_xla_interaction.md`).
 -   Identified performance bottlenecks or issues from previous execution/profiling
 
-## 2. Optimization Strategy
+## 2. Hypothesis
+
+The plan must rest on exactly **one** primary hypothesis, stated so that the
+measurement taken in Phase 3 can refute it. Write it in this shape — the worker
+parses the labelled lines, so keep the labels literal:
+
+```
+Hypothesis: <one sentence naming the mechanism, not the change>
+  Discrepancy:  <the measured gap between what something costs and what it ought
+                 to cost, with both numbers and their sources>
+  Prediction:   <the expected latency or speedup, per case, as a number>
+  Refuted if:   <the observation that would kill it — a specific number the
+                 Phase 3 measurement could produce>
+  Provenance:   <LEDGER-<id> | ROOFLINE | PROFILE-iter<k> | BASELINE-<artifact>, one or more>
+  Distinct from: <which previously-refuted hypothesis this is NOT, for N > 1>
+```
+
+Two rules on the wording:
+
+-   **Name a mechanism, not an edit.** *"Increase BLOCK_M to 256"* is a change,
+    not a hypothesis. *"The inner loop is losing to latency because eight short
+    serially-dependent chains cannot fill the MXU pipeline; stacking them into
+    one chain will recover the 2.3× discrepancy between the in-situ and
+    isolated matmul rates"* is a hypothesis: it says what is wrong, why, and
+    what should follow.
+-   **The discrepancy is mandatory.** If you cannot name one — a measured cost
+    against a measured or analytic "ought" — you do not have a hypothesis yet,
+    and the honest plan is to say which measurement would produce one. It is
+    legitimate for a plan's whole content to be "the residual is attributed to a
+    mechanism nobody has probed; here is the probe."
+
+Secondary changes are allowed, but list them separately and label them as
+such, each with its own `Provenance:` line — they must not be what the
+iteration is judged on, because a plan that changes five things at once cannot
+be refuted by any result.
+
+## 3. Optimization Strategy
 
 -   High-level optimization approach targeting the diagnosed bottleneck
 -   **Every hypothesis carries a `Provenance:` line.** One of `LEDGER-<id>`,
-    `ROOFLINE`, `PROFILE-iter<k>`, or several. Under
+    `ROOFLINE`, `PROFILE-iter<k>`, `BASELINE-<artifact>`, or several. Under
     `reference_trust == "divergent"`, a `LEDGER-*` tag must be paired with a
     `ROOFLINE` one. An untagged hypothesis is unfinished.
 -   **For a `pytorch` / `cuda` primary**: which opportunity from Section 9 of
@@ -481,32 +745,73 @@ should be structured as a markdown document with the following sections:
 -   Key transformations to apply (referencing specific strategies from the relevant optimization guide)
 -   Rationale for each optimization
 
-## 3. Memory Layout and Tiling
+## 4. Memory Layout and Tiling
 
 -   Proposed block sizes (bM, bK, bN, etc.)
 -   Memory layout strategy (HBM, VMEM, SMEM usage)
--   Justification based on TPU specs
+-   The explicit VMEM sizing arithmetic from step 3a:
+    `2 x sum(pipelined block dimension product x sizeof(dtype)) + scratch <= VMEM budget`
+-   **Traffic recount.** If you change any block size, the re-read multiplier in
+    `roofline.json` changes with it — `reads = sum ceil(work_len / block_size) x
+    data_len`. State the new memory roof, or state that the block sizes are
+    unchanged. A roofline table quoted under a different block size than it was
+    computed for is wrong by exactly that multiplier.
 
-## 4. TPU-Specific Optimizations
+## 5. TPU-Specific Optimizations
 
 -   Use of pipelining
 -   Prefetching strategies
 -   Use of TPU-specific features (matmul units, vector units)
 -   Synchronization and memory fence placement
 
-## 5. Implementation Details
+## 6. Implementation Details
 
 -   Grid specification
 -   BlockSpec configuration
 -   Any special considerations or edge cases
 
-## 6. Expected Performance Impact
+## 7. Tunable Parameters
 
--   Expected speedup or performance characteristics
+The worker decides in Phase 6 whether an autotuning round is triggered, using
+the trigger list in `{{MAXKERNEL_ROOT}}/skill/guides/general_autotune.md` §1.
+It needs this section to make that call, so fill it in even when you expect no
+sweep.
+
+-   **Inventory the knobs** this plan introduces or touches, classified by how
+    they would be reached: exposed through the call signature, a source
+    constant, or derived/structural (and therefore not tunable).
+-   **For each knob, one line naming the two opposing pressures it mediates** —
+    e.g. *"large ⇒ longer transfers, better bandwidth, but the tail unit is
+    processed at full width so padding is wasted; small ⇒ less waste, more issue
+    overhead, shallower pipeline."* This is not documentation: it is what says
+    which direction to walk and, more importantly, **which later change will
+    invalidate the optimum**. A knob whose trade-off you cannot state is a knob
+    whose results nobody will be able to interpret.
+-   **Does this change remove or add a cost that scales with a tunable
+    parameter?** Answer yes or no explicitly. A yes is autotune trigger T2, and
+    it means the previous optimum solved a trade-off that no longer exists — the
+    new optimum can lie **outside any range previously searched**.
+-   **Does this change move a resource budget** (VMEM, scratch, registers) that
+    some other parameter is derived from? A yes is trigger T3.
+-   Record what you deliberately are **not** tuning, and why.
+
+## 8. Expected Performance Impact
+
+-   Expected speedup and expected absolute latency **per case**, as numbers —
+    these are what the next iteration compares against, and "faster" is not
+    comparable to anything.
+-   **Position against the target range** from `roofline.json`: does this plan
+    aim to reach it, or to close part of the distance? A plan that predicts a
+    result outside the target range needs to explain which roof it thinks is
+    wrong.
+-   **Position against the gap**: is this change attacking *work* (reducing what
+    the binding half must do) or *schedule* (recovering overlap)? Say which. A
+    work reduction judged against the gap, or a schedule fix judged against the
+    roofline, will be read as a failure when it succeeded.
 -   Potential risks or limitations
 -   Alternative approaches if this doesn't work
 
-## 7. Documentation Requirements
+## 9. Documentation Requirements
 
 -   All variables in the kernel should have shape comments (e.g., `# Shape:
     (batch_size, seq_len, hidden_dim)`)
@@ -517,11 +822,19 @@ should be structured as a markdown document with the following sections:
 -   Rationale for block dimensions and tiling choices
 -   Explanation of any non-obvious indexing or memory access patterns
 
-## 8. Design Method Sections (required)
+## 10. Design Method Sections (required)
 
 Required in every plan, new or revised. The formats are in
 `{{MAXKERNEL_ROOT}}/reference/kernel_design_method.md` §5–§9. A plan missing
-any of these is incomplete, and the worker will send it back.
+this section is incomplete, and the worker will send it back.
+
+**How much to write.** Fill in every part below **in full on iteration 1, and
+on any re-plan** — an iteration where a measured number refuted a modelled one
+the previous plan relied on. On later iterations, carry the section forward
+from the plan you are building on and **update only the rows the hypothesis
+touches**; open the section with one line saying so, e.g. *"Carried from
+iter3; updated: cost classes C2/C5, contract questions L3, T2."* The section
+must still be present on every iteration.
 
 -   **Cost classes**: all eight rows, each `examined: <work> → <critical-path
     contribution>` or `UNEXAMINED: <why>`.
@@ -536,14 +849,39 @@ any of these is incomplete, and the worker will send it back.
     source-read rule from `reference/`, or a probe output file under
     `<run_dir>/probes/`.
 -   **For revisions**: when a measured number contradicted a modelled one the
-    previous plan relied on, open this section with a `modelled → measured`
-    table and recompute what depended on it.
+    previous plan relied on, this is a re-plan: open this section with a
+    `modelled → measured` table, recompute what depended on it, and fill in
+    every part in full.
 
 ### Reference Guides
 
 You have the following reference documents to help you:
 
-**Reference Guides for Diagnosis & Optimization**:
+**Method guides — hardware-independent, read in place under `{{MAXKERNEL_ROOT}}/skill/guides/`.**
+These describe *how to reason*, and `general_profile_reasoning.md` is mandatory
+reading for this phase:
+
+*   `{{MAXKERNEL_ROOT}}/skill/guides/general_profile_reasoning.md` — how each
+    measurement produces the next one. **Read this every time.**
+*   `{{MAXKERNEL_ROOT}}/skill/guides/general_floor.md` — what a floor and a gap
+    mean, and what they cannot tell you (in particular: attribution explains
+    what the *floor* is made of, never what the *gap* is made of).
+*   `{{MAXKERNEL_ROOT}}/skill/guides/general_attribution.md` — how the
+    breakdown you are reading was produced, and why its deltas do not sum.
+*   `{{MAXKERNEL_ROOT}}/skill/guides/general_roofline.md` — how the target range
+    was derived and what invalidates it.
+*   `{{MAXKERNEL_ROOT}}/skill/guides/general_micro_benchmarking.md` — how to
+    read the rate tables, and the validity limits on a prediction drawn from
+    them.
+*   `{{MAXKERNEL_ROOT}}/skill/guides/general_gap_probing.md` — the six causes of
+    overlap failure, if a gap probe ran.
+*   `{{MAXKERNEL_ROOT}}/skill/guides/general_autotune.md` — §1 only, to fill in
+    the *Tunable Parameters* section of your plan.
+*   `{{MAXKERNEL_ROOT}}/skill/guides/general_stopping.md` — read it when you are
+    about to propose a low-return change, so you can say plainly whether the
+    queue is empty.
+
+**TPU-specific guides for diagnosis & optimization**:
     Use `Read` to read the relevant guides when diagnosing profile summaries and designing optimization strategies:
     *   **Diagnostic Guide**: `{{MAXKERNEL_ROOT}}/reference/tpu_profiling_and_diagnostics.md` (Section 2: Reading and Interpreting Profile Traces).
     *   **Memory Optimization**: `{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md` (for memory-bound kernels, access efficiency under tiled layouts, pipelining, double buffering, VMEM fusion).
@@ -683,6 +1021,24 @@ The current implementation performs a basic matrix multiplication using JAX's `j
 
 Current approach: Simple matmul with no blocking or tiling.
 
+Measured Evidence Table:
+
+| quantity | value | source file | kernel version |
+|---|---|---|---|
+| per-case measured latency | case0 2.231 ms, case1 0.402 ms | baseline/baseline_measurements.json | base.py |
+| compute-only / transfer-only | 0.441 / 0.294 ms | baseline/floor.json | base.py |
+| floor, gap, gap % | 0.441 ms, 0.054 ms, 12% | baseline/floor.json | base.py |
+| binding half | compute-bound | baseline/floor.json | base.py |
+| top attributed components | MM1 0.175 ms, unpack 0.098 ms | baseline/attribution.json | base.py |
+| calibrated one-pass time | 0.013 ms | baseline/attribution.json ruler | base.py |
+| dispatch floor | 0.0245 ms (3 args, no donation) | baseline/microbenchmarks.json | n/a |
+| isolated rate for MM1 | implies 0.076 ms; ratio 2.3x | baseline/microbenchmarks.json | base.py |
+| binding roof + pass count | operand-stream 0.110 ms; 34 passes | baseline/roofline.json | base.py |
+| target range | 0.249 - 0.300 ms | baseline/roofline.json | base.py |
+| gap-probe verdicts | not run (gap 12% < trigger) | - | - |
+
+Directions already closed: `killed_directions` is empty at baseline.
+
 Profile Trace Diagnosis & Bottleneck Classification (for revisions):
 - Expected vs. Actual Performance:
   - Expected target in iter1: 2-5x speedup over baseline (target latency: ~0.5ms - 1.1ms).
@@ -697,14 +1053,35 @@ Performance bottlenecks:
 - Missing TPU matmul unit utilization
 - No double buffering or VMEM fusion
 
-## 2. Optimization Strategy
+## 2. Hypothesis
+
+Hypothesis: the matmul is not short of arithmetic throughput; it is streaming
+  each operand tile once per output block, so the operand port, not the MXU,
+  sets its cost.
+  Discrepancy:  MM1 costs 0.175 ms in situ (baseline/attribution.json) against
+                0.076 ms for the identical shape standing alone
+                (baseline/microbenchmarks.json) -- a 2.3x ratio, so the volume
+                is fine and the formulation is not.
+  Prediction:   keeping the accumulator resident across K removes 3 of every 4
+                re-reads; case0 0.90 ms, case1 0.28 ms.
+  Refuted if:   case0 stays above 1.6 ms, i.e. the re-read multiplier was not
+                what was costing the time.
+  Provenance:   BASELINE-attribution, BASELINE-microbenchmarks, ROOFLINE
+  Distinct from: iteration 1 is the first; nothing has been refuted yet.
+
+Secondary (not what this iteration is judged on): tighten the tail mask.
+  Provenance: ROOFLINE
+
+## 3. Optimization Strategy
 We will implement a blocked matrix multiplication kernel using Pallas with the following key optimizations:
 1. Tile the computation into blocks that fit in VMEM
 2. Use explicit accumulation in output blocks
 3. Leverage TPU matmul units through proper block sizing
 4. Add pipelining for overlapping compute and memory operations
 
-## 3. Memory Layout and Tiling
+Optimization Base Choice: base (iteration 1)
+
+## 4. Memory Layout and Tiling
 - Block sizes: bM=128, bK=128, bN=128
   - Rationale: Aligns with the 128×128 MXU of a v5e/v5p target (use 256 on v6e/v7x)
   - Fits in VMEM: ~128KB per block with float32
@@ -713,30 +1090,61 @@ We will implement a blocked matrix multiplication kernel using Pallas with the f
   - A: (bM, bK) moving along M and K dimensions
   - B: (bK, bN) moving along K and N dimensions
   - C: (bM, bN) accumulating along K dimension
+- VMEM budget: 2 x (128*128*4 + 128*128*4 + 128*128*4) = 0.39 MiB <= 16 MiB
+  default scoped limit (v5e)
+- Traffic recount: reads drop from ceil(K/bK) x A_len to 1 x A_len, so the
+  memory roof falls from 0.249 ms to 0.062 ms at these block sizes.
 
-## 4. TPU-Specific Optimizations
+## 5. TPU-Specific Optimizations
 - Initialize output block to zero only on first K iteration (program_id(2) == 0)
 - Use in-place accumulation (+=) to leverage matmul units
 - Potential for pipelining in future iterations
 
-## 5. Implementation Details
+## 6. Implementation Details
 - Grid: 3D grid (M//bM, N//bN, K//bK)
 - Input BlockSpecs with dimension selection lambdas
 - Output BlockSpec with accumulation semantics
 - Zero initialization guard using pl.when
 
-## 6. Expected Performance Impact
-- Expected: 2-5x speedup over naive jnp.matmul for large matrices
-- Benefits increase with matrix size due to better memory locality
+## 7. Tunable Parameters
+- bM, bK, bN -- source constants, sweepable by one variant module per value.
+  - Trade-off: large => longer DMAs and better bandwidth, but the tail block is
+    processed at full width so padding is wasted; small => less waste, more
+    per-step issue overhead and a shallower pipeline.
+- Grid rank -- structural, not tuned.
+- Does this change remove or add a cost that scales with a tunable parameter?
+  YES -- it removes the per-K-block re-read, which was the pressure pushing bK
+  large. bK's optimum will move, possibly outside any range previously
+  searched. (autotune trigger T2)
+- Does this change move a resource budget? YES -- the resident accumulator adds
+  0.13 MB of VMEM. (trigger T3)
+- Deliberately not tuned: the accumulator dtype, which is pinned to f32 by the
+  tolerance.
+
+## 8. Expected Performance Impact
+- Expected: case0 0.90 ms, case1 0.28 ms (2.5x and 1.4x)
+- Position against target range: 0.90 ms is above the 0.249-0.300 ms target
+  range, so this closes part of the distance, not all of it. A second
+  iteration should be expected.
+- Attacking work, not schedule: this reduces what the binding (compute) half
+  must do. Judge it against the roofline, not against the gap.
 - Risks: May need tuning of block sizes for optimal performance on specific TPU version
 - Alternative: If performance is not satisfactory, consider smaller blocks or adding explicit pipelining
 
-## 7. Documentation Requirements
+## 9. Documentation Requirements
 - All tensor shapes documented inline: A: (M, K), B: (K, N), C: (M, N)
 - Memory hierarchy annotations: Input blocks (A_block, B_block) loaded from HBM to VMEM
 - Block references: a_ref (bM, bK) in VMEM, b_ref (bK, bN) in VMEM, c_ref (bM, bN) accumulator
 - Memory transfer comments: Document when data moves from HBM→VMEM→registers
 - Grid indexing explanation: program_id(0)=M block, program_id(1)=N block, program_id(2)=K iteration
+
+## 10. Design Method Sections (required)
+Iteration 1: filled in full.
+- Cost classes: all eight rows, e.g. `operand re-reads: examined: ceil(K/bK) x A_len -> dominant (0.175 ms of MM1)` ...
+- Implementation affordances: every row scored, e.g. `resident accumulator: planned` ...
+- Unit trading: `tail mask (VPU, 1 pass): linear part too small to pay`
+- Contract questions: L1-L7, W1-W3, T1-T5, R1 each answered, `NA: <reason>`, or answered by a probe
+- Facts needed: whether `vmem_limit_bytes` moves the scoped limit -> `<run_dir>/probes/vmem_limit_bytes_raises_ceiling.txt`; HBM plateau -> `<run_dir>/probes/hbm_bandwidth_arms.txt`
 ```
 
 Remember: Focus on creating a clear, actionable plan.

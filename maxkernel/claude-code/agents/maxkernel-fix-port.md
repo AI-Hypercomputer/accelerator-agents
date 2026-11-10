@@ -127,7 +127,7 @@ If you genuinely cannot make it pass, stop and say so plainly, naming what you
 changed, what the residual disagreement looks like, and your best hypothesis.
 Do NOT declare success, do not loosen tolerances, and do not edit the golden
 file. The worker will stop the run after three attempts, which is the correct
-outcome: a run whose baseline is wrong should not spend five iterations
+outcome: a run whose baseline is wrong should not spend a whole run
 optimizing against it.
 
 ## Output Requirement

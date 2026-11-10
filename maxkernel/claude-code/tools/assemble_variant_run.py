@@ -4,7 +4,7 @@
 This is the measurement path for the phases the correctness harness cannot
 serve:
 
-  * Phase 0.6 baseline per-case timing (the "variant" is `base.py` itself);
+  * Phase 0.95 baseline per-case timing (the "variant" is `base.py` itself);
   * floor probes    -- the compute-only / transfer-only cuts (general_floor.md);
   * attribution     -- one stage removed per variant (general_attribution.md);
   * gap probes      -- work held constant, schedule perturbed
@@ -155,13 +155,34 @@ def assemble(
   get_inputs_path: str,
   output_path: str,
   label: str,
+  base_path: str | None = None,
 ) -> None:
   variant_src = Path(variant_kernel_path).read_text()
+  base_src = Path(base_path).read_text() if base_path else None
+  # A training-step base (tools/make_vjp_base.py) times a kernel's
+  # forward_pass and backward_pass through its own training_step, exactly as
+  # assemble_test_run.py does for the real kernel. A variant cut from such a
+  # kernel keeps both names, so it is bound the same way here.
+  training_step = bool(
+    base_src and re.search(r"^def\s+training_step\b", base_src, re.M)
+  )
+  if training_step:
+    missing = [
+      name
+      for name in ("forward_pass", "backward_pass")
+      if not re.search(rf"^(?:def\s+{name}\b|{name}\s*=)", variant_src, re.M)
+    ]
+    if missing:
+      raise ValueError(
+        f"{base_path} defines training_step, so the variant must define "
+        f"forward_pass and backward_pass; {variant_kernel_path} is missing "
+        f"{', '.join(missing)}."
+      )
   # `computation` may be defined (`def computation(...)`) or bound to an
   # existing function (`computation = workload`). Both leave a module-level
   # `computation` for the exec'd namespace below, so accept either; only a
   # source with neither can fail to bind. Mirrors assemble_test_harness.py.
-  if not re.search(
+  if not training_step and not re.search(
     r"^(?:def\s+computation\b|computation\s*=)", variant_src, re.M
   ):
     raise ValueError(
@@ -202,9 +223,25 @@ def assemble(
     "exec(compile(_VARIANT_SRC, "
     + repr(str(variant_kernel_path))
     + ", 'exec'), _variant_ns)",
-    "variant_computation = _variant_ns['computation']",
-    _MAIN,
   ]
+  if training_step:
+    parts += [
+      "# =====================================================================",
+      f"# Training-step base, embedded verbatim from {base_path}.",
+      "# The variant's forward_pass and backward_pass are timed through it.",
+      "# =====================================================================",
+      f"_BASE_SRC = {base_src!r}",
+      "_base_ns = {}",
+      "exec(compile(_BASE_SRC, "
+      + repr(str(base_path))
+      + ", 'exec'), _base_ns)",
+      "variant_computation = _base_ns['training_step'](",
+      "  _variant_ns['forward_pass'], _variant_ns['backward_pass']",
+      ")",
+    ]
+  else:
+    parts.append("variant_computation = _variant_ns['computation']")
+  parts.append(_MAIN)
 
   Path(output_path).write_text("\n".join(parts))
   print(f"Assembled variant timing script at {output_path} (label: {label})")
@@ -235,6 +272,15 @@ def main():
       "conventions and mixing them guarantees a misread later."
     ),
   )
+  parser.add_argument(
+    "--base_path",
+    default=None,
+    help=(
+      "The run's base.py. Required for training-step runs (base.py defines "
+      "training_step): the variant then defines forward_pass and "
+      "backward_pass and is timed through base.training_step(...)."
+    ),
+  )
   args = parser.parse_args()
 
   label = args.label or Path(args.variant_kernel_path).stem
@@ -245,6 +291,7 @@ def main():
       args.get_inputs_path,
       args.output_path,
       label,
+      base_path=args.base_path,
     )
   except Exception as e:  # pylint: disable=broad-except
     print(f"Failed to assemble variant run: {e}", file=sys.stderr)

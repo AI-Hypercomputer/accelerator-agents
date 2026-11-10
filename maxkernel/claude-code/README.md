@@ -8,7 +8,7 @@ the baseline (floor, attribution, microbenchmarks, roofline), then runs a closed
 self-refinement loop in which each iteration tests one falsifiable hypothesis —
 **plan → implement → compile → test → profile → keep/drop → floor/gap → autotune
 only when a trigger fires** — and stops when a measured stopping criterion is met
-(`max_iterations`, default 5, is only a backstop), keeping the fastest numerically-correct kernel it found. Every iteration is
+(the kernel is saturated or converged; there is no fixed iteration count), keeping the fastest numerically-correct kernel it found. Every iteration is
 grounded in real hardware: kernels compile on an actual TPU VM, correctness is
 checked against the baseline, and the next plan is written from an XProf trace of
 the last one rather than from a guess.
@@ -97,8 +97,8 @@ you ──▶ maxkernel skill (orchestrator)
              │              ─▶ gap-probe (if gap large, work cuts stopped paying)
              │            autotune-planner / autotune-summary (only on a trigger)
              └──────────  update state + stopping verdict (general_stopping.md)
-                              └ orchestrator stops on convergence, or
-                                on max_iterations as a backstop
+                              └ orchestrator stops when the kernel is
+                                saturated or converged (no fixed count)
 
         evaluation/compare_kernel.py   (separate, needs a TPU)
              └ times the user's REAL PyTorch against the generated kernel,

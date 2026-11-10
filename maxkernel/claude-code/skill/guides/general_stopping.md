@@ -12,7 +12,16 @@ because a percentage was reached. You stop because further experiments stopped
 paying, and the floor measurement is what makes "stopped paying" a defensible
 judgement instead of a guess.
 
-Criteria A and B below are the two signals. Neither is sufficient alone.
+Criteria A and B below are the two signals. **A run stops when the kernel is
+saturated or converged:**
+
+- **Saturated**: Criterion A holds (close to a floor that is itself close to the
+  hardware) and at least one experiment after reaching it returned under 1%.
+- **Converged**: Criterion B holds strongly enough to end the search on its own:
+  at least three consecutive experiments under 1% against three distinct
+  hypotheses, or five when much of the floor gap remains (Criterion C).
+
+Reaching a percentage of the floor without a failed experiment is neither.
 
 ---
 

@@ -799,7 +799,7 @@ most expensive shortcut available here: the alternative is a whole run of
 guessing, each iteration of which costs more than this phase does. It is also
 what makes an early stop possible at all — without a measured floor there is no
 defensible way to say further experiments have stopped paying, so a run that
-skips it can only ever end by exhausting its iteration budget.
+skips it has no defensible way to stop.
 
 It runs on whatever `computation` the Phase 0.9 harness times — for a
 training-step run (Phase 0.85), that is the whole forward + backward step.
@@ -1042,12 +1042,18 @@ and — only if it did — how much room is left in it.
     | # | condition | `kept` |
     |---|---|---|
     | 1 | `compile_ok != true` OR `test_ok != true` OR `optimized_time_ms` is `null` | `false` |
-    | 2 | `speedup > 1.0` | `true` |
-    | 3 | `speedup <= 1.0` | `false` |
+    | 2 | `speedup > 1.0` AND (`state.best_optimized_time` is `null` OR `optimized_time_ms < state.best_optimized_time`) | `true` |
+    | 3 | otherwise | `false` |
 
-    This is deliberately the same predicate `maxkernel-plan-kernel` uses to pick
-    its optimization base, so the two can never disagree. The threshold is the
-    literal number `1.0`; a speedup of exactly `1.0` is *not* kept.
+    **`kept` means "the new best kernel"**: correct, faster than `base.py`, and
+    strictly faster than every earlier iteration. Read `state.best_optimized_time`
+    as it stands now, before Phase 7 updates it. A change that beats the
+    baseline but not the incumbent is **dropped**: the loop always carries the
+    kernel with the best speedup forward, and a slower kernel is never measured
+    for a floor or gap. This is the same predicate `maxkernel-plan-kernel` uses
+    to pick its optimization base (beat `base.py` and improve on the kernel it
+    built from), so the two can never disagree. The thresholds are strict: a
+    speedup of exactly `1.0`, or a tie with the incumbent, is *not* kept.
 
     Then write `<run_dir>/iter<n>/keep_decision.md` — three short sections, and
     it costs a minute:
@@ -1388,13 +1394,33 @@ If a trigger fires:
       "remaining_prize_ms": 0.124,
       "cases_above_5pct_unchecked": [],
       "untested_hypotheses": ["the residual may be issue bandwidth; never probed"],
+      "stop_reason": null,
       "recommend_stop": false,
       "rationale": "<two sentences>"
     }
     ```
 
-    `recommend_stop` is `true` only when **both** A and B are met and
-    `cases_above_5pct_unchecked` is empty. The orchestrator branches on this
+    **The verdict: stop when the kernel is saturated or converged.** Write
+    `stop_reason` and set `recommend_stop` from it:
+
+    -   **`"saturated"`**: Criterion A is met (within ~1.25x of a floor that is
+        itself near the hardware limit, no redundant traffic left) **and** at
+        least one experiment since reaching it returned under 1%
+        (`consecutive_sub_1pct >= 1`). Reaching the floor without a failed
+        experiment is not a stop.
+    -   **`"converged"`**: returns have stopped, whatever A says. At least
+        **3** consecutive iterations with `improvement_over_incumbent < 0.01`,
+        against at least **3 distinct** hypotheses. When the remaining prize is
+        still large (exposed time above ~20% of the floor, Criterion C), require
+        **5** consecutive, against 5 distinct hypotheses, before concluding the
+        queue is empty.
+    -   otherwise `null`.
+
+    `recommend_stop` is `true` only when `stop_reason` is `"saturated"` or
+    `"converged"` **and** `cases_above_5pct_unchecked` is empty. There is no
+    iteration budget by default, so this verdict is the only normal exit: every
+    iteration either improves by at least 1% (progress toward a bounded floor)
+    or counts toward `"converged"`, which guarantees the run ends. The orchestrator branches on this
     field; it does not re-derive the judgement. Write the block on every
     iteration, failed ones included — `iteration_assessed` is how the
     orchestrator knows the verdict is current.

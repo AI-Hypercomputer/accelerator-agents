@@ -81,18 +81,20 @@ the change was kept, `gap_probe.json` only if the gap was worth probing, and
 result, not a crash.
 
 **The run has no fixed length.** It ends when it converges, however many
-iterations that takes. If `state.stopping.recommend_stop` is `true`, it did: the
-kernel is close to a floor that is itself close to the hardware, and several
-experiments against distinct hypotheses came back under 1%. Read
+iterations that takes. When it stops, `state.stopping.stop_reason` says why:
+`"saturated"` means the kernel is close to a floor that is itself close to the
+hardware and a further experiment no longer paid; `"converged"` means several
+experiments in a row, against distinct hypotheses, came back under 1%. Read
 `state.stopping.untested_hypotheses` before concluding the kernel is done: it
 lists the explanations nobody got round to attacking.
 
-If instead the run reaches `state.max_iterations` (default 5), it **stopped
+There is no iteration budget by default. If you set one (`loop.max_iterations` in a
+job file, or `max_iterations` in `state.json` before starting) and the run reaches it, it **stopped
 without converging**: the loop was cut off mid-search, not finished, and
 `state.stopping` will tell you which criterion was still unmet. That is the case
 where re-prompting *"continue to optimize this kernel"* is most likely to pay.
-You can also raise `max_iterations` in `state.json` before starting, or lower it
-if you only want a quick look.
+Set a small cap if you only want a quick look; a run without one can take many
+hours, since each iteration includes several TPU jobs.
 
 If the agent gets stuck, you can always stop it and re-prompt it to *"continue to
 optimize this kernel"* — it will pick up where it left off from `state.json`. The baseline phase is

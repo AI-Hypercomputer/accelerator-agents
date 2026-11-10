@@ -182,7 +182,7 @@ Two things to know about an `autodiff` run:
 | `correctness.seed` | `1024` | Re-set before *each* model construction, which is how two modules come out with identical random weights without anything being copied. |
 | `correctness.num_trials` | `5` | Input sets per correctness check. |
 | `target.tpu_version` | from `tpu_config.json` | e.g. `"TPU v6e"`. |
-| `loop.max_iterations` | `5` | Optimization iterations. |
+| `loop.max_iterations` | none | Optional cap on iterations. By default there is none: the run stops when the kernel is saturated or converged. Set a positive integer only to cap a run; reaching it means the run stopped without converging. |
 | `evaluation.compare_against_source` | `false` | Also time the kernel against the **original PyTorch** on the TPU via `evaluation/compare_kernel.py`. Invalid for a CUDA input — a TPU host cannot execute CUDA. |
 | `constraints.preserve_shapes` | `true` | Never substitute problem dimensions (general_rules #6). |
 | `name`, `description`, `notes` | — | `notes` is passed through to the planner. |

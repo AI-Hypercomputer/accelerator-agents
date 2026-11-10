@@ -564,7 +564,7 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
           "source_context_path": null,
 
           "iteration": 0,
-          "max_iterations": 5,
+          "max_iterations": null,
           "atol": 1e-2,
           "rtol": 1e-2,
           "best_code_path": "{{MAXKERNEL_ROOT}}/workspace/<run_id>/base.py",
@@ -584,14 +584,14 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     -   `stopping` starts as `null` and is overwritten by the worker at the end
         of every iteration (Phase 7). `null` means "not yet assessed", which the
         control loop reads as "not converged".
-    -   **`max_iterations` is a safety backstop, not a target.** The loop is
-        *expected* to end on the measured stopping criteria in
-        `state.stopping`; the budget only exists so a run that never converges
-        still terminates. Nothing anywhere requires the loop to reach it, and
-        a run that stops at iteration 2 on a met criterion is a better outcome
-        than one that spends three more iterations confirming it. Raise or
-        lower the value freely — the control loop reads the field and never
-        the literal.
+    -   **There is no iteration budget by default: `max_iterations` is
+        `null`.** The loop runs until the worker's measured verdict says the
+        kernel is **saturated** (at a floor that is itself near the hardware
+        limit, and a further experiment no longer pays) or **converged**
+        (several distinct hypotheses in a row stopped returning). Set a number
+        only when the user or the job file asks for a cap
+        (`loop.max_iterations`); then it is a backstop, and reaching it means
+        the run stopped **without** converging.
     -   `primary.language` is one of `"pytorch"`, `"jax"`, `"cuda"`,
         `"triton"`, `"cutile"`, `"cutedsl"`, `"gpu"` — the
         verdict from step 3, written once and never revised mid-run. Every
@@ -685,30 +685,29 @@ partway through — re-read this section's steps as literally as you re-read
         `true` but `state.stopping.cases_above_5pct_unchecked` is non-empty,
         that is inconsistent — the worker's own rule forbids it. Treat it as
         "not converged" and continue to (b), so one more iteration is
-        dispatched (the budget backstop still applies), and note the
+        dispatched (a user-set budget, if any, still applies), and note the
         inconsistency in your final report.
 
-    b.  **Budget exhausted — the backstop.** `state.iteration >=
-        state.max_iterations`? Yes -> go to "Finish", reporting that the loop
-        ran out of budget **without converging**, which is a different and
-        weaker result than (a) and must be described as such. No -> continue
-        to step 3.
-
-        Read the number out of `state.max_iterations`. Do not hard-code it,
-        and do not treat it as the number of iterations the run is supposed to
-        perform — it is the point at which an unconverged run gives up.
+    b.  **User-set budget — only if one exists.** If `state.max_iterations` is
+        `null` (the default), skip this check: there is no budget, and the run
+        continues until (a) fires. If it is a number and `state.iteration >=
+        state.max_iterations`, go to "Finish", reporting that the loop hit the
+        requested cap **without converging**, which is a different and weaker
+        result than (a) and must be described as such. Otherwise continue to
+        step 3.
 
     The `state.stopping` block is written by the worker in its Phase 7, which
-    applies `general_stopping.md` in full: it sets `recommend_stop` only when
-    the kernel is within ~25% of a floor that is itself near a hardware limit,
-    **and** several experiments against **distinct** hypotheses have returned
-    under 1%, **and** every case carrying >5% of total time has been
-    gap-checked.
+    applies `general_stopping.md` in full: it sets `recommend_stop` when
+    `stop_reason` is `"saturated"` (within ~25% of a floor that is itself near
+    the hardware limit, and a further experiment returned under 1%) or
+    `"converged"` (at least 3 consecutive iterations under 1% against distinct
+    hypotheses, 5 when much of the floor gap remains), **and** every case
+    carrying >5% of total time has been gap-checked.
 
     **Do not second-guess this field and do not compute your own version of
     it.** You do not have the measurements, and the two failure modes here are
     opposite and both bad: stopping on a percentage that nobody tested against,
-    or grinding through the whole budget after the queue of hypotheses is
+    or grinding on after the queue of hypotheses is
     demonstrably empty. If `state.stopping` is absent or `null` (Phase 0 work,
     or an early or failed iteration), treat it as "not converged" and keep
     going.
@@ -752,7 +751,8 @@ partway through — re-read this section's steps as literally as you re-read
 
     1.  step 2(a) fired — the worker wrote `recommend_stop: true` for this
         iteration (`iteration_assessed == iteration`, no unchecked >5% cases);
-    2.  step 2(b) fired — `state.iteration >= state.max_iterations`;
+    2.  step 2(b) fired — the user set `max_iterations` and
+        `state.iteration >= state.max_iterations`;
     3.  "Emergency Stop & Cleanup" from step 4 Case B — the 3 re-dispatch
         attempts are exhausted, or `state.primary.port_verified` is `false`.
 
@@ -785,8 +785,8 @@ If an iteration fails 3 consecutive times due to crashes, timeouts, or stuck sub
 
 ## Finish
 
-Once either stop condition in step 2 has fired — convergence (2a) or budget
-exhaustion (2b):
+Once a stop condition in step 2 has fired — the measured verdict (2a), or a
+user-set cap (2b):
 
 1.  Read `<run_dir>/state.json` one last time.
 2.  **Publish the winner to `<run_dir>/optimized.py`** so the result sits at
@@ -858,11 +858,11 @@ exhaustion (2b):
     state `state.best_speedup`, which iteration won (`state.best_code_path`),
     and that the winning kernel is at `<run_dir>/optimized.py`.
 4b. **Report the residual, not just the win.** From `state.stopping`, state:
-    -   why the loop stopped. If it converged, name which of criteria A and B
-        were met. If the budget ran out instead, say so in those words —
-        **budget exhaustion is not convergence**, and a report that blurs the
-        two implies the kernel is finished when in fact the loop was cut off
-        mid-search. If you overrode a `recommend_stop` because
+    -   why the loop stopped: `state.stopping.stop_reason` (`"saturated"` or
+        `"converged"`) and the criteria behind it. If a user-set cap ended the
+        run instead, say so in those words — **hitting a cap is not
+        convergence**, and a report that blurs the two implies the kernel is
+        finished when in fact the loop was cut off mid-search. If you overrode a `recommend_stop` because
         `cases_above_5pct_unchecked` was non-empty, say that too;
     -   `remaining_prize_ms` — how much is still exposed, and on which cases;
     -   `untested_hypotheses`, verbatim.

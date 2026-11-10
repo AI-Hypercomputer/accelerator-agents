@@ -339,7 +339,11 @@ algebraic form produces the value already on the axis its consumer wants (see
 | T2 | Ragged or padded? Does the transfer move exactly the live rows or a padded worst case, and what fraction of the bytes is padding across the job's cases? | `ragged, per-step size from <metadata>` · `padded, padding fraction <expr> per case` | `ragged_tail_cost`, `mask_versus_pad` |
 | T3 | Can the transfer be zero-length on grid steps that do not need it (a state read only on the first tile, a weight loaded once, a boundary value)? | `yes, predicate <expr>` · `no, every step needs it` · `no, and <fraction> of steps do not need it` | `traced_dma_length`; `zero_size_dma_needs_no_wait` is destructive and agents may not run it, so take its answer from [`design/pipelining.md`](design/pipelining.md) or [`tpu_hardware_facts.md`](tpu_hardware_facts.md) or predicate by branch |
 | T4 | Is any value moved HBM→VMEM more than once across grid steps where a VMEM scratch could carry it? | `none` · `<value>, moved <count> times = <bytes>; carrying it costs <bytes> of scratch` | `scratch_persists_across_grid_steps` |
-| T5 | For every array that is both read and written (state caches, in-place accumulators, an output written by two passes): is it `input_output_aliases` plus donation? If not, what does the copy cost? | `aliased, index map <...>, donated` · `not aliased; the copy is <bytes> per call because <...>` | manual: confirm `input_output_aliases` + donation in the lowered HLO |
+| T5 | For every array that is both read and written (state caches, in-place accumulators, an output written by two passes): is it `input_output_aliases` plus donation? If not, what does the copy cost? | `aliased, index map <...>, donated` · `not aliased; the copy is <bytes> per call because <...>` | `input_output_alias_in_place`; then confirm on this kernel's compiled HLO that no full-operand copy surrounds the call |
+
+MaxKernel's test harness jits `computation` without `donate_argnums`. Run `input_output_alias_in_place`
+before relying on an aliased output to make an update cheap: it reports, for this TPU and toolchain,
+whether an aliased but undonated operand is copied whole on every call.
 
 T4 and T5 are invisible to a roofline, which counts the bytes an algorithm must move: T4 is the same
 bytes moved several times because the grid lets the value fall out of VMEM between uses, T5 the

@@ -137,6 +137,7 @@ Rows: probe name | question | design file it informs. Paths are relative to `ref
 | `zero_size_dma_needs_no_wait` **(destructive)** | Is a zero-size DMA a true no-op, or does it still owe a wait? | [`tpu_hardware_facts.md`](tpu_hardware_facts.md) |
 | `undrained_semaphore_halts_core` **(destructive)** | What does leaving a real DMA un-waited actually do? | [`tpu_hardware_facts.md`](tpu_hardware_facts.md) |
 | `xla_reference_vs_f64_oracle` | Is an f32 XLA reference more accurate than the Pallas kernel it is judging? | [`tpu_hardware_facts.md`](tpu_hardware_facts.md) |
+| `input_output_alias_in_place` | When a pallas_call aliases an input to its output, does the caller pay a copy of the whole operand, with and without buffer donation? | contract row T5 in [`kernel_design_method.md`](kernel_design_method.md) §8 |
 
 ### `lowering` → [`tpu_hardware_facts.md`](tpu_hardware_facts.md)
 
@@ -312,16 +313,16 @@ cross-subcore coordination out of the kernel).
 
 ---
 
-## Planned probes (not yet implemented)
+## Checks that are answered without a probe
 
-Questions the suite does not answer yet. Until a probe exists, answer the row by reading the
-lowered artifact or the upstream test, and mark it as such.
+Some rules in `strategies/` and `design/` are about whether a construct lowers, or about a parameter
+that only matters inside one kernel. They have no probe on purpose: the real kernel answers them
+more directly than a generic probe would.
 
-| probe | question | informs |
+| question | how it is answered | where |
 | --- | --- | --- |
-| `input_output_alias_in_place` | Does `input_output_aliases` with donation remove the copy for an array that is both read and written? | contract row T5; [`kernel_design_method.md`](kernel_design_method.md) §8 |
-| `emit_pipeline_scratches_kwarg` | Is `emit_pipeline(scratches=)` honoured on this toolchain, or silently ignored? | [`design/pipelining.md`](design/pipelining.md) |
-| `sc_when_and_traced_grid` | Do `pl.when` around `emit_pipeline` and a traced grid length lower on SparseCore? | [`design/sparsecore.md`](design/sparsecore.md) |
-| `sc_rank0_load_memory_space` | Which memory spaces allow a rank-0 load on SparseCore? | [`design/sparsecore.md`](design/sparsecore.md) |
-| `sc_traced_dma_ring_shape` | Does a traced-extent SparseCore DMA lower into a 2-D ring row, or only into a 1-D ring slot? | [`design/sparsecore.md`](design/sparsecore.md) |
-| `sc_bank_stride_sweep` | What is the SparseCore bank count, and what does each additional way of a bank conflict cost? | [`design/sparsecore.md`](design/sparsecore.md) |
+| Is `emit_pipeline(scratches=)` honoured? | Not needed: always pass scratch buffers by closure capture, which works either way | [STRAT-SC-04](strategies/STRAT-SC-04-emit-pipeline-scratches-noop.md) |
+| Do `pl.when` around `emit_pipeline` and a traced grid length lower on SparseCore? | The compilation test of the kernel itself; on failure, the error table in [`design/sparsecore.md`](design/sparsecore.md) | [STRAT-MLA-08](strategies/STRAT-MLA-08-sparsecore-data-dependent-skip-lowers.md) |
+| Which memory spaces allow a rank-0 load on SparseCore? | Same: the compilation test, then the error table | [STRAT-MLA-09](strategies/STRAT-MLA-09-sparsecore-rank0-smem-xor.md) |
+| Does a traced-extent SparseCore DMA need a 1-D buffer? | Same: the compilation test, then the error table | [STRAT-MLA-12](strategies/STRAT-MLA-12-sparsecore-traced-dma-needs-a-1d-ring.md) |
+| What is the SparseCore bank count? | Not needed to apply the rule: time your own kernel with its lane-private stride and with stride + 1 at fixed work | [STRAT-SC-06](strategies/STRAT-SC-06-pad-scatter-stride-off-bank-count.md) |

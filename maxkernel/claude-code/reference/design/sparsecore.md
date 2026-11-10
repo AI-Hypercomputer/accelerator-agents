@@ -864,7 +864,7 @@ Each line is an open question with the probe that answers it.
   double buffer inside a SparseCore kernel? No registry probe yet.
 - **`core_map` versus `pl.kernel` dispatch.** Does calling `core_map` directly instead of going
   through `pl.kernel`'s `mpmd_map` dispatch change anything? No registry probe yet.
-- **Bank count.** `SparseCoreInfo` does not declare the VMEM bank count. The planned
-  `sc_bank_stride_sweep` will measure it ([../tpu_hardware_facts.md](../tpu_hardware_facts.md) §10).
+- **Bank count.** `SparseCoreInfo` does not declare the VMEM bank count. Check a kernel by timing
+  its lane-private stride against stride + 1 ([../tpu_hardware_facts.md](../tpu_hardware_facts.md) §10).
 - **Other generations.** The per-generation `SparseCoreInfo` table is jax's model of the hardware,
   not a datasheet. Every probe answer is per chip, so re-run on each generation targeted.

@@ -330,8 +330,8 @@ Read parameters from `SparseCoreInfo` at run time or measure them with the named
 **VMEM is banked, and conflicts serialize linearly in ways.** When a lane-private table's per-lane
 stride shares a factor with the bank count, every lane lands on one bank, and cost grows linearly
 with the number of colliding ways. `SparseCoreInfo` does not declare the bank count; it was
-inferred from a conflict ladder. No registry probe measures it yet. The planned
-`sc_bank_stride_sweep` will. Do not confuse the bank count with the subcore count. Rule:
+inferred from a conflict ladder. To check a kernel, time it with its lane-private stride and with
+stride + 1 at fixed work. Do not confuse the bank count with the subcore count. Rule:
 [STRAT-SC-06](strategies/STRAT-SC-06-pad-scatter-stride-off-bank-count.md).
 
 **A wave is all vector subcores in lockstep, and it costs as much as its longest row.** Wave width
@@ -395,6 +395,6 @@ Open questions, each with the probe that settles it. Do not fill a gap with an a
 - **Interpret mode vs traced-index VMEM scratch** (e.g. `lax.rem(p, 2)` double buffers): judged
   unchecked, not demonstrated. Settle with a deliberately wrong index under interpret and hardware.
 - **Counters on another capture path or chip**: repeat the §9 determinism control there.
-- **SparseCore bank count and cost per way**: planned `sc_bank_stride_sweep` (not in the registry).
+- **SparseCore bank count and cost per way**: not declared by `SparseCoreInfo`; check per kernel by timing the stride and stride + 1.
 - **SparseCore usable VMEM / SMEM vs declared**: `sc_vmem_per_subcore`, `sc_smem_capacity`.
 - **Multi-device**: everything here is one TensorCore device; no registry probe covers two chiplets.

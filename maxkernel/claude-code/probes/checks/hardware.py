@@ -895,3 +895,120 @@ def _xla_reference_vs_f64_oracle() -> str:
     f"that fails the reference and matches the oracle: fix the reference "
     f"with Precision.HIGHEST, do not loosen the tolerance"
   )
+
+
+@harness.probe(
+  _GROUP,
+  "input_output_alias_in_place",
+  "When a pallas_call aliases an input to its output, does the caller pay a "
+  "copy of the whole operand, with and without buffer donation?",
+)
+def _input_output_alias_in_place() -> str:
+  """Prices `input_output_aliases` the way MaxKernel's harness calls a kernel.
+
+  Hypothesis: aliasing an input to an output lets a kernel update a few rows
+  of a large buffer in place, but only if the caller donates the buffer. The
+  MaxKernel test harness jits `computation` without `donate_argnums`, so XLA
+  must keep the caller's array intact; if it does that by copying the whole
+  operand before the kernel writes into it, an "in-place" kernel pays a cost
+  that grows with the buffer, not with the update, and the copy shows up
+  outside the kernel in the profile.
+
+  Method: one kernel writes a single (8, cols) block of a (rows, cols) f32
+  buffer through an aliased output. Three arms at two buffer sizes:
+  `fresh_output` (no alias, the kernel alone: the control), `aliased` (jit
+  without donation, the harness case) and `aliased_donated` (jit with
+  `donate_argnums=0`). Each arm is checked for correctness (written block
+  updated, an untouched block read at a different offset preserved), the
+  compiled HLO is searched for a copy of the full operand, and the
+  per-call time is compared across the two sizes. A cost that scales with
+  the buffer means a full copy is paid.
+  """
+  import re
+
+  import jax
+  import jax.numpy as jnp
+  import numpy as np
+  from jax.experimental import pallas as pl
+
+  if jax.default_backend() != "tpu":
+    raise harness.Unsupported("needs a TPU: the copy is decided by XLA:TPU")
+
+  cols = 1024
+  sizes = (16384, 65536)  # rows; the second is 4x the first
+
+  def kernel(x_ref, o_ref) -> None:
+    o_ref[...] = x_ref[...] + 1.0
+
+  def build(rows: int, alias: bool):
+    block = pl.BlockSpec((8, cols), lambda i: (0, 0))
+    out_rows = rows if alias else 8
+    return pl.pallas_call(
+      kernel,
+      grid=(1,),
+      in_specs=[block],
+      out_specs=block,
+      out_shape=jax.ShapeDtypeStruct((out_rows, cols), jnp.float32),
+      input_output_aliases={0: 0} if alias else {},
+    )
+
+  def full_copies(compiled_text: str, rows: int) -> int:
+    shape = f"f32[{rows},{cols}]"
+    return sum(
+      1
+      for line in compiled_text.splitlines()
+      if shape in line.split("=", 1)[-1][:80] and re.search(r"\bcopy", line)
+    )
+
+  report = []
+  times: dict[str, list[float]] = {}
+  for rows in sizes:
+    for arm in ("fresh_output", "aliased", "aliased_donated"):
+      alias = arm != "fresh_output"
+      call = build(rows, alias)
+      fn = (
+        jax.jit(call, donate_argnums=0)
+        if arm == "aliased_donated"
+        else jax.jit(call)
+      )
+      base = jnp.arange(rows * cols, dtype=jnp.float32).reshape(rows, cols)
+      base = base / (rows * cols)
+      expected_block = np.asarray(base[:8]) + 1.0
+      untouched = np.asarray(base[8:16])
+      copies = full_copies(fn.lower(base).compile().as_text(), rows)
+
+      out = fn(base)
+      jax.block_until_ready(out)
+      ok = np.allclose(np.asarray(out[:8]), expected_block)
+      if alias:
+        ok = ok and np.allclose(np.asarray(out[8:16]), untouched)
+      if not ok:
+        raise harness.Invalid(f"{arm} at rows={rows} computed a wrong result")
+
+      # Chain the output back in, so the donated arm always has a live
+      # buffer and every arm does the same work per call.
+      state = {"buf": out if alias else base}
+
+      def step(fn=fn, state=state, alias=alias):
+        result = fn(state["buf"])
+        if alias:
+          state["buf"] = result
+        return result
+
+      timing = harness.time_above_floor(step, what=f"{arm} rows={rows}")
+      harness.require_above_dispatch_floor(timing, what=f"{arm} rows={rows}")
+      times.setdefault(arm, []).append(timing.median)
+      report.append(
+        f"{arm} rows={rows}: {timing.median * 1e6:.1f}us "
+        f"full_operand_copies_in_hlo={copies}"
+      )
+
+  scaling = {
+    arm: values[1] / values[0] for arm, values in times.items() if values[0]
+  }
+  return (
+    " | ".join(report)
+    + " || time ratio when the buffer grows 4x (about 1 = no copy, about 4 ="
+    + " a full-operand copy): "
+    + " ".join(f"{arm}={ratio:.2f}" for arm, ratio in scaling.items())
+  )

@@ -15,9 +15,7 @@ if tools_dir not in sys.path:
 from export_run_metrics import (
   extract_run_metrics,
   main,
-  parse_state_file,
   parse_stream_tokens,
-  RunMetricsSummary,
 )
 
 

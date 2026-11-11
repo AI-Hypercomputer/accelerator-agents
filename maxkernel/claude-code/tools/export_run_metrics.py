@@ -104,7 +104,11 @@ def parse_stream_tokens(stream_path: str) -> dict[str, Optional[int]]:
             input_tokens += int(u["input_tokens"])
             found_tokens = True
           if "cache_read_input_tokens" in u or "cache_read_tokens" in u:
-            val = u.get("cache_read_input_tokens") or u.get("cache_read_tokens")
+            val = (
+              u.get("cache_read_input_tokens")
+              if u.get("cache_read_input_tokens") is not None
+              else u.get("cache_read_tokens")
+            )
             if val is not None:
               cache_read_tokens += int(val)
               found_tokens = True
@@ -118,7 +122,11 @@ def parse_stream_tokens(stream_path: str) -> dict[str, Optional[int]]:
             input_tokens += int(u["input_tokens"])
             found_tokens = True
           if "cache_read_input_tokens" in u or "cache_read_tokens" in u:
-            val = u.get("cache_read_input_tokens") or u.get("cache_read_tokens")
+            val = (
+              u.get("cache_read_input_tokens")
+              if u.get("cache_read_input_tokens") is not None
+              else u.get("cache_read_tokens")
+            )
             if val is not None:
               cache_read_tokens += int(val)
               found_tokens = True
@@ -138,8 +146,10 @@ def parse_stream_tokens(stream_path: str) -> dict[str, Optional[int]]:
   if result_usage is not None:
     in_tok = result_usage.get("input_tokens")
     out_tok = result_usage.get("output_tokens")
-    cache_tok = result_usage.get("cache_read_input_tokens") or result_usage.get(
-      "cache_read_tokens"
+    cache_tok = (
+      result_usage.get("cache_read_input_tokens")
+      if result_usage.get("cache_read_input_tokens") is not None
+      else result_usage.get("cache_read_tokens")
     )
     tot_tok = result_usage.get("total_tokens")
     if tot_tok is None and (in_tok is not None or out_tok is not None):

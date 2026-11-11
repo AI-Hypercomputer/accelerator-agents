@@ -7,6 +7,7 @@ MODEL_NAME="${MODEL_NAME:-opus}"
 TPU_PORT="${TPU_PORT:-5463}"
 TIMEOUT="${TIMEOUT:-10h}"
 OUTPUT_DIR="${OUTPUT_DIR:-${MK_ROOT}/workspace/_pod_run}"
+export ANTHROPIC_HEADLESS=1
 
 DRY_RUN=false
 PROBLEM_DIR=""
@@ -171,6 +172,7 @@ cleanup() {
     kill "$TPU_SERVER_PID" 2>/dev/null || true
     wait "$TPU_SERVER_PID" 2>/dev/null || true
   fi
+  pkill -9 -f run_code.py || true
   exit "$exit_code"
 }
 trap cleanup EXIT INT TERM

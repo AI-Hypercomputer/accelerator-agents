@@ -226,6 +226,12 @@ else
 fi
 
 # 4. Run installer
+VENV_DIR="${HOME}/maxkernel_venv"
+if [ ! -f "${VENV_DIR}/bin/python" ]; then
+  mkdir -p "${VENV_DIR}/bin" 2>/dev/null || true
+  ln -sf "$(command -v python3)" "${VENV_DIR}/bin/python" 2>/dev/null || true
+  ln -sf "$(command -v python3)" "${VENV_DIR}/bin/python3" 2>/dev/null || true
+fi
 if [ "$DRY_RUN" = "true" ]; then
   echo "[dry-run] Running installer: python3 ${MK_ROOT}/install.py --with-guard"
 else
@@ -259,7 +265,7 @@ fi
 # 6. Execute claude or print dry-run command sequence
 if [ "$DRY_RUN" = "true" ]; then
   echo "[dry-run] Command sequence:"
-  echo "[dry-run]   timeout --signal=INT --kill-after=5m ${TIMEOUT} claude -p \"$PROMPT\" --model ${MODEL_NAME} --dangerously-skip-permissions --permission-prompts none --output-format stream-json --verbose > ${OUTPUT_DIR}/claude_stream.json 2>&1"
+  echo "[dry-run]   timeout --signal=INT --kill-after=5m ${TIMEOUT} claude -p \"$PROMPT\" --model ${MODEL_NAME} --dangerously-skip-permissions --output-format stream-json --verbose > ${OUTPUT_DIR}/claude_stream.json 2>&1"
   echo "[dry-run]   python3 ${MK_ROOT}/tools/export_run_metrics.py --run_dir ${OUTPUT_DIR} --output ${OUTPUT_DIR}/summary_metrics.json"
 else
   mkdir -p "${OUTPUT_DIR}"
@@ -269,13 +275,16 @@ else
     claude -p "$PROMPT" \
       --model "$MODEL_NAME" \
       --dangerously-skip-permissions \
-      --permission-prompts none \
       --output-format stream-json --verbose \
       </dev/null >"${OUTPUT_DIR}/claude_stream.json" 2>&1
   CLAUDE_RC=$?
   set -e
 
   echo "Claude Code execution finished with exit code ${CLAUDE_RC}"
+  if [ "$CLAUDE_RC" -ne 0 ] && [ -f "${OUTPUT_DIR}/claude_stream.json" ]; then
+    echo "--- Claude Code stderr / output (exit code ${CLAUDE_RC}) ---" >&2
+    tail -n 100 "${OUTPUT_DIR}/claude_stream.json" >&2
+  fi
 
   # 7. Export run metrics
   if [ -f "${OUTPUT_DIR}/state.json" ]; then

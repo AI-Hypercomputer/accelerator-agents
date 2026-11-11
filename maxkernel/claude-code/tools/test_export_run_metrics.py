@@ -12,7 +12,13 @@ tools_dir = os.path.dirname(os.path.abspath(__file__))
 if tools_dir not in sys.path:
   sys.path.insert(0, tools_dir)
 
-from export_run_metrics import extract_run_metrics, main, parse_state_file, parse_stream_tokens, RunMetricsSummary
+from export_run_metrics import (
+  extract_run_metrics,
+  main,
+  parse_state_file,
+  parse_stream_tokens,
+  RunMetricsSummary,
+)
 
 
 class TestExportRunMetrics(unittest.TestCase):
@@ -37,16 +43,38 @@ class TestExportRunMetrics(unittest.TestCase):
         "reason": "Max iterations reached",
       },
     }
-    with open(os.path.join(self.test_dir, "state.json"), "w", encoding="utf-8") as f:
+    with open(
+      os.path.join(self.test_dir, "state.json"), "w", encoding="utf-8"
+    ) as f:
       json.dump(state_data, f)
 
     stream_events = [
-      {"type": "message_start", "message": {"usage": {"input_tokens": 1000, "cache_read_input_tokens": 300, "output_tokens": 50}}},
+      {
+        "type": "message_start",
+        "message": {
+          "usage": {
+            "input_tokens": 1000,
+            "cache_read_input_tokens": 300,
+            "output_tokens": 50,
+          }
+        },
+      },
       {"type": "message_delta", "usage": {"output_tokens": 150}},
-      {"type": "message_start", "message": {"usage": {"input_tokens": 500, "cache_read_input_tokens": 200, "output_tokens": 25}}},
+      {
+        "type": "message_start",
+        "message": {
+          "usage": {
+            "input_tokens": 500,
+            "cache_read_input_tokens": 200,
+            "output_tokens": 25,
+          }
+        },
+      },
       {"type": "message_delta", "usage": {"output_tokens": 75}},
     ]
-    with open(os.path.join(self.test_dir, "claude_stream.json"), "w", encoding="utf-8") as f:
+    with open(
+      os.path.join(self.test_dir, "claude_stream.json"), "w", encoding="utf-8"
+    ) as f:
       for event in stream_events:
         f.write(json.dumps(event) + "\n")
 
@@ -73,7 +101,9 @@ class TestExportRunMetrics(unittest.TestCase):
       "best_code_path": "/tmp/workspace/iter1.py",
       "history": [{"iteration": 1, "speedup": 1.15}],
     }
-    with open(os.path.join(self.test_dir, "state.json"), "w", encoding="utf-8") as f:
+    with open(
+      os.path.join(self.test_dir, "state.json"), "w", encoding="utf-8"
+    ) as f:
       json.dump(state_data, f)
 
     # No stream file provided; token metrics should be None
@@ -100,18 +130,29 @@ class TestExportRunMetrics(unittest.TestCase):
         "roofline_attained_pct": 92.5,
       },
     }
-    with open(os.path.join(self.test_dir, "state.json"), "w", encoding="utf-8") as f:
+    with open(
+      os.path.join(self.test_dir, "state.json"), "w", encoding="utf-8"
+    ) as f:
       json.dump(state_data, f)
 
     summary = extract_run_metrics(self.test_dir)
     self.assertEqual(summary.iteration_count, 2)
-    self.assertEqual(summary.stopping_recommendations["reason"], "Target roofline speedup reached")
-    self.assertEqual(summary.stopping_recommendation["reason"], "Target roofline speedup reached")
+    self.assertEqual(
+      summary.stopping_recommendations["reason"],
+      "Target roofline speedup reached",
+    )
+    self.assertEqual(
+      summary.stopping_recommendation["reason"],
+      "Target roofline speedup reached",
+    )
 
   def test_stream_tokens_with_result_event(self):
     stream_file = os.path.join(self.test_dir, "claude_stream.json")
     stream_events = [
-      {"type": "message_start", "message": {"usage": {"input_tokens": 100, "output_tokens": 20}}},
+      {
+        "type": "message_start",
+        "message": {"usage": {"input_tokens": 100, "output_tokens": 20}},
+      },
       {
         "type": "result",
         "subtype": "success",
@@ -161,7 +202,9 @@ class TestExportRunMetrics(unittest.TestCase):
       "best_optimized_time": 8.57,
       "best_code_path": "/tmp/workspace/best.py",
     }
-    with open(os.path.join(self.test_dir, "state.json"), "w", encoding="utf-8") as f:
+    with open(
+      os.path.join(self.test_dir, "state.json"), "w", encoding="utf-8"
+    ) as f:
       json.dump(state_data, f)
 
     output_path = os.path.join(self.test_dir, "summary_metrics.json")

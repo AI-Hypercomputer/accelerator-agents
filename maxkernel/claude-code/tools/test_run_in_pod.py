@@ -64,23 +64,27 @@ class TestRunInPod(unittest.TestCase):
 
   def test_dry_run_formatting_with_flag(self):
     out_dir = os.path.join(self.test_dir, "out")
-    res = self.run_script([
-      "--dry-run",
-      "--problem-dir",
-      self.problem_dir,
-      "--output-dir",
-      out_dir,
-      "--model",
-      "claude-3-opus",
-      "--tpu-port",
-      "5555",
-      "--timeout",
-      "2h",
-    ])
+    res = self.run_script(
+      [
+        "--dry-run",
+        "--problem-dir",
+        self.problem_dir,
+        "--output-dir",
+        out_dir,
+        "--model",
+        "claude-3-opus",
+        "--tpu-port",
+        "5555",
+        "--timeout",
+        "2h",
+      ]
+    )
     self.assertEqual(res.returncode, 0, msg=res.stderr)
     output = res.stdout
     self.assertIn("[dry-run] Checking node and claude CLI in PATH", output)
-    self.assertIn("[dry-run] Checking TPU server health on 127.0.0.1:5555/health", output)
+    self.assertIn(
+      "[dry-run] Checking TPU server health on 127.0.0.1:5555/health", output
+    )
     self.assertIn("tpu_server.py --port=5555", output)
     self.assertIn("install.py --with-guard", output)
     self.assertIn("Pointing tpu_config.json at 127.0.0.1:5555", output)

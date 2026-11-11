@@ -57,6 +57,11 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 # Copy complete repository source files (including unmerged PR branches)
 COPY . /accelerator-agents
 
+# Configure default maxkernel_venv symlink for Claude Code subagents
+RUN mkdir -p /root/maxkernel_venv/bin && \
+    ln -sf /usr/bin/python3 /root/maxkernel_venv/bin/python && \
+    ln -sf /usr/bin/python3 /root/maxkernel_venv/bin/python3
+
 # Ensure entrypoint runner is executable
 RUN chmod +x /accelerator-agents/maxkernel/claude-code/tools/run_in_pod.sh
 

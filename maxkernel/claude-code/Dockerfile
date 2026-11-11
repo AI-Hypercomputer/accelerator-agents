@@ -15,6 +15,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Google Cloud SDK for GCS artifacts sync
+RUN curl -sLO https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz && \
+    tar -xzf google-cloud-cli-linux-x86_64.tar.gz -C /opt && \
+    /opt/google-cloud-sdk/install.sh -q && \
+    rm google-cloud-cli-linux-x86_64.tar.gz
+ENV PATH="${PATH}:/opt/google-cloud-sdk/bin"
+ENV CLOUDSDK_CORE_DISABLE_USAGE_REPORTING=true
+
 # Install Node.js 20.x and npm
 RUN mkdir -p /etc/apt/keyrings && \
     curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
@@ -38,18 +46,20 @@ RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
     update-alternatives --set python3 /usr/bin/python3.12 && \
     curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
 
-WORKDIR /accelerator-agents/maxkernel/claude-code
+WORKDIR /accelerator-agents
 
 # Copy requirements and install Python dependencies including JAX with Trillium libtpu and anthropic[vertex]
-COPY requirements.txt .
+COPY maxkernel/claude-code/requirements.txt /accelerator-agents/maxkernel/claude-code/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir "anthropic[vertex]" && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r /accelerator-agents/maxkernel/claude-code/requirements.txt
 
-# Copy repository source files
-COPY . .
+# Copy complete repository source files (including unmerged PR branches)
+COPY . /accelerator-agents
 
 # Ensure entrypoint runner is executable
-RUN chmod +x tools/run_in_pod.sh
+RUN chmod +x /accelerator-agents/maxkernel/claude-code/tools/run_in_pod.sh
+
+WORKDIR /workspace
 
 ENTRYPOINT ["/accelerator-agents/maxkernel/claude-code/tools/run_in_pod.sh"]

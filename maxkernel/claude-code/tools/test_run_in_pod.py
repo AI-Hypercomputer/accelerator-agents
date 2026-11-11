@@ -106,6 +106,14 @@ class TestRunInPod(unittest.TestCase):
     self.assertEqual(res.returncode, 0, msg=res.stderr)
     self.assertIn("Detected Vertex AI configuration", res.stdout)
 
+  def test_vertex_ai_disabled(self):
+    res = self.run_script(
+      ["--dry-run", "--problem-dir", self.problem_dir],
+      env={"CLAUDE_CODE_USE_VERTEX": "0"},
+    )
+    self.assertEqual(res.returncode, 0, msg=res.stderr)
+    self.assertNotIn("Detected Vertex AI configuration", res.stdout)
+
 
 if __name__ == "__main__":
   unittest.main()

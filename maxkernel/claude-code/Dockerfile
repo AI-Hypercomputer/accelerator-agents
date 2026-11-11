@@ -5,6 +5,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV IS_SANDBOX=1
 ENV ANTHROPIC_HEADLESS=1
+ENV CLAUDE_CODE_USE_VERTEX=1
+ENV ANTHROPIC_VERTEX_PROJECT_ID=tpu-kernel-assist-sandbox
+ENV CLOUD_ML_REGION=us-east5
 ENV MK_ROOT=/accelerator-agents/maxkernel/claude-code
 
 # Install system dependencies and repository prerequisites

@@ -187,9 +187,9 @@ write it.
 
 ### No job files, no iteration budget
 
-This branch has no job-file mechanism — `validate_job.py`, `docs/job-spec.md`
-and `examples/jobs/` do not exist here, and nothing reads a `job.json`. So the
-runner puts what a job file would have declared straight into the prompt: the
+The nightly runner does not use the job-file mechanism (`validate_job.py`,
+`docs/job-spec.md`); it never writes a `job.json`. Instead it
+puts what a job file would have declared straight into the prompt: the
 entry point (`computation`, which five ops bind by assignment), the source
 role, and the `atol`/`rtol` read out of `kernel_task.yaml`.
 

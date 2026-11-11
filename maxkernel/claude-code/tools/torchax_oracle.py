@@ -45,6 +45,10 @@ Exit codes:
   4  STEP 0 FAILED: torchax disagrees with eager PyTorch beyond tolerance.
      The oracle is not trustworthy and must not be used.
   5  the capture would exceed --max-bytes
+
+`--entry-point`, `--inputs-fn`, `--init-inputs-fn` and `--input-spec` carry a
+job file's declarations, with the same meaning as in capture_torch_golden.py;
+both tools read the spec through tools/input_spec.py so they cannot disagree.
 """
 
 import argparse
@@ -58,6 +62,8 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 os.environ.setdefault("JAX_PLATFORMS", os.environ.get("JAX_PLATFORMS", "cpu"))
 
 import numpy as np  # noqa: E402
+
+import input_spec  # noqa: E402  (tools/, beside this file)
 
 # Step 0 compares torchax's conversion against eager PyTorch. How closely the
 # two can possibly agree is a property of the BACKEND, not of the conversion:
@@ -148,11 +154,37 @@ def normalize_init_inputs(raw):
   return [raw], {}
 
 
-def build_model(ns, seed):
+def _named_factory(ns, name, default):
+  """Same rule as capture_torch_golden.py: missing is an error only if declared."""
+  fn = ns.get(name or default)
+  if name and not callable(fn):
+    raise LookupError(f"the declared function {name!r} is not defined in the source")
+  return fn if callable(fn) else None
+
+
+def build_model(ns, seed, entry_name=None, init_fn_name=None, spec=None):
   import torch
   import torch.nn as nn
 
   torch.manual_seed(seed)
+  if input_spec.has_init(spec):
+    init_raw = input_spec.init_inputs(spec)
+  else:
+    init_fn = _named_factory(ns, init_fn_name, "get_init_inputs")
+    init_raw = init_fn() if init_fn else None
+
+  if entry_name:
+    kind, cls = input_spec.resolve_entry(ns, entry_name, "__maxkernel_source__")
+    if kind != "module":
+      raise LookupError(
+        f"entry point {entry_name!r} is a function; torchax.extract_jax "
+        "converts nn.Modules. Use reference_mode 'llm_port'."
+      )
+    args, kwargs = normalize_init_inputs(init_raw)
+    model = cls(*args, **kwargs)
+    model.eval()
+    return model, cls.__name__
+
   modules = {
     n: o
     for n, o in ns.items()
@@ -173,9 +205,7 @@ def build_model(ns, seed):
       "and none named `Model`. Ask the user which one is being converted."
     )
 
-  args, kwargs = normalize_init_inputs(
-    ns["get_init_inputs"]() if callable(ns.get("get_init_inputs")) else None
-  )
+  args, kwargs = normalize_init_inputs(init_raw)
   model = cls(*args, **kwargs)
   model.eval()
   return model, cls.__name__
@@ -275,19 +305,29 @@ def build(
   max_bytes,
   skip_step0,
   backend=None,
+  entry_name=None,
+  inputs_fn_name=None,
+  init_fn_name=None,
+  spec=None,
 ):
   import jax
   import torch
 
   torchax = import_torchax()
   ns = load_source(source_path)
-  model, model_name = build_model(ns, seed)
+  model, model_name = build_model(ns, seed, entry_name, init_fn_name, spec)
 
-  if not callable(ns.get("get_inputs")):
+  # Declared configs win over the source's factory, and are each built once.
+  declared = input_spec.config_count(spec)
+  get_inputs = None if declared else _named_factory(ns, inputs_fn_name, "get_inputs")
+  if not declared and get_inputs is None:
     raise LookupError(
-      "the source defines no get_inputs(); there are no canonical input "
-      "shapes to build an oracle over."
+      "the source defines no get_inputs() and the job declares no "
+      "input.configs; there are no canonical input shapes to build an "
+      "oracle over."
     )
+  if declared:
+    num_configs = declared
 
   states, jax_fn = torchax.extract_jax(model)
   states_order = list(states.keys())
@@ -297,7 +337,10 @@ def build(
 
   for idx in range(num_configs):
     torch.manual_seed(seed + idx)
-    raw = ns["get_inputs"]()
+    if declared:
+      raw = input_spec.build_args(spec, idx, seed + idx)
+    else:
+      raw = get_inputs()
     raw = [raw] if isinstance(raw, torch.Tensor) else list(raw)
     tensors = [a for a in raw if isinstance(a, torch.Tensor)]
     extras = [a for a in raw if not isinstance(a, torch.Tensor)]
@@ -378,6 +421,9 @@ def build(
     "schema": "maxkernel.torchax_oracle/1",
     "source_path": str(Path(source_path).resolve()),
     "model_class": model_name,
+    "inputs_origin": (
+      "job input.configs" if declared else f"source {get_inputs.__name__}()"
+    ),
     "seed": seed,
     "torch_version": torch.__version__,
     "jax_version": jax.__version__,
@@ -443,7 +489,20 @@ def main():
     action="store_true",
     help="skip step 0. The oracle is then unvalidated -- say so downstream.",
   )
+  p.add_argument("--entry-point", help="nn.Module class to convert; skips discovery")
+  p.add_argument("--inputs-fn", help="name of the forward-inputs factory")
+  p.add_argument("--init-inputs-fn", help="name of the constructor-inputs factory")
+  p.add_argument(
+    "--input-spec",
+    help="input_spec.json with declared constructor args and input configs",
+  )
   args = p.parse_args()
+
+  try:
+    spec = input_spec.load_input_spec(args.input_spec)
+  except (OSError, ValueError) as e:
+    print(f"BAD_INPUT_SPEC: {e}", file=sys.stderr)
+    return 3
 
   atol, rtol, backend = resolve_tolerance(args.atol, args.rtol)
   if args.atol is None or args.rtol is None:
@@ -463,6 +522,10 @@ def main():
       max_bytes=args.max_bytes,
       skip_step0=args.skip_eager_check,
       backend=backend,
+      entry_name=args.entry_point,
+      inputs_fn_name=args.inputs_fn,
+      init_fn_name=args.init_inputs_fn,
+      spec=spec,
     )
   except LookupError as e:
     print(f"NO_ENTRY_POINT: {e}", file=sys.stderr)

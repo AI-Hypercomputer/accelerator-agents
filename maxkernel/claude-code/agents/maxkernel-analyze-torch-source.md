@@ -87,6 +87,12 @@ the `__init__`, any helper functions, and any `get_inputs()` /
 If `state.primary.source_path` is missing or empty, STOP and report the error.
 Do not search for a replacement and do not invent a module.
 
+If `state.primary.extraction` is set, `source.py` was extracted from the user's
+codebase by an agent and approved by the user (Phase 0.15). Read
+`<run_dir>/extraction_rationale.md` too: its Assumptions and Divergences are
+semantics the user signed off on, and Section 1 of your brief should say the
+source is an extraction and name the original entry point.
+
 ## Step 3: Write the context brief
 
 Write `<run_dir>/torch_context.md` with the sections below. Two rules govern
@@ -222,6 +228,14 @@ Requirements:
     decorator — the harness jits it.
 6.  **Shape-commented** on every intermediate: `# Shape: (batch, seq, hidden)`.
 7.  **Preserve the user's problem dimensions exactly** (general_rules #6).
+8.  **Data-dependent routing gets the static-shape form an engineer would
+    write, never a dense one.** For an MoE / top-k dispatch (`nonzero`,
+    `bincount`, `split` on `.tolist()`, per-expert Python loops), port it as
+    sort-by-expert + `jax.lax.ragged_dot` with `group_sizes`, per
+    `{{MAXKERNEL_ROOT}}/reference/tpu_moe_and_grouped_matmul.md` §2. Computing
+    every expert for every token and masking gives the same numbers at E/K
+    times the FLOPs, and as `base.py` it inflates every speedup the run reports
+    by that factor. Capacity-factor dispatch only if the source drops tokens.
 
 ## Step 5: Verify your own port before you finish
 

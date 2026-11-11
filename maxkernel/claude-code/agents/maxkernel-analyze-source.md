@@ -262,7 +262,14 @@ Requirements:
 6.  **Shape-commented**, in the same style the rest of the loop uses:
     `# Shape: (batch, seq_len, hidden)` on every intermediate.
 7.  **Preserve the user's problem dimensions exactly** (general_rules #6). If
-    the source hard-codes sizes, keep them.
+    the source hard-codes sizes, keep them. If it does not, and
+    `state.primary.input_spec_path` is set, the declared configs there are the
+    sizes.
+8.  **Routed / grouped GEMMs get the static-shape form, never a dense one.**
+    A kernel that gathers tokens per expert and runs a varlen grouped GEMM
+    (MoE) ports as sort-by-expert + `jax.lax.ragged_dot` with `group_sizes`,
+    per `{{MAXKERNEL_ROOT}}/reference/tpu_moe_and_grouped_matmul.md` §2 — not
+    as compute-every-expert-and-mask, which inflates every speedup by E/K.
 
 Sanity-check it before you finish:
 

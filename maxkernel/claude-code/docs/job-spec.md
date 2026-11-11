@@ -10,7 +10,7 @@ four `.py` files in a directory is the thing being converted, and refuses
 (exit 3) when it cannot tell. A job file says so outright.
 
 ```bash
-{{VENV_PYTHON}} tools/validate_job.py examples/jobs/02-pytorch-to-pallas.json
+{{VENV_PYTHON}} tools/validate_job.py path/to/job.json
 ```
 
 ---
@@ -24,6 +24,7 @@ four `.py` files in a directory is the thing being converted, and refuses
 | PyTorch + CUDA ref → Pallas | `pytorch` | `true` | `true` | `torchax` or `llm_port` |
 | CUDA → Pallas | `cuda` | `false` | `true` | `llm_port` only |
 | Triton / cuTile / CuTe DSL / other GPU → Pallas | `triton`, `cutile`, `cutedsl`, `gpu` | either | `true` | `llm_port` only |
+| PyTorch codebase (package, GPU-only deps) → Pallas | `pytorch` + `input.extraction` | either | `true` | `llm_port` advised |
 | *no source* → Pallas | `specification` | either | depends on `synthesize_as` | `torchax`/`llm_port` when synthesizing PyTorch |
 
 The third row is the one worth being precise about: **PyTorch is the input and
@@ -44,6 +45,78 @@ never becomes `base.py`. It reaches the planner solely as triaged entries in
 | `entry_point` | The class or function being converted, e.g. `"Model"`. **Optional but strongly advised** — it is what removes the ambiguity that makes `classify_inputs.py` refuse to guess. |
 | `inputs_fn` | Name of the function returning forward arguments, usually `"get_inputs"`. |
 | `init_inputs_fn` | Name of the function returning constructor arguments, usually `"get_init_inputs"`. May return a flat list or `(args, kwargs)`; both conventions are handled. |
+| `init_args` / `init_kwargs` | Constructor arguments as JSON values, for a source with no `get_init_inputs()`. Mutually exclusive with `init_inputs_fn`. A constructor that takes an enum needs a source that accepts its string value. |
+| `configs` | Forward inputs, for a source with no `get_inputs()` — see below. Mutually exclusive with `inputs_fn`. |
+| `extraction` | The source cannot run as is; Phase 0.15 extracts a standalone one — see below. |
+
+`entry_point`, `inputs_fn`, `init_inputs_fn` and the spec fields reach the
+capture tools as `--entry-point`, `--inputs-fn`, `--init-inputs-fn` and
+`--input-spec <run_dir>/input_spec.json`. Declared, they replace discovery
+outright; undeclared, the tools fall back to the KernelBench conventions.
+
+### `input.configs` — when the source ships no `get_inputs()`
+
+Code from the wild rarely has an input factory, and general_rules #6 forbids an
+agent from choosing shapes. So you declare them, one entry per config to
+capture:
+
+```json
+"init_kwargs": {"num_experts": 128, "num_experts_per_tok": 8, "hidden_size": 768,
+                "intermediate_size": 256, "activation_function": "swiglu",
+                "add_bias": false, "std": 0.02},
+"configs": [
+  {"name": "T8192", "inputs": [
+    {"name": "hidden_states", "shape": [8192, 768], "dtype": "bfloat16"}
+  ]}
+]
+```
+
+| Field of `configs[].inputs[]` | Meaning |
+| --- | --- |
+| `shape`, `dtype` | A tensor argument. `dtype` is a torch dtype name (`bfloat16`, `float32`, `int32`, …). |
+| `init` | `randn` (default for floats), `rand`, `randint` (needs `low` and `high`), `zeros`, `ones`. **Integer tensors have no default**: they are usually indices, and their valid range is part of the problem. |
+| `scale` | Multiplies the sampled values. |
+| `value` | A non-tensor (static) argument instead of a tensor. |
+
+Each declared config is captured once (`--num-configs` does not apply), and
+`get_inputs()` in the generated harness is built from the capture. Constructor
+arguments are shared by every config: one run is one model. To compare model
+sizes, run one job per size.
+
+Golden capture stores every parameter. Large real-world parameter sets — MoE
+expert weights at `E*3*H*I` elements — can exceed the capture's 256 MB cap, and
+the capture then degrades to an unverified port. Pick a config whose weights fit
+if you want the port checked.
+
+### `input.extraction` — code that cannot run as is
+
+A repository is not a benchmark file. It has relative imports, imports
+CUDA-only libraries (CuTe DSL, Triton, custom extensions), touches
+`torch.cuda`, and ships no input factory. The capture tools execute one
+self-contained file on a TPU host's CPU, so none of that runs. `extraction` has
+an agent (`maxkernel-extract-source`, Phase 0.15) write that file — a `Model`
+with your constructor arguments and inputs — by tracing your entry point
+through the codebase, and then **stops for your approval** like a synthesized
+baseline.
+
+| Field | Meaning |
+| --- | --- |
+| `entry_point` | **Required.** What to reproduce, as `path/in/repo.py:Name`. |
+| `notes` | Which path to reproduce when `forward()` has several: backend, inference vs training, what to return. Without it the agent takes the default-argument path in `eval()` mode and records that choice. |
+| `user_confirms_extraction` | **Required, must be `true`.** Acknowledges the approval step exists. It is not the approval. |
+
+Rules the validator enforces: `extraction` needs `input.type: "pytorch"` and
+`input.configs`; `input.entry_point`, `inputs_fn` and `init_inputs_fn` cannot be
+set alongside it (the extracted file always exposes `Model`); and a PyTorch
+`input.path` that is a **directory** requires it.
+
+What you get at the gate: `source.py`, `extraction_rationale.md` (the path
+reproduced, the paths not reproduced, assumptions, and divergences between the
+repository's own torch path and its kernel path), and `extraction_check.py`,
+which compares the extraction with your original **on a machine where the
+original runs**. Nothing on the TPU host can make that comparison, so running it
+is the only check of that link. From approval onwards the run is an ordinary
+PyTorch run on the extracted file, and every later gate applies to it.
 
 ### `input.specification` — when there is no source file
 
@@ -191,7 +264,7 @@ Two things to know about an `autodiff` run:
 
 ## What the validator checks
 
-Beyond required fields and enum membership, it rejects twelve contradictions
+Beyond required fields and enum membership, it rejects sixteen contradictions
 that are each a real failure mode:
 
 1. `has_reference: true` with no `references` — a silently reference-less run.
@@ -215,6 +288,15 @@ that are each a real failure mode:
     there is no `base.py` to differentiate.
 12. `from: "autodiff"` with `evaluation.compare_against_source: true` — it
     would compare a backward kernel against the forward source.
+13. `input.configs` with `input.inputs_fn`, or `init_args`/`init_kwargs` with
+    `init_inputs_fn` — two sources for the same arguments.
+14. A malformed config: a tensor without a valid shape or dtype, an integer
+    tensor without an `init` range, `value` together with `shape`.
+15. `input.extraction` on a non-PyTorch input, without `input.configs`,
+    without `entry_point`, without `user_confirms_extraction`, or alongside
+    `input.entry_point` / `inputs_fn` / `init_inputs_fn`.
+16. A PyTorch `input.path` that is a directory, without `input.extraction` —
+    the capture tools cannot execute a package.
 
 On success it prints the plan the job implies, so you can see what will happen
 before it happens:
@@ -233,17 +315,3 @@ JOB VALID: rmsnorm-torch
 ```
 
 Exit `0` valid · `1` invalid · `2` valid but a declared path does not exist.
-
----
-
-## Examples
-
-`examples/jobs/` holds one runnable job per supported shape:
-
-| File | Shape |
-| --- | --- |
-| `01-jax-to-pallas.json` | JAX → Pallas |
-| `02-pytorch-to-pallas.json` | PyTorch → Pallas, torchax |
-| `03-pytorch-with-cuda-reference.json` | PyTorch + CUDA reference → Pallas |
-| `04-cuda-to-pallas.json` | CUDA → Pallas, `llm_port` |
-| `05-specification-to-pallas.json` | No source file — baseline synthesized from a spec, then approved |

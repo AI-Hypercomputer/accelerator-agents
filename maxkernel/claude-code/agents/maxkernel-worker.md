@@ -30,6 +30,8 @@ fast.
 
 Semantics spine — load-bearing. A defect here invalidates every number:
 *   `<run_dir>/source.*` or `<run_dir>/source/`: the user's original primary input, untouched (written by the orchestrator)
+*   `<run_dir>/original/`, `<run_dir>/source.py`, `<run_dir>/extraction_rationale.md`, `<run_dir>/extraction_check.py`: extraction runs only (`state.primary.extraction` set) — `original/` is the user's code, untouched; `source.py` is the self-contained module Phase 0.15 extracted from it, which becomes the primary once the user approves it
+*   `<run_dir>/input_spec.json`: the job's declared constructor arguments and input configs, when it declared any (`state.primary.input_spec_path`)
 *   `<run_dir>/torch_golden.npz` + `<run_dir>/torch_golden.json`: inputs and outputs recorded by running the user's PyTorch module on CPU — Phase 0.2, `pytorch` primary only
 *   `<run_dir>/torch_context.md` / `<run_dir>/<language>_context.md`: deep primary-source brief — Phase 0.4, only when `state.primary.language != "jax"`
 *   `<run_dir>/base.py`: Baseline JAX kernel — copied from `source.py` by the orchestrator for a `jax` input, or ported from the primary in Phase 0.4 otherwise
@@ -163,6 +165,14 @@ from inside the loop.
         the orchestrator that this combination needs the external harness at
         `{{MAXKERNEL_ROOT}}/evaluation/compare_kernel.py` rather than the
         internal loop — do not discover it four phases later.
+    -   `primary.entry_point`, `primary.inputs_fn`, `primary.init_inputs_fn`,
+        `primary.input_spec_path` — what the job declared about the source.
+        Each is `null` when undeclared; the capture tools then discover by
+        convention. When set, they are passed to the capture tools in Phase
+        0.2 verbatim — never re-derived.
+    -   `primary.extraction` — `null`, or an object meaning the user's code
+        cannot run as is and Phase 0.15 must extract a standalone source
+        from it first.
     -   `backward` = `state.backward` (`null` for a forward run).
         `backward.from == "autodiff"` enables Phase 0.85.
     -   Previous iteration artifacts from `state.history` (if present).
@@ -238,6 +248,70 @@ normal chain still applies afterwards and the *conversion* is verified. For
 all — the user's approval is the only anchor the run will ever have, and the
 final report must say so.
 
+### Phase 0.15: Extract a Standalone Source From Code in the Wild (ONCE — GATED)
+
+**Run only when `state.primary.extraction` is set.** It is set when the user's
+PyTorch code is a package or depends on things this host cannot run (relative
+imports, CuTe DSL / Triton / CUDA extensions, `torch.cuda` streams), so the
+capture tools cannot execute it directly.
+
+An agent writes the self-contained `source.py` from the user's code — which,
+as in Phase 0.1, means an agent writes the file this run is **scored against**.
+Unlike Phase 0.1 the semantics are not invented: they exist in the user's code,
+and the agent's job is to move them without changing them. Whether it did is not
+checkable on this host. So this phase also ends by stopping and asking the user.
+
+1.  **Check if already done**: if `<run_dir>/source.py` exists AND
+    `state.primary.extraction.approved` is `true`, skip to Phase 0.2. If
+    `source.py` exists but approval is not recorded, go to step 4 — do not
+    re-extract.
+2.  **Invoke `maxkernel-extract-source`**:
+    -   Prompt: `"Extract the primary source for run_dir = <run_dir> (state file: <run_dir>/state.json)."`
+3.  **Verify on disk**: `<run_dir>/source.py`, `<run_dir>/extraction_rationale.md`
+    and `<run_dir>/extraction_check.py` must exist and be non-empty, and
+    `source.py` must build and run exactly as the capture tools will run it:
+    ```bash
+    {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/input_spec.py smoke <run_dir>/source.py \
+      --input-spec <state.primary.input_spec_path> --entry-point Model
+    ```
+    Exit 0 prints `SMOKE_OK` and the output shapes. Re-dispatch per the retry
+    policy (3 attempts) if any check fails.
+4.  **STOP AND ASK THE USER. This gate is not skippable.**
+
+    Return to the orchestrator without advancing the iteration, reporting:
+    -   the full text of `<run_dir>/extraction_rationale.md`, with its
+        **Assumptions** and **Divergences** sections called out separately;
+    -   the paths to `<run_dir>/source.py` and `<run_dir>/extraction_check.py`,
+        and that the latter is how the user can compare the extraction with
+        their original on a machine where it runs — nothing here can;
+    -   the `SMOKE_OK` output shapes;
+    -   a plain statement that this file, not the user's original, is what
+        every number in the run will be checked against, and that an agent
+        wrote it.
+
+    Do not proceed on silence, on `input.extraction.user_confirms_extraction`
+    (it only acknowledges this step exists), or on your own judgement.
+
+5.  **On approval**: re-read `<run_dir>/state.json`, set
+    `primary.extraction.approved` to `true`, `primary.source_path` (and the
+    legacy `source_path`) to the absolute path of `<run_dir>/source.py`, and
+    `primary.entry_point` to `"Model"`. `primary.language` stays `"pytorch"`.
+    From here the run proceeds exactly as for a user-supplied PyTorch file,
+    with the declared configs driving the capture.
+
+6.  **On rejection or a correction request**: record what the user said in
+    `<run_dir>/maxkernel_debug_history.md`, re-dispatch
+    `maxkernel-extract-source` with their feedback in the prompt, and come back
+    to step 4. There is no attempt limit — this is a conversation with the
+    user, not a repair loop.
+
+**What this gate buys.** The golden values Phase 0.2 captures are the extracted
+file's, and Phase 0.8 checks `base.py` against them — so the chain from
+`source.py` to the kernel is verified as usual. The link from the user's original
+to `source.py` is checked only by the user: by reading the rationale, and by
+running `extraction_check.py` where the original runs. The final report must say
+which of those happened.
+
 ### Phase 0.2: Capture Golden Values From a PyTorch Primary (ONCE — idempotent)
 
 **Run this only when `state.primary.language` is `"pytorch"` or `"triton"`.**
@@ -275,7 +349,8 @@ Which tool produces the oracle depends on `state.reference_mode`:
       <state.primary.source_path> \
       --out <run_dir>/torchax_oracle.npz \
       --meta <run_dir>/torchax_oracle.json \
-      --seed <state.seed or 1024> --atol 1e-4 --rtol 1e-4
+      --seed <state.seed or 1024> --atol 1e-4 --rtol 1e-4 \
+      <declaration flags>
     ```
     Extra exit code for this tool: **4 = STEP 0 FAILED** — torchax does not
     reproduce eager PyTorch within tolerance. Do NOT degrade past this. The
@@ -290,8 +365,16 @@ Which tool produces the oracle depends on `state.reference_mode`:
       <state.primary.source_path> \
       --out <run_dir>/torch_golden.npz \
       --meta <run_dir>/torch_golden.json \
-      --device cpu --dtype-policy preserve --seed 0
+      --device cpu --dtype-policy preserve --seed 0 \
+      <declaration flags>
     ```
+
+    `<declaration flags>` are, for each of these `state.primary` fields that is
+    not `null`: `--entry-point <entry_point>`, `--inputs-fn <inputs_fn>`,
+    `--init-inputs-fn <init_inputs_fn>`, `--input-spec <input_spec_path>`.
+    Omit the ones that are `null`. They are the user's declarations; passing
+    them is what stops the tool from guessing. With `--input-spec`, each
+    declared config is captured once and `--num-configs` is ignored.
 
 3.  **Branch on the exit code. Each one means something different:**
 
@@ -299,9 +382,9 @@ Which tool produces the oracle depends on `state.reference_mode`:
     | --- | --- | --- |
     | 0 | golden captured | set `state.primary.golden_path` and `golden_meta_path`; continue |
     | 2 | torch missing, or the module will not run on CPU | **DEGRADE, do not abort.** Record `"golden_degraded": "<stderr reason>"` in state, leave the golden paths `null`, and continue. The run proceeds with today's self-comparison and the final report must say the port was never verified. |
-    | 3 | no discoverable entry point | STOP. Report to the orchestrator that the user must identify the entry point. Do not guess. |
+    | 3 | no discoverable entry point, or no input shapes | STOP. Report the tool's message to the orchestrator: the user must name the entry point (`input.entry_point`) or declare inputs (`input.configs`). Do not guess either. |
     | 4 | `forward()` is non-deterministic | **DEGRADE**, exactly as for exit 2, recording the non-determinism as the reason. There is no golden value to capture; dropout or live RNG means no single correct answer exists. |
-    | 5 | capture exceeds `--max-bytes` | retry once with `--num-configs 1`; if it still exceeds, DEGRADE as for exit 2. |
+    | 5 | capture exceeds `--max-bytes` | retry once with `--num-configs 1` (or, with `--input-spec`, add `--no-fp64-probe`); if it still exceeds, DEGRADE as for exit 2. Large real-world parameter sets (MoE expert weights) hit this; say so when degrading. |
 
     A degraded capture is a real loss of assurance, not a formality. Append the
     reason to `<run_dir>/maxkernel_debug_history.md` so a later correctness

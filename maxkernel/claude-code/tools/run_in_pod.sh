@@ -8,6 +8,7 @@ TPU_PORT="${TPU_PORT:-5463}"
 TIMEOUT="${TIMEOUT:-10h}"
 OUTPUT_DIR="${OUTPUT_DIR:-${MK_ROOT}/workspace/_pod_run}"
 export ANTHROPIC_HEADLESS=1
+export IS_SANDBOX=1
 
 DRY_RUN=false
 PROBLEM_DIR=""

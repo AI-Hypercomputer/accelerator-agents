@@ -3,6 +3,8 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
+ENV IS_SANDBOX=1
+ENV ANTHROPIC_HEADLESS=1
 ENV MK_ROOT=/accelerator-agents/maxkernel/claude-code
 
 # Install system dependencies and repository prerequisites

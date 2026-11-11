@@ -33,8 +33,12 @@ import sys
 import time
 import traceback
 
-import jax
-import jax.numpy as jnp
+try:
+  import jax
+  import jax.numpy as jnp
+except ImportError:
+  jax = None
+  jnp = None
 
 # ---------------------------------------------------------------------------
 # Tolerances -- the only part of this file a generator/fixer agent may edit.

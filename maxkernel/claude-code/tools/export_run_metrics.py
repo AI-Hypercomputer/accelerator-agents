@@ -90,7 +90,9 @@ def parse_stream_tokens(stream_path: str) -> dict[str, Optional[int]]:
           continue
 
         # Check for final result event with total usage
-        if event.get("type") == "result" and isinstance(event.get("usage"), dict):
+        if event.get("type") == "result" and isinstance(
+          event.get("usage"), dict
+        ):
           result_usage = event["usage"]
           continue
 
@@ -124,7 +126,6 @@ def parse_stream_tokens(stream_path: str) -> dict[str, Optional[int]]:
             output_tokens += int(u["output_tokens"])
             found_tokens = True
 
-
   except Exception:  # pylint: disable=broad-exception-caught
     return {
       "input_tokens": None,
@@ -137,7 +138,9 @@ def parse_stream_tokens(stream_path: str) -> dict[str, Optional[int]]:
   if result_usage is not None:
     in_tok = result_usage.get("input_tokens")
     out_tok = result_usage.get("output_tokens")
-    cache_tok = result_usage.get("cache_read_input_tokens") or result_usage.get("cache_read_tokens")
+    cache_tok = result_usage.get("cache_read_input_tokens") or result_usage.get(
+      "cache_read_tokens"
+    )
     tot_tok = result_usage.get("total_tokens")
     if tot_tok is None and (in_tok is not None or out_tok is not None):
       tot_tok = (in_tok or 0) + (out_tok or 0) + (cache_tok or 0)
@@ -233,12 +236,16 @@ def extract_run_metrics(
     if os.path.exists(candidate_stream):
       stream_file = candidate_stream
 
-  token_metrics = parse_stream_tokens(stream_file) if stream_file else {
-    "input_tokens": None,
-    "output_tokens": None,
-    "cache_read_tokens": None,
-    "total_tokens": None,
-  }
+  token_metrics = (
+    parse_stream_tokens(stream_file)
+    if stream_file
+    else {
+      "input_tokens": None,
+      "output_tokens": None,
+      "cache_read_tokens": None,
+      "total_tokens": None,
+    }
+  )
 
   return RunMetricsSummary(
     run_id=run_id,

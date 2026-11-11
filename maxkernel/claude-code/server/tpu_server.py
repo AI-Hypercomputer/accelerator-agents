@@ -982,6 +982,7 @@ async def autotune(request: AutotuneRequest):
 
 if __name__ == "__main__":
   import argparse
+
   parser = argparse.ArgumentParser(description="MaxKernel TPU execution server")
   parser.add_argument(
     "--port",

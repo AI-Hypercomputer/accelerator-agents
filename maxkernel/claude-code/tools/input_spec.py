@@ -39,11 +39,21 @@ Every field is optional. Constructor arguments are JSON values, so a source
 whose constructor takes an enum must accept its string value -- an extracted
 source (Phase 0.15) is written that way on purpose.
 
+OUTPUTS
+-------
+`output_leaves` is the one rule for what a forward() may return: tensors,
+nested in lists, tuples and dicts (dict keys in sorted order, as
+jax.tree_util.tree_leaves orders them). Both capture tools and the smoke check
+use it, so a source that passes smoke cannot fail capture on its outputs. A
+`None` leaf -- sonic-moe returns `(hidden_states, None)` in inference mode --
+is rejected by name.
+
 CLI:
   input_spec.py smoke <source.py> --input-spec <spec.json> [--entry-point Model]
     Builds the module exactly as the capture tools would, runs config 0 once on
-    CPU, and prints the output shapes. Exit 0 ok, 3 no entry point, 2 it did
-    not run.
+    CPU, checks its outputs with `output_leaves`, and prints their shapes. Exit
+    0 ok, 3 no entry point, 2 it did not run or returned something the capture
+    tools cannot record.
 """
 
 import argparse
@@ -209,6 +219,39 @@ def build_args(spec, index, seed):
   return args
 
 
+class UnsupportedOutput(TypeError):
+  """forward() returned a leaf that is not a tensor."""
+
+
+def output_leaves(out, path="output"):
+  """Flattens a forward() result into its tensor leaves, or raises.
+
+  Raises UnsupportedOutput naming the first non-tensor leaf by its path, e.g.
+  `output[1] is NoneType` -- which is what the source has to stop returning.
+  """
+  import torch
+
+  if isinstance(out, torch.Tensor):
+    return [out]
+  if isinstance(out, (list, tuple)):
+    flat = []
+    for i, item in enumerate(out):
+      flat.extend(output_leaves(item, f"{path}[{i}]"))
+    return flat
+  if isinstance(out, dict):
+    flat = []
+    for key in sorted(out):
+      flat.extend(output_leaves(out[key], f"{path}[{key!r}]"))
+    return flat
+  raise UnsupportedOutput(
+    f"{path} is {type(out).__name__}; forward() may only return tensors, "
+    "nested in lists, tuples or dicts. Drop it from the return value"
+    + (" (a None output, e.g. an aux loss that is None in inference mode)"
+       if out is None else "")
+    + "."
+  )
+
+
 def resolve_entry(ns, name, source_module_name):
   """Looks up a named entry point. Returns ("module", cls) or ("function", fn).
 
@@ -261,13 +304,10 @@ def _smoke(args):
   fwd = build_args(spec, 0, args.seed)
   with torch.no_grad():
     out = callee(*fwd)
-  leaves = out if isinstance(out, (list, tuple)) else [out]
+  leaves = output_leaves(out)
   print(f"SMOKE_OK entry={args.entry_point} kind={kind}")
   for i, o in enumerate(leaves):
-    if isinstance(o, torch.Tensor):
-      print(f"  out{i}: shape={list(o.shape)} dtype={str(o.dtype).replace('torch.', '')}")
-    else:
-      print(f"  out{i}: {type(o).__name__} {o!r}")
+    print(f"  out{i}: shape={list(o.shape)} dtype={str(o.dtype).replace('torch.', '')}")
 
 
 def main():

@@ -424,20 +424,11 @@ def build_configs(entry, seed, num_configs, spec=None):
 
 
 def flatten_outputs(out):
-  """Flattens the forward() result to match jax.tree_util.tree_leaves ordering."""
-  if isinstance(out, torch.Tensor):
-    return [out]
-  if isinstance(out, (list, tuple)):
-    flat = []
-    for item in out:
-      flat.extend(flatten_outputs(item))
-    return flat
-  if isinstance(out, dict):
-    flat = []
-    for key in sorted(out):  # tree_leaves sorts dict keys
-      flat.extend(flatten_outputs(out[key]))
-    return flat
-  raise TypeError(f"Unsupported output type: {type(out).__name__}")
+  """Flattens the forward() result to match jax.tree_util.tree_leaves ordering.
+
+  The rule lives in input_spec.output_leaves, shared with the smoke check.
+  """
+  return input_spec.output_leaves(out)
 
 
 def to_device(x):
@@ -865,6 +856,11 @@ def main():
   except MemoryError as e:
     print(f"TOO_LARGE: {e}", file=sys.stderr)
     sys.exit(5)
+  except input_spec.UnsupportedOutput as e:
+    # Not "would not run on CPU": it ran, and returned something no golden
+    # file can hold. Same degrade, but with the reason the source can fix.
+    print(f"DEGRADED: unsupported output: {e}", file=sys.stderr)
+    sys.exit(2)
   except Exception as e:  # pylint: disable=broad-except
     print(f"DEGRADED: the module would not run on CPU: {e}", file=sys.stderr)
     traceback.print_exc()

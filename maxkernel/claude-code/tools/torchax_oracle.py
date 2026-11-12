@@ -314,21 +314,8 @@ def first_inputs(ns, seed, inputs_fn_name=None, spec=None):
 
 
 def flatten_outputs(out):
-  import torch
-
-  if isinstance(out, torch.Tensor):
-    return [out]
-  if isinstance(out, (list, tuple)):
-    flat = []
-    for o in out:
-      flat.extend(flatten_outputs(o))
-    return flat
-  if isinstance(out, dict):
-    flat = []
-    for k in sorted(out):
-      flat.extend(flatten_outputs(out[k]))
-    return flat
-  raise TypeError(f"unsupported output type {type(out).__name__}")
+  """Same rule as capture_torch_golden.py and the smoke check."""
+  return input_spec.output_leaves(out)
 
 
 def flatten_jax_outputs(out):

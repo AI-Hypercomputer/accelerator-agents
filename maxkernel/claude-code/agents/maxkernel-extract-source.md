@@ -157,9 +157,11 @@ Fidelity rules:
   --input-spec <run_dir>/input_spec.json --entry-point Model
 ```
 
-It builds `Model` exactly as the capture tools will and runs config 0 once on
-CPU. Fix `source.py` until it prints `SMOKE_OK` with the output shapes you
-expect. Then run it once more and check the outputs are identical — a
+It builds `Model` exactly as the capture tools will, runs config 0 once on
+CPU, and checks the outputs with the capture tools' own rule — so a `None` or
+other non-tensor leaf fails here (`SMOKE_FAILED: ... output[1] is NoneType`)
+rather than after the user has approved. Fix `source.py` until it prints
+`SMOKE_OK` with the output shapes you expect. Then run it once more and check the outputs are identical — a
 non-deterministic file fails the golden capture.
 
 If config 0 is too large to run on CPU in reasonable time, say so in your

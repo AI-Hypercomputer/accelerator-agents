@@ -274,8 +274,10 @@ checkable on this host. So this phase also ends by stopping and asking the user.
     {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/input_spec.py smoke <run_dir>/source.py \
       --input-spec <state.primary.input_spec_path> --entry-point Model
     ```
-    Exit 0 prints `SMOKE_OK` and the output shapes. Re-dispatch per the retry
-    policy (3 attempts) if any check fails.
+    Exit 0 prints `SMOKE_OK` and the output shapes. Exit 2 includes a
+    `forward()` that returns a `None` or other non-tensor leaf, which the
+    golden capture cannot record; the message names the leaf. Re-dispatch per
+    the retry policy (3 attempts) if any check fails, quoting that message.
 4.  **STOP AND ASK THE USER. This gate is not skippable.**
 
     Return to the orchestrator without advancing the iteration, reporting:

@@ -283,9 +283,9 @@ def validate(job, job_path):
       errors.append(
         "input.extraction.entry_point is required: the class or function in "
         "the original code being converted, as 'file.py:Name' with the file "
-        "path relative to input.path, e.g. 'sonicmoe/moe.py:MoE' for a "
-        "repository root. It is what the extracting agent reproduces, so it "
-        "cannot be guessed."
+        "path relative to input.path, e.g. 'pkg/layers.py:Layer' when "
+        "input.path is the repository root. It is what the extracting agent "
+        "reproduces, so it cannot be guessed."
       )
     if not has_configs:
       errors.append(

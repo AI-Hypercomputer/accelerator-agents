@@ -155,7 +155,13 @@ def _validate_arg(arg, aw):
     errors.append(f"{aw}.init {init!r} needs a floating dtype, got {dtype!r}")
   elif init == "randint":
     low, high = arg.get("low"), arg.get("high")
-    if not (isinstance(low, int) and isinstance(high, int) and low < high):
+    if not (
+      isinstance(low, int)
+      and not isinstance(low, bool)
+      and isinstance(high, int)
+      and not isinstance(high, bool)
+      and low < high
+    ):
       errors.append(f"{aw}.init 'randint' needs integer `low` < `high`")
   scale = arg.get("scale")
   if scale is not None and not isinstance(scale, (int, float)):

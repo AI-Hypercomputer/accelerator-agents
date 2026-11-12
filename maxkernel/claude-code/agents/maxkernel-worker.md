@@ -366,9 +366,14 @@ Which tool produces the oracle depends on `state.reference_mode`:
     comes back in a different dtype (other than JAX's x64 narrowing, e.g.
     int64 indices as int32). Do NOT degrade past this. The
     oracle would be a computation that is not the user's, so every later check
-    would be meaningless. Record the report, fall back to
-    `reference_mode: "llm_port"` for the rest of the run, and note the switch in
-    `<run_dir>/maxkernel_debug_history.md`.
+    would be meaningless. Record the report and run the **torchax → llm_port
+    fallback** below.
+
+    **Exit 2 from this tool is also a fallback, not a degrade.** It means
+    torchax is unavailable or could not convert the module — data-dependent
+    shapes such as `.split(t.tolist())` or `nonzero` are the usual cause —
+    not that the module cannot run. Eager PyTorch may run it fine, so run
+    the fallback below instead of the exit-2 row of the table in step 3.
 
     `reference_mode == "llm_port"`:
     ```bash
@@ -392,7 +397,7 @@ Which tool produces the oracle depends on `state.reference_mode`:
     | exit | meaning | what you do |
     | --- | --- | --- |
     | 0 | golden captured | set `state.primary.golden_path` and `golden_meta_path`; continue |
-    | 2 | torch missing, or the module will not run on CPU | **DEGRADE, do not abort.** Record `"golden_degraded": "<stderr reason>"` in state, leave the golden paths `null`, and continue. The run proceeds with today's self-comparison and the final report must say the port was never verified. |
+    | 2 | torch missing, or the module will not run on CPU (from `capture_torch_golden.py`; from `torchax_oracle.py` see the fallback below) | **DEGRADE, do not abort.** Record `"golden_degraded": "<stderr reason>"` in state, leave the golden paths `null`, and continue. The run proceeds with today's self-comparison and the final report must say the port was never verified. |
     | 3 | no discoverable entry point, no input shapes, or constructor arguments missing (`MISSING_INIT_ARGS`) | STOP. Report the tool's message to the orchestrator: the user must name the entry point (`input.entry_point`), declare inputs (`input.configs`), or declare constructor arguments (`input.init_args` / `input.init_kwargs`). Do not guess any of them. |
     | 4 | `forward()` is non-deterministic | **DEGRADE**, exactly as for exit 2, recording the non-determinism as the reason. There is no golden value to capture; dropout or live RNG means no single correct answer exists. |
     | 5 | capture exceeds `--max-bytes` | retry once with `--num-configs 1` (or, with `--input-spec`, add `--no-fp64-probe`); if it still exceeds, DEGRADE as for exit 2. Large real-world parameter sets (MoE expert weights) hit this; say so when degrading. |
@@ -414,6 +419,30 @@ Which tool produces the oracle depends on `state.reference_mode`:
     `torchax_oracle.json` under `calling_convention.flat_signature` (and
     `golden_compatible_order` for the other convention), `torch_golden.json`
     under each argument's `argnum`. **Read the field. Never assume the order.**
+
+#### The torchax → llm_port fallback
+
+Used by Phase 0.2 (`torchax_oracle.py` exit 2 or 4) and Phase 0.3
+(`jaxpr_export.py` exit 2). Switching mode alone is not enough: without a
+golden capture `primary.golden_path` stays `null` (or keeps pointing at
+`torchax_oracle.json`, a schema `verify_port.py` cannot read), Phase 0.8 is
+skipped, and the hand-written port is never checked.
+
+1.  Re-read `<run_dir>/state.json`, set `reference_mode` to `"llm_port"` and
+    `reference_mode_fallback` to the failing tool, its exit code and the first
+    line of its stderr, and write it back. Append the same to
+    `<run_dir>/maxkernel_debug_history.md`.
+2.  Run the `reference_mode == "llm_port"` capture from Phase 0.2 step 2 —
+    `capture_torch_golden.py`, with the same `<declaration flags>`.
+3.  Branch on its exit code with the table in Phase 0.2 step 3, and record
+    the result as in step 4. On exit 0, `primary.golden_path` and
+    `golden_meta_path` must now name `torch_golden.npz` / `.json`, replacing
+    any `torchax_oracle.*` paths. On a degrade they are `null`, with the
+    reason recorded, as for any degraded capture.
+4.  Continue in `llm_port` mode: Phase 0.3 and 0.7 are skipped, Phase 0.4
+    hand-writes `base.py`, and Phase 0.8 checks it against the golden values.
+    Leave any `ref.jaxpr.txt` / `ref.hlo.txt` already written in place;
+    nothing downstream requires them in this mode.
 
 ### Phase 0.3: Export the Planner's Reference Material (ONCE — idempotent)
 
@@ -451,8 +480,9 @@ compile rather than someone's description of it.
     planning material.
 5.  **Record it in state**: set `jaxpr_path`, `hlo_path` and `jaxpr_facts_path`
     to ABSOLUTE paths.
-6.  **Exit 2 (torchax unavailable)** → fall back to `reference_mode:
-    "llm_port"` for the rest of the run and note it. Do not stop.
+6.  **Exit 2 (torchax unavailable, or the module will not convert)** → run
+    the **torchax → llm_port fallback** at the end of Phase 0.2, which also
+    replaces the torchax oracle with a golden capture. Do not stop.
 
 ### Phase 0.4: Understand the Primary Source (ONCE — idempotent)
 

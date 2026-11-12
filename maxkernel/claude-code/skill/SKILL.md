@@ -562,7 +562,10 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
         and are `null` without one. They are the user's declarations, passed
         to the capture tools as flags; never fill them by guessing.
     -   `reference_mode` and `emit_jnp_reference` come from step 3b. They are
-        written once and never revised mid-run; the worker branches on them in
+        written once and never revised mid-run — except that the worker
+        switches `reference_mode` from `"torchax"` to `"llm_port"` (recording
+        why in `reference_mode_fallback`) when torchax cannot build the
+        oracle or the jaxpr. The worker branches on them in
         Phases 0.2, 0.3 and 0.7.
     -   `jaxpr_path`, `hlo_path`, `jaxpr_facts_path`, `jnp_reference_path` and
         `jaxpr_comparison_path` stay `null` here. The worker fills them as each
@@ -756,9 +759,11 @@ Once `state.iteration == 5`:
     on their reading of the rationale alone.
 
     If the run fell back from `torchax` to `llm_port` mid-setup — a step-0
-    failure or a torch/torchax version conflict — say that too, and give the
-    reason from `<run_dir>/maxkernel_debug_history.md`. It changes how much the
-    denominator is worth.
+    failure, a module torchax could not convert, or a torch/torchax version
+    conflict — say that too, and give the reason from
+    `state.reference_mode_fallback`. Then say whether the fallback's golden
+    capture succeeded (`primary.golden_path` set, and `port_verified` from
+    Phase 0.8) or degraded. It changes how much the denominator is worth.
 
     **If `state.backward` is set, say what kind of kernel the run produced.**
     -   `"source"`: a backward kernel, built from the user's backward code.

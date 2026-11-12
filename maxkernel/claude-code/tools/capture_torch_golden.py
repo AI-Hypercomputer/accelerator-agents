@@ -64,6 +64,7 @@ the inputs came from, under `inputs_origin`.
 """
 
 import argparse
+import copy
 import json
 import os
 import sys
@@ -482,11 +483,13 @@ def run_fp64_probe(entry, model, args):
     if entry.kind == "function":
       f64_args = [to_float64(a) if is_tensor(a) else a for a in args]
       return run_forward(model, f64_args)
-    f64_model = model.double()
+    # On a copy: `.double()` converts in place, and converting back cannot
+    # restore a bf16 or mixed-dtype module -- `.float()` left a bf16 model in
+    # fp32, so every later config failed with a dtype mismatch. A copy also
+    # leaves the model untouched when the fp64 forward raises.
+    f64_model = copy.deepcopy(model).double()
     f64_args = [to_float64(a) if is_tensor(a) else a for a in args]
-    out = run_forward(f64_model, f64_args)
-    model.float()
-    return out
+    return run_forward(f64_model, f64_args)
   except Exception:  # pylint: disable=broad-except
     return None
 

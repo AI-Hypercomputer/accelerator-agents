@@ -252,7 +252,7 @@ def validate(job, job_path):
       "for the same forward arguments; keep the one you mean."
     )
   if inp.get("init_inputs_fn") and (
-    "init_args" in inp or "init_kwargs" in inp
+    inp.get("init_args") is not None or inp.get("init_kwargs") is not None
   ):
     errors.append(
       "input.init_inputs_fn and input.init_args/init_kwargs are both set. "

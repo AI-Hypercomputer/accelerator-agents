@@ -168,21 +168,26 @@ def scale_check(exp, act, atol, rtol):
   }
 
 
+def _as_float64(x):
+  """float64 for numeric arrays, including ml_dtypes floats.
+
+  ml_dtypes' bfloat16 / float8 have numpy kind 'V', so np.issubdtype(...,
+  np.number) is False for them. Testing only that left bf16 outputs in bf16:
+  the elementwise diff was computed in bf16, and scale_check saw a
+  non-floating dtype and skipped the relative-L2 guard entirely.
+  """
+  arr = np.asarray(x)
+  if np.issubdtype(arr.dtype, np.number) or arr.dtype.name in RAW_BIT_DTYPES:
+    return arr.astype(np.float64)
+  return arr
+
+
 def compare(expected, actual, atol, rtol):
   """Elementwise comparison with the worst offender located, not just counted.
 
   Plus the relative-L2 guard when atol swamps the output's scale.
   """
-  exp = (
-    np.asarray(expected, dtype=np.float64)
-    if np.issubdtype(np.asarray(expected).dtype, np.number)
-    else np.asarray(expected)
-  )
-  act = (
-    np.asarray(actual, dtype=np.float64)
-    if np.issubdtype(np.asarray(actual).dtype, np.number)
-    else np.asarray(actual)
-  )
+  exp, act = _as_float64(expected), _as_float64(actual)
 
   if exp.shape != act.shape:
     return {

@@ -42,7 +42,8 @@ Exit codes:
   0  oracle built and validated
   2  torchax unavailable, or the module will not convert -- DEGRADE, do not abort
   3  no discoverable entry point
-  4  STEP 0 FAILED: torchax disagrees with eager PyTorch beyond tolerance.
+  4  STEP 0 FAILED: torchax disagrees with eager PyTorch beyond tolerance,
+     or returns an output in a different dtype.
      The oracle is not trustworthy and must not be used.
   5  the capture would exceed --max-bytes
 
@@ -87,17 +88,57 @@ import input_spec  # noqa: E402  (tools/, beside this file)
 # later check is measured against it.
 DEFAULT_TOLERANCE = {"cpu": 1e-4, "tpu": 1e-3, "gpu": 1e-3}
 
+# The agreement is also bounded by each output's STORAGE dtype. A bf16 output
+# is rounded to 8 significand bits on both sides, and eager PyTorch and XLA
+# need not round intermediates at the same points, so a faithful conversion
+# lands about one bf16 ulp (7.8e-3 relative) apart -- measured 1.2e-2 on a
+# bf16 Linear+tanh on CPU. At the backend floor every bf16 module fails step 0.
+# So when no tolerance is given, each output gets the larger of the backend
+# floor and its dtype's floor, set at about two ulps; fp32/fp64 outputs keep
+# the backend floor unchanged.
+DTYPE_TOLERANCE = {"bfloat16": 2e-2, "float16": 2e-3}
+
+# JAX runs with x64 disabled by default, so these narrowings are how a 64-bit
+# eager output is expected to come back (int64 top-k indices become int32).
+# Any other dtype difference means the oracle would carry a dtype the user's
+# module does not produce -- e.g. torchax promotes `bf16 * python_float` to
+# float32 where eager keeps bf16 -- and fails step 0.
+X64_NARROWING = {
+  ("int64", "int32"),
+  ("uint64", "uint32"),
+  ("float64", "float32"),
+  ("complex128", "complex64"),
+}
+
 
 def resolve_tolerance(atol, rtol):
-  """Picks a step-0 tolerance matched to the backend, unless one was given."""
+  """Returns (atol, rtol, backend, backend_floor).
+
+  An explicit atol/rtol is returned as given and applies to every output.
+  `None` means "per output": `validate_oracle` then takes the larger of the
+  backend floor and that output's dtype floor.
+  """
   import jax
 
   backend = jax.default_backend()
-  floor = DEFAULT_TOLERANCE.get(backend, 1e-3)
+  return atol, rtol, backend, DEFAULT_TOLERANCE.get(backend, 1e-3)
+
+
+def output_tolerance(atol, rtol, backend_floor, dtype):
+  """The (atol, rtol) step 0 applies to one output of eager dtype `dtype`."""
+  auto = max(backend_floor, DTYPE_TOLERANCE.get(dtype, 0.0))
+  return (auto if atol is None else atol, auto if rtol is None else rtol)
+
+
+def describe_tolerance(atol, rtol, backend, backend_floor):
+  if atol is not None and rtol is not None:
+    return f"atol={atol:g} rtol={rtol:g} (explicit)"
   return (
-    floor if atol is None else atol,
-    floor if rtol is None else rtol,
-    backend,
+    f"per output: backend {backend!r} floor {backend_floor:g}, raised to "
+    + ", ".join(f"{v:g} for {k}" for k, v in DTYPE_TOLERANCE.items())
+    + " outputs"
+    + (f"; atol={atol:g} explicit" if atol is not None else "")
+    + (f"; rtol={rtol:g} explicit" if rtol is not None else "")
   )
 
 
@@ -211,10 +252,65 @@ def build_model(ns, seed, entry_name=None, init_fn_name=None, spec=None):
   return model, cls.__name__
 
 
+# Dtypes numpy has no native form for. `Tensor.numpy()` raises on them
+# ("unsupported ScalarType BFloat16"), and `np.savez` of an ml_dtypes array
+# reads back as opaque `|V2` bytes. So they cross into numpy through a bit view
+# and are stored as raw bits plus a tag -- the convention capture_torch_golden.py
+# writes and verify_port.decode reads.
+RAW_BITS = {
+  "bfloat16": np.uint16,
+  "float8_e4m3fn": np.uint8,
+  "float8_e5m2": np.uint8,
+}
+
+
+def torch_to_numpy(t):
+  """An exact numpy copy of a tensor; sub-fp16 dtypes come back as ml_dtypes."""
+  import torch
+
+  t = t.detach().cpu().contiguous()
+  tag = str(t.dtype).replace("torch.", "")
+  if tag in RAW_BITS:
+    import ml_dtypes
+
+    view = torch.uint16 if RAW_BITS[tag] is np.uint16 else torch.uint8
+    return t.view(view).numpy().view(getattr(ml_dtypes, tag))
+  return t.numpy()
+
+
+def encode_array(arr):
+  """Returns (array_to_store, dtype_tag, encoding) for one numpy array."""
+  arr = np.asarray(arr)
+  tag = str(arr.dtype)
+  if tag in RAW_BITS:
+    return arr.view(RAW_BITS[tag]), tag, "raw_bits"
+  return arr, tag, "native"
+
+
 def to_jax(t):
   import jax.numpy as jnp
 
-  return jnp.asarray(t.detach().cpu().numpy())
+  return jnp.asarray(torch_to_numpy(t))
+
+
+def first_inputs(ns, seed, inputs_fn_name=None, spec=None):
+  """Config 0's forward arguments: declared configs first, else the factory.
+
+  Shared by jaxpr_export.py and jaxpr_compare.py, so the jaxpr they trace is
+  built from the same inputs the oracle was.
+  """
+  import torch
+
+  torch.manual_seed(seed)
+  if input_spec.config_count(spec):
+    return input_spec.build_args(spec, 0, seed)
+  get_inputs = _named_factory(ns, inputs_fn_name, "get_inputs")
+  if get_inputs is None:
+    raise LookupError(
+      "the source defines no get_inputs() and no input spec declares configs"
+    )
+  raw = get_inputs()
+  return [raw] if isinstance(raw, torch.Tensor) else list(raw)
 
 
 def flatten_outputs(out):
@@ -241,8 +337,12 @@ def flatten_jax_outputs(out):
   return [np.asarray(x) for x in jax.tree_util.tree_leaves(out)]
 
 
-def validate_oracle(eager_outs, jax_outs, atol, rtol):
-  """STEP 0. Does the mechanical translation agree with the real module?"""
+def validate_oracle(eager_outs, jax_outs, atol, rtol, backend_floor=1e-4):
+  """STEP 0. Does the mechanical translation agree with the real module?
+
+  Agreement means the same dtype (up to JAX's x64 narrowing) and values within
+  tolerance. `atol`/`rtol` of `None` select the per-output default.
+  """
   import torch
 
   report = {"checked": True, "outputs": [], "worst_abs": 0.0, "worst_rel": 0.0}
@@ -255,7 +355,20 @@ def validate_oracle(eager_outs, jax_outs, atol, rtol):
     return report
 
   ok = True
+  dtype_failures = []
+  value_failures = []
   for i, (e, j) in enumerate(zip(eager_outs, jax_outs)):
+    e_dtype = str(e.dtype).replace("torch.", "")
+    j_dtype = str(np.asarray(j).dtype)
+    dtype_entry = {"eager_dtype": e_dtype, "torchax_dtype": j_dtype}
+    if e_dtype != j_dtype:
+      if (e_dtype, j_dtype) in X64_NARROWING:
+        dtype_entry["dtype_note"] = "x64 narrowing (JAX default), accepted"
+      else:
+        ok = False
+        dtype_failures.append(f"output {i}: eager {e_dtype}, torchax {j_dtype}")
+        dtype_entry["dtype_mismatch"] = True
+    o_atol, o_rtol = output_tolerance(atol, rtol, backend_floor, e_dtype)
     a = (
       e.detach().cpu().to(torch.float64).numpy()
       if e.is_floating_point()
@@ -265,13 +378,24 @@ def validate_oracle(eager_outs, jax_outs, atol, rtol):
     if a.shape != b.shape:
       ok = False
       report["outputs"].append(
-        {"index": i, "shape_mismatch": [list(a.shape), list(b.shape)]}
+        {
+          "index": i,
+          "shape_mismatch": [list(a.shape), list(b.shape)],
+          **dtype_entry,
+        }
       )
+      value_failures.append(f"output {i}: shape {list(a.shape)} vs {list(b.shape)}")
       continue
     diff = np.abs(a - b)
     denom = np.maximum(np.abs(a), 1e-30)
-    abs_max, rel_max = float(diff.max()), float((diff / denom).max())
-    within = bool(np.allclose(a, b, atol=atol, rtol=rtol, equal_nan=True))
+    abs_max = float(diff.max()) if diff.size else 0.0
+    rel_max = float((diff / denom).max()) if diff.size else 0.0
+    within = bool(np.allclose(a, b, atol=o_atol, rtol=o_rtol, equal_nan=True))
+    if not within:
+      value_failures.append(
+        f"output {i} ({e_dtype}): max|diff|={abs_max:.3e} over "
+        f"atol={o_atol:g} rtol={o_rtol:g}"
+      )
     ok = ok and within
     report["worst_abs"] = max(report["worst_abs"], abs_max)
     report["worst_rel"] = max(report["worst_rel"], rel_max)
@@ -280,17 +404,25 @@ def validate_oracle(eager_outs, jax_outs, atol, rtol):
         "index": i,
         "max_abs_diff": abs_max,
         "max_rel_diff": rel_max,
+        "atol": o_atol,
+        "rtol": o_rtol,
         "within_tolerance": within,
+        **dtype_entry,
       }
     )
 
   report["ok"] = ok
   if not ok:
+    problems = []
+    if dtype_failures:
+      problems.append("different output dtype (" + "; ".join(dtype_failures) + ")")
+    if value_failures:
+      problems.append("values out of tolerance (" + "; ".join(value_failures) + ")")
     report["reason"] = (
       "torchax's translation of this module does not reproduce eager "
-      "PyTorch within tolerance. It cannot serve as the correctness "
-      "oracle: every later check would be against a computation that is "
-      "not the user's."
+      "PyTorch: " + " and ".join(problems) + ". It cannot serve as the "
+      "correctness oracle: every later check would be against a computation "
+      "that is not the user's."
     )
   return report
 
@@ -305,6 +437,7 @@ def build(
   max_bytes,
   skip_step0,
   backend=None,
+  backend_floor=1e-4,
   entry_name=None,
   inputs_fn_name=None,
   init_fn_name=None,
@@ -355,14 +488,14 @@ def build(
     if not skip_step0:
       with torch.no_grad():
         eager_flat = flatten_outputs(model(*raw))
-      step0 = validate_oracle(eager_flat, jax_flat, atol, rtol)
+      step0 = validate_oracle(eager_flat, jax_flat, atol, rtol, backend_floor)
       if not step0["ok"]:
         raise ValueError(json.dumps(step0, indent=2))
 
     in_meta = []
     for j, a in enumerate(raw):
       if isinstance(a, torch.Tensor):
-        arr = a.detach().cpu().numpy()
+        arr, tag, encoding = encode_array(torch_to_numpy(a))
         key = f"cfg{idx}/in{j}"
         arrays[key] = arr
         total += arr.nbytes
@@ -371,7 +504,8 @@ def build(
             "key": key,
             "position": j,
             "shape": list(a.shape),
-            "dtype": str(a.dtype).replace("torch.", ""),
+            "dtype": tag,
+            "encoding": encoding,
             "kind": "tensor",
           }
         )
@@ -388,10 +522,11 @@ def build(
     out_meta = []
     for j, o in enumerate(jax_flat):
       key = f"cfg{idx}/out{j}"
-      arrays[key] = o
-      total += o.nbytes
+      arr, tag, encoding = encode_array(o)
+      arrays[key] = arr
+      total += arr.nbytes
       out_meta.append(
-        {"key": key, "shape": list(o.shape), "dtype": str(o.dtype)}
+        {"key": key, "shape": list(o.shape), "dtype": tag, "encoding": encoding}
       )
 
     cfgs.append(
@@ -413,7 +548,7 @@ def build(
 
   for name, arr in states.items():
     key = f"states/{name}"
-    arrays[key] = np.asarray(arr)
+    arrays[key], _, _ = encode_array(arr)
     total += arrays[key].nbytes
 
   n_tensors = cfgs[0]["n_tensor_inputs"]
@@ -451,16 +586,24 @@ def build(
       n: {
         "key": f"states/{n}",
         "shape": list(np.asarray(states[n]).shape),
-        "dtype": str(np.asarray(states[n]).dtype),
+        "dtype": encode_array(states[n])[1],
+        "encoding": encode_array(states[n])[2],
       }
       for n in states_order
     },
     "configs": cfgs,
     "total_bytes": total,
     "step0_tolerance": {
-      "atol": atol,
-      "rtol": rtol,
+      "atol": "per_output" if atol is None else atol,
+      "rtol": "per_output" if rtol is None else rtol,
       "backend": backend or "unknown",
+      "backend_floor": backend_floor,
+      "dtype_floors": DTYPE_TOLERANCE,
+      "rule": (
+        "explicit values apply to every output; per_output takes "
+        "max(backend_floor, dtype_floors[eager dtype]) for each output, "
+        "recorded under configs[].step0.outputs[]"
+      ),
     },
   }
   return arrays, manifest
@@ -479,8 +622,9 @@ def main():
     "--atol",
     type=float,
     default=None,
-    help="step-0 tolerance: torchax vs eager PyTorch. Defaults "
-    "to the backend's own floor -- see DEFAULT_TOLERANCE.",
+    help="step-0 tolerance: torchax vs eager PyTorch, applied to every "
+    "output. Default: per output, the larger of the backend floor "
+    "(DEFAULT_TOLERANCE) and the output dtype's floor (DTYPE_TOLERANCE).",
   )
   p.add_argument("--rtol", type=float, default=None)
   p.add_argument("--max-bytes", type=int, default=256_000_000)
@@ -504,11 +648,11 @@ def main():
     print(f"BAD_INPUT_SPEC: {e}", file=sys.stderr)
     return 3
 
-  atol, rtol, backend = resolve_tolerance(args.atol, args.rtol)
+  atol, rtol, backend, backend_floor = resolve_tolerance(args.atol, args.rtol)
+  tol_desc = describe_tolerance(atol, rtol, backend, backend_floor)
   if args.atol is None or args.rtol is None:
     print(
-      f"step-0 tolerance {atol:g} (backend {backend!r}); override with "
-      "--atol/--rtol",
+      f"step-0 tolerance: {tol_desc}; override with --atol/--rtol",
       file=sys.stderr,
     )
 
@@ -522,6 +666,7 @@ def main():
       max_bytes=args.max_bytes,
       skip_step0=args.skip_eager_check,
       backend=backend,
+      backend_floor=backend_floor,
       entry_name=args.entry_point,
       inputs_fn_name=args.inputs_fn,
       init_fn_name=args.init_inputs_fn,
@@ -536,7 +681,9 @@ def main():
     )
     print(e, file=sys.stderr)
     print(
-      f"\nThe comparison ran on backend {backend!r} at atol={atol:g}. On "
+      f"\nThe comparison ran with {tol_desc}. A dtype difference is never "
+      "precision: it means the oracle would return a dtype the module does "
+      "not, and no tolerance fixes it. For values: on "
       "an accelerator, XLA's default matmul precision is bf16, so a "
       "matmul-bearing module diverges from eager fp32 by roughly bf16 "
       "epsilon (~1e-3) however faithful the conversion is. If the "

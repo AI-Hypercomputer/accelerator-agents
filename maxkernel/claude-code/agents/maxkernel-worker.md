@@ -349,11 +349,17 @@ Which tool produces the oracle depends on `state.reference_mode`:
       <state.primary.source_path> \
       --out <run_dir>/torchax_oracle.npz \
       --meta <run_dir>/torchax_oracle.json \
-      --seed <state.seed or 1024> --atol 1e-4 --rtol 1e-4 \
+      --seed <state.seed or 1024> \
       <declaration flags>
     ```
+    Do not pass `--atol`/`--rtol` here. The tool's default is per output: the
+    backend floor (1e-4 on CPU, where it runs), raised to about two ulps for a
+    bf16 or fp16 output. A fixed 1e-4 fails every bf16 module on one bf16
+    rounding step and pushes it to `llm_port` for no reason.
     Extra exit code for this tool: **4 = STEP 0 FAILED** — torchax does not
-    reproduce eager PyTorch within tolerance. Do NOT degrade past this. The
+    reproduce eager PyTorch: its values are out of tolerance, or an output
+    comes back in a different dtype (other than JAX's x64 narrowing, e.g.
+    int64 indices as int32). Do NOT degrade past this. The
     oracle would be a computation that is not the user's, so every later check
     would be meaningless. Record the report, fall back to
     `reference_mode: "llm_port"` for the rest of the run, and note the switch in
@@ -422,8 +428,11 @@ compile rather than someone's description of it.
       --jaxpr <run_dir>/ref.jaxpr.txt \
       --hlo   <run_dir>/ref.hlo.txt \
       --json  <run_dir>/ref.facts.json \
-      --seed <state.seed or 1024>
+      --seed <state.seed or 1024> \
+      <declaration flags>
     ```
+    `<declaration flags>` are the same as in Phase 0.2, so the jaxpr is traced
+    from the same model and inputs the oracle was built from.
 3.  **Both files matter, and they answer different questions.** The jaxpr is
     pre-optimization: it says what was asked for — the operations, dtypes,
     reduction axes, broadcast structure. The optimized HLO is post-XLA: it says
@@ -598,8 +607,10 @@ When both hold, the agent writes a readable `jnp` reference and it becomes
       <state.primary.source_path> <run_dir>/base.py \
       --entry computation --seed <state.seed or 1024> \
       --atol <atol> --rtol <rtol> --strict \
-      --out <run_dir>/jaxpr_comparison.json
+      --out <run_dir>/jaxpr_comparison.json \
+      <declaration flags>
     ```
+    (`<declaration flags>` as in Phase 0.2.)
     `--strict` is required here, and the reason is measured. A reference that
     silently drops the epsilon from a normalization differs from the oracle by
     **7.8e-05** — it *passes* a 1e-2 value gate and is caught only structurally,
@@ -795,7 +806,7 @@ the backward alone when the forward stays fixed, with the gradients derived by
             -   `reference_mode: "torchax"`: the Phase 0.7 check without
                 `--strict`, since the edit changes the structure on purpose
                 and the values decide:
-                `jaxpr_compare.py <state.primary.source_path> <run_dir>/base_fwd.py --entry computation --seed <state.seed or 1024> --atol <atol> --rtol <rtol> --out <run_dir>/jaxpr_comparison.json`.
+                `jaxpr_compare.py <state.primary.source_path> <run_dir>/base_fwd.py --entry computation --seed <state.seed or 1024> --atol <atol> --rtol <rtol> --out <run_dir>/jaxpr_comparison.json <declaration flags>` (flags as in Phase 0.2).
         3.  Re-run the Phase 0.85 `make_vjp_base.py` command, re-assemble
             (step 4), and validate again.
         Log each edit in `maxkernel_debug_history.md`. If the repair fails, STOP and report it.

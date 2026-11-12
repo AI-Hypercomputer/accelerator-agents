@@ -43,6 +43,31 @@ import jax.numpy as jnp
 ATOL = 1e-2
 RTOL = 1e-2
 
+# Not tolerances -- do not edit. When ATOL is not small next to an output's
+# own scale (small-init weights give outputs ~1e-3), allclose accepts almost
+# anything, including an all-zeros kernel. Past SWAMP_RATIO the relative L2
+# error ||opt - base|| / ||base|| must also stay under max(RTOL, REL_L2_LIMIT).
+# Same rule as tools/verify_port.py.
+SWAMP_RATIO = 0.1
+REL_L2_LIMIT = 0.05
+
+
+def scale_check(b, o):
+  """Returns (ok, message or None) for one floating output pair."""
+  if not jnp.issubdtype(b.dtype, jnp.floating) or b.size == 0:
+    return True, None
+  b32 = jnp.asarray(b, jnp.float32)
+  o32 = jnp.asarray(o, jnp.float32)
+  rms = float(jnp.sqrt(jnp.mean(b32 * b32)))
+  if rms == 0.0 or ATOL <= SWAMP_RATIO * rms:
+    return True, None
+  rel = float(jnp.linalg.norm(o32 - b32) / jnp.linalg.norm(b32))
+  limit = max(RTOL, REL_L2_LIMIT)
+  return rel <= limit, (
+    f"ATOL={ATOL:g} is {ATOL / rms:.1f}x the output RMS {rms:.3e}; "
+    f"relative L2 error {rel:.3e} vs limit {limit:g}"
+  )
+
 
 def benchmark(func, args, static_argnums, num_runs=20, num_warmups=5):
   """JIT-compiles `func` (with layout alignment where possible) and times it."""
@@ -176,6 +201,17 @@ def main():
             print(
               f"Mismatch in output tensor {i} for input config {idx}: "
               f"max absolute difference {max_diff}"
+            )
+            continue
+          scale_ok, scale_msg = scale_check(b, o)
+          if scale_msg:
+            print(f"SCALE_WARNING output {i} config {idx}: {scale_msg}")
+          if not scale_ok:
+            is_correct = False
+            print(
+              f"Mismatch in output tensor {i} for input config {idx}: "
+              "within ATOL elementwise, but the relative L2 error is over "
+              "the limit -- ATOL is too loose to judge this output alone"
             )
 
       if not is_correct:

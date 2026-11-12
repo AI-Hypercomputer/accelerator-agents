@@ -242,7 +242,7 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     | `backward` | `backward`, copied as is except that `forward_context` becomes an absolute path. `null` when the job has no `backward`. |
     | `input.entry_point` / `.inputs_fn` / `.init_inputs_fn` | `primary.entry_point` / `primary.inputs_fn` / `primary.init_inputs_fn`, verbatim; `null` when absent |
     | `input.init_args`, `.init_kwargs`, `.configs` | written, just those keys, to `<run_dir>/input_spec.json`; `primary.input_spec_path` is its absolute path, `null` when the job declares none of them |
-    | `input.extraction` | copy `input.path` (file or directory) unchanged into `<run_dir>/original/`, and set `primary.extraction` to `{"original_path": <absolute path in original/>, "entry_point": ..., "notes": ... or null, "approved": null}`. `primary.source_path` stays `null` until the worker's Phase 0.15 records the approved extraction. `null` when absent |
+    | `input.extraction` | copy `input.path` (file or directory) unchanged to `<run_dir>/original/<basename of input.path>` — keeping its own name, never its contents spread directly into `original/` (`cp -r <input.path> <run_dir>/original/`). That copy is `original_path`. Take `relpath` and `name` from the validator's `plan.extraction_entry` in `<run_dir>/job_validation.json` — already resolved against the real `input.path` — and set `primary.extraction` to `{"original_path": <absolute>, "entry_point": <as written in the job>, "entry_file": <original_path joined with relpath, or original_path itself when relpath is "">, "entry_name": <name>, "notes": ... or null, "approved": null}`. Do not derive `entry_file` from `entry_point` yourself. `primary.source_path` stays `null` until the worker's Phase 0.15 records the approved extraction. `null` when absent |
 
     For a `jax` input, `needs_jax_conversion` is false and `base.py` is a copy
     of the source — the same path the loop has always taken.
@@ -304,7 +304,7 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     `triton`, `cuda.bindings`, custom extensions), or ship no `get_inputs()` —
     it cannot be run as is, and neither you nor a worker may pick its shapes.
     Do not start the run from inference. Ask the user for: the entry point
-    (`path/in/repo.py:Name`), which path of its `forward()` to reproduce
+    (`file.py:Name`, the file path relative to the directory or file they give as `input.path`), which path of its `forward()` to reproduce
     (backend, inference or training, what to return), the constructor
     arguments, and the input shapes and dtypes (point them at the repo's own
     tests or benchmarks if it has them). Then write a job file with

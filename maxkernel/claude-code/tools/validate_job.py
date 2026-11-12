@@ -48,6 +48,7 @@ Exit codes:
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -73,6 +74,75 @@ EXTRACTION_KEYS = {"entry_point", "notes", "user_confirms_extraction"}
 
 class JobError(Exception):
   pass
+
+
+def resolve_extraction_entry(input_path, entry_point):
+  """Resolves `input.extraction.entry_point` against `input.path`.
+
+  The file part is relative to `input.path` itself -- not to its parent, not
+  to the repository root. For a single-file `input.path` it is that file's
+  name, or omitted (`"Name"`). Returns (relpath, name, error): `relpath` is
+  what the orchestrator joins onto the copy of `input.path` under
+  `<run_dir>/original/`, so the extracting agent never joins paths itself.
+  """
+  file_part, sep, name = entry_point.rpartition(":")
+  if not sep:
+    file_part, name = "", entry_point
+  if not name:
+    return None, None, (
+      f"input.extraction.entry_point {entry_point!r} names no class or "
+      "function; the form is 'path/relative/to/input.path.py:Name'"
+    )
+
+  if input_path.is_file():
+    if file_part not in ("", input_path.name):
+      return None, None, (
+        f"input.extraction.entry_point {entry_point!r}: input.path is the "
+        f"single file {input_path.name}, so the file part must be "
+        f"{input_path.name!r} or omitted ('{name}')"
+      )
+    relpath, target = "", input_path
+  else:
+    if not file_part:
+      return None, None, (
+        f"input.extraction.entry_point {entry_point!r} has no file part, but "
+        f"input.path {input_path} is a directory; use "
+        "'path/relative/to/input.path.py:Name'"
+      )
+    relpath, target = file_part, input_path / file_part
+    if not target.is_file():
+      hint = ""
+      parts = Path(file_part).parts
+      if len(parts) > 1 and parts[0] == input_path.name and (
+        input_path / Path(*parts[1:])
+      ).is_file():
+        hint = (
+          f" The path is relative to input.path, which already ends in "
+          f"{input_path.name}/ -- use '{Path(*parts[1:]).as_posix()}:{name}'."
+        )
+      elif (input_path.parent / file_part).is_file():
+        hint = (
+          " That path exists relative to input.path's parent; the file "
+          "part is relative to input.path itself."
+        )
+      else:
+        found = sorted(input_path.rglob(Path(file_part).name))
+        if len(found) == 1:
+          rel = found[0].relative_to(input_path).as_posix()
+          hint = f" Did you mean '{rel}:{name}'?"
+      return None, None, (
+        f"input.extraction.entry_point {entry_point!r}: {target} does not "
+        f"exist.{hint}"
+      )
+
+  top = name.split(".")[0]
+  src = target.read_text(errors="replace")
+  if not re.search(rf"^\s*(?:class|def)\s+{re.escape(top)}\b", src, re.M):
+    return None, None, (
+      f"input.extraction.entry_point {entry_point!r}: {target} defines no "
+      f"class or function named {top!r}"
+    )
+  return relpath, name, None
 
 
 def _get(d, path, default=None):
@@ -212,8 +282,10 @@ def validate(job, job_path):
     ):
       errors.append(
         "input.extraction.entry_point is required: the class or function in "
-        "the original code being converted, e.g. 'sonicmoe/moe.py:MoE'. It "
-        "is what the extracting agent reproduces, so it cannot be guessed."
+        "the original code being converted, as 'file.py:Name' with the file "
+        "path relative to input.path, e.g. 'sonicmoe/moe.py:MoE' for a "
+        "repository root. It is what the extracting agent reproduces, so it "
+        "cannot be guessed."
       )
     if not has_configs:
       errors.append(
@@ -518,6 +590,15 @@ def validate(job, job_path):
       "so Phase 0.15 writes one for you to approve."
     )
     return errors, warnings, None
+  extraction_entry = None
+  if ipath and extraction is not None and _resolve(ipath).exists():
+    relpath, name, err = resolve_extraction_entry(
+      _resolve(ipath), extraction["entry_point"]
+    )
+    if err:
+      errors.append(err)
+      return errors, warnings, None
+    extraction_entry = {"relpath": relpath, "name": name}
   for i, r in enumerate(refs):
     if not _resolve(r["path"]).exists():
       missing.append(f"references[{i}].path: {_resolve(r['path'])}")
@@ -529,6 +610,9 @@ def validate(job, job_path):
   if bfrom == "autodiff":
     plan["optimize_forward"] = _get(job, "backward.optimize_forward", True)
   plan["missing_paths"] = missing
+  # Resolved against the real input.path. `relpath` is relative to it ("" when
+  # input.path is the file itself). Null until input.path exists.
+  plan["extraction_entry"] = extraction_entry
   return errors, warnings, plan
 
 

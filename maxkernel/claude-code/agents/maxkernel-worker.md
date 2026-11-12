@@ -264,7 +264,10 @@ checkable on this host. So this phase also ends by stopping and asking the user.
 1.  **Check if already done**: if `<run_dir>/source.py` exists AND
     `state.primary.extraction.approved` is `true`, skip to Phase 0.2. If
     `source.py` exists but approval is not recorded, go to step 4 — do not
-    re-extract.
+    re-extract. Otherwise check `test -f <state.primary.extraction.entry_file>`;
+    if it is missing, STOP and report the path to the orchestrator — the copy
+    into `original/` or the state mapping is wrong, and the agent must not
+    go looking for the file.
 2.  **Invoke `maxkernel-extract-source`**:
     -   Prompt: `"Extract the primary source for run_dir = <run_dir> (state file: <run_dir>/state.json)."`
 3.  **Verify on disk**: `<run_dir>/source.py`, `<run_dir>/extraction_rationale.md`

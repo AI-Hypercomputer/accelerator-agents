@@ -36,7 +36,11 @@ re-expressed and how you know it is equivalent.
 
 *   State file: `<run_dir>/state.json` — read `primary.extraction`:
     *   `original_path` — the user's code, copied untouched (a file or directory)
-    *   `entry_point` — what to reproduce, e.g. `sonicmoe/moe.py:MoE`
+    *   `entry_file` — the absolute path of the file holding the entry point,
+        already resolved inside `original_path`. **Open this path as given;
+        do not rebuild it from `entry_point`.**
+    *   `entry_name` — the class or function to reproduce, e.g. `MoE`
+    *   `entry_point` — the job's original spelling, for your rationale only
     *   `notes` — the user's instructions on which path / mode to reproduce
 *   `<run_dir>/input_spec.json` — the declared constructor arguments
     (`init_args`, `init_kwargs`) and input configs (`configs[].inputs`). **These
@@ -57,7 +61,7 @@ reference is advisory and sealed off from the semantics spine.
 
 ## Step 1: Trace the entry point
 
-Open the file and class/function named by `entry_point`. Read its constructor
+Open `entry_file` and find `entry_name` in it. Read its constructor
 and `forward()` (or the function body), then follow every call into the package
 until you reach either a `torch` operator or a GPU kernel launch. Record each
 file and line you read; the rationale cites them.

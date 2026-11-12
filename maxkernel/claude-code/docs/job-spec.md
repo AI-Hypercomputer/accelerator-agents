@@ -61,12 +61,12 @@ agent from choosing shapes. So you declare them, one entry per config to
 capture:
 
 ```json
-"init_kwargs": {"num_experts": 128, "num_experts_per_tok": 8, "hidden_size": 768,
-                "intermediate_size": 256, "activation_function": "swiglu",
-                "add_bias": false, "std": 0.02},
+"init_kwargs": {"hidden_size": 1024, "num_heads": 16, "activation": "gelu"},
 "configs": [
-  {"name": "T8192", "inputs": [
-    {"name": "hidden_states", "shape": [8192, 768], "dtype": "bfloat16"}
+  {"name": "seq2048", "inputs": [
+    {"name": "x", "shape": [4, 2048, 1024], "dtype": "bfloat16"},
+    {"name": "positions", "shape": [4, 2048], "dtype": "int32",
+     "init": "randint", "low": 0, "high": 2048}
   ]}
 ]
 ```
@@ -83,9 +83,9 @@ Each declared config is captured once (`--num-configs` does not apply), and
 arguments are shared by every config: one run is one model. To compare model
 sizes, run one job per size.
 
-Golden capture stores every parameter. Large real-world parameter sets — MoE
-expert weights at `E*3*H*I` elements — can exceed the capture's 256 MB cap, and
-the capture then degrades to an unverified port. Pick a config whose weights fit
+Golden capture stores every parameter. Large real-world parameter sets — a
+model's full weights, expert banks, embedding tables — can exceed the capture's
+256 MB cap, and the capture then degrades to an unverified port. Pick a config whose weights fit
 if you want the port checked.
 
 ### `input.extraction` — code that cannot run as is
@@ -101,7 +101,7 @@ baseline.
 
 | Field | Meaning |
 | --- | --- |
-| `entry_point` | **Required.** What to reproduce, as `path/in/repo.py:Name`. |
+| `entry_point` | **Required.** What to reproduce, as `file.py:Name`, where the file path is **relative to `input.path`** (not to its parent or the repository root). For a repository cloned to `my-repo/` with the class in `my-repo/pkg/layers.py`: with `input.path: "my-repo"` it is `pkg/layers.py:Layer`; with `input.path: "my-repo/pkg"` it is `layers.py:Layer`. When `input.path` is a single file, write just `Name`. The validator resolves it, checks the file defines `Name`, and suggests the right spelling when the path is off by a directory. |
 | `notes` | Which path to reproduce when `forward()` has several: backend, inference vs training, what to return. Without it the agent takes the default-argument path in `eval()` mode and records that choice. |
 | `user_confirms_extraction` | **Required, must be `true`.** Acknowledges the approval step exists. It is not the approval. |
 

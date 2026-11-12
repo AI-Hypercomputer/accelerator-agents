@@ -314,6 +314,7 @@ def materialize(entry, seed):
     elif isinstance(raw, dict):
       init_kwargs = dict(raw)
 
+  input_spec.check_init_args(entry.model_cls, init_args, init_kwargs)
   model = entry.model_cls(*init_args, **init_kwargs)
   model.eval()
   if _XLA:
@@ -843,6 +844,9 @@ def main():
       init_fn_name=args.init_inputs_fn,
       spec=spec,
     )
+  except input_spec.MissingInitArgs as e:
+    print(f"MISSING_INIT_ARGS: {e}", file=sys.stderr)
+    sys.exit(3)
   except LookupError as e:
     print(f"NO_ENTRY_POINT: {e}", file=sys.stderr)
     sys.exit(3)

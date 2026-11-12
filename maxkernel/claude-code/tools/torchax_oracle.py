@@ -222,6 +222,7 @@ def build_model(ns, seed, entry_name=None, init_fn_name=None, spec=None):
         "converts nn.Modules. Use reference_mode 'llm_port'."
       )
     args, kwargs = normalize_init_inputs(init_raw)
+    input_spec.check_init_args(cls, args, kwargs)
     model = cls(*args, **kwargs)
     model.eval()
     return model, cls.__name__
@@ -247,6 +248,7 @@ def build_model(ns, seed, entry_name=None, init_fn_name=None, spec=None):
     )
 
   args, kwargs = normalize_init_inputs(init_raw)
+  input_spec.check_init_args(cls, args, kwargs)
   model = cls(*args, **kwargs)
   model.eval()
   return model, cls.__name__
@@ -659,6 +661,9 @@ def main():
       init_fn_name=args.init_inputs_fn,
       spec=spec,
     )
+  except input_spec.MissingInitArgs as e:
+    print(f"MISSING_INIT_ARGS: {e}", file=sys.stderr)
+    return 3
   except LookupError as e:
     print(f"NO_ENTRY_POINT: {e}", file=sys.stderr)
     return 3

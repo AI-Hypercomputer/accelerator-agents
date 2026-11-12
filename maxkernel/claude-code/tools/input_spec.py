@@ -5,9 +5,9 @@ WHY THIS EXISTS
 ---------------
 `capture_torch_golden.py` and `torchax_oracle.py` were written against the
 KernelBench layout: one file, a `Model` class, `get_init_inputs()` and
-`get_inputs()`. Code from the wild has none of that. sonic-moe's `MoE` takes
-seven constructor arguments and ships no input factory; its realistic shapes
-live in a parameterized test. general_rules #6 forbids inventing dimensions, so
+`get_inputs()`. Code from the wild usually has none of that: a layer in a
+GitHub repository takes several constructor arguments, ships no input factory,
+and keeps its realistic shapes in a test or benchmark script. general_rules #6 forbids inventing dimensions, so
 the only legitimate source of shapes for such code is the user, through the
 job file.
 
@@ -45,8 +45,8 @@ OUTPUTS
 nested in lists, tuples and dicts (dict keys in sorted order, as
 jax.tree_util.tree_leaves orders them). Both capture tools and the smoke check
 use it, so a source that passes smoke cannot fail capture on its outputs. A
-`None` leaf -- sonic-moe returns `(hidden_states, None)` in inference mode --
-is rejected by name.
+`None` leaf -- e.g. `(output, None)` from a layer whose auxiliary loss is None
+in inference mode -- is rejected by name.
 
 CLI:
   input_spec.py smoke <source.py> --input-spec <spec.json> [--entry-point Model]
@@ -219,6 +219,36 @@ def build_args(spec, index, seed):
   return args
 
 
+class MissingInitArgs(LookupError):
+  """The module's constructor cannot be called with the arguments available."""
+
+
+def check_init_args(cls, args, kwargs):
+  """Binds the constructor arguments against `cls`'s signature, or raises.
+
+  Without this a constructor with required parameters and nothing declared
+  for them fails inside `cls(...)` with a TypeError, which the capture tools
+  report as "the module would not run on CPU" and degrade past -- leaving the
+  run with an unchecked port for a reason the user can fix in one line. A
+  LookupError subclass, so every tool stops with exit 3 and asks instead.
+  """
+  import inspect
+
+  try:
+    sig = inspect.signature(cls)
+  except (TypeError, ValueError):
+    return  # no introspectable signature; let construction decide
+  try:
+    sig.bind(*args, **kwargs)
+  except TypeError as e:
+    raise MissingInitArgs(
+      f"{cls.__name__}{sig} cannot be constructed from the arguments "
+      f"available ({e}). Declare them in the job as input.init_args / "
+      "input.init_kwargs, or name the source's factory with "
+      "input.init_inputs_fn."
+    ) from None
+
+
 class UnsupportedOutput(TypeError):
   """forward() returned a leaf that is not a tensor."""
 
@@ -296,6 +326,7 @@ def _smoke(args):
   torch.manual_seed(args.seed)
   if kind == "module":
     init_a, init_k = init_inputs(spec) if has_init(spec) else ([], {})
+    check_init_args(obj, init_a, init_k)
     callee = obj(*init_a, **init_k).eval()
   else:
     callee = obj
@@ -321,6 +352,9 @@ def main():
   args = p.parse_args()
   try:
     _smoke(args)
+  except MissingInitArgs as e:
+    print(f"MISSING_INIT_ARGS: {e}", file=sys.stderr)
+    return 3
   except LookupError as e:
     print(f"NO_ENTRY_POINT: {e}", file=sys.stderr)
     return 3

@@ -393,7 +393,7 @@ Which tool produces the oracle depends on `state.reference_mode`:
     | --- | --- | --- |
     | 0 | golden captured | set `state.primary.golden_path` and `golden_meta_path`; continue |
     | 2 | torch missing, or the module will not run on CPU | **DEGRADE, do not abort.** Record `"golden_degraded": "<stderr reason>"` in state, leave the golden paths `null`, and continue. The run proceeds with today's self-comparison and the final report must say the port was never verified. |
-    | 3 | no discoverable entry point, or no input shapes | STOP. Report the tool's message to the orchestrator: the user must name the entry point (`input.entry_point`) or declare inputs (`input.configs`). Do not guess either. |
+    | 3 | no discoverable entry point, no input shapes, or constructor arguments missing (`MISSING_INIT_ARGS`) | STOP. Report the tool's message to the orchestrator: the user must name the entry point (`input.entry_point`), declare inputs (`input.configs`), or declare constructor arguments (`input.init_args` / `input.init_kwargs`). Do not guess any of them. |
     | 4 | `forward()` is non-deterministic | **DEGRADE**, exactly as for exit 2, recording the non-determinism as the reason. There is no golden value to capture; dropout or live RNG means no single correct answer exists. |
     | 5 | capture exceeds `--max-bytes` | retry once with `--num-configs 1` (or, with `--input-spec`, add `--no-fp64-probe`); if it still exceeds, DEGRADE as for exit 2. Large real-world parameter sets (MoE expert weights) hit this; say so when degrading. |
 

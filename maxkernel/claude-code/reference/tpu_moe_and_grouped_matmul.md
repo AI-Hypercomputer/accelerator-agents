@@ -69,7 +69,7 @@ def moe_ffn(x, w_router, w_gate, w_up, w_down, top_k):
 *   Constraints from the source: lhs and rhs must be bf16 or f32, `group_sizes` must be int32, and **`m % tm == 0`** (otherwise it raises a ValueError). k and n may be ragged: the k remainder is masked in-kernel.
 *   `interpret=True` runs on CPU (gmm and tgmm both matched loop references). Use it to unit-test custom variants.
 
-### B. How it works (read `gmm.py` before writing a custom kernel)
+### B. How it works
 1.  **Metadata (computed in XLA, outside the kernel)**: `make_group_metadata` returns `(group_offsets[E+1], group_ids[tiles_m+E-1], m_tile_ids[tiles_m+E-1])` and `num_tiles`. Grid step i works on m-tile `m_tile_ids[i]` with expert `group_ids[i]`. A tile that straddles a group boundary is visited **once per group it touches**, and those visits are consecutive, so the output block stays resident. Example: `group_sizes=[100,0,60,96]`, m=256, tm=128 gives `group_ids=[0,2,2,3]` and `m_tile_ids=[0,0,1,1]`. That is 4 tile visits where a dense GEMM would need 2. Empty groups are skipped in gmm (`visit_empty_groups=False`) and visited in tgmm, which still has to zero their dW.
 2.  **Scalar prefetch**: `pltpu.PrefetchScalarGridSpec(num_scalar_prefetch=2, grid=(tiles_n, num_tiles, tiles_k), in_specs=..., out_specs=..., scratch_shapes=[pltpu.VMEM((tm, tn), jnp.float32)])`. The metadata tuple and `group_offset` are placed in SMEM and passed to every index_map. The lhs index_map returns `(m_tile_ids[i], k)`. The rhs index_map returns `(group_ids[i] - group_offset, k, n)` with block `(None, tk, tn)`, so only the active expert's weight tile is DMA'd.
 3.  **Dynamic grid**: `num_tiles` is a traced scalar used as a grid dimension. Pallas TPU accepts this, so no grid steps are spent on padding tiles.

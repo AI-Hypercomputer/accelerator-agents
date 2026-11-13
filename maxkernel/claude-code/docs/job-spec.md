@@ -25,6 +25,7 @@ four `.py` files in a directory is the thing being converted, and refuses
 | CUDA → Pallas | `cuda` | `false` | `true` | `llm_port` only |
 | Triton / cuTile / CuTe DSL / other GPU → Pallas | `triton`, `cutile`, `cutedsl`, `gpu` | either | `true` | `llm_port` only |
 | PyTorch codebase (package, GPU-only deps) → Pallas | `pytorch` + `input.extraction` | either | `true` | `llm_port` advised |
+| JAX codebase (package, module-library parameters) → Pallas | `jax` + `input.extraction` | either | `false` | `none` |
 | *no source* → Pallas | `specification` | either | depends on `synthesize_as` | `torchax`/`llm_port` when synthesizing PyTorch |
 
 The third row is the one worth being precise about: **PyTorch is the input and
@@ -94,33 +95,51 @@ does not fit), so leave headroom.
 
 ### `input.extraction` — code that cannot run as is
 
-A repository is not a benchmark file. It has relative imports, imports
-CUDA-only libraries (CuTe DSL, Triton, custom extensions), touches
-`torch.cuda`, and ships no input factory. The capture tools execute one
-self-contained file on a TPU host's CPU, so none of that runs. `extraction` has
-an agent (`maxkernel-extract-source`, Phase 0.15) write that file — a `Model`
-with your constructor arguments and inputs — by tracing your entry point
-through the codebase, and then **stops for your approval** like a synthesized
-baseline.
+A repository is not a benchmark file. It has relative imports, depends on
+things the run cannot load, and ships no input factory. `extraction` has an
+agent (Phase 0.15) write one self-contained `source.py` in the input's own
+framework — with your constructor arguments and inputs — by tracing your entry
+point through the codebase, and then **stops for your approval** like a
+synthesized baseline. It applies to `input.type: "pytorch"` and `"jax"`:
+
+| | PyTorch | JAX |
+| --- | --- | --- |
+| Why the code cannot be used as is | It imports CUDA-only libraries (CuTe DSL, Triton, custom extensions) or touches `torch.cuda`, and the capture tools execute one self-contained file on a TPU host's CPU. | A JAX input becomes `base.py` unchanged, and `base.py` is one self-contained file with a module-level `computation`. A package that keeps its parameters in a module library (Flax, Equinox, Haiku) is neither. |
+| Agent | `maxkernel-extract-source` | `maxkernel-extract-jax-source` |
+| The extracted `source.py` | A `Model` class, driven by your declared arguments | A `computation` function taking inputs and parameters as arguments, plus a `get_inputs()` that builds your declared configs. Only `jax`, `numpy` and the standard library are imported. |
+| After approval | An ordinary PyTorch run on that file: golden capture, port, port check | Copied to `base.py`. An ordinary JAX run: no oracle, no port. |
 
 | Field | Meaning |
 | --- | --- |
 | `entry_point` | **Required.** What to reproduce, as `file.py:Name`, where the file path is **relative to `input.path`** (not to its parent or the repository root). For a repository cloned to `my-repo/` with the class in `my-repo/pkg/layers.py`: with `input.path: "my-repo"` it is `pkg/layers.py:Layer`; with `input.path: "my-repo/pkg"` it is `layers.py:Layer`. When `input.path` is a single file, write just `Name`. The validator resolves it, checks the file defines `Name`, and suggests the right spelling when the path is off by a directory. |
-| `notes` | Which path to reproduce when `forward()` has several: backend, inference vs training, what to return. Without it the agent takes the default-argument path in `eval()` mode and records that choice. |
+| `notes` | Which path to reproduce when `forward()` (or the JAX call method) has several: backend, inference vs training, what to return. Without it the agent takes the default-argument path in inference mode and records that choice. |
 | `user_confirms_extraction` | **Required, must be `true`.** Acknowledges the approval step exists. It is not the approval. |
 
-Rules the validator enforces: `extraction` needs `input.type: "pytorch"` and
-`input.configs`; `input.entry_point`, `inputs_fn` and `init_inputs_fn` cannot be
-set alongside it (the extracted file always exposes `Model`); and a PyTorch
-`input.path` that is a **directory** requires it.
+Rules the validator enforces: `extraction` needs `input.type: "pytorch"` or
+`"jax"`, and `input.configs`; `input.entry_point`, `inputs_fn` and
+`init_inputs_fn` cannot be set alongside it (the extracted file has a fixed
+entry point); and a PyTorch or JAX `input.path` that is a **directory**
+requires it. A JAX extraction keeps `needs_jax_conversion: false`, like any
+JAX input.
 
 What you get at the gate: `source.py`, `extraction_rationale.md` (the path
-reproduced, the paths not reproduced, assumptions, and divergences between the
-repository's own torch path and its kernel path), and `extraction_check.py`,
-which compares the extraction with your original **on a machine where the
-original runs**. Nothing on the TPU host can make that comparison, so running it
-is the only check of that link. From approval onwards the run is an ordinary
-PyTorch run on the extracted file, and every later gate applies to it.
+reproduced, the paths not reproduced, and assumptions; plus, for PyTorch,
+divergences between the repository's own torch path and its kernel path, and
+for JAX, each library call that was re-expressed in plain `jax`), and
+`extraction_check.py`, which compares the extraction with your original.
+
+- **PyTorch.** The original cannot run on the TPU host, so you run
+  `extraction_check.py` **on a machine where it does**; that is the only check
+  of the link from your code to `source.py`. From approval onwards the run is
+  an ordinary PyTorch run on the extracted file, and every later gate applies
+  to it.
+- **JAX.** The agent tries to run `extraction_check.py` on the host, with the
+  original's own parameters loaded into the extracted `computation`, and the
+  rationale opens with the result. If your package's dependencies are not
+  installed there, it could not run, and the check is yours to run. Either
+  way, **no later gate looks at the extracted file again**: it is the
+  baseline, and a JAX baseline has no oracle. Your approval and that script
+  are the whole check.
 
 ### `input.specification` — when there is no source file
 
@@ -297,11 +316,13 @@ that are each a real failure mode:
     `init_inputs_fn` — two sources for the same arguments.
 14. A malformed config: a tensor without a valid shape or dtype, an integer
     tensor without an `init` range, `value` together with `shape`.
-15. `input.extraction` on a non-PyTorch input, without `input.configs`,
-    without `entry_point`, without `user_confirms_extraction`, or alongside
+15. `input.extraction` on an input that is neither PyTorch nor JAX, without
+    `input.configs`, without `entry_point`, without
+    `user_confirms_extraction`, or alongside
     `input.entry_point` / `inputs_fn` / `init_inputs_fn`.
-16. A PyTorch `input.path` that is a directory, without `input.extraction` —
-    the capture tools cannot execute a package.
+16. A PyTorch or JAX `input.path` that is a directory, without
+    `input.extraction` — the PyTorch capture tools cannot execute a package,
+    and a JAX input has to be the one file that becomes `base.py`.
 
 On success it prints the plan the job implies, so you can see what will happen
 before it happens:

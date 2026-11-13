@@ -54,6 +54,14 @@ CLI:
     CPU, checks its outputs with `output_leaves`, and prints their shapes. Exit
     0 ok, 3 no entry point, 2 it did not run or returned something the capture
     tools cannot record.
+
+  input_spec.py smoke <source.py> --input-spec <spec.json> --framework jax
+    For a self-contained JAX source (an extracted one, Phase 0.15), which
+    becomes base.py unchanged. Checks that it imports only jax, numpy and the
+    standard library, that it defines `computation` and `get_inputs`, that
+    `get_inputs()` builds exactly the declared configs (shapes, dtypes and
+    static values) and is deterministic, and that config 0 runs under
+    `jax.jit` on CPU the way the harness will call it. Same exit codes.
 """
 
 import argparse
@@ -347,17 +355,195 @@ def _smoke(args):
     print(f"  out{i}: shape={list(o.shape)} dtype={str(o.dtype).replace('torch.', '')}")
 
 
+# What a self-contained JAX source may import besides the standard library.
+# It becomes base.py verbatim and base.py is submitted to the TPU as source
+# text, so a package the host happens to have installed is not available there.
+JAX_SOURCE_IMPORTS = {"jax", "numpy"}
+
+# JAX without x64 narrows these on creation; a declared int64 index arriving
+# as int32 is the declared input, not a changed one.
+JAX_NARROWED = {"int64": "int32", "float64": "float32"}
+
+
+def foreign_imports(source_text):
+  """Modules a source imports beyond jax, numpy and the standard library.
+
+  Relative imports count: they are what makes a file part of a package.
+  Returns [] on a Python without `sys.stdlib_module_names` (< 3.10), where
+  the standard library cannot be enumerated.
+  """
+  import ast
+
+  stdlib = getattr(sys, "stdlib_module_names", None)
+  if stdlib is None:
+    return []
+  allowed = set(stdlib) | JAX_SOURCE_IMPORTS
+  found = set()
+  for node in ast.walk(ast.parse(source_text)):
+    if isinstance(node, ast.Import):
+      names = [a.name for a in node.names]
+    elif isinstance(node, ast.ImportFrom):
+      if node.level:
+        found.add("." * node.level + (node.module or ""))
+        continue
+      names = [node.module or ""]
+    else:
+      continue
+    found.update(n for n in names if n.split(".")[0] not in allowed)
+  return sorted(found)
+
+
+def check_declared_inputs(spec, cases):
+  """Where a JAX source's `get_inputs()` departs from the declared configs.
+
+  `cases` is what `get_inputs()` returned: one `(dynamic_args, static_args)`
+  per declared config. The declared tensor inputs must lead `dynamic_args`
+  with their declared shape and dtype, and the declared `value` inputs must
+  lead `static_args`, both in declared order. Parameters and constructor
+  scalars follow them and are the source's own. Returns a list of errors.
+  """
+  declared = spec.get("configs") or []
+  if not isinstance(cases, list):
+    return ["get_inputs() must return a list of (dynamic_args, static_args)"]
+  if len(cases) != len(declared):
+    return [
+      f"get_inputs() returns {len(cases)} config(s) but the job declares "
+      f"{len(declared)}; it must return exactly the declared configs, in order"
+    ]
+  errors = []
+  for i, (cfg, case) in enumerate(zip(declared, cases)):
+    if not (isinstance(case, (tuple, list)) and len(case) == 2):
+      errors.append(f"config {i}: expected (dynamic_args, static_args)")
+      continue
+    dynamic, static = list(case[0]), list(case[1])
+    tensors = [a for a in cfg["inputs"] if "value" not in a]
+    values = [a for a in cfg["inputs"] if "value" in a]
+    if len(dynamic) < len(tensors):
+      errors.append(
+        f"config {i}: {len(dynamic)} dynamic argument(s), but the job "
+        f"declares {len(tensors)} tensor input(s)"
+      )
+      continue
+    for j, (arg, got) in enumerate(zip(tensors, dynamic)):
+      name = arg.get("name") or f"input {j}"
+      shape = list(getattr(got, "shape", ()))
+      dtype = str(getattr(got, "dtype", type(got).__name__))
+      if shape != list(arg["shape"]):
+        errors.append(
+          f"config {i} {name}: shape {shape}, declared {list(arg['shape'])}"
+        )
+      if dtype not in (arg["dtype"], JAX_NARROWED.get(arg["dtype"])):
+        errors.append(f"config {i} {name}: dtype {dtype}, declared {arg['dtype']}")
+    if len(static) < len(values):
+      errors.append(
+        f"config {i}: {len(static)} static argument(s), but the job "
+        f"declares {len(values)} static input(s)"
+      )
+      continue
+    for arg, got in zip(values, static):
+      if got != arg["value"]:
+        errors.append(
+          f"config {i} {arg.get('name') or 'static input'}: value {got!r}, "
+          f"declared {arg['value']!r}"
+        )
+  return errors
+
+
+def _smoke_jax(args):
+  """Checks a self-contained JAX source the way the harness will use it.
+
+  The file becomes base.py unchanged, so the contract is base.py's: a
+  module-level `computation`, called under `jax.jit` with the static arguments
+  as `static_argnums`, and a `get_inputs()` that builds the declared configs.
+  """
+  os.environ.setdefault("JAX_PLATFORMS", "cpu")
+  import jax
+  import numpy as np
+
+  path = Path(args.source)
+  text = path.read_text()
+  foreign = foreign_imports(text)
+  if foreign:
+    raise ImportError(
+      f"the source imports {', '.join(foreign)}. A self-contained JAX source "
+      "may import only jax, numpy and the standard library: it becomes "
+      "base.py, which is sent to the TPU as source text."
+    )
+
+  ns = {"__name__": "__maxkernel_source__", "__file__": str(path.resolve())}
+  exec(compile(text, str(path), "exec"), ns)  # pylint: disable=exec-used
+
+  entry = args.entry_point
+  for name in (entry, "get_inputs"):
+    if not callable(ns.get(name)):
+      raise LookupError(f"the source defines no module-level `{name}`")
+
+  spec = load_input_spec(args.input_spec)
+  if not config_count(spec):
+    raise LookupError("the spec declares no configs to run")
+
+  try:
+    cases = ns["get_inputs"]()
+  except Exception as e:  # pylint: disable=broad-except
+    raise RuntimeError(f"get_inputs() raised {type(e).__name__}: {e}") from e
+  errors = check_declared_inputs(spec, cases)
+  if errors:
+    raise ValueError(
+      "get_inputs() does not build the declared configs:\n  "
+      + "\n  ".join(errors)
+    )
+
+  again = ns["get_inputs"]()
+  for a, b in zip(cases[0][0], again[0][0]):
+    if np.asarray(a).tobytes() != np.asarray(b).tobytes():
+      raise ValueError(
+        "get_inputs() returns different values on a second call; build "
+        "every array from a fixed jax.random.PRNGKey"
+      )
+
+  dynamic, static = list(cases[0][0]), list(cases[0][1])
+  static_argnums = tuple(range(len(dynamic), len(dynamic) + len(static)))
+  try:
+    out = jax.jit(ns[entry], static_argnums=static_argnums)(*dynamic, *static)
+  except Exception as e:  # pylint: disable=broad-except
+    # Re-raised as RuntimeError: JAX's tracing errors include IndexError
+    # subclasses, which main() would otherwise report as a missing entry point.
+    raise RuntimeError(
+      f"`{entry}` does not run under jax.jit with the static arguments as "
+      f"static_argnums, which is how the harness calls it: "
+      f"{type(e).__name__}: {str(e).splitlines()[0]}"
+    ) from e
+  leaves = jax.tree_util.tree_leaves(out)
+  if not leaves:
+    raise ValueError(f"`{entry}` returned no arrays")
+  print(f"SMOKE_OK entry={entry} kind=jax")
+  for i, o in enumerate(leaves):
+    print(f"  out{i}: shape={list(o.shape)} dtype={o.dtype}")
+
+
 def main():
   p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
   sub = p.add_subparsers(dest="cmd", required=True)
   s = sub.add_parser("smoke", help="run config 0 of a spec once on CPU")
   s.add_argument("source")
   s.add_argument("--input-spec", required=True)
-  s.add_argument("--entry-point", default="Model")
+  s.add_argument(
+    "--framework",
+    default="torch",
+    choices=["torch", "jax"],
+    help="torch (default): a module or function driven by the spec. jax: a "
+    "self-contained file with `computation` and `get_inputs`.",
+  )
+  s.add_argument(
+    "--entry-point",
+    help="default: Model for torch, computation for jax",
+  )
   s.add_argument("--seed", type=int, default=0)
   args = p.parse_args()
+  if args.entry_point is None:
+    args.entry_point = "computation" if args.framework == "jax" else "Model"
   try:
-    _smoke(args)
+    (_smoke_jax if args.framework == "jax" else _smoke)(args)
   except MissingInitArgs as e:
     print(f"MISSING_INIT_ARGS: {e}", file=sys.stderr)
     return 3

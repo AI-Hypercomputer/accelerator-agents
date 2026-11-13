@@ -254,15 +254,25 @@ final report must say so.
 ### Phase 0.15: Extract a Standalone Source From Code in the Wild (ONCE — GATED)
 
 **Run only when `state.primary.extraction` is set.** It is set when the user's
-PyTorch code is a package or depends on things this host cannot run (relative
-imports, CuTe DSL / Triton / CUDA extensions, `torch.cuda` streams), so the
-capture tools cannot execute it directly.
+PyTorch or JAX code is a package, or depends on things the run cannot load, so
+it cannot be used directly: relative imports in either; for PyTorch, CuTe DSL /
+Triton / CUDA extensions and `torch.cuda` streams, which the capture tools
+cannot execute; for JAX, parameters held in a module library and no
+module-level `computation`, where `base.py` must be one self-contained file.
 
 An agent writes the self-contained `source.py` from the user's code — which,
 as in Phase 0.1, means an agent writes the file this run is **scored against**.
 Unlike Phase 0.1 the semantics are not invented: they exist in the user's code,
-and the agent's job is to move them without changing them. Whether it did is not
-checkable on this host. So this phase also ends by stopping and asking the user.
+and the agent's job is to move them without changing them. So this phase also
+ends by stopping and asking the user.
+
+`state.primary.language` decides three things below:
+
+| | `pytorch` | `jax` |
+| --- | --- | --- |
+| `<extractor>` | `maxkernel-extract-source` | `maxkernel-extract-jax-source` |
+| `<smoke flags>` | `--entry-point Model` | `--framework jax` |
+| Checkable against the original on this host? | No: the original cannot run here | Sometimes: the extractor runs `extraction_check.py` here when the original imports, and its rationale says whether it did |
 
 1.  **Check if already done**: if `<run_dir>/source.py` exists AND
     `state.primary.extraction.approved` is `true`, skip to Phase 0.2. If
@@ -271,54 +281,70 @@ checkable on this host. So this phase also ends by stopping and asking the user.
     if it is missing, STOP and report the path to the orchestrator — the copy
     into `original/` or the state mapping is wrong, and the agent must not
     go looking for the file.
-2.  **Invoke `maxkernel-extract-source`**:
+2.  **Invoke `<extractor>`** — `maxkernel-extract-source` for `pytorch`,
+    `maxkernel-extract-jax-source` for `jax`:
     -   Prompt: `"Extract the primary source for run_dir = <run_dir> (state file: <run_dir>/state.json)."`
 3.  **Verify on disk**: `<run_dir>/source.py`, `<run_dir>/extraction_rationale.md`
     and `<run_dir>/extraction_check.py` must exist and be non-empty, and
-    `source.py` must build and run exactly as the capture tools will run it:
+    `source.py` must build and run exactly as the run will use it:
     ```bash
     {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/input_spec.py smoke <run_dir>/source.py \
-      --input-spec <state.primary.input_spec_path> --entry-point Model
+      --input-spec <state.primary.input_spec_path> <smoke flags>
     ```
-    Exit 0 prints `SMOKE_OK` and the output shapes. Exit 2 includes a
-    `forward()` that returns a `None` or other non-tensor leaf, which the
-    golden capture cannot record; the message names the leaf. Re-dispatch per
-    the retry policy (3 attempts) if any check fails, quoting that message.
+    Exit 0 prints `SMOKE_OK` and the output shapes. For `pytorch`, exit 2
+    includes a `forward()` that returns a `None` or other non-tensor leaf,
+    which the golden capture cannot record; the message names the leaf. For
+    `jax`, exit 2 includes an import `base.py` may not have, a `get_inputs()`
+    that does not build the declared configs, and a `computation` that does
+    not run under `jax.jit`; the message names which. Re-dispatch per the
+    retry policy (3 attempts) if any check fails, quoting that message.
 4.  **STOP AND ASK THE USER. This gate is not skippable.**
 
     Return to the orchestrator without advancing the iteration, reporting:
     -   the full text of `<run_dir>/extraction_rationale.md`, with its
-        **Assumptions** and **Divergences** sections called out separately;
-    -   the paths to `<run_dir>/source.py` and `<run_dir>/extraction_check.py`,
-        and that the latter is how the user can compare the extraction with
-        their original on a machine where it runs — nothing here can;
+        **Assumptions** section called out separately, and with it
+        **Divergences** (`pytorch`) or **Library calls I re-expressed** (`jax`);
+    -   the paths to `<run_dir>/source.py` and `<run_dir>/extraction_check.py`.
+        For `pytorch`, say that the script is how the user can compare the
+        extraction with their original on a machine where it runs — nothing
+        here can. For `jax`, quote the rationale's **Checked against the
+        original?** section first: either the script ran here and what it
+        found, or it could not run here and the user is the only one who can;
     -   the `SMOKE_OK` output shapes;
     -   a plain statement that this file, not the user's original, is what
         every number in the run will be checked against, and that an agent
         wrote it.
 
     Do not proceed on silence, on `input.extraction.user_confirms_extraction`
-    (it only acknowledges this step exists), or on your own judgement.
+    (it only acknowledges this step exists), or on your own judgement. A
+    passing `extraction_check.py` is evidence for the user, not an approval.
 
 5.  **On approval**: re-read `<run_dir>/state.json`, set
-    `primary.extraction.approved` to `true`, `primary.source_path` (and the
-    legacy `source_path`) to the absolute path of `<run_dir>/source.py`, and
-    `primary.entry_point` to `"Model"`. `primary.language` stays `"pytorch"`.
-    From here the run proceeds exactly as for a user-supplied PyTorch file,
-    with the declared configs driving the capture.
+    `primary.extraction.approved` to `true` and `primary.source_path` (and the
+    legacy `source_path`) to the absolute path of `<run_dir>/source.py`.
+    `primary.language` does not change. Then:
+    -   `pytorch`: set `primary.entry_point` to `"Model"`. From here the run
+        proceeds exactly as for a user-supplied PyTorch file, with the
+        declared configs driving the capture.
+    -   `jax`: copy the approved file to the baseline, unchanged —
+        `cp <run_dir>/source.py <run_dir>/base.py` — and leave
+        `primary.entry_point` as it is. From here the run proceeds exactly as
+        for a user-supplied JAX file: the phases that port and verify a
+        non-JAX source (0.2, 0.3, 0.4, 0.7, 0.8) skip a `jax` primary.
 
 6.  **On rejection or a correction request**: record what the user said in
-    `<run_dir>/maxkernel_debug_history.md`, re-dispatch
-    `maxkernel-extract-source` with their feedback in the prompt, and come back
-    to step 4. There is no attempt limit — this is a conversation with the
-    user, not a repair loop.
+    `<run_dir>/maxkernel_debug_history.md`, re-dispatch `<extractor>` with
+    their feedback in the prompt, and come back to step 4. There is no attempt
+    limit — this is a conversation with the user, not a repair loop.
 
-**What this gate buys.** The golden values Phase 0.2 captures are the extracted
-file's, and Phase 0.8 checks `base.py` against them — so the chain from
-`source.py` to the kernel is verified as usual. The link from the user's original
-to `source.py` is checked only by the user: by reading the rationale, and by
-running `extraction_check.py` where the original runs. The final report must say
-which of those happened.
+**What this gate buys.** For `pytorch`, the golden values Phase 0.2 captures are
+the extracted file's, and Phase 0.8 checks `base.py` against them — so the chain
+from `source.py` to the kernel is verified as usual. For `jax`, the extracted
+file *is* `base.py`, so there is no port to verify and no later gate looks at
+it again. In both, the link from the user's original to `source.py` is checked
+only by reading the rationale and by `extraction_check.py`: run by the user
+where the original runs, or, for `jax`, by the extractor on this host when the
+original imports here. The final report must say which of those happened.
 
 ### Phase 0.2: Capture Golden Values From a PyTorch Primary (ONCE — idempotent)
 
@@ -496,8 +522,9 @@ compile rather than someone's description of it.
 ### Phase 0.4: Understand the Primary Source (ONCE — idempotent)
 
 **Skip this entire phase when `state.primary.language == "jax"`.** A JAX input
-already has its `<run_dir>/base.py`, written by the orchestrator, and there is
-nothing to port or explain.
+already has its `<run_dir>/base.py`, written by the orchestrator or, for an
+extracted source, by Phase 0.15 on approval, and there is nothing to port or
+explain.
 
 **Also skip when `state.reference_mode == "torchax"`.** There is no
 hand-written port in that mode — the JAX reference was obtained mechanically in
@@ -793,7 +820,9 @@ the backward alone when the forward stays fixed, with the gradients derived by
 1.  **Check if already done**: If `<run_dir>/base.py` AND `<run_dir>/test_kernel.py` both exist, skip to Phase 1.
 2.  **Ensure base kernel exists**: `<run_dir>/base.py` should already be there.
     Which phase produced it depends on how this run is configured:
-    -   a `jax` primary — copied from the user's source by the orchestrator;
+    -   a `jax` primary — copied from the user's source by the orchestrator,
+        or, when `state.primary.extraction` is set, copied from the approved
+        `source.py` in Phase 0.15;
     -   `reference_mode: "llm_port"` — hand-written in Phase 0.4 and gated in
         Phase 0.8;
     -   `reference_mode: "torchax"` — written from the jaxpr in Phase 0.7 and

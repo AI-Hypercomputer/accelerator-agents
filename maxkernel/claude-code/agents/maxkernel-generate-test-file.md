@@ -74,6 +74,12 @@ Proceed to read it with `Read` (to learn its signature and shapes -- not to copy
     anything but `"jax"`, `base.py` is a port, and the canonical shapes live
     in the *original* source, not in it.
 
+    When it is `"jax"` and `state.primary.extraction` is set, `base.py` is an
+    extracted source the user approved, and its own `get_inputs()` is part of
+    what they approved: it builds the configs the job declared and initializes
+    the parameters the way the original does. Reproduce its cases exactly —
+    same arrays, same PRNG keys, same order — and nothing else.
+
     **Prefer recorded shapes over described ones.** When
     `state.primary.golden_meta_path` is set, read that JSON first
     (`<run_dir>/torch_golden.json`). It is not a description of the inputs --

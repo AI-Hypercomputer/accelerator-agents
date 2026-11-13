@@ -22,12 +22,14 @@ object: either the input *is* a backward implementation (`backward.from:
 port with `jax.vjp` (`backward.from: "autodiff"`; both passes are optimized
 unless `backward.optimize_forward` is false).
 
-Code from the wild -- a package with relative imports, GPU-only dependencies
-and no `get_inputs()` -- declares `input.extraction`. Phase 0.15 then has an
-agent write a standalone PyTorch `source.py` from it, built around the shapes in
+Code from the wild -- a package with relative imports, dependencies this host
+or the TPU cannot load, and no `get_inputs()` -- declares `input.extraction`.
+Phase 0.15 then has an agent write a standalone `source.py` from it in the
+input's own framework (PyTorch or JAX), built around the shapes in
 `input.configs`, and stops for the user to approve it before anything else
-runs. A PyTorch `input.path` that is a directory requires it: the capture tools
-load one file.
+runs. A PyTorch or JAX `input.path` that is a directory requires it: the
+PyTorch capture tools load one file, and a JAX input becomes `base.py`, which
+is one file.
 
 Two rules govern the whole schema:
 
@@ -70,6 +72,9 @@ RELATIONSHIPS = {"same_operation", "same_family", "unknown"}
 BACKWARD_FROM = {"source", "autodiff"}
 BACKWARD_KEYS = {"from", "wrt", "optimize_forward", "forward_context"}
 EXTRACTION_KEYS = {"entry_point", "notes", "user_confirms_extraction"}
+# Frameworks whose code can be extracted into a standalone source: the ones
+# the loop accepts a single self-contained file for.
+EXTRACTION_TYPES = {"pytorch", "jax"}
 
 
 class JobError(Exception):
@@ -270,11 +275,11 @@ def validate(job, job_path):
         f"input.extraction has unknown keys {unknown}; allowed: "
         f"{sorted(EXTRACTION_KEYS)}"
       )
-    if itype != "pytorch":
+    if itype not in EXTRACTION_TYPES:
       errors.append(
         f"input.extraction is set for a {itype!r} input. Extraction writes a "
-        "standalone PyTorch module from a PyTorch codebase; it only applies "
-        "to input.type 'pytorch'."
+        "standalone source in the input's own framework from a codebase that "
+        "cannot be run as is; it applies to input.type 'pytorch' and 'jax'."
       )
     if not (
       isinstance(extraction.get("entry_point"), str)
@@ -297,9 +302,10 @@ def validate(job, job_path):
       if inp.get(field):
         errors.append(
           f"input.{field} is set alongside input.extraction. The extracted "
-          "source always exposes `Model` and is driven by input.configs / "
-          "init_args / init_kwargs; name the original entry point in "
-          "input.extraction.entry_point instead."
+          "source has a fixed entry point (`Model` for PyTorch, `computation` "
+          "for JAX) and is driven by input.configs / init_args / init_kwargs; "
+          "name the original entry point in input.extraction.entry_point "
+          "instead."
         )
     if extraction.get("user_confirms_extraction") is not True:
       errors.append(
@@ -592,14 +598,20 @@ def validate(job, job_path):
     missing.append(f"input.path: {_resolve(ipath)}")
   elif (
     ipath
-    and itype == "pytorch"
+    and itype in EXTRACTION_TYPES
     and extraction is None
     and _resolve(ipath).is_dir()
   ):
+    why = (
+      "The PyTorch capture tools execute a single self-contained file, so a "
+      "package (relative imports, GPU-only dependencies) cannot be run as is."
+      if itype == "pytorch"
+      else "A JAX input is copied to base.py unchanged, and base.py is one "
+      "self-contained file with a module-level `computation`, so a package "
+      "(relative imports, module-library dependencies) cannot be used as is."
+    )
     errors.append(
-      f"input.path {_resolve(ipath)} is a directory. The PyTorch capture "
-      "tools execute a single self-contained file, so a package (relative "
-      "imports, GPU-only dependencies) cannot be run as is. Either point "
+      f"input.path {_resolve(ipath)} is a directory. {why} Either point "
       "input.path at one self-contained file, or declare input.extraction "
       "so Phase 0.15 writes one for you to approve."
     )
@@ -670,7 +682,12 @@ def build_plan(
       "nothing independent exists to check it against"
     )
 
-  if extraction is not None and oracle:
+  if extraction is not None and effective == "jax":
+    oracle = (
+      "none — base.py is the EXTRACTED source.py, which the user approved. "
+      "The only check against the original is extraction_check.py"
+    )
+  elif extraction is not None and oracle:
     oracle += (
       " -- run on the EXTRACTED source.py, which the user approved; the "
       "original code is never executed"
@@ -687,6 +704,9 @@ def build_plan(
   if itype == "specification" and synth == "jax":
     base_py = "SYNTHESIZED from the specification, then user-approved"
     producer = "maxkernel-synthesize-baseline"
+  elif effective == "jax" and extraction is not None:
+    base_py = "the extracted source.py, copied unchanged after approval"
+    producer = "maxkernel-extract-jax-source"
   elif effective == "jax":
     base_py = "copied from the input, unchanged"
     producer = "orchestrator"
@@ -710,7 +730,8 @@ def build_plan(
   if itype == "specification":
     phases.append(f"0.1 synthesize {synth} baseline + USER APPROVAL GATE")
   if extraction is not None:
-    phases.append("0.15 extract standalone PyTorch source + USER APPROVAL GATE")
+    kind = "JAX" if effective == "jax" else "PyTorch"
+    phases.append(f"0.15 extract standalone {kind} source + USER APPROVAL GATE")
   if effective in ("pytorch", "triton"):
     phases.append("0.2 oracle")
   if method == "torchax":
@@ -738,7 +759,12 @@ def build_plan(
     "advisory_spine": bool(refs),
     "extraction": extraction is not None,
     "entry_point": (
-      _get(job, "input.extraction.entry_point") + " (extracted to Model)"
+      _get(job, "input.extraction.entry_point")
+      + (
+        " (extracted to computation)"
+        if effective == "jax"
+        else " (extracted to Model)"
+      )
       if extraction is not None
       else _get(job, "input.entry_point")
     ),

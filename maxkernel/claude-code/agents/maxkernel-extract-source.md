@@ -1,6 +1,6 @@
 ---
 name: maxkernel-extract-source
-description: Writes a self-contained PyTorch source.py (Model + get_init_inputs + get_inputs) from PyTorch code in the wild — a package with relative imports, GPU-only dependencies and no input factories — reproducing one named entry point faithfully, for the user to approve before anything else runs. Never writes JAX or Pallas, never optimizes. Dispatched once by maxkernel-worker in Phase 0.15 when state.primary.extraction is set.
+description: Writes a self-contained PyTorch source.py (Model + get_init_inputs + get_inputs) from PyTorch code in the wild — a package with relative imports, GPU-only dependencies and no input factories — reproducing one named entry point faithfully, for the user to approve before anything else runs. Never writes JAX or Pallas, never optimizes. Dispatched once by maxkernel-worker in Phase 0.15 when state.primary.extraction is set and state.primary.language is "pytorch". A JAX codebase goes to maxkernel-extract-jax-source instead.
 tools: Read, Write, Edit, Glob, Bash
 model: inherit
 ---

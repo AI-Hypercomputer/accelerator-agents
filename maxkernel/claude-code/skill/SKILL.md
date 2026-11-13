@@ -97,6 +97,7 @@ this harness — do not invent one. What you trust is `<run_dir>/state.json` on
 disk, not the worker's prose.
 
 The other registered subagents (`maxkernel-extract-source`,
+`maxkernel-extract-jax-source`,
 `maxkernel-analyze-torch-source`,
 `maxkernel-write-jnp-reference`, `maxkernel-synthesize-baseline`,
 `maxkernel-analyze-source`, `maxkernel-analyze-gpu-reference`,
@@ -176,6 +177,12 @@ dependencies, no `get_inputs()`), Phase 0.15 has `maxkernel-extract-source`
 write a self-contained `source.py` from it, built around the shapes the job
 declares, and the run **stops for the user to approve it**. After approval the
 extracted file is the `source.py` at the top of the diagram.
+
+A JAX package gets the same phase and the same gate, from
+`maxkernel-extract-jax-source`. Its extracted `source.py` is one self-contained
+JAX file with a module-level `computation`, so after approval it is copied to
+`base.py` and the run continues as for any JAX input: there is no oracle and no
+port.
 
 Three things about this shape are worth holding onto.
 
@@ -300,19 +307,22 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     candidates and ask which is being converted and which (if any) are
     references.
 
-    **Code from the wild.** If the primary is a package — a directory whose
-    files use relative imports, import GPU-only libraries (`cutlass`,
-    `triton`, `cuda.bindings`, custom extensions), or ship no `get_inputs()` —
+    **Code from the wild.** If the primary is a PyTorch or JAX package — a
+    directory whose files use relative imports, import GPU-only libraries
+    (`cutlass`, `triton`, `cuda.bindings`, custom extensions), keep their
+    parameters in a module library with no module-level `computation` (JAX),
+    or ship no `get_inputs()` —
     it cannot be run as is, and neither you nor a worker may pick its shapes.
     Do not start the run from inference. Ask the user for: the entry point
-    (`file.py:Name`, the file path relative to the directory or file they give as `input.path`), which path of its `forward()` to reproduce
+    (`file.py:Name`, the file path relative to the directory or file they give as `input.path`), which path of its `forward()` or call method to reproduce
     (backend, inference or training, what to return), the constructor
     arguments, and the input shapes and dtypes (point them at the repo's own
     tests or benchmarks if it has them). Then write a job file with
     `input.extraction` and `input.configs` from their answers (the
     `input.configs` and `input.extraction` sections of
     `{{MAXKERNEL_ROOT}}/docs/job-spec.md` give the format), show it to them,
-    and continue from step 1b.
+    and continue from step 1b. `input.type` is the package's own framework:
+    `"pytorch"` or `"jax"`.
 
     **If the user stated the roles explicitly** ("convert this, use this one as
     a reference"), believe the user over the tool, and note any disagreement in
@@ -353,6 +363,9 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
 
     -   **`jax`** — already a JAX/Pallas module. Copy `<run_dir>/source.py` to
         `<run_dir>/base.py`. This is the path the loop has always taken.
+        Exception: with `input.extraction` there is no `source.py` yet, so
+        copy nothing. The worker's Phase 0.15 writes it, and copies it to
+        `base.py` itself once the user approves.
     -   **`pytorch`** — a `torch` reference. The worker's Phase 0.2 runs it on
         CPU to capture golden values, Phase 0.4 writes
         `<run_dir>/torch_context.md` and ports it to `<run_dir>/base.py`, and
@@ -666,11 +679,14 @@ partway through — re-read this section's steps as literally as you re-read
         `state.primary.extraction` is set, its `approved` is not `true`, and
         the worker returned an extracted source for review. Handle it exactly
         like Case A2: not a failure, not retried, not counted against
-        `attempt_count`. Present the rationale — its Assumptions and
-        Divergences sections first — the path to `source.py`, and
-        `extraction_check.py`, which is how the user can compare the
-        extraction with their original where it runs. Re-dispatch once they
-        approve or ask for changes. Do not approve it yourself.
+        `attempt_count`. Present the rationale — its Assumptions section
+        first, with Divergences (PyTorch) or Library calls I re-expressed
+        (JAX) — the path to `source.py`, and `extraction_check.py`, which
+        compares the extraction with their original. For PyTorch the user
+        must run it where the original runs. For JAX the extractor may have
+        run it on this host already: lead with the rationale's "Checked
+        against the original?" answer. Re-dispatch once they approve or ask
+        for changes. Do not approve it yourself, even when that check passed.
     -   **Case B — state unchanged**: the worker finished, errored, or gave up
         without committing the iteration.
         -   Append the worker's reported error to `<run_dir>/maxkernel_debug_history.md`.
@@ -758,12 +774,15 @@ Once `state.iteration == 5`:
 
     **If `state.primary.extraction` is set, say so before any number.** The
     run's semantics come from `source.py`, which an agent extracted from the
-    user's code (`primary.extraction.entry_point`) and the user approved. Every
-    gate from the golden capture onwards checks against that file, not against
-    the original. Point at `<run_dir>/extraction_rationale.md`, and say whether
-    the user reported running `<run_dir>/extraction_check.py` against their
-    original; if they did not, the link from their code to the baseline rests
-    on their reading of the rationale alone.
+    user's code (`primary.extraction.entry_point`) and the user approved. For
+    a PyTorch extraction, every gate from the golden capture onwards checks
+    against that file, not against the original. For a JAX extraction that
+    file *is* `base.py`, and no gate checked it at all. Point at
+    `<run_dir>/extraction_rationale.md`, and say whether
+    `<run_dir>/extraction_check.py` was run against the original — by the
+    user, or for JAX by the extractor on this host, as the rationale records —
+    and what it found. If it was not run, the link from their code to the
+    baseline rests on their reading of the rationale alone.
 
     If the run fell back from `torchax` to `llm_port` mid-setup — a step-0
     failure, a module torchax could not convert, or a torch/torchax version

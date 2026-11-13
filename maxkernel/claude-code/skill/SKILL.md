@@ -589,9 +589,15 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
         kernel is **saturated** (at a floor that is itself near the hardware
         limit, and a further experiment no longer pays) or **converged**
         (several distinct hypotheses in a row stopped returning). Set a number
-        only when the user or the job file asks for a cap
-        (`loop.max_iterations`); then it is a backstop, and reaching it means
-        the run stopped **without** converging.
+        **only** when a cap was explicitly requested, and then use exactly that
+        number:
+        -   the job file sets `loop.max_iterations`; or
+        -   the user's prompt asks for one (e.g. "at most 8 iterations",
+            "max_iterations 3", "just a quick look, 2 iterations").
+
+        Never invent a cap, and never default to 5. With a cap set, the loop
+        stops at whichever comes first: the measured verdict, or the cap.
+        Reaching the cap means the run stopped **without** converging.
     -   `primary.language` is one of `"pytorch"`, `"jax"`, `"cuda"`,
         `"triton"`, `"cutile"`, `"cutedsl"`, `"gpu"` — the
         verdict from step 3, written once and never revised mid-run. Every

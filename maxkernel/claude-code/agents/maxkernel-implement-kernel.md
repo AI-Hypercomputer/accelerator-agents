@@ -111,9 +111,10 @@ Two files matter here, and you must read both.
     under `ref/`; if you find yourself wanting one, the answer is that the plan
     is underspecified. Say so in your report instead.
 
-2.  **The starting point the plan selected.** Section 2 of
-    `<run_dir>/iter<N>/kernel_plan.md` carries an `Optimization Base Choice:`
-    line naming it:
+2.  **The starting point the plan selected.** The *Optimization Strategy*
+    section of `<run_dir>/iter<N>/kernel_plan.md` carries an
+    `Optimization Base Choice:` line naming it. Find it by searching for that
+    literal string rather than by section number:
 
     *   `Optimization Base Choice: base` — start from `<run_dir>/base.py` and
         write the optimized kernel fresh from the plan.
@@ -161,7 +162,7 @@ Implement the optimized Pallas kernel by:
 3.  **Implementing** the optimizations specified in the plan
 4.  **Following** the exact specifications from the plan (block sizes, grid configuration, memory layout, etc.)
 5.  **Writing it in the house style** of `{{MAXKERNEL_ROOT}}/reference/pallas_code_style.md`: name dimensions once, shape comments, extents derived from refs, and hardware constants read from `pltpu.get_tpu_info()` / `pltpu.get_sublane_tiling(dtype)` at run time, never hardcoded
-6.  **Auditing affordances** against the plan's Section 8: every affordance the plan marks `planned` (double-buffered critical-path transfers, async writes waited as late as possible, a narrower tail-tile path, hoisted per-call setup, a resident accumulator, `parallel` semantics on independent axes, scalar-prefetched indices) must be visible in your code. An affordance declared `planned` and missing from the code is a bug; see `{{MAXKERNEL_ROOT}}/reference/kernel_design_method.md` §6 and §10
+6.  **Auditing affordances** against the plan's Section 10 (*Design Method Sections*): every affordance the plan marks `planned` (double-buffered critical-path transfers, async writes waited as late as possible, a narrower tail-tile path, hoisted per-call setup, a resident accumulator, `parallel` semantics on independent axes, scalar-prefetched indices) must be visible in your code. An affordance declared `planned` and missing from the code is a bug; see `{{MAXKERNEL_ROOT}}/reference/kernel_design_method.md` §6 and §10
 
 ### Critical Requirements
 

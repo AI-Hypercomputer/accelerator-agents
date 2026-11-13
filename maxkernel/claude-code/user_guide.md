@@ -57,8 +57,45 @@ primary computes.
 
 ## Watching a run
 
-Observe `state.json` as it makes progress. The artifacts for each iteration will
-be in `workspace/<id>/iter<n>/…`. The optimized code is `optimized.py`.
+Observe `state.json` as it makes progress.
+
+**The first thing that happens is not optimization.** After the base kernel and
+test harness are prepared, MaxKernel characterizes the baseline into
+`workspace/<id>/baseline/`. That phase runs several TPU jobs and produces no
+faster kernel, which is expected: it is buying the map every later decision is
+steered by. The two files worth opening yourself:
+
+*   `baseline/roofline.md`: a per-case table of how fast this kernel *could*
+    go, with a target range and a one-sentence statement of which direction the
+    run is going to work in.
+*   `baseline/attribution.md`: where the baseline's time actually goes, ranked.
+
+Then the artifacts for each iteration appear in `workspace/<id>/iter<n>/…`. The
+optimized code is `optimized.py`; `kernel_plan.md` opens with the hypothesis the
+iteration is testing, and `keep_decision.md` says whether it survived and
+whether its stated mechanism turned out to be right (those two can differ).
+
+Some per-iteration files are deliberately absent: `floor.json` only exists if
+the change was kept, `gap_probe.json` only if the gap was worth probing, and
+`autotune_summary.md` only if a tuning trigger fired. A missing file is a
+result, not a crash.
+
+**The run has no fixed length.** It ends when it converges, however many
+iterations that takes. When it stops, `state.stopping.stop_reason` says why:
+`"saturated"` means the kernel is close to a floor that is itself close to the
+hardware and a further experiment no longer paid; `"converged"` means several
+experiments in a row, against distinct hypotheses, came back under 1%. Read
+`state.stopping.untested_hypotheses` before concluding the kernel is done: it
+lists the explanations nobody got round to attacking.
+
+There is no iteration budget by default. If you set one (`loop.max_iterations` in a
+job file, or `max_iterations` in `state.json` before starting) and the run reaches it, it **stopped
+without converging**: the loop was cut off mid-search, not finished, and
+`state.stopping` will tell you which criterion was still unmet. That is the case
+where re-prompting *"continue to optimize this kernel"* is most likely to pay.
+Set a small cap if you only want a quick look; a run without one can take many
+hours, since each iteration includes several TPU jobs.
 
 If the agent gets stuck, you can always stop it and re-prompt it to *"continue to
-optimize this kernel"* — it will pick up where it left off from `state.json`.
+optimize this kernel"* — it will pick up where it left off from `state.json`. The baseline phase is
+idempotent and will not be re-run.

@@ -16,6 +16,23 @@ kernels. Your goal is to identify parameters, create a parameterized code
 template of the kernel, and define the search space to minimize execution
 time.
 
+**Read `{{MAXKERNEL_ROOT}}/skill/guides/general_autotune.md` §2–§4 before
+choosing anything.** §1 (*when* to sweep) is not your decision — the worker has
+already applied it in Phase 6 and will hand you the trigger that fired. §2
+(which cases), §3 (the search space) and §4 (running a round) are yours, and the
+two rules that matter most are easy to get wrong:
+
+> **Sweep the fewest cases that can distinguish the choices you are deciding
+> between. Verify on all of them.**
+
+> **A grid is not a search; it is a set of hypotheses about where the optimum
+> lies. Each point should be there for a reason you can state.**
+
+Your dispatch prompt names the **trigger** (`T1`–`T8` from §1) and a one-sentence
+**question** this round must answer. Both go into the spec and into the summary.
+If you were not given them, stop and say so rather than sweeping blind: a round
+with no question produces numbers nobody can re-interpret later.
+
 --------------------------------------------------------------------------------
 
 ## Standardized File Paths & Strict Boundaries
@@ -40,9 +57,35 @@ the TPU VM.
 To prepare for autotuning, you must:
 
 1.  Use `Read` tool to read the optimized kernel code located at
-    `<run_dir>/iter<N>/optimized.py`.
+    `<run_dir>/iter<N>/optimized.py`, and **Section 7 (Tunable Parameters) of
+    `<run_dir>/iter<N>/kernel_plan.md`**, which already inventories the knobs and
+    states each one's trade-off. Do not re-derive that inventory; extend it if
+    the implementation introduced a knob the plan did not anticipate.
 2.  Identify the parameters that can be tuned in the kernel (e.g., BLOCK_M,
     BLOCK_N).
+
+    **Inventory them by how they are reached**, because the three classes have
+    different costs:
+
+    | class | how it is swept | cost per point |
+    |---|---|---|
+    | exposed through the call signature | the harness passes the value | one compilation per distinct combination |
+    | source constants | one substituted variant per value | one compilation |
+    | derived or structural | **not swept** | n/a |
+
+    Every distinct combination is usually a **separate compilation** — that, not
+    execution, is what makes grids expensive.
+
+    **Drop a case where the parameter is pinned by its shape, and do this
+    first.** Evaluate the clamping expression the kernel actually applies, per
+    case. If a parameter can only take one value for a case, sweeping it there
+    re-measures an identical compiled kernel under different labels. Cost is
+    usually not the reason to exclude — duplication is.
+
+    **Record what you deliberately do not tune, and why.** Writing the exclusion
+    list down prevents both wasted sweeps and the later question "did anyone
+    ever check this?"
+
     -   **The sweep must move its work driver.** Before writing the search
         space, compute what each parameter actually changes (grid steps,
         tiles, bytes moved, DMA count) at every point, from the same code
@@ -117,7 +160,78 @@ To prepare for autotuning, you must:
         combinations) stays small—ideally between **10 to 100 total combinations
         max**. Keep each parameter list to 2 or 3 high-probability values (e.g.,
         `[64, 128]`). Do not generate massive combinatorial sweeps.
-5.  Write the `kernel_name`, `code_template`, and `search_space` to a JSON
+    -   **Start at the current default and walk outward.** The existing value is
+        someone's prior measurement, and including it gives you a control
+        measured under identical conditions. Omitting it means you cannot tell
+        whether you improved anything.
+    -   **Bound each parameter by the shape, not by round numbers.** Compute the
+        largest meaningful value from the problem itself; anything beyond it is
+        either clamped (a duplicate) or invalid.
+    -   **Let failures bound the space — they are free information.**
+        Deliberately include one point you expect to fail on a budgeted
+        resource. A resource error is a hard upper bound obtained in seconds and
+        is more reliable than your estimate of the budget. **Put the
+        expected-failure point last**: per-configuration exceptions are caught
+        and reported, but a whole-run timeout is not.
+    -   **Order the grid so a killed run still answers the question.** Put the
+        decisive comparison first. A sweep that completes a quarter of its grid
+        has still done its job if the first two points were the discriminating
+        ones.
+    -   **Match the design to the question:**
+
+        | question | design |
+        |---|---|
+        | which of two parameters matters, and do they interact? | 2×2 factorial + the default |
+        | one parameter's meaning changed; where is its optimum now? | line scan, others held fixed |
+        | is the optimum on a boundary? | edge probes, after the interior settles |
+        | is a source constant worth exposing as a knob at all? | one value per variant, coarse |
+
+        A line scan assumes the parameters are separable and is valid only once
+        that is established, or when only one has changed. A grid-truncation
+        knob (above) is the exception to "edge probes": its optimum is interior
+        by construction.
+    -   **Never reuse a grid after a structural change.** An optimum can move
+        further than a previous grid's entire span. One configuration once
+        measured 1702.5 µs — 4.6× worse than its neighbours — and was written
+        off; after a later change decoupled the two concerns that parameter had
+        been arbitrating, the *identical* configuration measured 303.7 µs and
+        was the best point in its grid. A grid that excluded it as "known bad"
+        would have missed the global optimum. If the plan's Section 7 says a
+        cost that scales with this parameter was removed or added, **include
+        values you previously ruled out**.
+    -   **Prefer values that divide the natural block structure.** Non-divisors
+        introduce padding, padding changes the *work*, and that confounds a
+        schedule measurement with a work measurement.
+    -   **Anti-patterns**: a dense grid before a coarse one (go coarse, find the
+        bend, then refine); sweeping a parameter whose effect you have not
+        reasoned about — if you cannot say what a result would *mean*, do not
+        measure it.
+4b. **Choose the case set deliberately** (§2), and state the scoring metric
+    first, because it changes the answer. The harness scores on the geometric
+    mean of per-case speedups, so **small cases count equally** — do not select
+    only the cases with the largest absolute times.
+
+    -   **Sweep variants of the same shape together.** If two cases differ only
+        in dtype, flag or precision, sweep both: the pair is what tells you
+        whether the optimum is shape-driven or dtype-driven, and one alone
+        silently assumes it generalizes.
+    -   **Always include a case that could plausibly regress — the control.**
+        This is the least obvious rule and the highest-value one. A sweep over
+        the biggest cases will always find a value that helps them; without a
+        case where that value plausibly *hurts*, you will fit a rule to what you
+        measured and regress what you did not. Pick a shape whose structure
+        opposes the expected trend. In one instance four large shapes all wanted
+        a bigger query block while one short-sequence shape measured
+        36.5 / 38.7 / 42.6 µs — monotonically **worse** in exactly that
+        direction, because a query block is processed at its full static size
+        and that shape's work did not fill one.
+    -   **If the parameter consumes a budgeted resource, include a case with a
+        different resource profile.** Compile-time resource failures do not
+        track problem size monotonically — the case that fails first is often
+        not the biggest, because what matters is the ratio of the resource
+        estimate to the limit, not the amount of data.
+5.  Write the `kernel_name`, `code_template`, `search_space` and the round's
+    provenance to a JSON
     string and save it to `<run_dir>/iter<N>/autotune_spec.json` using the `write_to_file` tool.
     The JSON file must have exactly this structure:
 
@@ -125,9 +239,36 @@ To prepare for autotuning, you must:
 {
   "kernel_name": "...",
   "code_template": "...",
-  "search_space": { ... }
+  "search_space": { ... },
+  "round": {
+    "trigger": "T2",
+    "trigger_reason": "the resident accumulator removed the per-K-block re-read, which was the pressure pushing bK large",
+    "question": "where is bK's optimum now that the re-read cost is gone?",
+    "scoring_metric": "geometric mean of per-case speedups",
+    "design": "line scan over bK, bM and bN held at the plan's values",
+    "cases_swept": [0, 3],
+    "case_rationale": {
+      "0": "dominant case",
+      "3": "control -- short sequence, structure opposes the expected trend"
+    },
+    "cases_excluded": {"1": "bK pinned by shape", "2": "duplicate of case 1"},
+    "knobs_not_tuned": {"accumulator dtype": "pinned to f32 by the tolerance"},
+    "work_driver": {"BLOCK_K": "K-grid steps 32/16/8/4 across the grid -- moves"},
+    "expected_failure_point": {"BLOCK_K": 512},
+    "grid_rationale": {
+      "BLOCK_K": "64 is the current default (control); 128 and 256 walk outward into the range previously ruled out by T2; 512 is the expected VMEM failure, placed last"
+    }
+  }
 }
 ```
+
+`round` is not decoration. `general_autotune.md` §4 is explicit that the trigger
+and the question are what make a result reusable — without them you have numbers
+nobody can re-interpret later, and the next round cannot be sized.
+`work_driver` records the driver check above (what each swept parameter moves);
+a parameter whose driver is flat should not be in `search_space` at all.
+`maxkernel-autotune-summary` copies these fields into its report, and the
+sweep runner ignores them.
 
 Note: `kernel_name` is kept for logging/traceability, but the harness always
 calls the fixed entry point names (`base_computation`/`opt_computation`) --

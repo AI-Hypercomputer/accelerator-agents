@@ -1,6 +1,6 @@
 ---
 name: maxkernel-worker
-description: Runs ONE full iteration (plan -> implement -> compile -> test -> autotune -> profile) of the MaxKernel Pallas TPU kernel optimization loop, coordinating the other maxkernel-* subagents. Dispatched by the maxkernel skill orchestrator, once per iteration, with a run_dir argument.
+description: Runs ONE full iteration (plan -> implement -> compile -> test -> profile -> keep/floor/gap -> conditional autotune -> state + stopping assessment) of the MaxKernel Pallas TPU kernel optimization loop, and on the first iteration also the one-time baseline characterization (per-case timing, profile, floor, attribution, microbenchmarks, roofline). Coordinates the other maxkernel-* subagents. Dispatched by the maxkernel skill orchestrator, once per iteration, with a run_dir argument.
 model: inherit
 ---
 
@@ -48,14 +48,46 @@ reference:
 *   `<run_dir>/reference_alignment.md`: the trust verdict — Phase 0.6
 *   `<run_dir>/ideas_ledger.json`: the triaged borrowable ideas — Phase 0.6
 
+### Baseline Analysis (Produced once during Phase 0.95, in `<run_dir>/baseline/`):
+Measured against `base.py` before a single line of optimization is written.
+Every later iteration reads these; they are the run's only source of "what this
+cost ought to be", and without them the planner is reasoning from a datasheet.
+*   `baseline_measurements.json`: per-case latency of `base.py` on this TPU
+*   `profile_kernel.py`, `profile/`, `profile_summary.md`, `profile_metrics.json`, `hlo_dump.txt`
+*   `floor.md` / `floor.json`: compute-only, transfer-only, floor, gap, binding half
+*   `attribution.md` / `attribution.json`: ranked breakdown of the binding half, plus the calibrated vector rate
+*   `microbenchmarks.md` / `microbenchmarks.json`: dispatch floor at this kernel's arity, HBM bandwidth plateau (taken from `run_probe.py`), isolated rates of the components attribution handed off, killed directions
+*   `roofline.md` / `roofline.json`: per-case roofs, bound classification, pass count, target range
+*   `variants/`, `microbench/`: the probe sources, kept so a later round can extend rather than rewrite them
+
 ### Per-Iteration Artifacts (`<run_dir>/iter<n>/`):
-*   `<run_dir>/iter<n>/kernel_plan.md`: Optimization plan
+*   `<run_dir>/iter<n>/kernel_plan.md`: Optimization plan, carrying one falsifiable hypothesis
 *   `<run_dir>/iter<n>/optimized.py`: Optimized kernel implementation
 *   `<run_dir>/iter<n>/test_run.py`: Runnable test script combining test harness + optimized kernel
-*   `<run_dir>/iter<n>/autotune_spec.json`: Autotuning specification
-*   `<run_dir>/iter<n>/autotune_summary.md`: Autotuning summary report
-*   `<run_dir>/iter<n>/profile_kernel.py`: Profiling script
-*   `<run_dir>/iter<n>/profile_summary.md`: Profiling summary report
+*   `<run_dir>/iter<n>/profile_kernel.py`, `profile/`, `profile_summary.md`, `profile_metrics.json`, `hlo_dump.txt`: Profiling script, trace and summary
+*   `<run_dir>/iter<n>/keep_decision.md`: whether the hypothesis was kept, and why
+*   `<run_dir>/iter<n>/floor.md` / `floor.json`: **only if the change was kept**
+*   `<run_dir>/iter<n>/gap_probe.md` / `gap_probe.json`: only if the gap warranted probing
+*   `<run_dir>/iter<n>/autotune_spec.json` / `autotune_summary.md`: only if a tuning trigger fired
+
+The conditionals are not laziness — they are the protocol. A floor measured
+after a rejected change tells you nothing (the kernel did not move), a gap probe
+run before work reduction has stopped paying describes a kernel you are about to
+replace, and a sweep run without a trigger is the anti-pattern
+`general_autotune.md` opens with. **The absence of a file is information the
+next iteration's planner reads.**
+
+### Method guides
+Hardware-independent operating instructions, read in place under
+`{{MAXKERNEL_ROOT}}/skill/guides/`. The subagents read them in full; you need
+§1 of `general_autotune.md` and all of `general_stopping.md` yourself, because
+those two govern decisions you make rather than delegate.
+
+*   `{{MAXKERNEL_ROOT}}/skill/guides/general_roofline.md`, `{{MAXKERNEL_ROOT}}/skill/guides/general_attribution.md`, `{{MAXKERNEL_ROOT}}/skill/guides/general_micro_benchmarking.md` — Phase 0.95
+*   `{{MAXKERNEL_ROOT}}/skill/guides/general_profile_reasoning.md` — how the planner turns measurements into the next experiment
+*   `{{MAXKERNEL_ROOT}}/skill/guides/general_floor.md`, `{{MAXKERNEL_ROOT}}/skill/guides/general_gap_probing.md` — Phase 5
+*   `{{MAXKERNEL_ROOT}}/skill/guides/general_autotune.md` — Phase 6 (**you apply §1**)
+*   `{{MAXKERNEL_ROOT}}/skill/guides/general_stopping.md` — Phase 7 (**you apply all of it**)
 
 ### Project File & Tool Location Rules
 Always specify explicit, full relative paths starting from project root (`{{MAXKERNEL_ROOT}}/`) or absolute paths when invoking tools, reading subagent prompts, or referencing server scripts:
@@ -102,6 +134,28 @@ Notes specific to this harness:
     phase.
 5.  Never run two subagents concurrently in this loop: each phase consumes the
     previous phase's artifact, and they share one TPU.
+6.  **The measurement subagents take a `target`, not an iteration.** Five
+    agents measure THIS kernel by timing deliberately-wrong analysis variants
+    through `{{MAXKERNEL_ROOT}}/tools/assemble_variant_run.py` (timing only, no
+    correctness check). Dispatch them with
+    `"<task> for run_dir = <run_dir>, target = <baseline | iter<n>>."`;
+    `target = baseline` writes into `<run_dir>/baseline/`, `target = iter<n>`
+    into `<run_dir>/iter<n>/`:
+
+    | subagent | when | produces |
+    |---|---|---|
+    | `maxkernel-floor-probe` | Phase 0.95; Phase 5 if kept; Phase 6 after an adopted sweep | `floor.md` / `floor.json`: compute-only and transfer-only times, floor, gap, `gap_frac_of_floor`, binding half (`label`), `floor_near_hardware_limit` |
+    | `maxkernel-attribution` | Phase 0.95 | `attribution.md` / `attribution.json`: ranked cost of each stage of the binding half (one stage removed per variant), the calibrated vector rate, and the components handed off to microbenchmarking |
+    | `maxkernel-microbenchmark` | Phase 0.95 | `microbenchmarks.md` / `microbenchmarks.json`: the dispatch floor at this kernel's arity, chip-level numbers (HBM bandwidth plateau, per-grid-step cost) copied from `run_probe.py`, isolated rates for the components attribution handed off, killed directions |
+    | `maxkernel-roofline` | Phase 0.95 | `roofline.md` / `roofline.json`: four roofs per case, bound classification, pass count, `ratio_to_max_roof`, target range |
+    | `maxkernel-gap-probe` | Phase 5, only when all four gap triggers hold | `gap_probe.md` / `gap_probe.json`: schedule perturbations with work held constant, `floor_formula_still_valid`, `confounded_probes` |
+
+    **Training-step runs.** When `base.py` defines `training_step` (Phase
+    0.85), a variant defines `forward_pass` and `backward_pass`, not just
+    `computation`, and is assembled with `--base_path <run_dir>/base.py`, which
+    binds it through `base.training_step(...)` the same way
+    `assemble_test_run.py` binds an optimized kernel. Say so in the dispatch
+    prompt for these runs.
 
 --------------------------------------------------------------------------------
 
@@ -536,7 +590,7 @@ When both hold, the agent writes a readable `jnp` reference and it becomes
     -   **3** — bad invocation or the candidate has no `computation`. Fix the
         call; do not burn an attempt.
 5.  **After 3 failed attempts, STOP THE RUN**, exactly as Phase 0.8 does. A run
-    whose reference is wrong should not spend five iterations optimizing
+    whose reference is wrong should not spend a whole run optimizing
     against it.
 
 **A `divergent` verdict is not automatically fatal** — a legitimate
@@ -572,7 +626,7 @@ a different one with the opposite argument order, so pointing it at
 `torchax_oracle.json` would not work anyway.
 
 Otherwise this is a hard gate. A run whose baseline is wrong should not spend
-five iterations optimizing against it — that is worse than no run, because it
+a whole run optimizing against it — that is worse than no run, because it
 ends in a confident, wrong speedup.
 
 1.  **Run the check**:
@@ -652,7 +706,7 @@ the backward alone when the forward stays fixed, with the gradients derived by
 
 ### Phase 0.9: Prepare Shared Base Kernel & Test Harness (Execute ONCE — idempotent)
 
-1.  **Check if already done**: If `<run_dir>/base.py` AND `<run_dir>/test_kernel.py` both exist, skip to Phase 1.
+1.  **Check if already done**: If `<run_dir>/base.py` AND `<run_dir>/test_kernel.py` both exist, skip to Phase 0.95.
 2.  **Ensure base kernel exists**: `<run_dir>/base.py` should already be there.
     Which phase produced it depends on how this run is configured:
     -   a `jax` primary — copied from the user's source by the orchestrator;
@@ -733,17 +787,147 @@ the backward alone when the forward stays fixed, with the gradients derived by
         `<run_dir>/maxkernel_debug_history.md` now, so a later correctness
         failure can be read against it.
 
+### Phase 0.95: Baseline Characterization (Execute ONCE — idempotent)
+
+**Check if already done**: if `<run_dir>/baseline/roofline.json` exists, skip to
+Phase 1. Otherwise create `<run_dir>/baseline/` and run every step below.
+
+Nothing is optimized in this phase. Its entire output is a map of where the
+baseline's time goes and how much of it is recoverable — and every hypothesis
+the run will ever form is built on it. Skipping it to "save an iteration" is the
+most expensive shortcut available here: the alternative is a whole run of
+guessing, each iteration of which costs more than this phase does. It is also
+what makes an early stop possible at all — without a measured floor there is no
+defensible way to say further experiments have stopped paying, so a run that
+skips it has no defensible way to stop.
+
+It runs on whatever `computation` the Phase 0.9 harness times — for a
+training-step run (Phase 0.85), that is the whole forward + backward step.
+
+Dispatch the steps **in this order**, one at a time, verifying each artifact on
+disk before the next. The order is dictated by data dependencies, not by
+importance — each step consumes the previous ones:
+
+| # | step | subagent | produces | needs |
+|---|---|---|---|---|
+| 1 | per-case baseline timing | *(you, directly — see below)* | `baseline_measurements.json` | — |
+| 2 | profile + per-XLA-op breakdown + HLO/LLO read | `maxkernel-generate-profile-script`, then `maxkernel-summarize-profile` | `profile_summary.md`, `profile_metrics.json`, `hlo_dump.txt` | 1 |
+| 3 | floor | `maxkernel-floor-probe` | `floor.json` | 1 |
+| 4 | attribution | `maxkernel-attribution` | `attribution.json` | 3 |
+| 5 | microbenchmarks | `maxkernel-microbenchmark` | `microbenchmarks.json` | 4 |
+| 6 | roofline | `maxkernel-roofline` | `roofline.json` | 3, 4, 5 |
+
+Dispatch each with `"<task> for run_dir = <run_dir>, target = baseline."` For
+a training-step run, append: `"base.py defines training_step: variants define
+forward_pass and backward_pass and are assembled with --base_path
+<run_dir>/base.py."`
+
+**Step 2 in detail.** Invoke `maxkernel-generate-profile-script` with
+`"Generate profiling script for run_dir = <run_dir>, target = baseline."`, run
+the trace with
+`{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/tpu_client.py --action profile --code_file <run_dir>/baseline/profile_kernel.py`,
+then invoke `maxkernel-summarize-profile` with
+`"Summarize trace profile for run_dir = <run_dir>, target = baseline."` The
+summary must carry the per-case, per-XLA-op device-time breakdown and the
+HLO/LLO read, exactly as for an iteration profile (Phase 4).
+
+**On the ordering of steps 3–6.** The floor comes before attribution because
+attribution must cut its variants on top of the *binding* half's probe, and only
+the floor says which half that is (`general_floor.md` §7). The roofline comes
+last, not first, because two of its four roofs are measured rather than
+computed: its vector-unit rate is calibrated from an attribution ablation delta
+(`general_roofline.md` §1.C) and its operand-streaming roof must be measured
+because the a-priori weight-port model runs ~2× pessimistic and gets the
+element-vs-byte question backwards (§3). Running the roofline first would mean
+running it on two guesses.
+
+**The two kinds of probe meet here.** Steps 3–6 measure THIS kernel.
+`{{MAXKERNEL_ROOT}}/tools/run_probe.py` measures the chip and toolchain, and
+caches the result per TPU and toolchain under `workspace/_probe_cache/`, so
+these numbers are taken once and reused, never re-measured by a hand-written
+microbenchmark:
+-   `maxkernel-microbenchmark` takes the HBM bandwidth plateau and the generic
+    per-grid-step cost from `run_probe.py --pick hbm_bandwidth_arms --pick
+    dispatch_floor`, measures only the dispatch floor at this kernel's own
+    argument count and donation pattern (it depends on both), and spends the
+    rest of its TPU time only on the kernel-specific components that
+    `attribution.json` hands off. If attribution hands off none, the component
+    section of `microbenchmarks.json` is `null` with the reason.
+-   `maxkernel-roofline` builds its bandwidth roof from the measured plateau
+    (`run_probe.py --pick hbm_bandwidth_arms`) as well as the spec figure, and
+    records both. The floor's `floor_near_hardware_limit` and Phase 7's
+    Criterion A compare against the same measured plateau.
+
+**Step 1 in detail** — you do this yourself; it is deterministic and needs no
+agent. `base.py` always defines `computation` (for a training-step run,
+`make_vjp_base.py` built it from `training_step`), so no `--base_path` is
+needed here:
+
+```bash
+{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/assemble_variant_run.py \
+  <run_dir>/base.py <run_dir>/get_inputs.py \
+  <run_dir>/baseline/run_base_per_case.py --label baseline
+
+{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/tpu_client.py \
+  --action performance_test --code_file <run_dir>/baseline/run_base_per_case.py
+```
+
+Parse every `CASE_TIME_<idx>: <ms>` line and the `GEOMEAN_TIME` line from STDOUT
+and write `<run_dir>/baseline/baseline_measurements.json`:
+
+```json
+{
+  "kernel": "<run_dir>/base.py",
+  "per_case_ms": {"0": 2.231044, "1": 0.402113},
+  "geomean_ms": 0.947,
+  "failed_cases": {}
+}
+```
+
+Milliseconds, JSON numbers, never strings. A case that printed `CASE_ERROR_<idx>`
+goes in `failed_cases` with its message and is omitted from `per_case_ms`.
+
+This is the *only* per-case absolute baseline the run ever takes: the correctness
+harness reports a geometric mean plus per-case *speedups*, so without this table
+nobody can say which case is actually slow. Note that `state.base_time_ms` from
+Phase 0.9 is the harness's geomean and will not generally equal `geomean_ms`
+here — different aggregation over the same kernel. Do not "reconcile" them.
+
+**Failure policy for this phase.** Steps 2–6 each get 3 attempts, as usual. If a
+step still fails, record the failure in `<run_dir>/maxkernel_debug_history.md`,
+write a stub artifact naming what is missing, and **continue to the next step**
+— then proceed to Phase 1. A run with four of six baseline artifacts is far
+better off than one with none, and the planner is instructed to treat a missing
+input as "not measured" rather than as permission to assume. Step 1 is the
+exception: if it fails, the kernel does not run on this TPU at all, so stop and
+report.
+
 ### Phase 1: Planning & Implementation
 
 1.  **Plan Optimization**:
     -   Invoke `maxkernel-plan-kernel` subagent.
     -   Prompt: `"Create optimization plan for run_dir = <run_dir>, iteration = <n>."`
+    -   The plan carries **one** falsifiable hypothesis, built on the measured
+        artifacts in `<run_dir>/baseline/` (and on the latest kept iteration's
+        `floor.json` / `gap_probe.json` when they exist), and distinct from
+        every hypothesis an earlier iteration's `keep_decision.md` recorded as
+        refuted.
     -   **Check the plan is complete.** `Read` `<run_dir>/iter<n>/kernel_plan.md`
-        and confirm its "Design Method Sections" part has all five required
-        parts: cost classes, implementation affordances, unit trading,
-        contract questions, and facts needed. If any is missing, invoke
-        `maxkernel-plan-kernel` once more with the prompt
-        `"Revise the optimization plan for run_dir = <run_dir>, iteration = <n>: Section 8 (Design Method Sections) is missing <parts>."`
+        and confirm:
+        1.  **§2 Hypothesis** is present, with a `Provenance:` line (one of
+            `LEDGER-<id>`, `ROOFLINE`, `PROFILE-iter<k>`,
+            `BASELINE-<artifact>`), a `Prediction:` line giving a number, and a
+            `Refuted if:` line. Phase 5 judges the iteration against these two
+            lines, so a plan without them cannot be judged.
+        2.  **§10 Design Method Sections** is present. On iteration 1, and on
+            any re-plan (a measured number refuted a modelled one), it must
+            have all five required parts in full: cost classes,
+            implementation affordances, unit trading, contract questions, and
+            facts needed. On later iterations it may update only the rows the
+            hypothesis touches, but it must say so.
+        If either is missing, invoke `maxkernel-plan-kernel` once more with the
+        prompt
+        `"Revise the optimization plan for run_dir = <run_dir>, iteration = <n>: <§2 Hypothesis | §10 Design Method Sections> is missing <parts>."`
         Proceed after one revision either way, and note any part still
         missing in `<run_dir>/maxkernel_debug_history.md`.
 2.  **Implement Kernel**:
@@ -767,11 +951,18 @@ the backward alone when the forward stays fixed, with the gradients derived by
     ```
 2.  **Execute TPU Correctness Tests**:
     `{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/tpu_client.py --action correctness_test --code_file <run_dir>/iter<n>/test_run.py`
-    (STDOUT outputs `CORRECTNESS: True/False`, `BASE_TIME: <ms>`, `RESULT_TIME: <ms>`, and `SPEEDUP: <ratio>`).
+    (STDOUT outputs `SPEEDUP_CASE_<idx>: <ratio>` per case, then `CORRECTNESS: True/False`, `BASE_TIME: <ms>`, `RESULT_TIME: <ms>`, and `SPEEDUP: <ratio>`).
     -   **Capture these values verbatim from STDOUT now.** They are written to
-        `state.json` in Phase 6 and this is the only place they exist — the
-        script is not re-run. Parse as floats: `base_time_ms` <- `BASE_TIME`,
+        `state.json` in Phase 7 and this is the only place they exist — the
+        script is not re-run (except after an adopted sweep, Phase 6 step 5).
+        Parse as floats: `base_time_ms` <- `BASE_TIME`,
         `optimized_time_ms` <- `RESULT_TIME`, `speedup` <- `SPEEDUP`.
+    -   **Capture every `SPEEDUP_CASE_<idx>` line too.** The headline `SPEEDUP`
+        is a geometric mean, and a mean hides the case that regressed. Phase 5's
+        keep decision and Phase 7's stopping assessment both read the per-case
+        numbers; a change that wins 1.4× overall while regressing one case by
+        0.7× is a different result from one that wins 1.4× everywhere, and only
+        the per-case lines distinguish them.
     -   Never compute `speedup` yourself, and never derive a latency from job
         timestamps or CLI wall-clock duration — those include queue wait and JIT
         compilation time.
@@ -785,12 +976,201 @@ the backward alone when the forward stays fixed, with the gradients derived by
         measured either way; do not "correct" them.
 3.  **Summarize Test Results**:
     Invoke `maxkernel-summarize-test-results` with prompt `"Summarize test results for run_dir = <run_dir>, iteration = <n>."`
-4.  If correctness passed, proceed to Phase 4. Otherwise, skip to Phase 6 with `test_ok = False`.
+4.  If correctness passed, proceed to Phase 4. Otherwise, skip to Phase 7 with `test_ok = False`.
 
-### Phase 4: Autotuning Loop
+**Do not autotune here.** Tuning before the change has been profiled and judged
+is `general_autotune.md`'s N4 (*tuning as a substitute for diagnosis*) and N2
+(*adopting tuned values while the structure is still moving*) at once: a sweep
+will find a local improvement, the iteration will stop there, and every
+subsequent measurement will be taken at an operating point chosen for a
+structure that is still changing. Phase 6 runs a sweep only when a trigger fires.
+
+### Phase 4: Profiling Loop
+
+Profiling comes before any tuning: Phase 5 judges the change and Phase 6 decides
+whether to sweep, and both read this profile.
+
+1.  **Generate Profiling Script**:
+    Invoke `maxkernel-generate-profile-script` subagent with prompt `"Generate profiling script for run_dir = <run_dir>, iteration = <n>, target = iter<n>."`
+    The script must cover every `get_inputs()` case, each wrapped in its own
+    `case_<idx>` trace annotation, with at least three blocked executions per
+    case — a profile taken on one case is routinely quoted as if it described
+    the suite.
+2.  **Execute Profile Trace**:
+    `{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/tpu_client.py --action profile --code_file <run_dir>/iter<n>/profile_kernel.py`
+3.  **Analyze and Summarize Trace**:
+    Invoke `maxkernel-summarize-profile` subagent with prompt `"Summarize trace profile for run_dir = <run_dir>, iteration = <n>, target = iter<n>."`
+    -   **Verify the per-XLA-op breakdown on disk.** Besides
+        `<run_dir>/iter<n>/profile_summary.md`, the summarizer must write
+        `<run_dir>/iter<n>/profile_metrics.json` (machine-readable, read by
+        Phase 5 and the next planner) and `<run_dir>/iter<n>/hlo_dump.txt`.
+        The summary must carry a **per-case, per-XLA-op device-time
+        breakdown** — the Pallas custom call(s) separated from every XLA op
+        around them (copies, transposes, fusions, reductions) — and the
+        HLO/LLO read. A kernel-only number hides the glue XLA added around
+        the kernel, which is often where the time a change "saved" went. If
+        any of the three is missing, or the breakdown is absent, re-dispatch
+        per the retry policy.
+4.  **Confirm the ledger was adjudicated** (skip when there is no ledger).
+    Every idea this iteration's plan adopted carries a falsifiable claim, and
+    the trace is where it is settled. After the summarizer returns, check that
+    no entry is still sitting in `adopted` for this iteration:
+    ```bash
+    {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/ledger.py list <run_dir>/ideas_ledger.json --status adopted
+    ```
+    An entry adopted in iteration `n` that is still `adopted` after the
+    summarizer ran means the claim was never checked. Re-dispatch the
+    summarizer once with the specific ids named in the prompt. If it still
+    cannot settle them, that is acceptable — an honest `inconclusive` is a
+    valid verdict and the summarizer should have recorded it — but an entry
+    left unadjudicated is not, because the next iteration's planner will treat
+    it as untried and may re-adopt a claim the trace already disproved.
+
+### Phase 5: Keep / Drop, Floor, and Gap
+
+This phase decides whether iteration `n` produced a kernel worth building on,
+and — only if it did — how much room is left in it.
+
+1.  **Judge the hypothesis, and write it down.**
+
+    Read the `Hypothesis` block (§2) from `<run_dir>/iter<n>/kernel_plan.md`
+    (`Prediction:` and `Refuted if:`) and compare it against what Phase 3
+    measured, per case as well as on the geomean.
+
+    Apply this rule literally, top to bottom, first match wins:
+
+    | # | condition | `kept` |
+    |---|---|---|
+    | 1 | `compile_ok != true` OR `test_ok != true` OR `optimized_time_ms` is `null` | `false` |
+    | 2 | `speedup > 1.0` AND (`state.best_optimized_time` is `null` OR `optimized_time_ms < state.best_optimized_time`) | `true` |
+    | 3 | otherwise | `false` |
+
+    **`kept` means "the new best kernel"**: correct, faster than `base.py`, and
+    strictly faster than every earlier iteration. Read `state.best_optimized_time`
+    as it stands now, before Phase 7 updates it. A change that beats the
+    baseline but not the incumbent is **dropped**: the loop always carries the
+    kernel with the best speedup forward, and a slower kernel is never measured
+    for a floor or gap. This is the same predicate `maxkernel-plan-kernel` uses
+    to pick its optimization base (beat `base.py` and improve on the kernel it
+    built from), so the two can never disagree. The thresholds are strict: a
+    speedup of exactly `1.0`, or a tie with the incumbent, is *not* kept.
+
+    Then write `<run_dir>/iter<n>/keep_decision.md` — three short sections, and
+    it costs a minute:
+    *   **Verdict**: `kept` / `dropped`, with the numbers the rule compared.
+    *   **Hypothesis verdict**: `confirmed` / `partially confirmed` / `refuted`.
+        This is a *separate* judgement from the keep decision and the two
+        legitimately disagree: a change can be kept for a real 1.2× while its
+        stated mechanism was wrong, and a change can be dropped while having
+        confirmed something worth knowing. Quote the plan's `Prediction:` and
+        `Refuted if:` lines against the measurement, and copy the plan's
+        `Provenance:` line so a later planner can see which source the refuted
+        idea came from.
+    *   **Per-case note**: name any case that regressed even though the geomean
+        improved. If one shape regressed and the rest improved, that is
+        `general_autotune.md` trigger T4 — record it, Phase 6 reads it.
+
+    **A sub-1% win is evidence against the theory that produced it**, not just a
+    small win. Say so when it happens; `general_stopping.md` treats that reading
+    as more important than the percentage.
+
+    When the iteration failed compile or correctness, still write
+    `keep_decision.md` (`dropped`, hypothesis verdict `null`, and why), then
+    go to Phase 7.
+
+2.  **If `kept == false`: skip steps 3 and 4 entirely and go straight to
+    Phase 7** — Phase 6 is skipped too, for the same reason.
+    Do not measure a floor and do not run a gap probe. The kernel did not move,
+    so the previous floor still stands and re-measuring would tell you nothing.
+    This is `general_floor.md` §3 and it is a rule, not a preference — the whole
+    reason floor checks stay cheap is that rejected changes do not earn one.
+
+3.  **If `kept == true`: measure the floor.**
+    Invoke `maxkernel-floor-probe` with
+    `"Probe the floor for run_dir = <run_dir>, target = iter<n>."` (for a
+    training-step run, add the `forward_pass` / `backward_pass` /
+    `--base_path <run_dir>/base.py` note from the Subagent Delegation Rules).
+
+    When it returns, read `<run_dir>/iter<n>/floor.json` yourself. Two fields
+    drive what happens next: `gap_frac_of_floor` and `label`.
+
+    Expect the label to flip over the course of a run, and never carry it
+    forward — a pure block-size retune that touches neither the arithmetic nor
+    the transfer code can hand the constraint to the other half.
+
+4.  **Gap probe — only when all four triggers hold.** Check them yourself
+    against `<run_dir>/iter<n>/floor.json` and `<run_dir>/baseline/roofline.json`
+    before dispatching; the subagent re-checks and will correctly refuse if you
+    were wrong:
+
+    1.  `gap_frac_of_floor > 0.10`;
+    2.  the gap is outside measurement noise;
+    3.  the kernel actually has concurrency (async copies or a pipelined grid —
+        a fully resident, synchronous kernel has nothing to overlap);
+    4.  **work reduction on the binding half has stopped paying.** This is the
+        one most often gotten wrong. Gap probing recovers *schedule*, not
+        *work*. If `roofline.json` still shows the binding half far from its own
+        hardware roof — `ratio_to_max_roof` above ~2× — its formulation is the
+        bigger prize, and fixing it moves the gap anyway, so a probe now
+        describes a kernel that is about to be replaced.
+
+    If all four hold, invoke `maxkernel-gap-probe` with
+    `"Probe the gap for run_dir = <run_dir>, target = iter<n>."`
+    Otherwise record in `keep_decision.md` which trigger failed and skip it.
+
+    If the probe returns `floor_formula_still_valid: false`, contention was
+    confirmed: `max(compute-only, transfer-only)` is the wrong floor formula,
+    every gap figure in the run is overstated, and part of what looks
+    recoverable is not. Append that to `<run_dir>/maxkernel_debug_history.md`
+    prominently — it changes how Phase 7 reads every remaining number.
+
+### Phase 6: Autotuning — only when a trigger fires
+
+**Read `{{MAXKERNEL_ROOT}}/skill/guides/general_autotune.md` §1.** The
+decision to sweep is yours; the design of the sweep is the planner's.
+
+> **The single most important negative finding: a measurement of the performance
+> floor never motivates a tuning sweep.**
+
+Tuning is not how you close a gap between achieved time and the floor. Every
+genuine trigger is about a **stale or invalidated optimum** — a parameter whose
+correct value changed and nobody re-derived it.
+
+**Skip this phase entirely if `kept == false`** (a rejected change did not move
+the kernel, so the previous optimum still stands), or if every tunable parameter
+is pinned by the shapes in `get_inputs()`.
+
+Otherwise evaluate these eight triggers. Sweep if **any** holds:
+
+| # | trigger | where you check it |
+|---|---|---|
+| **T1** | defaults came from a table, heuristic or hard-coded constant written for different code | the *Tunable Parameters* section (§7) of `kernel_plan.md`; **must be checked deliberately — it never announces itself**: no error, no regression, just a worse operating point |
+| **T2** | the change removed or added a cost that **scales with** a tunable parameter | §7's explicit yes/no |
+| **T3** | the change moved a resource budget, so the feasible region shifted | §7's explicit yes/no |
+| **T4** | one shape regressed while the rest improved, and no single sub-change explains it | the per-case note in `keep_decision.md` |
+| **T5** | you are about to accept or reject a variant on its measured time, and the incumbent has had tuning attention the challenger has not | `keep_decision.md` |
+| **T6** | a schedule probe came back confounded by a parameter moving | `gap_probe.json`'s `confounded_probes` |
+| **T7** | you are about to fit a rule to optima gathered on inconsistent grids | prior `autotune_summary.md` files |
+| **T8** | a two- or three-point sweep would test a specific directional theory from the plan | `kernel_plan.md` |
+
+T2 deserves the most weight. The previous optimum solved a trade-off that no
+longer exists, and **the new optimum can lie outside the range previously
+searched** — in one case a configuration written off at 1702.5 µs measured
+303.7 µs after a change decoupled the two concerns that parameter had been
+arbitrating, and was then the best point in its grid.
+
+If no trigger fires, write one line into `<run_dir>/iter<n>/keep_decision.md`
+saying so, and go to Phase 7. That is a normal outcome; most iterations should
+not sweep.
+
+If a trigger fires:
 
 1.  **Plan Tuning Specs**:
-    Invoke `maxkernel-autotune-planner` subagent with prompt `"Create autotune spec for run_dir = <run_dir>, iteration = <n>."`
+    Invoke `maxkernel-autotune-planner` subagent with prompt
+    `"Create autotune spec for run_dir = <run_dir>, iteration = <n>. Trigger = <T#>: <one sentence on why it fired now>. Question this round must answer: <one sentence>."`
+    Pass the trigger and the question — the planner is instructed to stop
+    without them, because a round with no question produces numbers nobody can
+    re-interpret later.
 2.  **Run Autotuning Sweep**:
     -   Extract `code_template` from `<run_dir>/iter<n>/autotune_spec.json` to `<run_dir>/iter<n>/autotune_template.py`.
     -   Assemble parameterized trial template:
@@ -801,7 +1181,17 @@ the backward alone when the forward stays fixed, with the gradients derived by
         ```
     -   Build `<run_dir>/iter<n>/autotune_payload.json` and execute sweep:
         `{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/tpu_client.py --action autotune --code_file <run_dir>/iter<n>/autotune_payload.json --timeout 600`
+        The payload carries `code_template` (the assembled full template) and
+        `search_space`. The spec's `round` block is provenance for the summary
+        agent and is not sent to the server.
     -   Save output array to `<run_dir>/iter<n>/autotune_results.json`.
+    -   **Treat the first run of a new sweep as a harness test, not a
+        measurement.** Sweeps exercise a path single runs do not: repeated
+        invocation with varying configuration against shared state. A sweep whose
+        first configuration succeeds and whose remaining ones all fail
+        identically is the signature of buffer donation, cached compilation or
+        mutated inputs — look at the failure *pattern* before debugging the
+        kernel.
 3.  **Apply Best Configuration**:
     ```bash
     {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/apply_best_config.py \
@@ -818,37 +1208,24 @@ the backward alone when the forward stays fixed, with the gradients derived by
     -   Selection is deterministic. Never pick the winner yourself.
 4.  **Summarize Autotuning Results**:
     Invoke `maxkernel-autotune-summary` with prompt `"Summarize autotuning results for run_dir = <run_dir>, iteration = <n>."`
+5.  **Re-test, then re-floor.** `apply_best_config.py` edited
+    `<run_dir>/iter<n>/optimized.py`, so the timings captured in Phase 3 now
+    describe a kernel that no longer exists. Re-run Phase 3 steps 1–2 against
+    the substituted kernel and **use those numbers** (including every
+    `SPEEDUP_CASE_<idx>`) for Phase 7; this also re-confirms correctness at
+    the adopted configuration, which `general_stopping.md` §6 requires before
+    any stop. Then re-run `maxkernel-floor-probe` for `target = iter<n>`: a
+    pure tuning change can flip the binding half without touching either the
+    arithmetic or the transfer code, and the next iteration's plan is aimed by
+    that label.
 
-### Phase 5: Profiling Loop
-
-1.  **Generate Profiling Script**:
-    Invoke `maxkernel-generate-profile-script` subagent with prompt `"Generate profiling script for run_dir = <run_dir>, iteration = <n>."`
-2.  **Execute Profile Trace**:
-    `{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/tpu_client.py --action profile --code_file <run_dir>/iter<n>/profile_kernel.py`
-3.  **Analyze and Summarize Trace**:
-    Invoke `maxkernel-summarize-profile` subagent with prompt `"Summarize trace profile for run_dir = <run_dir>, iteration = <n>."`
-4.  **Confirm the ledger was adjudicated** (skip when there is no ledger).
-    Every idea this iteration's plan adopted carries a falsifiable claim, and
-    the trace is where it is settled. After the summarizer returns, check that
-    no entry is still sitting in `adopted` for this iteration:
-    ```bash
-    {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/ledger.py list <run_dir>/ideas_ledger.json --status adopted
-    ```
-    An entry adopted in iteration `n` that is still `adopted` after the
-    summarizer ran means the claim was never checked. Re-dispatch the
-    summarizer once with the specific ids named in the prompt. If it still
-    cannot settle them, that is acceptable — an honest `inconclusive` is a
-    valid verdict and the summarizer should have recorded it — but an entry
-    left unadjudicated is not, because the next iteration's planner will treat
-    it as untried and may re-adopt a claim the trace already disproved.
-
-### Phase 6: Update State
+### Phase 7: Update State and Assess Stopping
 
 1.  Re-read `<run_dir>/state.json`.
 2.  Set `iteration` to `n`.
 3.  **Append the iteration record to `state.history`.** Write every field below,
-    using **ABSOLUTE PATHS** for the four file entries and **JSON numbers** (not
-    strings) for the three timings:
+    using **ABSOLUTE PATHS** for the file entries and **JSON numbers** (not
+    strings) for the timings and fractions:
 
     ```json
     {
@@ -858,24 +1235,62 @@ the backward alone when the forward stays fixed, with the gradients derived by
       "base_time_ms": 2.231044,
       "optimized_time_ms": 0.734112,
       "speedup": 3.0391,
+      "per_case_speedup": {"0": 3.41, "1": 2.70},
       "base_choice": "iter2",
+      "kept": true,
+      "hypothesis_verdict": "confirmed",
+      "hypothesis_provenance": "BASELINE-attribution",
+      "improvement_over_incumbent": 0.184,
+      "floor_ms": 0.6102,
+      "gap_frac_of_floor": 0.2031,
+      "binding_half": "transfer-bound",
+      "autotune_trigger": "T2",
       "kernel_plan": "<run_dir>/iter3/kernel_plan.md",
       "optimized_kernel": "<run_dir>/iter3/optimized.py",
+      "keep_decision": "<run_dir>/iter3/keep_decision.md",
       "profile_summary": "<run_dir>/iter3/profile_summary.md",
+      "floor": "<run_dir>/iter3/floor.json",
+      "gap_probe": null,
       "autotune_summary": "<run_dir>/iter3/autotune_summary.md"
     }
     ```
 
     -   `base_time_ms`, `optimized_time_ms` and `speedup` are the floats you
-        captured from Phase 3 STDOUT. If the iteration failed correctness, write
-        `null` for all three and `"test_ok": false`.
+        captured from Phase 3 STDOUT (or from the Phase 6 re-test, when a sweep
+        was adopted). If the iteration failed correctness, write `null` for all
+        three and `"test_ok": false`.
+    -   `per_case_speedup` maps case index to the `SPEEDUP_CASE_<idx>` value.
+        This is what lets the stopping assessment in step 6, and the next
+        planner, see a case the geomean is hiding. `null` when the iteration
+        failed correctness.
     -   `base_choice` is `"base"` or `"iter<k>"`, naming the source this
         iteration was built from. Read it from the `Optimization Base Choice:`
-        line in Section 2 of `<run_dir>/iter<n>/kernel_plan.md`, which the
-        planner is required to emit. If it is genuinely absent, write
-        `"unknown"` — do not guess.
-    -   Include all four path keys even for phases that were skipped; set a
-        path to `null` when the file does not exist on disk.
+        line in `<run_dir>/iter<n>/kernel_plan.md`, which the planner is required
+        to emit — search for that literal string rather than by section
+        number. If it is genuinely absent, write `"unknown"` — do not guess.
+    -   `kept` and `hypothesis_verdict` come from Phase 5 step 1.
+        `hypothesis_verdict` is one of `"confirmed"`, `"partially_confirmed"`,
+        `"refuted"`, or `null` when the iteration never got far enough to
+        produce a measurement. **It is not the same as `kept`** and the two
+        legitimately disagree.
+    -   `hypothesis_provenance` is the §2 hypothesis's `Provenance:` tag(s),
+        verbatim (`LEDGER-<id>`, `ROOFLINE`, `PROFILE-iter<k>`,
+        `BASELINE-<artifact>`), or `null` if the plan carried none.
+    -   `improvement_over_incumbent` is the fractional improvement of this
+        iteration's `optimized_time_ms` over `state.best_optimized_time` as it
+        stood *before* this iteration:
+        `(prev_best - optimized_time_ms) / prev_best`. Negative for a
+        regression, `null` when there was no incumbent or no measurement. This
+        is the number Criterion B in step 6 counts, and computing it here —
+        before step 4 updates the incumbent — is the only place it is cheap.
+    -   `floor_ms`, `gap_frac_of_floor` and `binding_half` are copied from
+        `<run_dir>/iter<n>/floor.json`. All three are `null` when the change was
+        dropped and no floor was measured — that is correct and expected, not a
+        gap to fill from an older iteration.
+    -   `autotune_trigger` is the trigger code that fired in Phase 6, or `null`
+        if none did.
+    -   Include every path key even for phases that were skipped; set a path to
+        `null` when the file does not exist on disk.
 
 4.  **Update the best-so-far by explicit numerical comparison.** Evaluate these
     in order and apply the first that matches:
@@ -901,9 +1316,124 @@ the backward alone when the forward stays fixed, with the gradients derived by
 
 5.  Leave `state.base_time_ms` untouched — it is set once in Phase 0.9 and is a
     fixed reference point.
-6.  Write updated `<run_dir>/state.json` back to disk.
 
-Finish by reporting a 2-3 sentence summary back to caller.
+6.  **Assess the stopping criteria and record the verdict.**
+
+    **Read `{{MAXKERNEL_ROOT}}/skill/guides/general_stopping.md`.** You
+    apply it; the orchestrator only reads the fields you write. The shape of the
+    rule:
+
+    > **Stopping is marginal-return-driven, not threshold-driven.** You do not
+    > stop because a percentage was reached. You stop because further
+    > experiments stopped paying — and the floor measurement is what makes
+    > "stopped paying" a defensible judgement instead of a guess.
+
+    Evaluate both criteria. **Neither is sufficient alone.**
+
+    **Criterion A — distance to the floor is small.** `actual <= ~1.25 x floor`,
+    i.e. exposed time under ~20%, *and* the floor itself validated against the
+    hardware (`floor_near_hardware_limit` in `floor.json`: bytes moved divided
+    by transfer-only time compared against the **measured** HBM bandwidth
+    plateau from `run_probe.py --pick hbm_bandwidth_arms` — recorded in
+    `<run_dir>/baseline/microbenchmarks.json` and `roofline.json` — as well as
+    the spec figure, with no redundant traffic left to remove). A floor is only
+    a stop signal if the floor is itself near a physical limit. If the measured
+    plateau is missing, say so in `criterion_a_detail` and judge against the
+    spec figure alone.
+
+    Set `criterion_a_met` accordingly. If no floor was measured this iteration
+    (the change was dropped), use the most recent one in `state.history` (or
+    `<run_dir>/baseline/floor.json`) and say which iteration it came from.
+
+    **Criterion B — experiments stopped returning.** Count backwards through
+    `state.history` for consecutive iterations whose `improvement_over_incumbent`
+    is `< 0.01` (including negative). Two or three is the signal — **but check
+    independence first**: read those iterations' `Hypothesis` blocks and ask
+    whether the failures were against **distinct** hypotheses. Three attacks on
+    the same suspected cause refute one hypothesis; they do not exhaust the
+    space. Set `criterion_b_met` only when the failing hypotheses were distinct,
+    and record how many distinct ones failed.
+
+    **Criterion C governs how A and B are used.** The floor's job is not to
+    supply a threshold; it is to **bound how much is left**, so a small return
+    can be judged against a known remaining prize:
+
+    -   0.58% return with 51 µs exposed ⇒ the prize is small and this attack
+        barely dents it ⇒ stop.
+    -   0.58% return with 300 µs exposed ⇒ the prize is large and the wrong
+        attack was picked ⇒ keep going, change hypothesis.
+
+    Same result, opposite decision. Never apply a fixed percentage mechanically.
+
+    **What does NOT count as a stop signal**, and each of these is a real way
+    runs end early:
+    -   reaching a percentage of floor without having run experiments that
+        failed;
+    -   a single failed experiment;
+    -   multiple failures that all target the same suspected cause;
+    -   **diminishing returns on the heaviest cases only.** This is the common
+        trap: diagnosis narrows to the two or three cases with the largest
+        absolute times and the small cases quietly drop out of the loop. The
+        harness scores on a geometric mean of per-case speedups, so small cases
+        count equally. Before setting `recommend_stop: true`, **gap-check every
+        case carrying >5% of total time** using `per_case_speedup` and the
+        per-case rows of `floor.json` and `roofline.json`. In one instance the
+        four smallest cases held ~12% of suite time at 10.8× their bandwidth
+        floor, and nothing had re-examined them for four hours.
+
+    Write into `state.json` (top level, overwriting each iteration):
+
+    ```json
+    "stopping": {
+      "iteration_assessed": 3,
+      "criterion_a_met": false,
+      "criterion_a_detail": "actual 0.734 ms vs floor 0.610 ms = 1.20x floor, but floor_near_hardware_limit is false (0.9 TB/s against a measured 1.4 TB/s plateau, 1.6 TB/s spec)",
+      "criterion_b_met": false,
+      "consecutive_sub_1pct": 0,
+      "distinct_hypotheses_failed": 0,
+      "remaining_prize_ms": 0.124,
+      "cases_above_5pct_unchecked": [],
+      "untested_hypotheses": ["the residual may be issue bandwidth; never probed"],
+      "stop_reason": null,
+      "recommend_stop": false,
+      "rationale": "<two sentences>"
+    }
+    ```
+
+    **The verdict: stop when the kernel is saturated or converged.** Write
+    `stop_reason` and set `recommend_stop` from it:
+
+    -   **`"saturated"`**: Criterion A is met (within ~1.25x of a floor that is
+        itself near the hardware limit, no redundant traffic left) **and** at
+        least one experiment since reaching it returned under 1%
+        (`consecutive_sub_1pct >= 1`). Reaching the floor without a failed
+        experiment is not a stop.
+    -   **`"converged"`**: returns have stopped, whatever A says. At least
+        **3** consecutive iterations with `improvement_over_incumbent < 0.01`,
+        against at least **3 distinct** hypotheses. When the remaining prize is
+        still large (exposed time above ~20% of the floor, Criterion C), require
+        **5** consecutive, against 5 distinct hypotheses, before concluding the
+        queue is empty.
+    -   otherwise `null`.
+
+    `recommend_stop` is `true` only when `stop_reason` is `"saturated"` or
+    `"converged"` **and** `cases_above_5pct_unchecked` is empty. There is no
+    iteration budget by default, so this verdict is the only normal exit: every
+    iteration either improves by at least 1% (progress toward a bounded floor)
+    or counts toward `"converged"`, which guarantees the run ends. The orchestrator branches on this
+    field; it does not re-derive the judgement. Write the block on every
+    iteration, failed ones included — `iteration_assessed` is how the
+    orchestrator knows the verdict is current.
+
+    `untested_hypotheses` is not optional and not a formality. Diminishing
+    returns is not a proof of optimality — if the leading explanation for the
+    residual was never experimentally attacked, say so plainly rather than
+    letting the run assert the kernel is at its limit.
+
+7.  Write updated `<run_dir>/state.json` back to disk.
+
+Finish by reporting a 2-3 sentence summary back to caller: what the hypothesis
+was, whether it was kept, and the stopping verdict.
 
 --------------------------------------------------------------------------------
 

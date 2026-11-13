@@ -3,10 +3,12 @@
 An agent that writes and optimizes [Pallas](https://docs.jax.dev/en/latest/pallas/index.html)
 TPU kernels, packaged for [Claude Code](https://claude.com/claude-code).
 
-You point it at a kernel — JAX, CUDA or PyTorch — and a TPU; it runs a closed
-self-refinement loop —
-**plan → implement → compile → test → autotune → profile** — for five iterations,
-keeping the fastest numerically-correct kernel it found. Every iteration is
+You point it at a kernel — JAX, CUDA or PyTorch — and a TPU. It first measures
+the baseline (floor, attribution, microbenchmarks, roofline), then runs a closed
+self-refinement loop in which each iteration tests one falsifiable hypothesis —
+**plan → implement → compile → test → profile → keep/drop → floor/gap → autotune
+only when a trigger fires** — and stops when a measured stopping criterion is met
+(the kernel is saturated or converged; there is no fixed iteration count), keeping the fastest numerically-correct kernel it found. Every iteration is
 grounded in real hardware: kernels compile on an actual TPU VM, correctness is
 checked against the baseline, and the next plan is written from an XProf trace of
 the last one rather than from a guess.
@@ -28,7 +30,8 @@ Read the **[User Guide](user_guide.md)** — a short walkthrough of how to use M
 | --- | --- |
 | `skill/SKILL.md` | The `maxkernel` skill — the orchestrator. It only reads state and dispatches the worker; it never writes kernel code itself. |
 | `skill/general_rules.md` | The invariants every subagent loads before doing anything. |
-| `agents/maxkernel-*.md` | 19 subagent prompts: one worker plus eighteen single-phase specialists. |
+| `agents/maxkernel-*.md` | 25 subagent prompts: one worker plus twenty-four single-phase specialists, including the five baseline-analysis agents (`floor-probe`, `attribution`, `microbenchmark`, `roofline`, `gap-probe`). |
+| `skill/guides/general_*.md` | Eight hardware-independent method guides (roofline, floor, attribution, microbenchmarking, gap probing, profile reasoning, autotune, stopping) that the worker and analysis agents read by explicit path. |
 | `tools/` | The agent's CLI surface: TPU client, input classification, golden capture and port verification, GPU kernel fact extraction (CUDA, Triton, cuTile), the ideas ledger, test-harness assembly, autotune config selection, XProf trace analysis, HLO dumps, RAG retrieval. |
 | `server/tpu_server.py` | The job-queue daemon that runs on (or beside) the TPU VM. |
 | `hooks/` | Optional `PreToolUse` guard — see [Workspace guard](#workspace-guard-optional). |
@@ -72,19 +75,30 @@ you ──▶ maxkernel skill (orchestrator)
              │        base.py vs golden, on CPU
              │        fails ─▶ fix-port ×3 ─▶ STOP the run
              │
+             │ 0.95 BASELINE CHARACTERIZATION (once) ─▶ baseline/
+             │        per-case timing + profile (per-XLA-op, HLO/LLO)
+             │        floor-probe ▸ attribution ▸ microbenchmark ▸ roofline
+             │        (variants timed via tools/assemble_variant_run.py)
+             │
              ├──────────▶ plan-kernel ──▶ implement-kernel
              │              ▲   ▲              │   (no read access to ref/)
-             │              │   └ roofline first, then jaxpr + HLO, then ledger
+             │              │   └ ONE hypothesis built on baseline/,
+             │              │     then jaxpr + HLO, then ledger
              │              └ reads the primary's context brief
              │            fix-kernel-compilation ─┘
              │            compilation-summary
              │            generate-test-file / fix-test-script
              │            test-script-validation-summary
              │            summarize-test-results
-             │            autotune-planner / autotune-summary
-             └──────────  generate-profile-script / summarize-profile
-                              └ adjudicates each adopted ledger idea
-                                against the trace: confirmed | refuted
+             │            generate-profile-script / summarize-profile
+             │              └ adjudicates each adopted ledger idea
+             │                against the trace: confirmed | refuted
+             │            keep/drop vs incumbent ─▶ floor-probe (if kept)
+             │              ─▶ gap-probe (if gap large, work cuts stopped paying)
+             │            autotune-planner / autotune-summary (only on a trigger)
+             └──────────  update state + stopping verdict (general_stopping.md)
+                              └ orchestrator stops when the kernel is
+                                saturated or converged (no fixed count)
 
         evaluation/compare_kernel.py   (separate, needs a TPU)
              └ times the user's REAL PyTorch against the generated kernel,
@@ -124,7 +138,7 @@ one reference: a file, or a directory holding a multi-file kernel project.
 `tools/classify_inputs.py` sorts every file you hand over by deterministic
 marker matching, not a model's opinion. When two files could each be the
 primary, it refuses to guess and the orchestrator asks you — picking wrong
-would silently benchmark the wrong computation for five iterations.
+would silently benchmark the wrong computation for a whole run.
 
 | primary language | What happens |
 | --- | --- |
@@ -144,7 +158,7 @@ the outputs; `verify_port.py` then checks `base.py` against them. Without this,
 a non-JAX run has no way to detect a mistranslated port — harness validation
 binds `base.py` as both sides of its own comparison, so it proves the harness
 runs and nothing about the port. If the check fails three times, the run
-**stops**: five iterations optimizing against a wrong denominator is worse
+**stops**: a whole run optimizing against a wrong denominator is worse
 than no run, because it ends in a confident, wrong number.
 
 **Borrowing from a reference.** `maxkernel-reconcile-reference` first asks

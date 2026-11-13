@@ -12,9 +12,12 @@ Before taking any action or writing any code, you MUST read `{{CLAUDE_DIR}}/skil
 
 
 Your goal is to analyze the results from the profiling execution and perform
-deep performance trace analysis. Your response should have three parts: 1) A summary of the profiling results (ALU %, Memory BW %, Step Time). 2) Deep
-analysis using the available offline XProf tools. 3) A clear decision on whether
-there is significant room for performance improvement.
+deep performance trace analysis. Your response should have four parts:
+1) A summary of the profiling results (ALU %, Memory BW %, Step Time).
+2) A **per-XLA-op device-time breakdown**, per input case.
+3) Deep analysis using the available offline XProf tools, including an HLO/LLO
+   read of what the compiler actually emitted.
+4) A clear decision on whether there is significant room for improvement.
 
 --------------------------------------------------------------------------------
 
@@ -22,15 +25,27 @@ there is significant room for performance improvement.
 
 Your target run directory is `<run_dir>` (e.g., `{{MAXKERNEL_ROOT}}/workspace/<run_id>`). Read `<run_dir>/state.json` to get full history and current iteration state.
 
+Your dispatch prompt names a **target**, either `baseline` or `iter<N>` (a
+prompt that says `iteration = <n>` means target `iter<n>`);
+`<analysis_dir>` is `<run_dir>/baseline/` or `<run_dir>/iter<N>/` accordingly.
+The kernel profiled was `<run_dir>/base.py` or
+`<run_dir>/iter<N>/optimized.py` to match.
+
 All artifacts for this task are strictly confined within `<run_dir>`:
 
-*   Profile summary report output: `<run_dir>/iter<N>/profile_summary.md`
-*   Profile trace artifacts: `<run_dir>/iter<N>/profile/` (automatically fetched by `tpu_client.py`)
+*   Profile summary report output: `<analysis_dir>/profile_summary.md`
+*   Machine-readable metrics output: `<analysis_dir>/profile_metrics.json`
+*   HLO dump: `<analysis_dir>/hlo_dump.txt`
+*   Profile trace artifacts: `<analysis_dir>/profile/` (automatically fetched by `tpu_client.py`)
 
 
 --------------------------------------------------------------------------------
 
-For context, here are the profiling results: `{xplane_pb_path}`
+Find the trace yourself rather than waiting to be handed a path: `tpu_client.py`
+fetches the artifacts into `<analysis_dir>/profile/`, and `<xplane_pb_path>`
+below means the `.xplane.pb` under that directory. If there is more than one,
+use the most recent. If there is none, stop and report that the profile job did
+not produce a trace — do not analyze the previous iteration's.
 
 ### Tool Usage
 
@@ -123,6 +138,68 @@ You have these tools to help you:
     Add `--print-metadata` for the long form, or `--output-path` to write the
     HLO to a file instead of stdout.
 
+--------------------------------------------------------------------------------
+
+### The per-XLA-op breakdown (mandatory)
+
+Before any prose, produce the op-level table. This is what tells the planner
+whether the time is inside the Pallas kernel at all, or in unfused XLA ops
+around it — the two lead to completely different plans, and the overview
+metrics cannot distinguish them.
+
+```bash
+{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/query_xplane.py -- "<xplane_pb_path>" \
+  "SELECT name, COUNT(*) AS n, SUM(duration_ps)/1e6 AS total_us
+   FROM events GROUP BY name ORDER BY total_us DESC LIMIT 25"
+```
+
+Then split it per case. The profile script wraps each input case in a
+`case_<idx>` `TraceAnnotation`, so the annotation's `start_ps`/`end_ps` bracket
+that case's events:
+
+```bash
+{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/query_xplane.py -- "<xplane_pb_path>" \
+  "SELECT name, start_ps, end_ps FROM events WHERE name LIKE 'case_%' ORDER BY start_ps"
+```
+
+Report, per case: op name, invocation count, total device µs, and share of that
+case's device time. **Do not collapse to the geomean and stop.** Floors and
+bottlenecks differ by regime; the small cases quietly dropping out of the
+analysis is the single most common way a run stops early against a suite that
+still had headroom.
+
+Also name explicitly:
+
+*   which row is the Pallas `custom-call` (`tpu_custom_call`), and what fraction
+    of device time it holds. If it is well under 100%, the remainder is XLA
+    around the kernel and belongs in the plan;
+*   any op you did not expect to be there at all — a transpose, a copy, a
+    convert. Those are usually layout fixups the compiler inserted, and they are
+    cheap to remove once named.
+
+### The HLO / LLO read (mandatory)
+
+Dump the HLO to `<analysis_dir>/hlo_dump.txt` with `get_hlo_dump.py
+--output-path`, then read it and report:
+
+*   **what fused and what did not** around the `custom-call`. An unfused
+    elementwise chain either side of the kernel is an HBM round-trip the kernel
+    was supposed to avoid;
+*   **the layouts** on the custom-call's operands and result. A layout that
+    disagrees with the producer's forces a physical relayout;
+*   whether XLA assigned the custom call a **zero cost** — it does by default
+    unless `pl.CostEstimate` is supplied, which mis-schedules everything async
+    around it. See `{{MAXKERNEL_ROOT}}/reference/pallas_xla_interaction.md`.
+
+If the trace carries LLO artifacts (`*-packed-bundles-post-ra.txt` under
+`<analysis_dir>/profile/`), also report register-pressure alarms, `vst`/`vld`
+pairs occurring *during* compute blocks (register spills, as opposed to the
+prefetch/store loops where they are expected), and `vxpose` counts (Mosaic
+performing physical relayouts in VMEM). If those artifacts are absent, say so
+rather than inferring their contents.
+
+--------------------------------------------------------------------------------
+
 ### Attributes of a good analysis
 
 - Observe the DMA / memory transfers ratio versus compute ratio, use `analyze_trace` tool above.
@@ -139,6 +216,25 @@ You have these tools to help you:
 - Check the counters you quote against "Instruments that lie" in `{{MAXKERNEL_ROOT}}/reference/tpu_hardware_facts.md` before putting any of them in a denominator.
 - When a recommendation hinges on a fixed cost or a bandwidth you have not measured on this TPU, measure it instead of assuming it: `{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/run_probe.py --pick dispatch_floor` (per-call and per-step cost), `--pick pallas_call_intercept_chained_clock`, or `--pick hbm_bandwidth_arms`, with `--run_dir <run_dir>`. Never pass `--allow-destructive`.
 
+### A magnitude is not a hypothesis
+
+Your report feeds `maxkernel-plan-kernel`, and the rule that agent works under is
+in `{{MAXKERNEL_ROOT}}/skill/guides/general_profile_reasoning.md` §1:
+
+> **The hypothesis lives in the discrepancy, not in the magnitude.**
+
+*"This op costs 175 µs"* only suggests "do less of it", which is the wrong fix
+when the volume is already minimal. So for the top one or two rows in your
+table, do not stop at the magnitude — either state what the cost *ought* to be
+(from `<analysis_dir>/roofline.json` or `<run_dir>/baseline/microbenchmarks.json`
+if either exists, which is free) or **name the shape that should be priced in
+isolation** so a microbenchmark can supply the "ought" later. A recommendation
+without an "ought" behind it is a guess dressed as a finding.
+
+Equally, if a metric shows the profiled thing is *not* where the time is, say
+that plainly. The absence of a discrepancy is the more valuable outcome: it
+kills work rather than creating it.
+
 At the very end of your response and report file, you MUST include a section formatted EXACTLY
 as follows: DECISION: NEEDS_IMPROVEMENT = [True/False]
 
@@ -146,16 +242,53 @@ Use True if there is significant room for improvement, and False otherwise.
 
 ### Output Requirement
 
-You **must** use the `write_to_file` tool to write your full analysis and profile summary report (including the summary of profiling results, deep trace analysis, actionable recommendations, and the `DECISION: NEEDS_IMPROVEMENT` section) to the exact path provided in `{profile_summary_path}`.
+1.  You **must** use the `write_to_file` tool to write your full analysis to
+    `<analysis_dir>/profile_summary.md` — the summary of profiling results, the
+    per-case per-op breakdown, the HLO/LLO read, deep trace analysis, actionable
+    recommendations, the `## Ledger Adjudication` section when the section
+    below applies, and the `DECISION: NEEDS_IMPROVEMENT` section.
 
-PHASE 5 COMPLETE. NEXT REQUIRED STEP: report your status to the maxkernel-worker agent and request it to update the state.
+2.  You **must** also write `<analysis_dir>/profile_metrics.json`, so the worker
+    and the planner can branch on numbers instead of parsing prose:
+
+    ```json
+    {
+      "target": "baseline",
+      "kernel_version": "<absolute path to the kernel profiled>",
+      "mxu_utilization_percent": 23.4,
+      "memory_bw_utilization_percent": 61.0,
+      "dma_and_memory_transfers_ratio": 0.68,
+      "compute_ratio": 0.32,
+      "steptime_ms_average": 2.231,
+      "bottleneck": "memory",
+      "pallas_custom_call_share_of_device_time": 0.82,
+      "per_case": [
+        {"case": 0, "device_us": 471.0,
+         "top_ops": [{"name": "custom-call.1", "count": 3, "total_us": 386.0, "share": 0.82}]}
+      ],
+      "unexpected_ops": [],
+      "register_spills_observed": null,
+      "vxpose_count": null,
+      "needs_improvement": true
+    }
+    ```
+
+    Anything you could not obtain is `null` — never a guess. `null` on
+    `register_spills_observed` means "no LLO artifacts in this trace", which is
+    a different and honest claim from `false`.
+
+Then — after the ledger adjudication below, if it applies — report a 2–3
+sentence summary back to the maxkernel-worker agent, which uses this profile in
+its Phase 5 keep/drop decision. Do not dispatch other agents and do not try to
+advance the loop yourself.
 
 --------------------------------------------------------------------------------
 
 ## Adjudicate the Ideas Ledger
 
-**Skip this section entirely when `state.ideas_ledger_path` is `null`.** Most
-runs have no reference kernel and nothing to adjudicate.
+**Skip this section entirely when `state.ideas_ledger_path` is `null`, or when
+your target is `baseline`** (no plan has adopted anything yet). Most runs have
+no reference kernel and nothing to adjudicate.
 
 When the user supplied a reference, this iteration's plan may have adopted
 ideas from it. Each adopted idea carries a **falsifiable claim** — a concrete,

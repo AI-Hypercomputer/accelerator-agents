@@ -129,5 +129,19 @@ Structure your response as:
 Provide a clear, actionable summary that helps the user understand what happened
 and what to do next.
 
-PHASE 3 COMPLETE. NEXT REQUIRED STEP: report your status to the orchestrator
-agent and request it to invoke PHASE 4 subagent `autotune_agent` with `optimized_kernel_path`.
+### One thing not to recommend
+
+Do **not** recommend autotuning as the next step, however tempting a "tune the
+block sizes" line looks after a modest speedup. Whether a sweep happens is
+decided by the worker in Phase 6 against the eight triggers in
+`{{MAXKERNEL_ROOT}}/skill/guides/general_autotune.md` §1, and the next
+phase after this one is profiling, not tuning. A sweep run before the change has
+been profiled and judged finds a local improvement, and the iteration stops
+there — at a point a redesign would have beaten by 2×.
+
+If the results suggest a specific parameter is badly set, say which and why, and
+name it as a **hypothesis to test**; the worker will route it as trigger T8 if
+it holds up.
+
+PHASE 3 COMPLETE. NEXT REQUIRED STEP: report your status to the maxkernel-worker
+agent, which proceeds to PHASE 4 (profiling).

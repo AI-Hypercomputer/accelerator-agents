@@ -316,10 +316,14 @@ def validate(job, job_path):
         "almost any output and will not catch a real error"
       )
 
-  iters = _get(job, "loop.max_iterations", 5)
-  if not isinstance(iters, int) or iters < 1:
+  # No default cap: the run stops when the kernel is saturated or converged.
+  # A value here is an optional backstop.
+  iters = _get(job, "loop.max_iterations", None)
+  if iters is not None and (
+    not isinstance(iters, int) or isinstance(iters, bool) or iters < 1
+  ):
     errors.append(
-      f"loop.max_iterations must be a positive integer, got {iters!r}"
+      f"loop.max_iterations must be a positive integer or omitted, got {iters!r}"
     )
 
   # ---- backward --------------------------------------------------------

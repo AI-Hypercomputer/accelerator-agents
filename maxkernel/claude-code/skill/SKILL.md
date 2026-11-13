@@ -1,6 +1,6 @@
 ---
 name: maxkernel
-description: Orchestrates Pallas TPU kernel development and optimization. Converts JAX, PyTorch or GPU kernel code (CUDA, Triton, cuTile, CuTe DSL) into a Pallas TPU kernel and runs a self-refinement loop (plan -> implement -> compile -> test -> autotune -> profile) by dispatching the maxkernel-worker subagent once per iteration. Accepts an optional reference kernel (a GPU implementation of the same computation, in any of those languages or another) that the planner mines for design ideas. Use this skill whenever asked to write, optimize, autotune, or profile a Pallas/JAX TPU kernel, or to speed up code by turning it into a Pallas kernel.
+description: Orchestrates Pallas TPU kernel development and optimization. Converts JAX, PyTorch or GPU kernel code (CUDA, Triton, cuTile, CuTe DSL) into a Pallas TPU kernel. Measures a baseline (roofline, floor, attribution, microbenchmarks, profile), then runs a hypothesis-driven self-refinement loop (plan -> implement -> compile -> test -> profile -> keep/floor/gap -> conditional autotune) by dispatching the maxkernel-worker subagent once per iteration, stopping on measured marginal return. Accepts an optional reference kernel (a GPU implementation of the same computation, in any of those languages or another) that the planner mines for design ideas. Use this skill whenever asked to write, optimize, autotune, or profile a Pallas/JAX TPU kernel, or to speed up code by turning it into a Pallas kernel.
 ---
 
 # MaxKernel
@@ -23,7 +23,7 @@ Workspace root: `$MK/workspace`.
 2.  **Absolute Paths in `state.json`**: `<run_dir>/state.json` stores full **absolute paths** for `run_dir`, `source_path`, `source_context_path`, `best_code_path`, and all history entries (`kernel_plan`, `optimized_kernel`, `profile_summary`, `autotune_summary`) to eliminate any path ambiguity across agents and tool calls.
 3.  **Each iteration's heavy work runs in an isolated worker agent**. Your own context
     only ever holds one state read + one worker dispatch + one short return
-    summary per iteration — not five iterations' worth of
+    summary per iteration — not a whole run's worth of
     plan/implement/compile/test/autotune/profile transcripts.
 4.  **Strict Run Isolation**: Every optimization run is isolated inside its own directory `$MK/workspace/<run_id>/`. Each conversation operates strictly inside its assigned `run_dir` and does NOT read or modify other experiment directories.
 
@@ -48,6 +48,18 @@ All project resources must be referenced by absolute path:
     `{{MAXKERNEL_ROOT}}/reference/pallas_code_style.md`,
     `{{MAXKERNEL_ROOT}}/reference/design/` (one design reference per topic) and
     `{{MAXKERNEL_ROOT}}/reference/strategies/INDEX.md` (strategy rules)
+*   Method guides — hardware-independent operating instructions, read in place
+    under `{{MAXKERNEL_ROOT}}/skill/guides/`:
+    `{{MAXKERNEL_ROOT}}/skill/guides/general_roofline.md`,
+    `{{MAXKERNEL_ROOT}}/skill/guides/general_attribution.md`,
+    `{{MAXKERNEL_ROOT}}/skill/guides/general_micro_benchmarking.md`,
+    `{{MAXKERNEL_ROOT}}/skill/guides/general_profile_reasoning.md`,
+    `{{MAXKERNEL_ROOT}}/skill/guides/general_floor.md`,
+    `{{MAXKERNEL_ROOT}}/skill/guides/general_gap_probing.md`,
+    `{{MAXKERNEL_ROOT}}/skill/guides/general_autotune.md`,
+    `{{MAXKERNEL_ROOT}}/skill/guides/general_stopping.md`. The worker and its
+    subagents read these; **you do not** — you are an orchestrator and every
+    decision they govern is made inside the worker.
 *   Hardware probes (run by the planning, compile-fix and profiling agents to
     measure a hardware or toolchain fact on the target instead of assuming it):
     `{{MAXKERNEL_ROOT}}/tools/run_probe.py`, suite in `{{MAXKERNEL_ROOT}}/probes/`
@@ -113,10 +125,43 @@ The other registered subagents (`maxkernel-analyze-torch-source`,
 `maxkernel-implement-kernel`, `maxkernel-fix-kernel-compilation`,
 `maxkernel-compilation-summary`, `maxkernel-generate-test-file`,
 `maxkernel-fix-test-script`, `maxkernel-test-script-validation-summary`,
-`maxkernel-summarize-test-results`, `maxkernel-autotune-planner`,
+`maxkernel-summarize-test-results`, `maxkernel-floor-probe`,
+`maxkernel-attribution`, `maxkernel-microbenchmark`, `maxkernel-roofline`,
+`maxkernel-gap-probe`, `maxkernel-autotune-planner`,
 `maxkernel-autotune-summary`, `maxkernel-generate-profile-script`,
 `maxkernel-summarize-profile`) are dispatched **by the worker**, not by you.
 You only ever dispatch `maxkernel-worker`.
+
+## What one iteration does
+
+You do not run any of this; it is here so you can read a worker's report and a
+`state.json` and tell whether an iteration really happened.
+
+Once per run, before iteration 1 and after the base kernel and test harness
+exist (Phase 0.9), the worker's Phase 0.95 (Baseline Characterization)
+measures the baseline: per-case latencies, a profile with a per-XLA-op
+breakdown and an HLO/LLO read, the empirical floor (compute-only vs
+transfer-only), an attribution breakdown of whichever half binds,
+microbenchmarks that price the top components in isolation, and a roofline that
+turns all of it into a per-case target range. Those artifacts land in
+`<run_dir>/baseline/` and every later iteration reads them.
+
+Each iteration then runs:
+
+-   Phase 1: plan (one falsifiable hypothesis, built on those measurements) and
+    implement
+-   Phase 2: compile, repairing if needed
+-   Phase 3: test
+-   Phase 4: profile
+-   Phase 5: keep or drop against the incumbent; floor, but **only if kept**;
+    gap probe, but **only if the gap is large and work reduction has stopped
+    paying**
+-   Phase 6: autotune, but **only if one of eight triggers fires**
+-   Phase 7: update state and assess stopping (writes `state.stopping`)
+
+The conditionals are load-bearing. A floor measured after a rejected change
+tells you nothing, and a sweep with no trigger finds a local optimum that stops
+the iteration short of a redesign worth several times more.
 
 ## The conversion pipeline
 
@@ -159,8 +204,15 @@ Every run walks the same path. Knowing its shape is what lets you read
         │                                        │
         └───────────────────┬────────────────────┘
                             ▼
+              Phase 0.9   base kernel + shared test harness
+                            │
+                            ▼
+              Phase 0.95  baseline characterization → baseline/
+              floor, attribution, microbenchmarks, roofline
+                            │
+                            ▼
               Phase 1   plan-kernel
-              reads: roofline first, then jaxpr + HLO,
+              reads: baseline/ first, then jaxpr + HLO,
                      then the ideas ledger if a reference exists
                             │
                             ▼
@@ -169,7 +221,8 @@ Every run walks the same path. Knowing its shape is what lets you read
                             ▼
               iter<n>/optimized.py   ◀── PALLAS
                             │
-              Phase 2-5  compile → test → autotune → profile
+              Phase 2-7  compile → test → profile → keep/floor/gap
+                         → autotune (if triggered) → update + stopping
                             │
                             ▼
                     state.best_code_path
@@ -292,7 +345,7 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
 
     **Exit 3 — AMBIGUOUS. Ask the user; do not guess.** Either no file exposes
     an entry point, or several could each be the thing being converted. A wrong
-    guess here silently benchmarks the wrong computation for five iterations
+    guess here silently benchmarks the wrong computation for every iteration
     and every number the run produces is meaningless. Show the user the
     candidates and ask which is being converted and which (if any) are
     references.
@@ -511,13 +564,14 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
           "source_context_path": null,
 
           "iteration": 0,
-          "max_iterations": 5,
+          "max_iterations": null,
           "atol": 1e-2,
           "rtol": 1e-2,
           "best_code_path": "{{MAXKERNEL_ROOT}}/workspace/<run_id>/base.py",
           "best_optimized_time": null,
           "best_speedup": null,
           "base_time_ms": null,
+          "stopping": null,
           "history": []
         }
         ```
@@ -526,7 +580,24 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
         `best_speedup` and `base_time_ms` start as `null`, meaning "not yet
         measured". Do NOT write the string `"Infinity"` — it cannot be compared
         numerically and silently breaks every `<` test downstream. The worker
-        fills `base_time_ms` in its Phase 0.9 and the other two in its Phase 6.
+        fills `base_time_ms` in its Phase 0.9 and the other two in its Phase 7.
+    -   `stopping` starts as `null` and is overwritten by the worker at the end
+        of every iteration (Phase 7). `null` means "not yet assessed", which the
+        control loop reads as "not converged".
+    -   **There is no iteration budget by default: `max_iterations` is
+        `null`.** The loop runs until the worker's measured verdict says the
+        kernel is **saturated** (at a floor that is itself near the hardware
+        limit, and a further experiment no longer pays) or **converged**
+        (several distinct hypotheses in a row stopped returning). Set a number
+        **only** when a cap was explicitly requested, and then use exactly that
+        number:
+        -   the job file sets `loop.max_iterations`; or
+        -   the user's prompt asks for one (e.g. "at most 8 iterations",
+            "max_iterations 3", "just a quick look, 2 iterations").
+
+        Never invent a cap, and never default to 5. With a cap set, the loop
+        stops at whichever comes first: the measured verdict, or the cap.
+        Reaching the cap means the run stopped **without** converging.
     -   `primary.language` is one of `"pytorch"`, `"jax"`, `"cuda"`,
         `"triton"`, `"cutile"`, `"cutedsl"`, `"gpu"` — the
         verdict from step 3, written once and never revised mid-run. Every
@@ -595,6 +666,7 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
         `port_verified` all `null`) and set `references: []`. A resumed run
         never acquires a reference it did not start with.
     -   If it has no `backward` key, set `"backward": null`.
+    -   If it has no `stopping` key, set `"stopping": null`.
 
 ## Control loop — mechanical, follow exactly
 
@@ -604,10 +676,47 @@ partway through — re-read this section's steps as literally as you re-read
 
 1.  **Read `<run_dir>/state.json`**, right now, even if you think you already
     know what it says.
-2.  **Check the stop condition against what you just read:** `state.iteration >=
-    state.max_iterations` (i.e. >= 5)?
-    -   Yes -> go to "Finish" below. Stop looping.
-    -   No -> continue to step 3.
+2.  **Check the two stop conditions against what you just read**, in this order:
+
+    a.  **Converged — the primary exit.** Is `state.stopping.recommend_stop`
+        exactly `true`, AND `state.stopping.iteration_assessed ==
+        state.iteration`? Yes -> go to "Finish", reporting that the loop
+        stopped on a measured stopping criterion. No -> continue to (b).
+
+        The second conjunct is load-bearing: it means the verdict was written
+        by the iteration that just finished, so a stale `recommend_stop` left
+        over from an earlier iteration can never end the run.
+
+        **The one override you may apply yourself:** if `recommend_stop` is
+        `true` but `state.stopping.cases_above_5pct_unchecked` is non-empty,
+        that is inconsistent — the worker's own rule forbids it. Treat it as
+        "not converged" and continue to (b), so one more iteration is
+        dispatched (a user-set budget, if any, still applies), and note the
+        inconsistency in your final report.
+
+    b.  **User-set budget — only if one exists.** If `state.max_iterations` is
+        `null` (the default), skip this check: there is no budget, and the run
+        continues until (a) fires. If it is a number and `state.iteration >=
+        state.max_iterations`, go to "Finish", reporting that the loop hit the
+        requested cap **without converging**, which is a different and weaker
+        result than (a) and must be described as such. Otherwise continue to
+        step 3.
+
+    The `state.stopping` block is written by the worker in its Phase 7, which
+    applies `general_stopping.md` in full: it sets `recommend_stop` when
+    `stop_reason` is `"saturated"` (within ~25% of a floor that is itself near
+    the hardware limit, and a further experiment returned under 1%) or
+    `"converged"` (at least 3 consecutive iterations under 1% against distinct
+    hypotheses, 5 when much of the floor gap remains), **and** every case
+    carrying >5% of total time has been gap-checked.
+
+    **Do not second-guess this field and do not compute your own version of
+    it.** You do not have the measurements, and the two failure modes here are
+    opposite and both bad: stopping on a percentage that nobody tested against,
+    or grinding on after the queue of hypotheses is
+    demonstrably empty. If `state.stopping` is absent or `null` (Phase 0 work,
+    or an early or failed iteration), treat it as "not converged" and keep
+    going.
 3.  **Dispatch the worker for `target_iteration = state.iteration + 1`**:
     -   Initialize `attempt_count = 1`.
     -   Call the `Agent` tool with `subagent_type="maxkernel-worker"` and the
@@ -615,7 +724,8 @@ partway through — re-read this section's steps as literally as you re-read
 4.  **Verify the iteration against disk, not against the worker's report**:
     -   Re-read `<run_dir>/state.json`.
     -   **Case A — `state.iteration >= target_iteration`**: the iteration
-        genuinely completed. Go back to step 1.
+        genuinely completed. Go back to step 1, where step 2 decides whether
+        its stopping verdict ends the run.
     -   **Case A2 — the worker is waiting on the Phase 0.1 approval gate**:
         `state.primary.language` is still `"specification"` and the worker
         returned a synthesized baseline for review. **This is not a failure and
@@ -637,16 +747,35 @@ partway through — re-read this section's steps as literally as you re-read
             Cleanup" and tell the user the baseline could not be verified,
             pointing at `<run_dir>/port_verification.json` for the diagnosis.
             Retrying cannot help — every iteration would be measured against a
-            wrong denominator, and five iterations of confident, wrong speedups
+            wrong denominator, and a run of confident, wrong speedups
             is a worse outcome than stopping.
         -   Otherwise increment `attempt_count`. If `attempt_count > 3`, go to
             "Emergency Stop & Cleanup". Otherwise re-run step 3 for the same
             `target_iteration`.
-5.  **Hard rule:** never end your turn while `state.iteration < 5` unless the 3
-    re-dispatch attempts are exhausted. If you notice yourself about to
-    summarize results and stop early, treat that as a bug in yourself — re-read
-    `<run_dir>/state.json` before doing anything else; if the count is still
-    under 5, dispatch the next iteration instead of stopping.
+5.  **Hard rule: there are exactly three ways out of this loop**, and all three
+    are decided by something you just read off disk:
+
+    1.  step 2(a) fired — the worker wrote `recommend_stop: true` for this
+        iteration (`iteration_assessed == iteration`, no unchecked >5% cases);
+    2.  step 2(b) fired — the user set `max_iterations` and
+        `state.iteration >= state.max_iterations`;
+    3.  "Emergency Stop & Cleanup" from step 4 Case B — the 3 re-dispatch
+        attempts are exhausted, or `state.primary.port_verified` is `false`.
+
+    Waiting on the user at the Phase 0.1 approval gate (Case A2) is a pause,
+    not an exit: the loop resumes at step 1 once they decide.
+
+    Nothing else ends your turn. There is **no minimum iteration count** — if
+    the loop converges on iteration 2, stop on iteration 2 and say so. (In
+    practice criterion B needs a short history of failed experiments behind it,
+    so convergence on iteration 1 is not reachable; that is a property of the
+    criteria, not a floor you should enforce.) Equally, if you
+    notice yourself about to summarize results with none of the three
+    satisfied, treat that as a bug in yourself: re-read
+    `<run_dir>/state.json` before doing anything else, and dispatch the next
+    iteration instead of stopping. "It seems fast enough", "the speedup looks
+    good", and "we have done a few rounds" are not stop conditions; a field on
+    disk that a measurement produced is.
 
 ## Emergency Stop & Cleanup
 
@@ -662,7 +791,8 @@ If an iteration fails 3 consecutive times due to crashes, timeouts, or stuck sub
 
 ## Finish
 
-Once `state.iteration == 5`:
+Once a stop condition in step 2 has fired — the measured verdict (2a), or a
+user-set cap (2b):
 
 1.  Read `<run_dir>/state.json` one last time.
 2.  **Publish the winner to `<run_dir>/optimized.py`** so the result sits at
@@ -729,9 +859,24 @@ Once `state.iteration == 5`:
             recomputing what they need from the forward inputs.
 4.  Report a short table to the user with one row per `state.history` entry:
     iteration, `compile_ok`, `test_ok`, `base_time_ms`, `optimized_time_ms`,
-    `speedup`, `base_choice`. Below the table, state `state.best_speedup`,
-    which iteration won (`state.best_code_path`), and that the winning kernel
-    is at `<run_dir>/optimized.py`.
+    `speedup`, `kept`, `hypothesis_verdict`, `binding_half`,
+    `gap_frac_of_floor`, `autotune_trigger`, `base_choice`. Below the table,
+    state `state.best_speedup`, which iteration won (`state.best_code_path`),
+    and that the winning kernel is at `<run_dir>/optimized.py`.
+4b. **Report the residual, not just the win.** From `state.stopping`, state:
+    -   why the loop stopped: `state.stopping.stop_reason` (`"saturated"` or
+        `"converged"`) and the criteria behind it. If a user-set cap ended the
+        run instead, say so in those words — **hitting a cap is not
+        convergence**, and a report that blurs the two implies the kernel is
+        finished when in fact the loop was cut off mid-search. If you overrode a `recommend_stop` because
+        `cases_above_5pct_unchecked` was non-empty, say that too;
+    -   `remaining_prize_ms` — how much is still exposed, and on which cases;
+    -   `untested_hypotheses`, verbatim.
+
+    The last one is the point. Diminishing returns is not a proof of
+    optimality, and the next person should start from a map rather than a dead
+    end. If the leading explanation for the residual was never experimentally
+    attacked, say that plainly instead of implying the kernel is at its limit.
 5.  **When `state.ideas_ledger_path` is set, report what the reference
     actually contributed:**
     ```bash
@@ -777,8 +922,10 @@ Once `state.iteration == 5`:
     it, with the commands, and say what it would tell them.
 
 7.  Point to `<run_dir>/optimized.py` as the result of the loop — it is the
-    best kernel across all iterations, not necessarily the last one
-    (`iter5/optimized.py` is only the final attempt). When `reference_mode` is
+    best kernel across all iterations, not necessarily the last one (the
+    highest-numbered `iter<n>/optimized.py` is only the final attempt). Also
+    point to `<run_dir>/baseline/` — the roofline's target range and the
+    attribution breakdown are what any follow-up work should resume from. When `reference_mode` is
     `"torchax"`, also point to `<run_dir>/ref.jaxpr.txt` and
     `<run_dir>/ref.hlo.txt` — they are the record of what the kernel was
     derived from, and the HLO's fusion count is what a later run would start

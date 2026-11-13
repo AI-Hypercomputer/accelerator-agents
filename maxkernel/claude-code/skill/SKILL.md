@@ -41,11 +41,11 @@ All project resources must be referenced by absolute path:
     `{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md`,
     `{{MAXKERNEL_ROOT}}/reference/tpu_mxu_and_register_optimization.md`,
     `{{MAXKERNEL_ROOT}}/reference/tpu_profiling_and_diagnostics.md`,
-    `{{MAXKERNEL_ROOT}}/reference/pallas_xla_interaction.md`
-*   Job file format — the declaration a run starts from, and the seven
+    `{{MAXKERNEL_ROOT}}/reference/pallas_xla_interaction.md`,
+    `{{MAXKERNEL_ROOT}}/reference/tpu_moe_and_grouped_matmul.md`
+*   Job file format — the declaration a run starts from, and the
     contradictions the validator rejects:
     `{{MAXKERNEL_ROOT}}/docs/job-spec.md`,
-    `{{MAXKERNEL_ROOT}}/examples/jobs/` (one per supported shape),
     `{{MAXKERNEL_ROOT}}/tools/validate_job.py`
 *   Conversion pipeline reference, including the torch/torchax version pin and
     the two opposing argument-order conventions:
@@ -96,7 +96,9 @@ the tool result. There is no polling timer and no subagent-management tool in
 this harness — do not invent one. What you trust is `<run_dir>/state.json` on
 disk, not the worker's prose.
 
-The other registered subagents (`maxkernel-analyze-torch-source`,
+The other registered subagents (`maxkernel-extract-source`,
+`maxkernel-extract-jax-source`,
+`maxkernel-analyze-torch-source`,
 `maxkernel-write-jnp-reference`, `maxkernel-synthesize-baseline`,
 `maxkernel-analyze-source`, `maxkernel-analyze-gpu-reference`,
 `maxkernel-reconcile-reference`, `maxkernel-fix-port`,
@@ -169,6 +171,19 @@ Every run walks the same path. Knowing its shape is what lets you read
                 <run_dir>/optimized.py
 ```
 
+Code from the wild enters one step earlier. When the user's PyTorch is a
+package that cannot run on this host (relative imports, CuTe DSL / Triton / CUDA
+dependencies, no `get_inputs()`), Phase 0.15 has `maxkernel-extract-source`
+write a self-contained `source.py` from it, built around the shapes the job
+declares, and the run **stops for the user to approve it**. After approval the
+extracted file is the `source.py` at the top of the diagram.
+
+A JAX package gets the same phase and the same gate, from
+`maxkernel-extract-jax-source`. Its extracted `source.py` is one self-contained
+JAX file with a module-level `computation`, so after approval it is copied to
+`base.py` and the run continues as for any JAX input: there is no oracle and no
+port.
+
 Three things about this shape are worth holding onto.
 
 **"Pure JAX" and "Pallas" are both JAX.** `pl.pallas_call` is a JAX primitive
@@ -229,16 +244,20 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     | `jax_conversion.method` | `reference_mode` (`"torchax"` / `"llm_port"`) |
     | `jax_conversion.emit_readable_reference` | `emit_jnp_reference` |
     | `correctness.atol` / `.rtol` / `.seed` | `atol`, `rtol`, `seed` |
+    | `correctness.max_capture_bytes` | `max_capture_bytes`, verbatim; `null` when absent |
     | `target.tpu_version` | `tpu_version` |
     | `loop.max_iterations` | `max_iterations` |
     | `backward` | `backward`, copied as is except that `forward_context` becomes an absolute path. `null` when the job has no `backward`. |
+    | `input.entry_point` / `.inputs_fn` / `.init_inputs_fn` | `primary.entry_point` / `primary.inputs_fn` / `primary.init_inputs_fn`, verbatim; `null` when absent |
+    | `input.init_args`, `.init_kwargs`, `.configs` | written, just those keys, to `<run_dir>/input_spec.json`; `primary.input_spec_path` is its absolute path, `null` when the job declares none of them |
+    | `input.extraction` | copy `input.path` (file or directory) unchanged to `<run_dir>/original/<basename of input.path>` — keeping its own name, never its contents spread directly into `original/` (`cp -r <input.path> <run_dir>/original/`). That copy is `original_path`. Take `relpath` and `name` from the validator's `plan.extraction_entry` in `<run_dir>/job_validation.json` — already resolved against the real `input.path` — and set `primary.extraction` to `{"original_path": <absolute>, "entry_point": <as written in the job>, "entry_file": <original_path joined with relpath, or original_path itself when relpath is "">, "entry_name": <name>, "notes": ... or null, "approved": null}`. Do not derive `entry_file` from `entry_point` yourself. `primary.source_path` stays `null` until the worker's Phase 0.15 records the approved extraction. `null` when absent |
 
     For a `jax` input, `needs_jax_conversion` is false and `base.py` is a copy
     of the source — the same path the loop has always taken.
 
     **No job file?** Continue to step 2 and infer, as before. Offer to write one
-    at the end: `{{MAXKERNEL_ROOT}}/docs/job-spec.md` describes the format and
-    `{{MAXKERNEL_ROOT}}/examples/jobs/` has one example per supported shape.
+    at the end: `{{MAXKERNEL_ROOT}}/docs/job-spec.md` describes the format,
+    field by field.
 
 2.  **Capture every input the user gave you, verbatim**:
     -   Create `<run_dir>/inbox/`.
@@ -288,6 +307,23 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     candidates and ask which is being converted and which (if any) are
     references.
 
+    **Code from the wild.** If the primary is a PyTorch or JAX package — a
+    directory whose files use relative imports, import GPU-only libraries
+    (`cutlass`, `triton`, `cuda.bindings`, custom extensions), keep their
+    parameters in a module library with no module-level `computation` (JAX),
+    or ship no `get_inputs()` —
+    it cannot be run as is, and neither you nor a worker may pick its shapes.
+    Do not start the run from inference. Ask the user for: the entry point
+    (`file.py:Name`, the file path relative to the directory or file they give as `input.path`), which path of its `forward()` or call method to reproduce
+    (backend, inference or training, what to return), the constructor
+    arguments, and the input shapes and dtypes (point them at the repo's own
+    tests or benchmarks if it has them). Then write a job file with
+    `input.extraction` and `input.configs` from their answers (the
+    `input.configs` and `input.extraction` sections of
+    `{{MAXKERNEL_ROOT}}/docs/job-spec.md` give the format), show it to them,
+    and continue from step 1b. `input.type` is the package's own framework:
+    `"pytorch"` or `"jax"`.
+
     **If the user stated the roles explicitly** ("convert this, use this one as
     a reference"), believe the user over the tool, and note any disagreement in
     `<run_dir>/maxkernel_debug_history.md`.
@@ -327,6 +363,9 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
 
     -   **`jax`** — already a JAX/Pallas module. Copy `<run_dir>/source.py` to
         `<run_dir>/base.py`. This is the path the loop has always taken.
+        Exception: with `input.extraction` there is no `source.py` yet, so
+        copy nothing. The worker's Phase 0.15 writes it, and copies it to
+        `base.py` itself once the user approves.
     -   **`pytorch`** — a `torch` reference. The worker's Phase 0.2 runs it on
         CPU to capture golden values, Phase 0.4 writes
         `<run_dir>/torch_context.md` and ports it to `<run_dir>/base.py`, and
@@ -474,7 +513,12 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
             "context_path": null,
             "golden_path": null,
             "golden_meta_path": null,
-            "port_verified": null
+            "port_verified": null,
+            "entry_point": null,
+            "inputs_fn": null,
+            "init_inputs_fn": null,
+            "input_spec_path": null,
+            "extraction": null
           },
           "reference_mode": "torchax",
           "emit_jnp_reference": true,
@@ -505,6 +549,7 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
           "max_iterations": 5,
           "atol": 1e-2,
           "rtol": 1e-2,
+          "max_capture_bytes": null,
           "best_code_path": "{{MAXKERNEL_ROOT}}/workspace/<run_id>/base.py",
           "best_optimized_time": null,
           "best_speedup": null,
@@ -527,8 +572,19 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     -   `primary.context_path`, `golden_path`, `golden_meta_path` and
         `port_verified` all stay `null` here; the worker fills them in Phases
         0.2, 0.4 and 0.8 as each artifact appears on disk.
+    -   `primary.entry_point`, `inputs_fn`, `init_inputs_fn`,
+        `input_spec_path` and `extraction` come from the job file (step 1b)
+        and are `null` without one. They are the user's declarations, passed
+        to the capture tools as flags; never fill them by guessing.
+    -   `max_capture_bytes` is the job's `correctness.max_capture_bytes`, or
+        `null`. The worker passes it to the Phase 0.2 capture as
+        `--max-bytes`; `null` leaves the tools' 256 MB default in force. Never
+        set it yourself: it is the user's ceiling.
     -   `reference_mode` and `emit_jnp_reference` come from step 3b. They are
-        written once and never revised mid-run; the worker branches on them in
+        written once and never revised mid-run — except that the worker
+        switches `reference_mode` from `"torchax"` to `"llm_port"` (recording
+        why in `reference_mode_fallback`) when torchax cannot build the
+        oracle or the jaxpr. The worker branches on them in
         Phases 0.2, 0.3 and 0.7.
     -   `jaxpr_path`, `hlo_path`, `jaxpr_facts_path`, `jnp_reference_path` and
         `jaxpr_comparison_path` stay `null` here. The worker fills them as each
@@ -586,6 +642,10 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
         `port_verified` all `null`) and set `references: []`. A resumed run
         never acquires a reference it did not start with.
     -   If it has no `backward` key, set `"backward": null`.
+    -   If it has no `max_capture_bytes` key, set `"max_capture_bytes": null`.
+    -   If `primary` lacks any of `entry_point`, `inputs_fn`,
+        `init_inputs_fn`, `input_spec_path`, `extraction`, set the missing
+        ones to `null`.
 
 ## Control loop — mechanical, follow exactly
 
@@ -615,6 +675,18 @@ partway through — re-read this section's steps as literally as you re-read
         or asked for changes. Do not count it against `attempt_count`, and do
         not approve it yourself — the whole point of the gate is that a human
         reads a baseline no human wrote.
+    -   **Case A3 — the worker is waiting on the Phase 0.15 extraction gate**:
+        `state.primary.extraction` is set, its `approved` is not `true`, and
+        the worker returned an extracted source for review. Handle it exactly
+        like Case A2: not a failure, not retried, not counted against
+        `attempt_count`. Present the rationale — its Assumptions section
+        first, with Divergences (PyTorch) or Library calls I re-expressed
+        (JAX) — the path to `source.py`, and `extraction_check.py`, which
+        compares the extraction with their original. For PyTorch the user
+        must run it where the original runs. For JAX the extractor may have
+        run it on this host already: lead with the rationale's "Checked
+        against the original?" answer. Re-dispatch once they approve or ask
+        for changes. Do not approve it yourself, even when that check passed.
     -   **Case B — state unchanged**: the worker finished, errored, or gave up
         without committing the iteration.
         -   Append the worker's reported error to `<run_dir>/maxkernel_debug_history.md`.
@@ -700,10 +772,24 @@ Once `state.iteration == 5`:
         recorded cause). An unverified reference means the speedup numbers rest
         on an agent's reading of the source and nothing else.
 
+    **If `state.primary.extraction` is set, say so before any number.** The
+    run's semantics come from `source.py`, which an agent extracted from the
+    user's code (`primary.extraction.entry_point`) and the user approved. For
+    a PyTorch extraction, every gate from the golden capture onwards checks
+    against that file, not against the original. For a JAX extraction that
+    file *is* `base.py`, and no gate checked it at all. Point at
+    `<run_dir>/extraction_rationale.md`, and say whether
+    `<run_dir>/extraction_check.py` was run against the original — by the
+    user, or for JAX by the extractor on this host, as the rationale records —
+    and what it found. If it was not run, the link from their code to the
+    baseline rests on their reading of the rationale alone.
+
     If the run fell back from `torchax` to `llm_port` mid-setup — a step-0
-    failure or a torch/torchax version conflict — say that too, and give the
-    reason from `<run_dir>/maxkernel_debug_history.md`. It changes how much the
-    denominator is worth.
+    failure, a module torchax could not convert, or a torch/torchax version
+    conflict — say that too, and give the reason from
+    `state.reference_mode_fallback`. Then say whether the fallback's golden
+    capture succeeded (`primary.golden_path` set, and `port_verified` from
+    Phase 0.8) or degraded. It changes how much the denominator is worth.
 
     **If `state.backward` is set, say what kind of kernel the run produced.**
     -   `"source"`: a backward kernel, built from the user's backward code.

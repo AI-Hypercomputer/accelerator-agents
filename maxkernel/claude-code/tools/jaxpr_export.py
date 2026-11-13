@@ -46,8 +46,10 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 os.environ.setdefault("JAX_PLATFORMS", os.environ.get("JAX_PLATFORMS", "cpu"))
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import input_spec  # noqa: E402
 from torchax_oracle import (  # noqa: E402
   build_model,
+  first_inputs,
   import_torchax,
   load_source,
   to_jax,
@@ -171,20 +173,22 @@ def hlo_facts(hlo_text):
   }
 
 
-def export(source_path, seed, max_eqns):
+def export(
+  source_path,
+  seed,
+  max_eqns,
+  entry_name=None,
+  inputs_fn_name=None,
+  init_fn_name=None,
+  spec=None,
+):
   import jax
+  import torch
 
   torchax = import_torchax()
   ns = load_source(source_path)
-  model, model_name = build_model(ns, seed)
-  if not callable(ns.get("get_inputs")):
-    raise LookupError("the source defines no get_inputs()")
-
-  import torch
-
-  torch.manual_seed(seed)
-  raw = ns["get_inputs"]()
-  raw = [raw] if isinstance(raw, torch.Tensor) else list(raw)
+  model, model_name = build_model(ns, seed, entry_name, init_fn_name, spec)
+  raw = first_inputs(ns, seed, inputs_fn_name, spec)
   args = tuple(to_jax(a) if isinstance(a, torch.Tensor) else a for a in raw)
 
   states, jax_fn = torchax.extract_jax(model)
@@ -241,12 +245,34 @@ def main():
     default=400,
     help="warn above this; a whole-model jaxpr is not planning material",
   )
+  p.add_argument("--entry-point", help="nn.Module class to convert; skips discovery")
+  p.add_argument("--inputs-fn", help="name of the forward-inputs factory")
+  p.add_argument("--init-inputs-fn", help="name of the constructor-inputs factory")
+  p.add_argument(
+    "--input-spec",
+    help="input_spec.json with declared constructor args and input configs",
+  )
   args = p.parse_args()
 
   try:
+    spec = input_spec.load_input_spec(args.input_spec)
+  except (OSError, ValueError) as e:
+    print(f"BAD_INPUT_SPEC: {e}", file=sys.stderr)
+    return 3
+
+  try:
     jaxpr_text, hlo_text, facts = export(
-      args.source_path, args.seed, args.max_eqns
+      args.source_path,
+      args.seed,
+      args.max_eqns,
+      entry_name=args.entry_point,
+      inputs_fn_name=args.inputs_fn,
+      init_fn_name=args.init_inputs_fn,
+      spec=spec,
     )
+  except input_spec.MissingInitArgs as e:
+    print(f"MISSING_INIT_ARGS: {e}", file=sys.stderr)
+    return 3
   except LookupError as e:
     print(f"NO_ENTRY_POINT: {e}", file=sys.stderr)
     return 3

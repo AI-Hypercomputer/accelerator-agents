@@ -22,6 +22,15 @@ object: either the input *is* a backward implementation (`backward.from:
 port with `jax.vjp` (`backward.from: "autodiff"`; both passes are optimized
 unless `backward.optimize_forward` is false).
 
+Code from the wild -- a package with relative imports, dependencies this host
+or the TPU cannot load, and no `get_inputs()` -- declares `input.extraction`.
+Phase 0.15 then has an agent write a standalone `source.py` from it in the
+input's own framework (PyTorch or JAX), built around the shapes in
+`input.configs`, and stops for the user to approve it before anything else
+runs. A PyTorch or JAX `input.path` that is a directory requires it: the
+PyTorch capture tools load one file, and a JAX input becomes `base.py`, which
+is one file.
+
 Two rules govern the whole schema:
 
   * **Redundant fields are checksums, not duplication.** `has_reference` repeats
@@ -41,8 +50,12 @@ Exit codes:
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from input_spec import validate_input_spec  # noqa: E402
 
 SCHEMA = "maxkernel.job/1"
 
@@ -58,10 +71,83 @@ CONVERSION_METHODS = {"torchax", "llm_port", "none"}
 RELATIONSHIPS = {"same_operation", "same_family", "unknown"}
 BACKWARD_FROM = {"source", "autodiff"}
 BACKWARD_KEYS = {"from", "wrt", "optimize_forward", "forward_context"}
+EXTRACTION_KEYS = {"entry_point", "notes", "user_confirms_extraction"}
+# Frameworks whose code can be extracted into a standalone source: the ones
+# the loop accepts a single self-contained file for.
+EXTRACTION_TYPES = {"pytorch", "jax"}
 
 
 class JobError(Exception):
   pass
+
+
+def resolve_extraction_entry(input_path, entry_point):
+  """Resolves `input.extraction.entry_point` against `input.path`.
+
+  The file part is relative to `input.path` itself -- not to its parent, not
+  to the repository root. For a single-file `input.path` it is that file's
+  name, or omitted (`"Name"`). Returns (relpath, name, error): `relpath` is
+  what the orchestrator joins onto the copy of `input.path` under
+  `<run_dir>/original/`, so the extracting agent never joins paths itself.
+  """
+  file_part, sep, name = entry_point.rpartition(":")
+  if not sep:
+    file_part, name = "", entry_point
+  if not name:
+    return None, None, (
+      f"input.extraction.entry_point {entry_point!r} names no class or "
+      "function; the form is 'path/relative/to/input.path.py:Name'"
+    )
+
+  if input_path.is_file():
+    if file_part not in ("", input_path.name):
+      return None, None, (
+        f"input.extraction.entry_point {entry_point!r}: input.path is the "
+        f"single file {input_path.name}, so the file part must be "
+        f"{input_path.name!r} or omitted ('{name}')"
+      )
+    relpath, target = "", input_path
+  else:
+    if not file_part:
+      return None, None, (
+        f"input.extraction.entry_point {entry_point!r} has no file part, but "
+        f"input.path {input_path} is a directory; use "
+        "'path/relative/to/input.path.py:Name'"
+      )
+    relpath, target = file_part, input_path / file_part
+    if not target.is_file():
+      hint = ""
+      parts = Path(file_part).parts
+      if len(parts) > 1 and parts[0] == input_path.name and (
+        input_path / Path(*parts[1:])
+      ).is_file():
+        hint = (
+          f" The path is relative to input.path, which already ends in "
+          f"{input_path.name}/ -- use '{Path(*parts[1:]).as_posix()}:{name}'."
+        )
+      elif (input_path.parent / file_part).is_file():
+        hint = (
+          " That path exists relative to input.path's parent; the file "
+          "part is relative to input.path itself."
+        )
+      else:
+        found = sorted(input_path.rglob(Path(file_part).name))
+        if len(found) == 1:
+          rel = found[0].relative_to(input_path).as_posix()
+          hint = f" Did you mean '{rel}:{name}'?"
+      return None, None, (
+        f"input.extraction.entry_point {entry_point!r}: {target} does not "
+        f"exist.{hint}"
+      )
+
+  top = name.split(".")[0]
+  src = target.read_text(errors="replace")
+  if not re.search(rf"^\s*(?:class|def)\s+{re.escape(top)}\b", src, re.M):
+    return None, None, (
+      f"input.extraction.entry_point {entry_point!r}: {target} defines no "
+      f"class or function named {top!r}"
+    )
+  return relpath, name, None
 
 
 def _get(d, path, default=None):
@@ -158,6 +244,78 @@ def validate(job, job_path):
   elif not ipath:
     errors.append("input.path is required")
 
+  # ---- declared entry point and inputs ---------------------------------
+  for field in ("entry_point", "inputs_fn", "init_inputs_fn"):
+    v = inp.get(field)
+    if v is not None and not (isinstance(v, str) and v):
+      errors.append(f"input.{field} must be a non-empty string, got {v!r}")
+  errors.extend(validate_input_spec(inp, where="input"))
+  has_configs = bool(inp.get("configs"))
+  if has_configs and inp.get("inputs_fn"):
+    errors.append(
+      "input.configs and input.inputs_fn are both set. They are two sources "
+      "for the same forward arguments; keep the one you mean."
+    )
+  if inp.get("init_inputs_fn") and (
+    inp.get("init_args") is not None or inp.get("init_kwargs") is not None
+  ):
+    errors.append(
+      "input.init_inputs_fn and input.init_args/init_kwargs are both set. "
+      "They are two sources for the same constructor arguments; keep one."
+    )
+
+  extraction = inp.get("extraction")
+  if extraction is not None:
+    if not isinstance(extraction, dict):
+      errors.append("input.extraction must be an object")
+      extraction = {}
+    unknown = sorted(set(extraction) - EXTRACTION_KEYS)
+    if unknown:
+      errors.append(
+        f"input.extraction has unknown keys {unknown}; allowed: "
+        f"{sorted(EXTRACTION_KEYS)}"
+      )
+    if itype not in EXTRACTION_TYPES:
+      errors.append(
+        f"input.extraction is set for a {itype!r} input. Extraction writes a "
+        "standalone source in the input's own framework from a codebase that "
+        "cannot be run as is; it applies to input.type 'pytorch' and 'jax'."
+      )
+    if not (
+      isinstance(extraction.get("entry_point"), str)
+      and extraction["entry_point"]
+    ):
+      errors.append(
+        "input.extraction.entry_point is required: the class or function in "
+        "the original code being converted, as 'file.py:Name' with the file "
+        "path relative to input.path, e.g. 'pkg/layers.py:Layer' when "
+        "input.path is the repository root. It is what the extracting agent "
+        "reproduces, so it cannot be guessed."
+      )
+    if not has_configs:
+      errors.append(
+        "input.extraction requires input.configs. The extracted source's "
+        "get_inputs() is built from the declared shapes; an agent may not "
+        "choose the problem dimensions (general_rules #6)."
+      )
+    for field in ("entry_point", "inputs_fn", "init_inputs_fn"):
+      if inp.get(field):
+        errors.append(
+          f"input.{field} is set alongside input.extraction. The extracted "
+          "source has a fixed entry point (`Model` for PyTorch, `computation` "
+          "for JAX) and is driven by input.configs / init_args / init_kwargs; "
+          "name the original entry point in input.extraction.entry_point "
+          "instead."
+        )
+    if extraction.get("user_confirms_extraction") is not True:
+      errors.append(
+        "input.extraction.user_confirms_extraction must be true. An agent "
+        "writes the source this run is scored against, so the run pauses for "
+        "you to read and approve it before anything else happens. Setting "
+        "this field is how you accept that step exists; the run still stops "
+        "for the actual approval."
+      )
+
   # ---- references -----------------------------------------------------
   refs = job.get("references", [])
   has_ref = job.get("has_reference")
@@ -230,6 +388,14 @@ def validate(job, job_path):
         "input.specification.synthesize_as is 'jax' and "
         "needs_jax_conversion is true. A synthesized JAX baseline IS "
         "base.py; there is nothing further to convert."
+      )
+    if extraction is not None and method == "torchax":
+      warnings.append(
+        "input.extraction with jax_conversion.method 'torchax': torchax "
+        "cannot trace data-dependent shapes (.tolist(), "
+        "nonzero, boolean indexing), which code from the wild often has. If "
+        "step 0 cannot run, the run falls back to llm_port; choose "
+        "'llm_port' now if you know the source has them."
       )
     if itype in GPU_TYPES and method == "torchax":
       errors.append(
@@ -315,6 +481,20 @@ def validate(job, job_path):
         f"correctness.{name} is {v}; a tolerance that loose accepts "
         "almost any output and will not catch a real error"
       )
+
+  # The golden capture's byte cap. Optional: unset, the capture tools use
+  # their own default. Real weights can exceed that default, and shrinking the
+  # declared config to fit would change the problem, so the job may raise it.
+  max_capture = _get(job, "correctness.max_capture_bytes")
+  if max_capture is not None and (
+    not isinstance(max_capture, int)
+    or isinstance(max_capture, bool)
+    or max_capture <= 0
+  ):
+    errors.append(
+      "correctness.max_capture_bytes must be a positive integer number of "
+      f"bytes, got {max_capture!r}"
+    )
 
   iters = _get(job, "loop.max_iterations", 5)
   if not isinstance(iters, int) or iters < 1:
@@ -416,6 +596,35 @@ def validate(job, job_path):
   # resolve until the baseline has been synthesized.
   if ipath and not _resolve(ipath).exists():
     missing.append(f"input.path: {_resolve(ipath)}")
+  elif (
+    ipath
+    and itype in EXTRACTION_TYPES
+    and extraction is None
+    and _resolve(ipath).is_dir()
+  ):
+    why = (
+      "The PyTorch capture tools execute a single self-contained file, so a "
+      "package (relative imports, GPU-only dependencies) cannot be run as is."
+      if itype == "pytorch"
+      else "A JAX input is copied to base.py unchanged, and base.py is one "
+      "self-contained file with a module-level `computation`, so a package "
+      "(relative imports, module-library dependencies) cannot be used as is."
+    )
+    errors.append(
+      f"input.path {_resolve(ipath)} is a directory. {why} Either point "
+      "input.path at one self-contained file, or declare input.extraction "
+      "so Phase 0.15 writes one for you to approve."
+    )
+    return errors, warnings, None
+  extraction_entry = None
+  if ipath and extraction is not None and _resolve(ipath).exists():
+    relpath, name, err = resolve_extraction_entry(
+      _resolve(ipath), extraction["entry_point"]
+    )
+    if err:
+      errors.append(err)
+      return errors, warnings, None
+    extraction_entry = {"relpath": relpath, "name": name}
   for i, r in enumerate(refs):
     if not _resolve(r["path"]).exists():
       missing.append(f"references[{i}].path: {_resolve(r['path'])}")
@@ -423,14 +632,19 @@ def validate(job, job_path):
   if fctx and not _resolve(fctx).exists():
     missing.append(f"backward.forward_context: {_resolve(fctx)}")
 
-  plan = build_plan(job, itype, needs, method, emit, refs, bfrom)
+  plan = build_plan(job, itype, needs, method, emit, refs, bfrom, extraction)
   if bfrom == "autodiff":
     plan["optimize_forward"] = _get(job, "backward.optimize_forward", True)
   plan["missing_paths"] = missing
+  # Resolved against the real input.path. `relpath` is relative to it ("" when
+  # input.path is the file itself). Null until input.path exists.
+  plan["extraction_entry"] = extraction_entry
   return errors, warnings, plan
 
 
-def build_plan(job, itype, needs, method, emit, refs, bfrom=None):
+def build_plan(
+  job, itype, needs, method, emit, refs, bfrom=None, extraction=None
+):
   """What the orchestrator will actually do, derived from the declaration."""
   synth = (
     _get(job, "input.specification.synthesize_as", "pytorch")
@@ -468,9 +682,31 @@ def build_plan(job, itype, needs, method, emit, refs, bfrom=None):
       "nothing independent exists to check it against"
     )
 
+  if extraction is not None and effective == "jax":
+    oracle = (
+      "none — base.py is the EXTRACTED source.py, which the user approved. "
+      "The only check against the original is extraction_check.py"
+    )
+  elif extraction is not None and oracle:
+    oracle += (
+      " -- run on the EXTRACTED source.py, which the user approved; the "
+      "original code is never executed"
+    )
+
+  configs = _get(job, "input.configs") or []
+  if configs:
+    inputs_origin = f"input.configs ({len(configs)} declared)"
+  elif itype == "specification":
+    inputs_origin = "synthesized source get_inputs(), from specification.tensors"
+  else:
+    inputs_origin = f"source {_get(job, 'input.inputs_fn') or 'get_inputs'}()"
+
   if itype == "specification" and synth == "jax":
     base_py = "SYNTHESIZED from the specification, then user-approved"
     producer = "maxkernel-synthesize-baseline"
+  elif effective == "jax" and extraction is not None:
+    base_py = "the extracted source.py, copied unchanged after approval"
+    producer = "maxkernel-extract-jax-source"
   elif effective == "jax":
     base_py = "copied from the input, unchanged"
     producer = "orchestrator"
@@ -493,6 +729,9 @@ def build_plan(job, itype, needs, method, emit, refs, bfrom=None):
   phases = ["0 read state"]
   if itype == "specification":
     phases.append(f"0.1 synthesize {synth} baseline + USER APPROVAL GATE")
+  if extraction is not None:
+    kind = "JAX" if effective == "jax" else "PyTorch"
+    phases.append(f"0.15 extract standalone {kind} source + USER APPROVAL GATE")
   if effective in ("pytorch", "triton"):
     phases.append("0.2 oracle")
   if method == "torchax":
@@ -518,6 +757,18 @@ def build_plan(job, itype, needs, method, emit, refs, bfrom=None):
     "backward_from": bfrom,
     "reference_count": len(refs),
     "advisory_spine": bool(refs),
+    "extraction": extraction is not None,
+    "entry_point": (
+      _get(job, "input.extraction.entry_point")
+      + (
+        " (extracted to computation)"
+        if effective == "jax"
+        else " (extracted to Model)"
+      )
+      if extraction is not None
+      else _get(job, "input.entry_point")
+    ),
+    "inputs_origin": inputs_origin,
     "oracle": oracle,
     "base_py": base_py,
     "base_py_producer": producer,
@@ -575,6 +826,14 @@ def main():
       + _get(job, "input.specification.operation", "(unnamed operation)")
     )
     print(f"  input        : {plan['input_type']}  ({where})")
+    if plan["entry_point"]:
+      print(f"  entry point  : {plan['entry_point']}")
+    print(f"  inputs       : {plan['inputs_origin']}")
+    if plan["extraction"]:
+      print(
+        "  extraction   : an agent writes a standalone source.py from the "
+        "original; the run STOPS for your approval"
+      )
     if plan["backward_from"] == "source":
       print("  backward     : from source (the input is the backward)")
     elif plan["backward_from"] == "autodiff":

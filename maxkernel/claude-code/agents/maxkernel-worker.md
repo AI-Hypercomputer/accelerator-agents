@@ -30,6 +30,8 @@ fast.
 
 Semantics spine — load-bearing. A defect here invalidates every number:
 *   `<run_dir>/source.*` or `<run_dir>/source/`: the user's original primary input, untouched (written by the orchestrator)
+*   `<run_dir>/original/`, `<run_dir>/source.py`, `<run_dir>/extraction_rationale.md`, `<run_dir>/extraction_check.py`: extraction runs only (`state.primary.extraction` set) — `original/` is the user's code, untouched; `source.py` is the self-contained module Phase 0.15 extracted from it, which becomes the primary once the user approves it
+*   `<run_dir>/input_spec.json`: the job's declared constructor arguments and input configs, when it declared any (`state.primary.input_spec_path`)
 *   `<run_dir>/torch_golden.npz` + `<run_dir>/torch_golden.json`: inputs and outputs recorded by running the user's PyTorch module on CPU — Phase 0.2, `pytorch` primary only
 *   `<run_dir>/torch_context.md` / `<run_dir>/<language>_context.md`: deep primary-source brief — Phase 0.4, only when `state.primary.language != "jax"`
 *   `<run_dir>/base.py`: Baseline JAX kernel — copied from `source.py` by the orchestrator for a `jax` input, or ported from the primary in Phase 0.4 otherwise
@@ -163,6 +165,17 @@ from inside the loop.
         the orchestrator that this combination needs the external harness at
         `{{MAXKERNEL_ROOT}}/evaluation/compare_kernel.py` rather than the
         internal loop — do not discover it four phases later.
+    -   `primary.entry_point`, `primary.inputs_fn`, `primary.init_inputs_fn`,
+        `primary.input_spec_path` — what the job declared about the source.
+        Each is `null` when undeclared; the capture tools then discover by
+        convention. When set, they are passed to the capture tools in Phase
+        0.2 verbatim — never re-derived.
+    -   `max_capture_bytes` = `state.max_capture_bytes` — `null` or absent
+        means the capture tools' default cap. When set, Phase 0.2 passes it as
+        `--max-bytes`.
+    -   `primary.extraction` — `null`, or an object meaning the user's code
+        cannot run as is and Phase 0.15 must extract a standalone source
+        from it first.
     -   `backward` = `state.backward` (`null` for a forward run).
         `backward.from == "autodiff"` enables Phase 0.85.
     -   Previous iteration artifacts from `state.history` (if present).
@@ -238,6 +251,101 @@ normal chain still applies afterwards and the *conversion* is verified. For
 all — the user's approval is the only anchor the run will ever have, and the
 final report must say so.
 
+### Phase 0.15: Extract a Standalone Source From Code in the Wild (ONCE — GATED)
+
+**Run only when `state.primary.extraction` is set.** It is set when the user's
+PyTorch or JAX code is a package, or depends on things the run cannot load, so
+it cannot be used directly: relative imports in either; for PyTorch, CuTe DSL /
+Triton / CUDA extensions and `torch.cuda` streams, which the capture tools
+cannot execute; for JAX, parameters held in a module library and no
+module-level `computation`, where `base.py` must be one self-contained file.
+
+An agent writes the self-contained `source.py` from the user's code — which,
+as in Phase 0.1, means an agent writes the file this run is **scored against**.
+Unlike Phase 0.1 the semantics are not invented: they exist in the user's code,
+and the agent's job is to move them without changing them. So this phase also
+ends by stopping and asking the user.
+
+`state.primary.language` decides three things below:
+
+| | `pytorch` | `jax` |
+| --- | --- | --- |
+| `<extractor>` | `maxkernel-extract-source` | `maxkernel-extract-jax-source` |
+| `<smoke flags>` | `--entry-point Model` | `--framework jax` |
+| Checkable against the original on this host? | No: the original cannot run here | Sometimes: the extractor runs `extraction_check.py` here when the original imports, and its rationale says whether it did |
+
+1.  **Check if already done**: if `<run_dir>/source.py` exists AND
+    `state.primary.extraction.approved` is `true`, skip to Phase 0.2. If
+    `source.py` exists but approval is not recorded, go to step 4 — do not
+    re-extract. Otherwise check `test -f <state.primary.extraction.entry_file>`;
+    if it is missing, STOP and report the path to the orchestrator — the copy
+    into `original/` or the state mapping is wrong, and the agent must not
+    go looking for the file.
+2.  **Invoke `<extractor>`** — `maxkernel-extract-source` for `pytorch`,
+    `maxkernel-extract-jax-source` for `jax`:
+    -   Prompt: `"Extract the primary source for run_dir = <run_dir> (state file: <run_dir>/state.json)."`
+3.  **Verify on disk**: `<run_dir>/source.py`, `<run_dir>/extraction_rationale.md`
+    and `<run_dir>/extraction_check.py` must exist and be non-empty, and
+    `source.py` must build and run exactly as the run will use it:
+    ```bash
+    {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/input_spec.py smoke <run_dir>/source.py \
+      --input-spec <state.primary.input_spec_path> <smoke flags>
+    ```
+    Exit 0 prints `SMOKE_OK` and the output shapes. For `pytorch`, exit 2
+    includes a `forward()` that returns a `None` or other non-tensor leaf,
+    which the golden capture cannot record; the message names the leaf. For
+    `jax`, exit 2 includes an import `base.py` may not have, a `get_inputs()`
+    that does not build the declared configs, and a `computation` that does
+    not run under `jax.jit`; the message names which. Re-dispatch per the
+    retry policy (3 attempts) if any check fails, quoting that message.
+4.  **STOP AND ASK THE USER. This gate is not skippable.**
+
+    Return to the orchestrator without advancing the iteration, reporting:
+    -   the full text of `<run_dir>/extraction_rationale.md`, with its
+        **Assumptions** section called out separately, and with it
+        **Divergences** (`pytorch`) or **Library calls I re-expressed** (`jax`);
+    -   the paths to `<run_dir>/source.py` and `<run_dir>/extraction_check.py`.
+        For `pytorch`, say that the script is how the user can compare the
+        extraction with their original on a machine where it runs — nothing
+        here can. For `jax`, quote the rationale's **Checked against the
+        original?** section first: either the script ran here and what it
+        found, or it could not run here and the user is the only one who can;
+    -   the `SMOKE_OK` output shapes;
+    -   a plain statement that this file, not the user's original, is what
+        every number in the run will be checked against, and that an agent
+        wrote it.
+
+    Do not proceed on silence, on `input.extraction.user_confirms_extraction`
+    (it only acknowledges this step exists), or on your own judgement. A
+    passing `extraction_check.py` is evidence for the user, not an approval.
+
+5.  **On approval**: re-read `<run_dir>/state.json`, set
+    `primary.extraction.approved` to `true` and `primary.source_path` (and the
+    legacy `source_path`) to the absolute path of `<run_dir>/source.py`.
+    `primary.language` does not change. Then:
+    -   `pytorch`: set `primary.entry_point` to `"Model"`. From here the run
+        proceeds exactly as for a user-supplied PyTorch file, with the
+        declared configs driving the capture.
+    -   `jax`: copy the approved file to the baseline, unchanged —
+        `cp <run_dir>/source.py <run_dir>/base.py` — and leave
+        `primary.entry_point` as it is. From here the run proceeds exactly as
+        for a user-supplied JAX file: the phases that port and verify a
+        non-JAX source (0.2, 0.3, 0.4, 0.7, 0.8) skip a `jax` primary.
+
+6.  **On rejection or a correction request**: record what the user said in
+    `<run_dir>/maxkernel_debug_history.md`, re-dispatch `<extractor>` with
+    their feedback in the prompt, and come back to step 4. There is no attempt
+    limit — this is a conversation with the user, not a repair loop.
+
+**What this gate buys.** For `pytorch`, the golden values Phase 0.2 captures are
+the extracted file's, and Phase 0.8 checks `base.py` against them — so the chain
+from `source.py` to the kernel is verified as usual. For `jax`, the extracted
+file *is* `base.py`, so there is no port to verify and no later gate looks at
+it again. In both, the link from the user's original to `source.py` is checked
+only by reading the rationale and by `extraction_check.py`: run by the user
+where the original runs, or, for `jax`, by the extractor on this host when the
+original imports here. The final report must say which of those happened.
+
 ### Phase 0.2: Capture Golden Values From a PyTorch Primary (ONCE — idempotent)
 
 **Run this only when `state.primary.language` is `"pytorch"` or `"triton"`.**
@@ -275,14 +383,26 @@ Which tool produces the oracle depends on `state.reference_mode`:
       <state.primary.source_path> \
       --out <run_dir>/torchax_oracle.npz \
       --meta <run_dir>/torchax_oracle.json \
-      --seed <state.seed or 1024> --atol 1e-4 --rtol 1e-4
+      --seed <state.seed or 1024> \
+      <declaration flags>
     ```
+    Do not pass `--atol`/`--rtol` here. The tool's default is per output: the
+    backend floor (1e-4 on CPU, where it runs), raised to about two ulps for a
+    bf16 or fp16 output. A fixed 1e-4 fails every bf16 module on one bf16
+    rounding step and pushes it to `llm_port` for no reason.
     Extra exit code for this tool: **4 = STEP 0 FAILED** — torchax does not
-    reproduce eager PyTorch within tolerance. Do NOT degrade past this. The
+    reproduce eager PyTorch: its values are out of tolerance, or an output
+    comes back in a different dtype (other than JAX's x64 narrowing, e.g.
+    int64 indices as int32). Do NOT degrade past this. The
     oracle would be a computation that is not the user's, so every later check
-    would be meaningless. Record the report, fall back to
-    `reference_mode: "llm_port"` for the rest of the run, and note the switch in
-    `<run_dir>/maxkernel_debug_history.md`.
+    would be meaningless. Record the report and run the **torchax → llm_port
+    fallback** below.
+
+    **Exit 2 from this tool is also a fallback, not a degrade.** It means
+    torchax is unavailable or could not convert the module — data-dependent
+    shapes such as `.split(t.tolist())` or `nonzero` are the usual cause —
+    not that the module cannot run. Eager PyTorch may run it fine, so run
+    the fallback below instead of the exit-2 row of the table in step 3.
 
     `reference_mode == "llm_port"`:
     ```bash
@@ -290,18 +410,32 @@ Which tool produces the oracle depends on `state.reference_mode`:
       <state.primary.source_path> \
       --out <run_dir>/torch_golden.npz \
       --meta <run_dir>/torch_golden.json \
-      --device cpu --dtype-policy preserve --seed 0
+      --device cpu --dtype-policy preserve --seed 0 \
+      <declaration flags>
     ```
+
+    `<declaration flags>` are, for each of these `state.primary` fields that is
+    not `null`: `--entry-point <entry_point>`, `--inputs-fn <inputs_fn>`,
+    `--init-inputs-fn <init_inputs_fn>`, `--input-spec <input_spec_path>`.
+    Omit the ones that are `null`. They are the user's declarations; passing
+    them is what stops the tool from guessing. With `--input-spec`, each
+    declared config is captured once and `--num-configs` is ignored.
+
+    When `state.max_capture_bytes` is set (not `null` or absent), also pass
+    `--max-bytes <max_capture_bytes>` to whichever of the two tools you run,
+    including the fallback capture below. It is the user's ceiling on the
+    capture's size, from the job's `correctness.max_capture_bytes`; without
+    it the tools use their 256 MB default.
 
 3.  **Branch on the exit code. Each one means something different:**
 
     | exit | meaning | what you do |
     | --- | --- | --- |
     | 0 | golden captured | set `state.primary.golden_path` and `golden_meta_path`; continue |
-    | 2 | torch missing, or the module will not run on CPU | **DEGRADE, do not abort.** Record `"golden_degraded": "<stderr reason>"` in state, leave the golden paths `null`, and continue. The run proceeds with today's self-comparison and the final report must say the port was never verified. |
-    | 3 | no discoverable entry point | STOP. Report to the orchestrator that the user must identify the entry point. Do not guess. |
+    | 2 | torch missing, or the module will not run on CPU (from `capture_torch_golden.py`; from `torchax_oracle.py` see the fallback below) | **DEGRADE, do not abort.** Record `"golden_degraded": "<stderr reason>"` in state, leave the golden paths `null`, and continue. The run proceeds with today's self-comparison and the final report must say the port was never verified. |
+    | 3 | no discoverable entry point, no input shapes, or constructor arguments missing (`MISSING_INIT_ARGS`) | STOP. Report the tool's message to the orchestrator: the user must name the entry point (`input.entry_point`), declare inputs (`input.configs`), or declare constructor arguments (`input.init_args` / `input.init_kwargs`). Do not guess any of them. |
     | 4 | `forward()` is non-deterministic | **DEGRADE**, exactly as for exit 2, recording the non-determinism as the reason. There is no golden value to capture; dropout or live RNG means no single correct answer exists. |
-    | 5 | capture exceeds `--max-bytes` | retry once with `--num-configs 1`; if it still exceeds, DEGRADE as for exit 2. |
+    | 5 | capture exceeds the byte cap (`--max-bytes`; 256 MB unless the job set `correctness.max_capture_bytes`) | retry once with `--num-configs 1` (or, with `--input-spec`, add `--no-fp64-probe`); if it still exceeds, DEGRADE as for exit 2. Never raise the cap yourself and never shrink the config: the cap is the user's setting and the shapes are the problem. Large real-world parameter sets hit this; when degrading, quote the tool's `TOO_LARGE` line, which gives a lower bound on the bytes it needs, so the user knows roughly what `correctness.max_capture_bytes` would let the port be checked. |
 
     A degraded capture is a real loss of assurance, not a formality. Append the
     reason to `<run_dir>/maxkernel_debug_history.md` so a later correctness
@@ -321,6 +455,30 @@ Which tool produces the oracle depends on `state.reference_mode`:
     `golden_compatible_order` for the other convention), `torch_golden.json`
     under each argument's `argnum`. **Read the field. Never assume the order.**
 
+#### The torchax → llm_port fallback
+
+Used by Phase 0.2 (`torchax_oracle.py` exit 2 or 4) and Phase 0.3
+(`jaxpr_export.py` exit 2). Switching mode alone is not enough: without a
+golden capture `primary.golden_path` stays `null` (or keeps pointing at
+`torchax_oracle.json`, a schema `verify_port.py` cannot read), Phase 0.8 is
+skipped, and the hand-written port is never checked.
+
+1.  Re-read `<run_dir>/state.json`, set `reference_mode` to `"llm_port"` and
+    `reference_mode_fallback` to the failing tool, its exit code and the first
+    line of its stderr, and write it back. Append the same to
+    `<run_dir>/maxkernel_debug_history.md`.
+2.  Run the `reference_mode == "llm_port"` capture from Phase 0.2 step 2 —
+    `capture_torch_golden.py`, with the same `<declaration flags>`.
+3.  Branch on its exit code with the table in Phase 0.2 step 3, and record
+    the result as in step 4. On exit 0, `primary.golden_path` and
+    `golden_meta_path` must now name `torch_golden.npz` / `.json`, replacing
+    any `torchax_oracle.*` paths. On a degrade they are `null`, with the
+    reason recorded, as for any degraded capture.
+4.  Continue in `llm_port` mode: Phase 0.3 and 0.7 are skipped, Phase 0.4
+    hand-writes `base.py`, and Phase 0.8 checks it against the golden values.
+    Leave any `ref.jaxpr.txt` / `ref.hlo.txt` already written in place;
+    nothing downstream requires them in this mode.
+
 ### Phase 0.3: Export the Planner's Reference Material (ONCE — idempotent)
 
 **Run only when `state.reference_mode == "torchax"`.** In `llm_port` mode the
@@ -339,8 +497,11 @@ compile rather than someone's description of it.
       --jaxpr <run_dir>/ref.jaxpr.txt \
       --hlo   <run_dir>/ref.hlo.txt \
       --json  <run_dir>/ref.facts.json \
-      --seed <state.seed or 1024>
+      --seed <state.seed or 1024> \
+      <declaration flags>
     ```
+    `<declaration flags>` are the same as in Phase 0.2, so the jaxpr is traced
+    from the same model and inputs the oracle was built from.
 3.  **Both files matter, and they answer different questions.** The jaxpr is
     pre-optimization: it says what was asked for — the operations, dtypes,
     reduction axes, broadcast structure. The optimized HLO is post-XLA: it says
@@ -354,14 +515,16 @@ compile rather than someone's description of it.
     planning material.
 5.  **Record it in state**: set `jaxpr_path`, `hlo_path` and `jaxpr_facts_path`
     to ABSOLUTE paths.
-6.  **Exit 2 (torchax unavailable)** → fall back to `reference_mode:
-    "llm_port"` for the rest of the run and note it. Do not stop.
+6.  **Exit 2 (torchax unavailable, or the module will not convert)** → run
+    the **torchax → llm_port fallback** at the end of Phase 0.2, which also
+    replaces the torchax oracle with a golden capture. Do not stop.
 
 ### Phase 0.4: Understand the Primary Source (ONCE — idempotent)
 
 **Skip this entire phase when `state.primary.language == "jax"`.** A JAX input
-already has its `<run_dir>/base.py`, written by the orchestrator, and there is
-nothing to port or explain.
+already has its `<run_dir>/base.py`, written by the orchestrator or, for an
+extracted source, by Phase 0.15 on approval, and there is nothing to port or
+explain.
 
 **Also skip when `state.reference_mode == "torchax"`.** There is no
 hand-written port in that mode — the JAX reference was obtained mechanically in
@@ -515,8 +678,10 @@ When both hold, the agent writes a readable `jnp` reference and it becomes
       <state.primary.source_path> <run_dir>/base.py \
       --entry computation --seed <state.seed or 1024> \
       --atol <atol> --rtol <rtol> --strict \
-      --out <run_dir>/jaxpr_comparison.json
+      --out <run_dir>/jaxpr_comparison.json \
+      <declaration flags>
     ```
+    (`<declaration flags>` as in Phase 0.2.)
     `--strict` is required here, and the reason is measured. A reference that
     silently drops the epsilon from a normalization differs from the oracle by
     **7.8e-05** — it *passes* a 1e-2 value gate and is caught only structurally,
@@ -655,7 +820,9 @@ the backward alone when the forward stays fixed, with the gradients derived by
 1.  **Check if already done**: If `<run_dir>/base.py` AND `<run_dir>/test_kernel.py` both exist, skip to Phase 1.
 2.  **Ensure base kernel exists**: `<run_dir>/base.py` should already be there.
     Which phase produced it depends on how this run is configured:
-    -   a `jax` primary — copied from the user's source by the orchestrator;
+    -   a `jax` primary — copied from the user's source by the orchestrator,
+        or, when `state.primary.extraction` is set, copied from the approved
+        `source.py` in Phase 0.15;
     -   `reference_mode: "llm_port"` — hand-written in Phase 0.4 and gated in
         Phase 0.8;
     -   `reference_mode: "torchax"` — written from the jaxpr in Phase 0.7 and
@@ -712,7 +879,7 @@ the backward alone when the forward stays fixed, with the gradients derived by
             -   `reference_mode: "torchax"`: the Phase 0.7 check without
                 `--strict`, since the edit changes the structure on purpose
                 and the values decide:
-                `jaxpr_compare.py <state.primary.source_path> <run_dir>/base_fwd.py --entry computation --seed <state.seed or 1024> --atol <atol> --rtol <rtol> --out <run_dir>/jaxpr_comparison.json`.
+                `jaxpr_compare.py <state.primary.source_path> <run_dir>/base_fwd.py --entry computation --seed <state.seed or 1024> --atol <atol> --rtol <rtol> --out <run_dir>/jaxpr_comparison.json <declaration flags>` (flags as in Phase 0.2).
         3.  Re-run the Phase 0.85 `make_vjp_base.py` command, re-assemble
             (step 4), and validate again.
         Log each edit in `maxkernel_debug_history.md`. If the repair fails, STOP and report it.

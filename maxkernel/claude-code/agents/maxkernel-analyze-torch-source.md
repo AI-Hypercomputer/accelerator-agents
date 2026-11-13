@@ -87,6 +87,12 @@ the `__init__`, any helper functions, and any `get_inputs()` /
 If `state.primary.source_path` is missing or empty, STOP and report the error.
 Do not search for a replacement and do not invent a module.
 
+If `state.primary.extraction` is set, `source.py` was extracted from the user's
+codebase by an agent and approved by the user (Phase 0.15). Read
+`<run_dir>/extraction_rationale.md` too: its Assumptions and Divergences are
+semantics the user signed off on, and Section 1 of your brief should say the
+source is an extraction and name the original entry point.
+
 ## Step 3: Write the context brief
 
 Write `<run_dir>/torch_context.md` with the sections below. Two rules govern
@@ -222,6 +228,16 @@ Requirements:
     decorator — the harness jits it.
 6.  **Shape-commented** on every intermediate: `# Shape: (batch, seq, hidden)`.
 7.  **Preserve the user's problem dimensions exactly** (general_rules #6).
+8.  **Keep the source's amount of work.** `base.py` is the denominator of
+    every speedup the run reports. Where the source does sparse, grouped or
+    data-dependent work (`nonzero`, `bincount`, `split` on `.tolist()`,
+    Python loops over groups), port it to the static-shape form an engineer
+    would write that still does only that work. Never compute everything and
+    mask: it gives the same numbers at a multiple of the FLOPs, and inflates
+    every speedup by the same factor. Do not buy static shapes with an
+    approximation the source does not make, such as dropping or truncating
+    elements to a fixed capacity. If `{{MAXKERNEL_ROOT}}/reference/` has a
+    guide for the pattern, use the baseline form it gives.
 
 ## Step 5: Verify your own port before you finish
 

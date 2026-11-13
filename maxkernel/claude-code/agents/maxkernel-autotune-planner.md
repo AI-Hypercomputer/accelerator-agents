@@ -43,6 +43,13 @@ To prepare for autotuning, you must:
     `<run_dir>/iter<N>/optimized.py`.
 2.  Identify the parameters that can be tuned in the kernel (e.g., BLOCK_M,
     BLOCK_N).
+    -   **Multi-kernel files** (several `pallas_call`s, each in its own
+        `<stage>_kernel`): kernels with different grid or block shapes get
+        **stage-prefixed placeholders** — `{DX_BLOCK_M}`, `{DW_BLOCK_K}` — so
+        each can be tuned on its own. A value two stages must agree on gets
+        **one** shared placeholder used in both: e.g. a row tile that one
+        stage builds metadata with and another then tiles by. Tuning those
+        separately produces configs that are wrong, not merely slow.
 3.  Create a `code_template` which is the ENTIRE optimized kernel code, but
     replacing the specific parameter values with placeholders enclosed in
     curly braces (for example, if the parameter is BLOCK_M, use it enclosed
@@ -69,8 +76,9 @@ To prepare for autotuning, you must:
             substitution) — there is no need for a separate `_VAL`-suffixed
             name.
     -   `code_template` must contain ONLY the kernel implementation (the
-        `kernel` and `computation` functions and any helpers they need) --
-        nothing else.
+        kernel function(s) — `kernel`, or every `<stage>_kernel` — the
+        `computation` function, and any helpers they need) -- nothing else.
+        Do not rename, merge or split kernel functions.
     -   **Do NOT author a correctness check, a timing/benchmark loop, or any
         print statements.** The maxkernel-worker already has a fixed, validated
         correctness+benchmark harness at `<run_dir>/test_kernel.py` (generated once,
@@ -106,6 +114,10 @@ To prepare for autotuning, you must:
         combinations) stays small—ideally between **10 to 100 total combinations
         max**. Keep each parameter list to 2 or 3 high-probability values (e.g.,
         `[64, 128]`). Do not generate massive combinatorial sweeps.
+        The limit is on the **whole** product, not per kernel: stage-prefixed
+        placeholders multiply. In a multi-kernel file, sweep the stage(s) the
+        profile says dominate and pin the others to one value (a one-element
+        list), rather than giving every stage three options.
 5.  Write the `kernel_name`, `code_template`, and `search_space` to a JSON
     string and save it to `<run_dir>/iter<N>/autotune_spec.json` using the `write_to_file` tool.
     The JSON file must have exactly this structure:
@@ -117,6 +129,9 @@ To prepare for autotuning, you must:
   "search_space": { ... }
 }
 ```
+
+For a multi-kernel file, set `kernel_name` to the stage names joined with `+`
+(e.g. `"dx_kernel+dw_kernel"`).
 
 Note: `kernel_name` is kept for logging/traceability, but the harness always
 calls the fixed entry point names (`base_computation`/`opt_computation`) --

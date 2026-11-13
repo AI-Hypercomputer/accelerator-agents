@@ -243,10 +243,24 @@ Measured, same comparison, two devices:
 
 *(TPU figure measured on a v6e-8 VM, Linear+GELU, torch 2.9 / torchax 0.0.13.)*
 
-A single fixed tolerance is therefore wrong on one of the two. `--atol`/`--rtol`
-default to the backend's own floor — `DEFAULT_TOLERANCE` in
-`tools/torchax_oracle.py`, `1e-4` on CPU and `1e-3` on an accelerator — and the
-resolved value is printed and recorded in the manifest.
+A single fixed tolerance is therefore wrong on one of the two. Without
+`--atol`/`--rtol`, each output is checked at the backend's own floor —
+`DEFAULT_TOLERANCE` in `tools/torchax_oracle.py`, `1e-4` on CPU and `1e-3` on
+an accelerator — raised to its storage dtype's floor when that is larger
+(`DTYPE_TOLERANCE`: `2e-2` for bf16, `2e-3` for fp16, about two ulps). A bf16
+output is rounded on both sides at points eager PyTorch and XLA need not share,
+so a faithful conversion lands about one bf16 ulp apart (measured `1.2e-2`
+relative on a bf16 Linear+tanh); at the backend floor every bf16 module would
+fail. An explicit `--atol`/`--rtol` applies to every output as given. The
+per-output values are recorded in the manifest under `configs[].step0`.
+
+Step 0 also compares **dtypes**. An output that comes back in a different dtype
+fails, whatever its values: the oracle would return something the user's module
+does not, and every port would be checked against it. One example is torchax
+promoting `bf16 * python_float` to float32 where eager keeps bf16. The single
+exception is JAX's default x64 narrowing (`int64` → `int32`, `float64` →
+`float32`), which is how 64-bit outputs such as top-k indices are expected to
+come back; it is recorded and accepted.
 
 The accelerator floor sits **at** the measured divergence, not above it. That
 is deliberate and it has a cost: a module that lands just the wrong side of

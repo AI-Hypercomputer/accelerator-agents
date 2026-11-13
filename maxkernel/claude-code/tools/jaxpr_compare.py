@@ -202,18 +202,32 @@ def load_candidate(path, entry):
 
 
 def compare(
-  source_path, candidate_path, entry, seed, states_first, atol=1e-4, rtol=1e-4
+  source_path,
+  candidate_path,
+  entry,
+  seed,
+  states_first,
+  atol=1e-4,
+  rtol=1e-4,
+  entry_name=None,
+  inputs_fn_name=None,
+  init_fn_name=None,
+  spec=None,
 ):
   import jax
   import torch
-  from jaxpr_export import build_model, import_torchax, load_source, to_jax
+  from torchax_oracle import (
+    build_model,
+    first_inputs,
+    import_torchax,
+    load_source,
+    to_jax,
+  )
 
   torchax = import_torchax()
   ns = load_source(source_path)
-  model, _ = build_model(ns, seed)
-  torch.manual_seed(seed)
-  raw = ns["get_inputs"]()
-  raw = [raw] if isinstance(raw, torch.Tensor) else list(raw)
+  model, _ = build_model(ns, seed, entry_name, init_fn_name, spec)
+  raw = first_inputs(ns, seed, inputs_fn_name, spec)
   args = tuple(to_jax(a) if isinstance(a, torch.Tensor) else a for a in raw)
 
   states, jax_fn = torchax.extract_jax(model)
@@ -350,9 +364,21 @@ def main():
     help="also exit 1 on a divergent STRUCTURAL verdict; the value "
     "gate fails with exit 1 regardless",
   )
+  p.add_argument(
+    "--entry-point", help="nn.Module class in the source; skips discovery"
+  )
+  p.add_argument("--inputs-fn", help="name of the forward-inputs factory")
+  p.add_argument("--init-inputs-fn", help="name of the constructor-inputs factory")
+  p.add_argument(
+    "--input-spec",
+    help="input_spec.json with declared constructor args and input configs",
+  )
   args = p.parse_args()
 
   try:
+    import input_spec
+
+    spec = input_spec.load_input_spec(args.input_spec)
     report = compare(
       args.source_path,
       args.candidate,
@@ -361,6 +387,10 @@ def main():
       states_first=not args.inputs_first,
       atol=args.atol,
       rtol=args.rtol,
+      entry_name=args.entry_point,
+      inputs_fn_name=args.inputs_fn,
+      init_fn_name=args.init_inputs_fn,
+      spec=spec,
     )
   except LookupError as e:
     print(f"BAD_INPUT: {e}", file=sys.stderr)

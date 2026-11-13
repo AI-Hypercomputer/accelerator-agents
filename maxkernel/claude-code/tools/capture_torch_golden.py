@@ -25,7 +25,8 @@ THE THREE HAZARDS IT IS BUILT AROUND
     arrive as an *argument*. Capturing inputs but not parameters makes the
     recorded outputs unreproducible noise. Every parameter and buffer is
     captured, in a stable order, and the manifest says which argument position
-    each one takes.
+    each one takes. They are stored once (`param/<name>`) and shared by every
+    config, since all configs run the same model.
 2.  **Determinism.** Dropout or any RNG live in `forward()` means there is no
     golden value to capture. `model.eval()` and `torch.no_grad()` handle the
     common case; a two-run bitwise probe catches the rest, and exits rather
@@ -52,9 +53,19 @@ Exit codes:
   3  no discoverable entry point -- ask the user
   4  forward() is non-deterministic -- no golden value exists to capture
   5  the capture would exceed --max-bytes
+
+DECLARED ENTRY POINTS AND INPUTS
+--------------------------------
+Discovery (below) is for files that follow a convention. When the job file
+names things instead, the declaration wins: `--entry-point` picks the class or
+function, `--inputs-fn` / `--init-inputs-fn` rename the factories, and
+`--input-spec` supplies constructor arguments and input configs the source does
+not ship (see `tools/input_spec.py`). The manifest records which of the two
+the inputs came from, under `inputs_origin`.
 """
 
 import argparse
+import copy
 import json
 import os
 import sys
@@ -89,6 +100,8 @@ try:
 except ImportError as e:
   print(f"DEGRADED: torch is not importable ({e})", file=sys.stderr)
   sys.exit(2)
+
+import input_spec  # noqa: E402  (tools/, beside this file)
 
 _XLA = None
 if _WANT_XLA:
@@ -193,15 +206,38 @@ class EntryPoint:
     self.inputs_fn = inputs_fn
 
 
-def discover_entry_point(ns):
+def _named_factory(ns, name, default):
+  """The factory called `name`; missing is an error only if it was declared."""
+  fn = ns.get(name or default)
+  if name and not callable(fn):
+    raise LookupError(f"the declared function {name!r} is not defined in the source")
+  return fn if callable(fn) else None
+
+
+def discover_entry_point(
+  ns, entry_name=None, inputs_fn_name=None, init_fn_name=None
+):
   """Finds the callable the loop should reproduce.
 
   Never guesses between two equally plausible candidates -- an ambiguous file
   exits 3 and the orchestrator asks the user, because binding the wrong entry
-  point silently benchmarks the wrong computation.
+  point silently benchmarks the wrong computation. A declared `entry_name`
+  skips the guessing entirely.
   """
-  get_inputs = ns.get("get_inputs")
-  get_init = ns.get("get_init_inputs")
+  get_inputs = _named_factory(ns, inputs_fn_name, "get_inputs")
+  get_init = _named_factory(ns, init_fn_name, "get_init_inputs")
+
+  if entry_name:
+    kind, obj = input_spec.resolve_entry(ns, entry_name, "__maxkernel_source__")
+    if kind == "module":
+      return EntryPoint(
+        "module",
+        f"{entry_name}.forward",
+        model_cls=obj,
+        init_inputs_fn=get_init,
+        inputs_fn=get_inputs,
+      )
+    return EntryPoint("function", entry_name, fn=obj, inputs_fn=get_inputs)
 
   modules = {
     name: obj
@@ -280,6 +316,7 @@ def materialize(entry, seed):
     elif isinstance(raw, dict):
       init_kwargs = dict(raw)
 
+  input_spec.check_init_args(entry.model_cls, init_args, init_kwargs)
   model = entry.model_cls(*init_args, **init_kwargs)
   model.eval()
   if _XLA:
@@ -346,18 +383,27 @@ def split_dynamic_static(args):
   return dynamic, static
 
 
-def build_configs(entry, seed, num_configs):
+def build_configs(entry, seed, num_configs, spec=None):
   """Builds the list of forward-argument sets to capture.
 
-  Strongly prefers the source's own `get_inputs()`: a KernelBench task ships
-  the shapes it was written for, and general_rules #6 forbids substituting our
-  own problem dimensions.
+  Declared configs (the job's `input.configs`) come first: the user named
+  them. Otherwise the source's own `get_inputs()` -- a KernelBench task ships
+  the shapes it was written for. Either way general_rules #6 forbids
+  substituting our own problem dimensions, so with neither there is nothing to
+  capture. Declared configs are each captured once; `num_configs` only applies
+  to `get_inputs()`, which is re-sampled per seed.
   """
+  if input_spec.config_count(spec):
+    return [
+      input_spec.build_args(spec, i, seed + i)
+      for i in range(input_spec.config_count(spec))
+    ]
   if not callable(entry.inputs_fn):
     raise LookupError(
-      "The source defines no `get_inputs()`, so there are no canonical input "
-      "shapes to capture. Ask the user for representative inputs rather than "
-      "inventing dimensions (general_rules #6)."
+      "The source defines no `get_inputs()` and the job declares no "
+      "`input.configs`, so there are no canonical input shapes to capture. "
+      "Ask the user for representative inputs rather than inventing "
+      "dimensions (general_rules #6)."
     )
 
   configs = []
@@ -381,20 +427,11 @@ def build_configs(entry, seed, num_configs):
 
 
 def flatten_outputs(out):
-  """Flattens the forward() result to match jax.tree_util.tree_leaves ordering."""
-  if isinstance(out, torch.Tensor):
-    return [out]
-  if isinstance(out, (list, tuple)):
-    flat = []
-    for item in out:
-      flat.extend(flatten_outputs(item))
-    return flat
-  if isinstance(out, dict):
-    flat = []
-    for key in sorted(out):  # tree_leaves sorts dict keys
-      flat.extend(flatten_outputs(out[key]))
-    return flat
-  raise TypeError(f"Unsupported output type: {type(out).__name__}")
+  """Flattens the forward() result to match jax.tree_util.tree_leaves ordering.
+
+  The rule lives in input_spec.output_leaves, shared with the smoke check.
+  """
+  return input_spec.output_leaves(out)
 
 
 def to_device(x):
@@ -447,11 +484,13 @@ def run_fp64_probe(entry, model, args):
     if entry.kind == "function":
       f64_args = [to_float64(a) if is_tensor(a) else a for a in args]
       return run_forward(model, f64_args)
-    f64_model = model.double()
+    # On a copy: `.double()` converts in place, and converting back cannot
+    # restore a bf16 or mixed-dtype module -- `.float()` left a bf16 model in
+    # fp32, so every later config failed with a dtype mismatch. A copy also
+    # leaves the model untouched when the fp64 forward raises.
+    f64_model = copy.deepcopy(model).double()
     f64_args = [to_float64(a) if is_tensor(a) else a for a in args]
-    out = run_forward(f64_model, f64_args)
-    model.float()
-    return out
+    return run_forward(f64_model, f64_args)
   except Exception:  # pylint: disable=broad-except
     return None
 
@@ -572,13 +611,37 @@ def describe(key, tensor):
 
 
 def capture(
-  source_path, seed, num_configs, dtype_policy, max_bytes, fp64_probe
+  source_path,
+  seed,
+  num_configs,
+  dtype_policy,
+  max_bytes,
+  fp64_probe,
+  entry_name=None,
+  inputs_fn_name=None,
+  init_fn_name=None,
+  spec=None,
 ):
   ns = load_source(source_path)
-  entry = discover_entry_point(ns)
+  entry = discover_entry_point(ns, entry_name, inputs_fn_name, init_fn_name)
+  if input_spec.has_init(spec):
+    if entry.kind == "function":
+      print(
+        "warning: the input spec declares constructor arguments, but the "
+        "entry point is a function; they are ignored",
+        file=sys.stderr,
+      )
+    else:
+      declared = input_spec.init_inputs(spec)
+      entry.init_inputs_fn = lambda: declared
   model, params = materialize(entry, seed)
   module_scalars = collect_module_scalars(model)
-  configs = build_configs(entry, seed, num_configs)
+  configs = build_configs(entry, seed, num_configs, spec)
+  inputs_origin = (
+    "job input.configs"
+    if input_spec.config_count(spec)
+    else f"source {entry.inputs_fn.__name__}()"
+  )
 
   if dtype_policy == "fp32":
     configs = [
@@ -595,6 +658,35 @@ def capture(
   arrays = {}
   manifest_configs = []
   total_bytes = 0
+
+  # Parameters and buffers belong to the model, not to a config: constructor
+  # arguments are shared, so every config runs the same weights. Store them
+  # once and let each config's manifest entry point at the shared key, so N
+  # configs do not cost N copies of the weights. Readers look arrays up through
+  # the manifest's `key`, so the sharing is invisible to them.
+  param_meta = []
+  for name, t in params.items():
+    array, meta = describe(f"param/{name}", t)
+    arrays[meta["key"]] = array
+    meta["role"] = "parameter"
+    meta["name"] = name
+    param_meta.append(meta)
+    total_bytes += meta["bytes"]
+  parameter_bytes = total_bytes
+
+  def check_cap():
+    if total_bytes > max_bytes:
+      raise MemoryError(
+        f"capture needs at least {total_bytes / 1e6:.1f} MB, over the "
+        f"{max_bytes / 1e6:.1f} MB cap. Parameters and buffers are "
+        f"{parameter_bytes / 1e6:.1f} MB of that, stored once for all "
+        "configs. Raise the cap with `correctness.max_capture_bytes` in the "
+        "job file (--max-bytes here), or capture fewer configs."
+      )
+
+  # Before any forward runs: weights that do not fit on their own will not
+  # fit after the inputs and outputs are added.
+  check_cap()
 
   for idx, args in enumerate(configs):
     dynamic, static = split_dynamic_static(args)
@@ -621,16 +713,11 @@ def capture(
       total_bytes += meta["bytes"]
 
     # Parameters follow the forward tensors, still as DYNAMIC arguments: the
-    # JAX `computation` has no `self` to read them from.
+    # JAX `computation` has no `self` to read them from. Every config lists
+    # them, at its own argument positions, pointing at the one stored copy.
     offset = len(dynamic)
-    for k, (name, t) in enumerate(params.items()):
-      array, meta = describe(f"cfg{idx}/param/{name}", t)
-      arrays[meta["key"]] = array
-      meta["role"] = "parameter"
-      meta["name"] = name
-      meta["argnum"] = offset + k
-      dyn_meta.append(meta)
-      total_bytes += meta["bytes"]
+    for k, meta in enumerate(param_meta):
+      dyn_meta.append({**meta, "argnum": offset + k})
 
     # Static arguments, in two groups: scalars passed to forward(), then
     # constructor scalars held on the module. Both are `static_argnums` on the
@@ -687,12 +774,7 @@ def capture(
       }
     )
 
-    if total_bytes > max_bytes:
-      raise MemoryError(
-        f"capture would need {total_bytes / 1e6:.1f} MB, over the "
-        f"{max_bytes / 1e6:.1f} MB cap. Re-run with a larger --max-bytes or "
-        "fewer --num-configs."
-      )
+    check_cap()
 
   manifest = {
     "source_path": str(Path(source_path).resolve()),
@@ -702,6 +784,7 @@ def capture(
       "parameter_order": list(params.keys()),
       "module_scalars": module_scalars,
     },
+    "inputs_origin": inputs_origin,
     "argument_contract": (
       "computation(*forward_tensors, *parameters_and_buffers, *static_scalars) "
       "-- dynamic arguments first, static last, as "
@@ -714,6 +797,7 @@ def capture(
     "numpy_version": np.__version__,
     "deterministic": True,
     "total_bytes": total_bytes,
+    "parameter_bytes": parameter_bytes,
     "configs": manifest_configs,
     "degraded": None,
   }
@@ -743,13 +827,40 @@ def main():
   )
   parser.add_argument("--seed", type=int, default=0)
   parser.add_argument("--num-configs", type=int, default=1)
-  parser.add_argument("--max-bytes", type=int, default=256_000_000)
+  parser.add_argument(
+    "--max-bytes",
+    type=int,
+    default=256_000_000,
+    help="ceiling on the captured arrays: parameters and buffers once, plus "
+    "every config's inputs and outputs. The job's "
+    "correctness.max_capture_bytes.",
+  )
   parser.add_argument(
     "--no-fp64-probe",
     action="store_true",
     help="skip the float64 recomputation and tolerance advice",
   )
+  parser.add_argument(
+    "--entry-point",
+    help="class or function to convert (the job's input.entry_point); "
+    "skips discovery",
+  )
+  parser.add_argument("--inputs-fn", help="name of the forward-inputs factory")
+  parser.add_argument(
+    "--init-inputs-fn", help="name of the constructor-inputs factory"
+  )
+  parser.add_argument(
+    "--input-spec",
+    help="input_spec.json with declared constructor args and input configs "
+    "(see tools/input_spec.py)",
+  )
   args = parser.parse_args()
+
+  try:
+    spec = input_spec.load_input_spec(args.input_spec)
+  except (OSError, ValueError) as e:
+    print(f"BAD_INPUT_SPEC: {e}", file=sys.stderr)
+    sys.exit(3)
 
   try:
     arrays, manifest = capture(
@@ -759,7 +870,14 @@ def main():
       dtype_policy=args.dtype_policy,
       max_bytes=args.max_bytes,
       fp64_probe=not args.no_fp64_probe,
+      entry_name=args.entry_point,
+      inputs_fn_name=args.inputs_fn,
+      init_fn_name=args.init_inputs_fn,
+      spec=spec,
     )
+  except input_spec.MissingInitArgs as e:
+    print(f"MISSING_INIT_ARGS: {e}", file=sys.stderr)
+    sys.exit(3)
   except LookupError as e:
     print(f"NO_ENTRY_POINT: {e}", file=sys.stderr)
     sys.exit(3)
@@ -773,6 +891,11 @@ def main():
   except MemoryError as e:
     print(f"TOO_LARGE: {e}", file=sys.stderr)
     sys.exit(5)
+  except input_spec.UnsupportedOutput as e:
+    # Not "would not run on CPU": it ran, and returned something no golden
+    # file can hold. Same degrade, but with the reason the source can fix.
+    print(f"DEGRADED: unsupported output: {e}", file=sys.stderr)
+    sys.exit(2)
   except Exception as e:  # pylint: disable=broad-except
     print(f"DEGRADED: the module would not run on CPU: {e}", file=sys.stderr)
     traceback.print_exc()

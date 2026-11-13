@@ -228,14 +228,16 @@ Requirements:
     decorator — the harness jits it.
 6.  **Shape-commented** on every intermediate: `# Shape: (batch, seq, hidden)`.
 7.  **Preserve the user's problem dimensions exactly** (general_rules #6).
-8.  **Data-dependent routing gets the static-shape form an engineer would
-    write, never a dense one.** For an MoE / top-k dispatch (`nonzero`,
-    `bincount`, `split` on `.tolist()`, per-expert Python loops), port it as
-    sort-by-expert + `jax.lax.ragged_dot` with `group_sizes`, per
-    `{{MAXKERNEL_ROOT}}/reference/tpu_moe_and_grouped_matmul.md` §2. Computing
-    every expert for every token and masking gives the same numbers at E/K
-    times the FLOPs, and as `base.py` it inflates every speedup the run reports
-    by that factor. Capacity-factor dispatch only if the source drops tokens.
+8.  **Keep the source's amount of work.** `base.py` is the denominator of
+    every speedup the run reports. Where the source does sparse, grouped or
+    data-dependent work (`nonzero`, `bincount`, `split` on `.tolist()`,
+    Python loops over groups), port it to the static-shape form an engineer
+    would write that still does only that work. Never compute everything and
+    mask: it gives the same numbers at a multiple of the FLOPs, and inflates
+    every speedup by the same factor. Do not buy static shapes with an
+    approximation the source does not make, such as dropping or truncating
+    elements to a fixed capacity. If `{{MAXKERNEL_ROOT}}/reference/` has a
+    guide for the pattern, use the baseline form it gives.
 
 ## Step 5: Verify your own port before you finish
 

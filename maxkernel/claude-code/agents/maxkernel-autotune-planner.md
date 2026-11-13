@@ -45,12 +45,11 @@ To prepare for autotuning, you must:
     BLOCK_N).
     -   **Multi-kernel files** (several `pallas_call`s, each in its own
         `<stage>_kernel`): kernels with different grid or block shapes get
-        **stage-prefixed placeholders** — `{UP_BLOCK_M}`, `{DOWN_BLOCK_N}`,
-        `{DW_BLOCK_K}` — so each can be tuned on its own. A value two stages
-        must agree on gets **one** shared placeholder used in both: e.g. the
-        row tile `tm` that the group metadata is built with and that the
-        grouped-matmul kernel then tiles by. Tuning those separately produces
-        configs that are wrong, not merely slow.
+        **stage-prefixed placeholders** — `{DX_BLOCK_M}`, `{DW_BLOCK_K}` — so
+        each can be tuned on its own. A value two stages must agree on gets
+        **one** shared placeholder used in both: e.g. a row tile that one
+        stage builds metadata with and another then tiles by. Tuning those
+        separately produces configs that are wrong, not merely slow.
 3.  Create a `code_template` which is the ENTIRE optimized kernel code, but
     replacing the specific parameter values with placeholders enclosed in
     curly braces (for example, if the parameter is BLOCK_M, use it enclosed
@@ -132,7 +131,7 @@ To prepare for autotuning, you must:
 ```
 
 For a multi-kernel file, set `kernel_name` to the stage names joined with `+`
-(e.g. `"up_proj_kernel+down_proj_kernel"`).
+(e.g. `"dx_kernel+dw_kernel"`).
 
 Note: `kernel_name` is kept for logging/traceability, but the harness always
 calls the fixed entry point names (`base_computation`/`opt_computation`) --

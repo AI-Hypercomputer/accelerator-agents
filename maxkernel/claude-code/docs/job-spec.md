@@ -85,7 +85,7 @@ sizes, run one job per size.
 
 Golden capture stores every parameter and buffer, once, however many configs
 you declare, plus each config's inputs and outputs. Large real-world parameter
-sets — a model's full weights, expert banks, embedding tables — can exceed the
+sets — a model's full weights, embedding tables — can exceed the
 capture's default 256 MB cap, and the capture then degrades to an unverified
 port. Do not shrink the config to fit: the declared dimensions are the problem.
 Raise the cap with `correctness.max_capture_bytes` instead. The tool's error

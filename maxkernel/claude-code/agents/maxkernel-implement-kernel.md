@@ -62,7 +62,7 @@ but actually have hidden failures.**
 4.  **BLOCK SPEC DIVISIBILITY & LANE PADDING:**
     - The trailing two dimensions of your block shape MUST be divisible by **8 and 128** respectively (e.g. bM x bK where bK is a multiple of 128).
     - If dimensions are ragged or not multiples of 128, apply lane-padding up to the nearest multiple of 128.
-    - **Ragged *groups* are different from ragged dimensions.** When rows are split into variable-size groups (MoE experts, a grouped GEMM), do not pad each group: scalar-prefetch the group metadata and mask straddling tiles, as `{{MAXKERNEL_ROOT}}/reference/tpu_moe_and_grouped_matmul.md` §3.B describes. Read that file before implementing any routed kernel.
+    - Variable-size row *groups* are not ragged dimensions: do not pad each group up to a tile. Handle group boundaries the way the plan specifies.
 
 5.  **EXPLICIT MEMORY SPACE ANNOTATIONS:**
     - Annotate tile references in `BlockSpec(memory_space=pltpu.MemorySpace.VMEM)` and scalar semaphores in `BlockSpec(memory_space=pltpu.MemorySpace.SMEM)` (requires `from jax.experimental.pallas import tpu as pltpu`).
@@ -179,16 +179,15 @@ Implement the optimized Pallas kernel by:
         -   **One `pallas_call`** (the usual case): a single function named
             exactly `kernel`.
         -   **Several `pallas_call`s**, only when the plan calls for them (e.g.
-            an MoE: up-projection and down-projection grouped matmuls, plus
-            dX and dW kernels in a backward): one function per stage, named
-            `<stage>_kernel` after what it computes (`up_proj_kernel`,
-            `down_proj_kernel`, `dw_kernel`). Do not split a computation into
-            several kernels the plan did not ask for.
+            stages with different grids, or separate dX and dW kernels in a
+            backward): one function per stage, named `<stage>_kernel` after
+            what it computes (`dx_kernel`, `dw_kernel`). Do not split a
+            computation into several kernels the plan did not ask for.
     2.  **`computation` function** (with exact name "computation") at module
         level - sets up parameters and invokes `pl.pallas_call` with the kernel
         function(s). In a multi-kernel file it orchestrates the stages in
-        order, and the plain XLA glue between them (`argsort`, `bincount`,
-        group metadata, `segment_sum`) lives here too. For a training-step
+        order, and the plain XLA glue between them (index computation,
+        metadata, reductions) lives here too. For a training-step
         `base.py`, `forward_pass` and `backward_pass` play this role and may
         each launch their own kernels.
 

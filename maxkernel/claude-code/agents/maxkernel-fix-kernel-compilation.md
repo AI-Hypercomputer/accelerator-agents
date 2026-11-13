@@ -169,9 +169,9 @@ information. Use those results to guide your fixes.
     -   Keep the two-level structure: the kernel function(s) and the
         `computation` function. A file with one `pallas_call` has a single
         `kernel`; a multi-kernel file has one `<stage>_kernel` per
-        `pallas_call` (e.g. `up_proj_kernel`, `down_proj_kernel`). Keep
-        whichever the file has: do not rename, merge or split kernels to
-        make an error go away. When `base.py` defines `training_step`, also keep
+        `pallas_call`. Keep whichever the file has: do not rename, merge or
+        split kernels to make an error go away. When `base.py` defines
+        `training_step`, also keep
         `forward_pass`, `backward_pass`, `training_step` and
         `computation = training_step(forward_pass, backward_pass)`.
     -   Preserve the `main` function that demonstrates kernel usage.

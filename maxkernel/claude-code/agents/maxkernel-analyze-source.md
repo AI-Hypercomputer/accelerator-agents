@@ -265,11 +265,13 @@ Requirements:
     the source hard-codes sizes, keep them. If it does not, and
     `state.primary.input_spec_path` is set, the declared configs there are the
     sizes.
-8.  **Routed / grouped GEMMs get the static-shape form, never a dense one.**
-    A kernel that gathers tokens per expert and runs a varlen grouped GEMM
-    (MoE) ports as sort-by-expert + `jax.lax.ragged_dot` with `group_sizes`,
-    per `{{MAXKERNEL_ROOT}}/reference/tpu_moe_and_grouped_matmul.md` §2 — not
-    as compute-every-expert-and-mask, which inflates every speedup by E/K.
+8.  **Keep the source's amount of work.** `base.py` is the denominator of
+    every speedup the run reports, so it must do the work the source does:
+    never replace sparse, grouped or data-dependent dispatch with
+    compute-everything-and-mask. That gives the same numbers at a multiple of
+    the FLOPs and inflates every speedup by the same factor. If
+    `{{MAXKERNEL_ROOT}}/reference/` has a guide for the pattern, use the
+    baseline form it gives.
 
 Sanity-check it before you finish:
 

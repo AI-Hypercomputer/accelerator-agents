@@ -386,7 +386,7 @@ def validate(job, job_path):
     if extraction is not None and method == "torchax":
       warnings.append(
         "input.extraction with jax_conversion.method 'torchax': torchax "
-        "cannot trace data-dependent shapes (MoE routing, .tolist(), "
+        "cannot trace data-dependent shapes (.tolist(), "
         "nonzero, boolean indexing), which code from the wild often has. If "
         "step 0 cannot run, the run falls back to llm_port; choose "
         "'llm_port' now if you know the source has them."

@@ -164,7 +164,7 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
         harness's job is to sample representative cases, not to define the
         universe of valid inputs.
 3.  **Baseline Architectural Analysis & First-Principles Protocol (for NEW plans):**
-    **Routed computations first:** if `base.py` (or the source) dispatches tokens to experts — top-k routing, `ragged_dot`, a grouped / varlen GEMM, gather-by-index into a matmul — read `{{MAXKERNEL_ROOT}}/reference/tpu_moe_and_grouped_matmul.md` before anything else, and use its §5 roofline (intensity ≈ T·K/E for the expert GEMMs) instead of a dense-GEMM estimate. Note its §3.C finding: megablox `gmm` alone does not beat `ragged_dot`, so a plan for an MoE must name the fusion (gather, GLU epilogue, router weighting) that is expected to win.
+    Estimate the work the computation actually does. When `base.py` does sparse, grouped or data-dependent work (indexed gathers, variable-size row groups), a dense estimate overstates it: check the **Reference Guides** list below for a guide on that pattern and take the roofline from it.
 
     For iteration 1, calculate theoretical arithmetic intensity (FLOPs/byte) using Section 1 of `{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md` and check against target TPU hardware limits. Adhere to Mosaic vector layout rules in Section 2 of `{{MAXKERNEL_ROOT}}/reference/tpu_mxu_and_register_optimization.md` (e.g. tiling last two dimensions to $8 \times 128$ VREGs, avoiding trailing singleton dimensions).
     
@@ -527,7 +527,7 @@ You have the following reference documents to help you:
     *   **Memory Optimization**: `{{MAXKERNEL_ROOT}}/reference/tpu_memory_overlapping.md` (for memory-bound kernels, access efficiency under tiled layouts, pipelining, double buffering, VMEM fusion).
     *   **Compute & Register Optimization**: `{{MAXKERNEL_ROOT}}/reference/tpu_mxu_and_register_optimization.md` (for compute-bound kernels, MXU queuing, VALU/MXU overlap, Mosaic vector layouts, register spill prevention).
     *   **XLA Interaction**: `{{MAXKERNEL_ROOT}}/reference/pallas_xla_interaction.md` (for manual fusion, cost estimates, async HLO execution).
-    *   **MoE & Grouped Matmul**: `{{MAXKERNEL_ROOT}}/reference/tpu_moe_and_grouped_matmul.md` (for routed / data-dependent computations: sort-by-expert, scalar-prefetched group metadata, megablox gmm/tgmm, what to fuse, MoE roofline and pitfalls).
+    *   **Grouped Matmul & Data-Dependent Routing**: `{{MAXKERNEL_ROOT}}/reference/tpu_moe_and_grouped_matmul.md` (read before planning when rows are split into variable-size groups that each use different weights, as in a mixture-of-experts layer: the static-shape baseline, roofline, what to fuse, and pitfalls. The plan must then state how group boundaries are handled, since the implementer follows the plan on that).
 
 ### Tool Usage
 

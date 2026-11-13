@@ -39,7 +39,7 @@ re-expressed and how you know it is equivalent.
     *   `entry_file` — the absolute path of the file holding the entry point,
         already resolved inside `original_path`. **Open this path as given;
         do not rebuild it from `entry_point`.**
-    *   `entry_name` — the class or function to reproduce, e.g. `MoE`
+    *   `entry_name` — the class or function to reproduce, e.g. `Layer`
     *   `entry_point` — the job's original spelling, for your rationale only
     *   `notes` — the user's instructions on which path / mode to reproduce
 *   `<run_dir>/input_spec.json` — the declared constructor arguments
@@ -130,7 +130,7 @@ and build each config's forward arguments from it, so:
     `state_dict` from the original loads into your `Model` (possibly through a
     documented key mapping). Keep the original's initialization scheme: the
     weights become captured inputs, but their scale decides the numerics (for
-    a router, which experts get picked).
+    a data-dependent selection, which elements get picked).
 *   **Never return `None`.** The capture tools flatten the output and reject
     `None` leaves. Return what the chosen path returns, minus anything `notes`
     says to drop, minus `None`s — and list what you dropped.
@@ -146,9 +146,9 @@ Fidelity rules:
     operations. Do not "clean up" an expression; a reordered reduction is a
     different number.
 *   **Keep the algorithm's structure.** Sparse dispatch stays sparse — do not
-    turn a routed MoE into a dense compute-every-expert-and-mask, even though
-    both give the same answer. The next phase ports *this file* to JAX and
-    tends to keep its shape.
+    replace it with compute-everything-and-mask, even though both give the
+    same answer. The next phase ports *this file* to JAX and tends to keep
+    its shape.
 *   **Data-dependent shapes are fine here.** `nonzero`, `bincount`, `split` on
     a `.tolist()` — keep them if the original has them. Making the computation
     TPU-friendly is the later phases' job, not yours.

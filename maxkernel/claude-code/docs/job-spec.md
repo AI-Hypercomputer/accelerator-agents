@@ -83,10 +83,14 @@ Each declared config is captured once (`--num-configs` does not apply), and
 arguments are shared by every config: one run is one model. To compare model
 sizes, run one job per size.
 
-Golden capture stores every parameter. Large real-world parameter sets — a
-model's full weights, expert banks, embedding tables — can exceed the capture's
-256 MB cap, and the capture then degrades to an unverified port. Pick a config whose weights fit
-if you want the port checked.
+Golden capture stores every parameter and buffer, once, however many configs
+you declare, plus each config's inputs and outputs. Large real-world parameter
+sets — a model's full weights, expert banks, embedding tables — can exceed the
+capture's default 256 MB cap, and the capture then degrades to an unverified
+port. Do not shrink the config to fit: the declared dimensions are the problem.
+Raise the cap with `correctness.max_capture_bytes` instead. The tool's error
+gives a lower bound on the bytes needed (it stops at the first config that
+does not fit), so leave headroom.
 
 ### `input.extraction` — code that cannot run as is
 
@@ -254,6 +258,7 @@ Two things to know about an `autodiff` run:
 | `correctness.atol` / `.rtol` | `1e-2` | Tolerances. The validator warns above `0.5`: a tolerance that loose accepts almost any output. |
 | `correctness.seed` | `1024` | Re-set before *each* model construction, which is how two modules come out with identical random weights without anything being copied. |
 | `correctness.num_trials` | `5` | Input sets per correctness check. |
+| `correctness.max_capture_bytes` | `256000000` | Ceiling, in bytes, on what the Phase 0.2 capture stores: parameters and buffers once, plus every config's inputs and outputs. Raise it when real weights exceed the default, rather than shrinking the config. A larger capture costs disk and host memory. |
 | `target.tpu_version` | from `tpu_config.json` | e.g. `"TPU v6e"`. |
 | `loop.max_iterations` | `5` | Optimization iterations. |
 | `evaluation.compare_against_source` | `false` | Also time the kernel against the **original PyTorch** on the TPU via `evaluation/compare_kernel.py`. Invalid for a CUDA input — a TPU host cannot execute CUDA. |

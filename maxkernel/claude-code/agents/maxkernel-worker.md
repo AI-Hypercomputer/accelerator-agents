@@ -170,6 +170,9 @@ from inside the loop.
         Each is `null` when undeclared; the capture tools then discover by
         convention. When set, they are passed to the capture tools in Phase
         0.2 verbatim — never re-derived.
+    -   `max_capture_bytes` = `state.max_capture_bytes` — `null` or absent
+        means the capture tools' default cap. When set, Phase 0.2 passes it as
+        `--max-bytes`.
     -   `primary.extraction` — `null`, or an object meaning the user's code
         cannot run as is and Phase 0.15 must extract a standalone source
         from it first.
@@ -392,6 +395,12 @@ Which tool produces the oracle depends on `state.reference_mode`:
     them is what stops the tool from guessing. With `--input-spec`, each
     declared config is captured once and `--num-configs` is ignored.
 
+    When `state.max_capture_bytes` is set (not `null` or absent), also pass
+    `--max-bytes <max_capture_bytes>` to whichever of the two tools you run,
+    including the fallback capture below. It is the user's ceiling on the
+    capture's size, from the job's `correctness.max_capture_bytes`; without
+    it the tools use their 256 MB default.
+
 3.  **Branch on the exit code. Each one means something different:**
 
     | exit | meaning | what you do |
@@ -400,7 +409,7 @@ Which tool produces the oracle depends on `state.reference_mode`:
     | 2 | torch missing, or the module will not run on CPU (from `capture_torch_golden.py`; from `torchax_oracle.py` see the fallback below) | **DEGRADE, do not abort.** Record `"golden_degraded": "<stderr reason>"` in state, leave the golden paths `null`, and continue. The run proceeds with today's self-comparison and the final report must say the port was never verified. |
     | 3 | no discoverable entry point, no input shapes, or constructor arguments missing (`MISSING_INIT_ARGS`) | STOP. Report the tool's message to the orchestrator: the user must name the entry point (`input.entry_point`), declare inputs (`input.configs`), or declare constructor arguments (`input.init_args` / `input.init_kwargs`). Do not guess any of them. |
     | 4 | `forward()` is non-deterministic | **DEGRADE**, exactly as for exit 2, recording the non-determinism as the reason. There is no golden value to capture; dropout or live RNG means no single correct answer exists. |
-    | 5 | capture exceeds `--max-bytes` | retry once with `--num-configs 1` (or, with `--input-spec`, add `--no-fp64-probe`); if it still exceeds, DEGRADE as for exit 2. Large real-world parameter sets (MoE expert weights) hit this; say so when degrading. |
+    | 5 | capture exceeds the byte cap (`--max-bytes`; 256 MB unless the job set `correctness.max_capture_bytes`) | retry once with `--num-configs 1` (or, with `--input-spec`, add `--no-fp64-probe`); if it still exceeds, DEGRADE as for exit 2. Never raise the cap yourself and never shrink the config: the cap is the user's setting and the shapes are the problem. Large real-world parameter sets hit this; when degrading, quote the tool's `TOO_LARGE` line, which gives a lower bound on the bytes it needs, so the user knows roughly what `correctness.max_capture_bytes` would let the port be checked. |
 
     A degraded capture is a real loss of assurance, not a formality. Append the
     reason to `<run_dir>/maxkernel_debug_history.md` so a later correctness

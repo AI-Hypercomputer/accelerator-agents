@@ -25,7 +25,8 @@ THE THREE HAZARDS IT IS BUILT AROUND
     arrive as an *argument*. Capturing inputs but not parameters makes the
     recorded outputs unreproducible noise. Every parameter and buffer is
     captured, in a stable order, and the manifest says which argument position
-    each one takes.
+    each one takes. They are stored once (`param/<name>`) and shared by every
+    config, since all configs run the same model.
 2.  **Determinism.** Dropout or any RNG live in `forward()` means there is no
     golden value to capture. `model.eval()` and `torch.no_grad()` handle the
     common case; a two-run bitwise probe catches the rest, and exits rather
@@ -658,6 +659,35 @@ def capture(
   manifest_configs = []
   total_bytes = 0
 
+  # Parameters and buffers belong to the model, not to a config: constructor
+  # arguments are shared, so every config runs the same weights. Store them
+  # once and let each config's manifest entry point at the shared key, so N
+  # configs do not cost N copies of the weights. Readers look arrays up through
+  # the manifest's `key`, so the sharing is invisible to them.
+  param_meta = []
+  for name, t in params.items():
+    array, meta = describe(f"param/{name}", t)
+    arrays[meta["key"]] = array
+    meta["role"] = "parameter"
+    meta["name"] = name
+    param_meta.append(meta)
+    total_bytes += meta["bytes"]
+  parameter_bytes = total_bytes
+
+  def check_cap():
+    if total_bytes > max_bytes:
+      raise MemoryError(
+        f"capture needs at least {total_bytes / 1e6:.1f} MB, over the "
+        f"{max_bytes / 1e6:.1f} MB cap. Parameters and buffers are "
+        f"{parameter_bytes / 1e6:.1f} MB of that, stored once for all "
+        "configs. Raise the cap with `correctness.max_capture_bytes` in the "
+        "job file (--max-bytes here), or capture fewer configs."
+      )
+
+  # Before any forward runs: weights that do not fit on their own will not
+  # fit after the inputs and outputs are added.
+  check_cap()
+
   for idx, args in enumerate(configs):
     dynamic, static = split_dynamic_static(args)
 
@@ -683,16 +713,11 @@ def capture(
       total_bytes += meta["bytes"]
 
     # Parameters follow the forward tensors, still as DYNAMIC arguments: the
-    # JAX `computation` has no `self` to read them from.
+    # JAX `computation` has no `self` to read them from. Every config lists
+    # them, at its own argument positions, pointing at the one stored copy.
     offset = len(dynamic)
-    for k, (name, t) in enumerate(params.items()):
-      array, meta = describe(f"cfg{idx}/param/{name}", t)
-      arrays[meta["key"]] = array
-      meta["role"] = "parameter"
-      meta["name"] = name
-      meta["argnum"] = offset + k
-      dyn_meta.append(meta)
-      total_bytes += meta["bytes"]
+    for k, meta in enumerate(param_meta):
+      dyn_meta.append({**meta, "argnum": offset + k})
 
     # Static arguments, in two groups: scalars passed to forward(), then
     # constructor scalars held on the module. Both are `static_argnums` on the
@@ -749,12 +774,7 @@ def capture(
       }
     )
 
-    if total_bytes > max_bytes:
-      raise MemoryError(
-        f"capture would need {total_bytes / 1e6:.1f} MB, over the "
-        f"{max_bytes / 1e6:.1f} MB cap. Re-run with a larger --max-bytes or "
-        "fewer --num-configs."
-      )
+    check_cap()
 
   manifest = {
     "source_path": str(Path(source_path).resolve()),
@@ -777,6 +797,7 @@ def capture(
     "numpy_version": np.__version__,
     "deterministic": True,
     "total_bytes": total_bytes,
+    "parameter_bytes": parameter_bytes,
     "configs": manifest_configs,
     "degraded": None,
   }
@@ -806,7 +827,14 @@ def main():
   )
   parser.add_argument("--seed", type=int, default=0)
   parser.add_argument("--num-configs", type=int, default=1)
-  parser.add_argument("--max-bytes", type=int, default=256_000_000)
+  parser.add_argument(
+    "--max-bytes",
+    type=int,
+    default=256_000_000,
+    help="ceiling on the captured arrays: parameters and buffers once, plus "
+    "every config's inputs and outputs. The job's "
+    "correctness.max_capture_bytes.",
+  )
   parser.add_argument(
     "--no-fp64-probe",
     action="store_true",

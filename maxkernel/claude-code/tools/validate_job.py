@@ -476,6 +476,20 @@ def validate(job, job_path):
         "almost any output and will not catch a real error"
       )
 
+  # The golden capture's byte cap. Optional: unset, the capture tools use
+  # their own default. Real weights can exceed that default, and shrinking the
+  # declared config to fit would change the problem, so the job may raise it.
+  max_capture = _get(job, "correctness.max_capture_bytes")
+  if max_capture is not None and (
+    not isinstance(max_capture, int)
+    or isinstance(max_capture, bool)
+    or max_capture <= 0
+  ):
+    errors.append(
+      "correctness.max_capture_bytes must be a positive integer number of "
+      f"bytes, got {max_capture!r}"
+    )
+
   iters = _get(job, "loop.max_iterations", 5)
   if not isinstance(iters, int) or iters < 1:
     errors.append(

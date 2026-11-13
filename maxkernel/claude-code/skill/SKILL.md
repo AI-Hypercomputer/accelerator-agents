@@ -237,6 +237,7 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
     | `jax_conversion.method` | `reference_mode` (`"torchax"` / `"llm_port"`) |
     | `jax_conversion.emit_readable_reference` | `emit_jnp_reference` |
     | `correctness.atol` / `.rtol` / `.seed` | `atol`, `rtol`, `seed` |
+    | `correctness.max_capture_bytes` | `max_capture_bytes`, verbatim; `null` when absent |
     | `target.tpu_version` | `tpu_version` |
     | `loop.max_iterations` | `max_iterations` |
     | `backward` | `backward`, copied as is except that `forward_context` becomes an absolute path. `null` when the job has no `backward`. |
@@ -535,6 +536,7 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
           "max_iterations": 5,
           "atol": 1e-2,
           "rtol": 1e-2,
+          "max_capture_bytes": null,
           "best_code_path": "{{MAXKERNEL_ROOT}}/workspace/<run_id>/base.py",
           "best_optimized_time": null,
           "best_speedup": null,
@@ -561,6 +563,10 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
         `input_spec_path` and `extraction` come from the job file (step 1b)
         and are `null` without one. They are the user's declarations, passed
         to the capture tools as flags; never fill them by guessing.
+    -   `max_capture_bytes` is the job's `correctness.max_capture_bytes`, or
+        `null`. The worker passes it to the Phase 0.2 capture as
+        `--max-bytes`; `null` leaves the tools' 256 MB default in force. Never
+        set it yourself: it is the user's ceiling.
     -   `reference_mode` and `emit_jnp_reference` come from step 3b. They are
         written once and never revised mid-run — except that the worker
         switches `reference_mode` from `"torchax"` to `"llm_port"` (recording
@@ -623,6 +629,7 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
         `port_verified` all `null`) and set `references: []`. A resumed run
         never acquires a reference it did not start with.
     -   If it has no `backward` key, set `"backward": null`.
+    -   If it has no `max_capture_bytes` key, set `"max_capture_bytes": null`.
     -   If `primary` lacks any of `entry_point`, `inputs_fn`,
         `init_inputs_fn`, `input_spec_path`, `extraction`, set the missing
         ones to `null`.

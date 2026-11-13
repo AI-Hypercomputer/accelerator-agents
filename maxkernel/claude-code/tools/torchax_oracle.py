@@ -532,7 +532,9 @@ def build(
     if total > max_bytes:
       raise MemoryError(
         f"oracle would need {total / 1e6:.1f} MB, over the "
-        f"{max_bytes / 1e6:.1f} MB cap; raise --max-bytes or lower --num-configs"
+        f"{max_bytes / 1e6:.1f} MB cap; raise it with "
+        "`correctness.max_capture_bytes` in the job file (--max-bytes here) "
+        "or lower --num-configs"
       )
 
   for name, arr in states.items():

@@ -62,9 +62,8 @@ from pathlib import Path
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 os.environ.setdefault("JAX_PLATFORMS", os.environ.get("JAX_PLATFORMS", "cpu"))
 
-import numpy as np  # noqa: E402
-
 import input_spec  # noqa: E402  (tools/, beside this file)
+import numpy as np  # noqa: E402
 
 # Step 0 compares torchax's conversion against eager PyTorch. How closely the
 # two can possibly agree is a property of the BACKEND, not of the conversion:
@@ -199,7 +198,9 @@ def _named_factory(ns, name, default):
   """Same rule as capture_torch_golden.py: missing is an error only if declared."""
   fn = ns.get(name or default)
   if name and not callable(fn):
-    raise LookupError(f"the declared function {name!r} is not defined in the source")
+    raise LookupError(
+      f"the declared function {name!r} is not defined in the source"
+    )
   return fn if callable(fn) else None
 
 
@@ -373,7 +374,9 @@ def validate_oracle(eager_outs, jax_outs, atol, rtol, backend_floor=1e-4):
           **dtype_entry,
         }
       )
-      value_failures.append(f"output {i}: shape {list(a.shape)} vs {list(b.shape)}")
+      value_failures.append(
+        f"output {i}: shape {list(a.shape)} vs {list(b.shape)}"
+      )
       continue
     diff = np.abs(a - b)
     denom = np.maximum(np.abs(a), 1e-30)
@@ -404,9 +407,13 @@ def validate_oracle(eager_outs, jax_outs, atol, rtol, backend_floor=1e-4):
   if not ok:
     problems = []
     if dtype_failures:
-      problems.append("different output dtype (" + "; ".join(dtype_failures) + ")")
+      problems.append(
+        "different output dtype (" + "; ".join(dtype_failures) + ")"
+      )
     if value_failures:
-      problems.append("values out of tolerance (" + "; ".join(value_failures) + ")")
+      problems.append(
+        "values out of tolerance (" + "; ".join(value_failures) + ")"
+      )
     report["reason"] = (
       "torchax's translation of this module does not reproduce eager "
       "PyTorch: " + " and ".join(problems) + ". It cannot serve as the "
@@ -441,7 +448,9 @@ def build(
 
   # Declared configs win over the source's factory, and are each built once.
   declared = input_spec.config_count(spec)
-  get_inputs = None if declared else _named_factory(ns, inputs_fn_name, "get_inputs")
+  get_inputs = (
+    None if declared else _named_factory(ns, inputs_fn_name, "get_inputs")
+  )
   if not declared and get_inputs is None:
     raise LookupError(
       "the source defines no get_inputs() and the job declares no "
@@ -624,9 +633,13 @@ def main():
     action="store_true",
     help="skip step 0. The oracle is then unvalidated -- say so downstream.",
   )
-  p.add_argument("--entry-point", help="nn.Module class to convert; skips discovery")
+  p.add_argument(
+    "--entry-point", help="nn.Module class to convert; skips discovery"
+  )
   p.add_argument("--inputs-fn", help="name of the forward-inputs factory")
-  p.add_argument("--init-inputs-fn", help="name of the constructor-inputs factory")
+  p.add_argument(
+    "--init-inputs-fn", help="name of the constructor-inputs factory"
+  )
   p.add_argument(
     "--input-spec",
     help="input_spec.json with declared constructor args and input configs",

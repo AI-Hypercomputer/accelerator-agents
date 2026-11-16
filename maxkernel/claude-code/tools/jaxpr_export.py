@@ -245,9 +245,13 @@ def main():
     default=400,
     help="warn above this; a whole-model jaxpr is not planning material",
   )
-  p.add_argument("--entry-point", help="nn.Module class to convert; skips discovery")
+  p.add_argument(
+    "--entry-point", help="nn.Module class to convert; skips discovery"
+  )
   p.add_argument("--inputs-fn", help="name of the forward-inputs factory")
-  p.add_argument("--init-inputs-fn", help="name of the constructor-inputs factory")
+  p.add_argument(
+    "--init-inputs-fn", help="name of the constructor-inputs factory"
+  )
   p.add_argument(
     "--input-spec",
     help="input_spec.json with declared constructor args and input configs",

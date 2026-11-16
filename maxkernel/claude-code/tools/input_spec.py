@@ -117,7 +117,9 @@ def validate_input_spec(spec, where="input"):
       continue
     inputs = cfg.get("inputs")
     if not isinstance(inputs, list) or not inputs:
-      errors.append(f"{cw}.inputs must be a non-empty list of forward arguments")
+      errors.append(
+        f"{cw}.inputs must be a non-empty list of forward arguments"
+      )
       continue
     for j, arg in enumerate(inputs):
       errors.extend(_validate_arg(arg, f"{cw}.inputs[{j}]"))
@@ -155,10 +157,12 @@ def _validate_arg(arg, aw):
     errors.append(
       f"{aw} is a {dtype} tensor with no `init`. Integer tensors are usually "
       "indices, and their valid range is part of the problem: give "
-      "`init: \"randint\"` with `low` and `high`, or `zeros`/`ones`."
+      '`init: "randint"` with `low` and `high`, or `zeros`/`ones`.'
     )
   elif init not in INIT_KINDS:
-    errors.append(f"{aw}.init must be one of {sorted(INIT_KINDS)}, got {init!r}")
+    errors.append(
+      f"{aw}.init must be one of {sorted(INIT_KINDS)}, got {init!r}"
+    )
   elif init in ("randn", "rand") and dtype not in FLOAT_DTYPES:
     errors.append(f"{aw}.init {init!r} needs a floating dtype, got {dtype!r}")
   elif init == "randint":
@@ -290,8 +294,11 @@ def output_leaves(out, path="output"):
   raise UnsupportedOutput(
     f"{path} is {type(out).__name__}; forward() may only return tensors, "
     "nested in lists, tuples or dicts. Drop it from the return value"
-    + (" (a None output, e.g. an aux loss that is None in inference mode)"
-       if out is None else "")
+    + (
+      " (a None output, e.g. an aux loss that is None in inference mode)"
+      if out is None
+      else ""
+    )
     + "."
   )
 
@@ -320,7 +327,9 @@ def resolve_entry(ns, name, source_module_name):
     return "module", obj
   if callable(obj):
     return "function", obj
-  raise LookupError(f"entry point {name!r} is neither an nn.Module nor callable")
+  raise LookupError(
+    f"entry point {name!r} is neither an nn.Module nor callable"
+  )
 
 
 def _smoke(args):
@@ -352,7 +361,9 @@ def _smoke(args):
   leaves = output_leaves(out)
   print(f"SMOKE_OK entry={args.entry_point} kind={kind}")
   for i, o in enumerate(leaves):
-    print(f"  out{i}: shape={list(o.shape)} dtype={str(o.dtype).replace('torch.', '')}")
+    print(
+      f"  out{i}: shape={list(o.shape)} dtype={str(o.dtype).replace('torch.', '')}"
+    )
 
 
 # What a self-contained JAX source may import besides the standard library.
@@ -433,7 +444,9 @@ def check_declared_inputs(spec, cases):
           f"config {i} {name}: shape {shape}, declared {list(arg['shape'])}"
         )
       if dtype not in (arg["dtype"], JAX_NARROWED.get(arg["dtype"])):
-        errors.append(f"config {i} {name}: dtype {dtype}, declared {arg['dtype']}")
+        errors.append(
+          f"config {i} {name}: dtype {dtype}, declared {arg['dtype']}"
+        )
     if len(static) < len(values):
       errors.append(
         f"config {i}: {len(static)} static argument(s), but the job "

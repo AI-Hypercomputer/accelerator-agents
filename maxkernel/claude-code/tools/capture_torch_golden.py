@@ -210,7 +210,9 @@ def _named_factory(ns, name, default):
   """The factory called `name`; missing is an error only if it was declared."""
   fn = ns.get(name or default)
   if name and not callable(fn):
-    raise LookupError(f"the declared function {name!r} is not defined in the source")
+    raise LookupError(
+      f"the declared function {name!r} is not defined in the source"
+    )
   return fn if callable(fn) else None
 
 

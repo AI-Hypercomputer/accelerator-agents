@@ -94,33 +94,47 @@ def resolve_extraction_entry(input_path, entry_point):
   if not sep:
     file_part, name = "", entry_point
   if not name:
-    return None, None, (
-      f"input.extraction.entry_point {entry_point!r} names no class or "
-      "function; the form is 'path/relative/to/input.path.py:Name'"
+    return (
+      None,
+      None,
+      (
+        f"input.extraction.entry_point {entry_point!r} names no class or "
+        "function; the form is 'path/relative/to/input.path.py:Name'"
+      ),
     )
 
   if input_path.is_file():
     if file_part not in ("", input_path.name):
-      return None, None, (
-        f"input.extraction.entry_point {entry_point!r}: input.path is the "
-        f"single file {input_path.name}, so the file part must be "
-        f"{input_path.name!r} or omitted ('{name}')"
+      return (
+        None,
+        None,
+        (
+          f"input.extraction.entry_point {entry_point!r}: input.path is the "
+          f"single file {input_path.name}, so the file part must be "
+          f"{input_path.name!r} or omitted ('{name}')"
+        ),
       )
     relpath, target = "", input_path
   else:
     if not file_part:
-      return None, None, (
-        f"input.extraction.entry_point {entry_point!r} has no file part, but "
-        f"input.path {input_path} is a directory; use "
-        "'path/relative/to/input.path.py:Name'"
+      return (
+        None,
+        None,
+        (
+          f"input.extraction.entry_point {entry_point!r} has no file part, but "
+          f"input.path {input_path} is a directory; use "
+          "'path/relative/to/input.path.py:Name'"
+        ),
       )
     relpath, target = file_part, input_path / file_part
     if not target.is_file():
       hint = ""
       parts = Path(file_part).parts
-      if len(parts) > 1 and parts[0] == input_path.name and (
-        input_path / Path(*parts[1:])
-      ).is_file():
+      if (
+        len(parts) > 1
+        and parts[0] == input_path.name
+        and (input_path / Path(*parts[1:])).is_file()
+      ):
         hint = (
           f" The path is relative to input.path, which already ends in "
           f"{input_path.name}/ -- use '{Path(*parts[1:]).as_posix()}:{name}'."
@@ -135,17 +149,25 @@ def resolve_extraction_entry(input_path, entry_point):
         if len(found) == 1:
           rel = found[0].relative_to(input_path).as_posix()
           hint = f" Did you mean '{rel}:{name}'?"
-      return None, None, (
-        f"input.extraction.entry_point {entry_point!r}: {target} does not "
-        f"exist.{hint}"
+      return (
+        None,
+        None,
+        (
+          f"input.extraction.entry_point {entry_point!r}: {target} does not "
+          f"exist.{hint}"
+        ),
       )
 
   top = name.split(".")[0]
   src = target.read_text(errors="replace")
   if not re.search(rf"^\s*(?:class|def)\s+{re.escape(top)}\b", src, re.M):
-    return None, None, (
-      f"input.extraction.entry_point {entry_point!r}: {target} defines no "
-      f"class or function named {top!r}"
+    return (
+      None,
+      None,
+      (
+        f"input.extraction.entry_point {entry_point!r}: {target} defines no "
+        f"class or function named {top!r}"
+      ),
     )
   return relpath, name, None
 
@@ -697,7 +719,9 @@ def build_plan(
   if configs:
     inputs_origin = f"input.configs ({len(configs)} declared)"
   elif itype == "specification":
-    inputs_origin = "synthesized source get_inputs(), from specification.tensors"
+    inputs_origin = (
+      "synthesized source get_inputs(), from specification.tensors"
+    )
   else:
     inputs_origin = f"source {_get(job, 'input.inputs_fn') or 'get_inputs'}()"
 

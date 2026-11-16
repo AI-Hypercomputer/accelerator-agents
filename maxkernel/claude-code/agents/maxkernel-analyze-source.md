@@ -262,7 +262,16 @@ Requirements:
 6.  **Shape-commented**, in the same style the rest of the loop uses:
     `# Shape: (batch, seq_len, hidden)` on every intermediate.
 7.  **Preserve the user's problem dimensions exactly** (general_rules #6). If
-    the source hard-codes sizes, keep them.
+    the source hard-codes sizes, keep them. If it does not, and
+    `state.primary.input_spec_path` is set, the declared configs there are the
+    sizes.
+8.  **Keep the source's amount of work.** `base.py` is the denominator of
+    every speedup the run reports, so it must do the work the source does:
+    never replace sparse, grouped or data-dependent dispatch with
+    compute-everything-and-mask. That gives the same numbers at a multiple of
+    the FLOPs and inflates every speedup by the same factor. If
+    `{{MAXKERNEL_ROOT}}/reference/` has a guide for the pattern, use the
+    baseline form it gives.
 
 Sanity-check it before you finish:
 

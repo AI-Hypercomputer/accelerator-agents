@@ -62,6 +62,7 @@ but actually have hidden failures.**
 4.  **BLOCK SPEC DIVISIBILITY & LANE PADDING:**
     - The trailing two dimensions of your block shape MUST be divisible by **8 and 128** respectively (e.g. bM x bK where bK is a multiple of 128).
     - If dimensions are ragged or not multiples of 128, apply lane-padding up to the nearest multiple of 128.
+    - Variable-size row *groups* are not ragged dimensions: do not pad each group up to a tile. Handle group boundaries the way the plan specifies.
 
 5.  **EXPLICIT MEMORY SPACE ANNOTATIONS:**
     - Annotate tile references in `BlockSpec(memory_space=pltpu.MemorySpace.VMEM)` and scalar semaphores in `BlockSpec(memory_space=pltpu.MemorySpace.SMEM)` (requires `from jax.experimental.pallas import tpu as pltpu`).
@@ -172,12 +173,23 @@ Implement the optimized Pallas kernel by:
 -   Preserve all initialization and setup code outside both the kernel and
     computation functions
 -   **Always use a two-level structure:**
-    1.  **`kernel` function** (with exact name "kernel") at module level -
-        contains the core computation logic that operates on memory references
-        (e.g., `x_ref`, `y_ref`, `z_ref`)
+    1.  **Kernel function(s)** at module level - contain the core computation
+        logic that operates on memory references (e.g., `x_ref`, `y_ref`,
+        `z_ref`):
+        -   **One `pallas_call`** (the usual case): a single function named
+            exactly `kernel`.
+        -   **Several `pallas_call`s**, only when the plan calls for them (e.g.
+            stages with different grids, or separate dX and dW kernels in a
+            backward): one function per stage, named `<stage>_kernel` after
+            what it computes (`dx_kernel`, `dw_kernel`). Do not split a
+            computation into several kernels the plan did not ask for.
     2.  **`computation` function** (with exact name "computation") at module
         level - sets up parameters and invokes `pl.pallas_call` with the kernel
-        function
+        function(s). In a multi-kernel file it orchestrates the stages in
+        order, and the plain XLA glue between them (index computation,
+        metadata, reductions) lives here too. For a training-step
+        `base.py`, `forward_pass` and `backward_pass` play this role and may
+        each launch their own kernels.
 
 ### Documentation Requirements (CRITICAL)
 
@@ -280,10 +292,12 @@ these Mosaic lowering constraints:
     resolve it rather than making assumptions or asking the user.
 -   If the plan seems to have issues or contradictions, attempt to resolve them
     or proceed with the most logical approach. Do not stop to ask the user.
--   DO NOT change code outside the `kernel` and `computation` functions unless
-    the plan explicitly specifies to do so
--   The `kernel` function must be named exactly "kernel" (not "mlp_kernel",
-    "matmul_kernel", etc.) and should be defined at module level
+-   DO NOT change code outside the kernel function(s) and `computation`
+    unless the plan explicitly specifies to do so
+-   A single-kernel file names its kernel exactly "kernel" (not
+    "mlp_kernel", "matmul_kernel", etc.). Only a file with several
+    `pallas_call`s uses `<stage>_kernel` names, one per stage. Every kernel
+    function is defined at module level
 -   The `computation` function must be named exactly "computation" (not
     "mlp_computation", "matmul_computation", etc.) and should be defined at
     module level
@@ -341,12 +355,13 @@ if __name__ == "__main__":
 1.  Read the plan file to understand the optimization strategy
 2.  Read the source kernel to understand the current implementation
 3.  Apply the optimizations from the plan:
-    -   Define the `kernel` function at module level
+    -   Define the `kernel` function (or, for a multi-kernel plan, each
+        `<stage>_kernel` function) at module level
     -   Set up the specified block sizes in the `computation` function
     -   Create the `pallas_call` invocation with the planned memory operations
     -   Configure the grid_spec, in_specs, and out_specs as specified
     -   Add any special optimizations (zero initialization guards, accumulation,
-        etc.) in the `kernel` function
+        etc.) in the kernel function(s)
     -   **CRITICAL:** Add a `main` function that:
         -   Creates sample inputs
         -   First tests the computation without JIT to verify basic compilation
@@ -407,7 +422,8 @@ Before you call `write_to_file`, verify your implementation has:
 
 -   ✅ **NO try-except blocks** - This is critical for validation
 -   ✅ **NO error handling** - Let errors surface naturally
--   ✅ `kernel` function at module level
+-   ✅ `kernel` function at module level, or one `<stage>_kernel` per
+    `pallas_call` when the plan calls for several
 -   ✅ `computation` function at module level
 -   ✅ When `base.py` defines `training_step`: `forward_pass`, `backward_pass`,
     and `computation = training_step(forward_pass, backward_pass)`

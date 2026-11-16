@@ -74,6 +74,12 @@ Proceed to read it with `Read` (to learn its signature and shapes -- not to copy
     anything but `"jax"`, `base.py` is a port, and the canonical shapes live
     in the *original* source, not in it.
 
+    When it is `"jax"` and `state.primary.extraction` is set, `base.py` is an
+    extracted source the user approved, and its own `get_inputs()` is part of
+    what they approved: it builds the configs the job declared and initializes
+    the parameters the way the original does. Reproduce its cases exactly —
+    same arrays, same PRNG keys, same order — and nothing else.
+
     **Prefer recorded shapes over described ones.** When
     `state.primary.golden_meta_path` is set, read that JSON first
     (`<run_dir>/torch_golden.json`). It is not a description of the inputs --
@@ -90,8 +96,14 @@ Proceed to read it with `Read` (to learn its signature and shapes -- not to copy
     `argnum` order and the same dtypes. This is the one place in the loop where
     the shapes are known rather than inferred.
 
-    Only when the manifest is absent (a `cuda` primary, or a degraded golden
-    capture) fall back to prose: read `state.primary.context_path` -- Section 2
+    When the manifest is absent (a `cuda` primary, or a degraded golden
+    capture) but `state.primary.input_spec_path` is set, the user declared the
+    inputs in the job file: build one config per entry of its `configs[]`, with
+    each forward input's `shape` and `dtype` exactly as declared (integer
+    inputs within their declared `low`/`high`). The parameter shapes follow
+    from its `init_args` / `init_kwargs` and the context brief.
+
+    Only when neither exists fall back to prose: read `state.primary.context_path` -- Section 2
     lists every tensor's shape and dtype, and Section 3 gives the argument
     contract. Reuse those shapes and dtypes exactly; translate `torch` dtypes
     to their `jnp` equivalents and nothing more. Never substitute your own

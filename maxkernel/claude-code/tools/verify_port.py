@@ -134,18 +134,60 @@ def build_args(npz, config):
   return tuple(slots[i] for i in sorted(slots))
 
 
+# When atol is not small next to the output's own scale, the elementwise test
+# |a - e| <= atol + rtol*|e| accepts almost anything: with small-init weights
+# (outputs ~2.5e-3 RMS) and atol=1e-2, an all-zeros port and a port with the
+# GLU gate and up halves swapped both passed. Past this ratio a scale-free
+# check is added: the relative L2 error ||a - e|| / ||e|| must stay under
+# max(rtol, REL_L2_LIMIT). Zeros score 1.0 and a swapped gate O(1); bf16
+# rounding noise stays far below 0.05.
+SWAMP_RATIO = 0.1
+REL_L2_LIMIT = 0.05
+
+
+def scale_check(exp, act, atol, rtol):
+  """The relative-L2 guard for a floating output, or None when not needed."""
+  if not np.issubdtype(exp.dtype, np.floating) or exp.size == 0:
+    return None
+  rms = float(np.sqrt(np.mean(exp * exp)))
+  if rms == 0.0 or atol <= SWAMP_RATIO * rms:
+    return None
+  rel_l2 = float(np.linalg.norm(act - exp) / np.linalg.norm(exp))
+  limit = max(rtol, REL_L2_LIMIT)
+  return {
+    "output_rms": rms,
+    "atol_over_rms": atol / rms,
+    "rel_l2_error": rel_l2,
+    "rel_l2_limit": limit,
+    "ok": rel_l2 <= limit,
+    "warning": (
+      f"atol={atol:g} is {atol / rms:.1f}x the expected output's RMS "
+      f"({rms:.3e}), so the elementwise check alone is close to vacuous; "
+      f"relative L2 error {rel_l2:.3e} checked against {limit:g}"
+    ),
+  }
+
+
+def _as_float64(x):
+  """float64 for numeric arrays, including ml_dtypes floats.
+
+  ml_dtypes' bfloat16 / float8 have numpy kind 'V', so np.issubdtype(...,
+  np.number) is False for them. Testing only that left bf16 outputs in bf16:
+  the elementwise diff was computed in bf16, and scale_check saw a
+  non-floating dtype and skipped the relative-L2 guard entirely.
+  """
+  arr = np.asarray(x)
+  if np.issubdtype(arr.dtype, np.number) or arr.dtype.name in RAW_BIT_DTYPES:
+    return arr.astype(np.float64)
+  return arr
+
+
 def compare(expected, actual, atol, rtol):
-  """Elementwise comparison with the worst offender located, not just counted."""
-  exp = (
-    np.asarray(expected, dtype=np.float64)
-    if np.issubdtype(np.asarray(expected).dtype, np.number)
-    else np.asarray(expected)
-  )
-  act = (
-    np.asarray(actual, dtype=np.float64)
-    if np.issubdtype(np.asarray(actual).dtype, np.number)
-    else np.asarray(actual)
-  )
+  """Elementwise comparison with the worst offender located, not just counted.
+
+  Plus the relative-L2 guard when atol swamps the output's scale.
+  """
+  exp, act = _as_float64(expected), _as_float64(actual)
 
   if exp.shape != act.shape:
     return {
@@ -157,6 +199,7 @@ def compare(expected, actual, atol, rtol):
   tol = atol + rtol * np.abs(exp)
   bad = diff > tol
   n_bad = int(bad.sum())
+  scale = scale_check(exp, act, atol, rtol)
   worst_flat = int(np.argmax(diff - tol)) if diff.size else 0
   worst_index = (
     list(map(int, np.unravel_index(worst_flat, diff.shape)))
@@ -165,7 +208,8 @@ def compare(expected, actual, atol, rtol):
   )
 
   return {
-    "ok": n_bad == 0,
+    "ok": n_bad == 0 and (scale is None or scale["ok"]),
+    "scale_check": scale,
     "elements": int(diff.size),
     "failing_elements": n_bad,
     "failing_fraction": float(n_bad / diff.size) if diff.size else 0.0,
@@ -192,6 +236,18 @@ def diagnose(results):
         f"output {r['index']}: {r['reason']} -- the port's output structure "
         "does not match the source's. Check the return signature and whether "
         "an output was transposed, split or merged."
+      )
+      continue
+    sc = r.get("scale_check")
+    if sc and not sc["ok"] and r["failing_elements"] == 0:
+      hints.append(
+        f"output {r['index']}: every element is within atol, but atol is "
+        f"{sc['atol_over_rms']:.1f}x the output's RMS and the relative L2 "
+        f"error is {sc['rel_l2_error']:.3e} (limit {sc['rel_l2_limit']:g}). "
+        "The port computes something of the right scale but the wrong values "
+        "-- a wrong operation, swapped operands or weight halves, a missing "
+        "term. A relative L2 near 1.0 means the port's output is unrelated "
+        "to, or zero against, the source's."
       )
       continue
     frac = r["failing_fraction"]
@@ -278,8 +334,16 @@ def verify(base_path, golden_npz, golden_meta, atol, rtol):
     if not cr["ok"]:
       hints.extend(diagnose(cr["outputs"]))
 
+  scale_warnings = [
+    f"config {cr['index']} output {r['index']}: {r['scale_check']['warning']}"
+    for cr in config_reports
+    for r in cr["outputs"]
+    if r.get("scale_check")
+  ]
+
   return {
     "port_verified": all_ok,
+    "scale_warnings": scale_warnings,
     "base_path": str(Path(base_path).resolve()),
     "golden_npz": str(Path(golden_npz).resolve()),
     "atol": atol,
@@ -347,6 +411,17 @@ for cfg in _MANIFEST["configs"]:
       ok = False
       print("MISMATCH out%d: %d/%d elements, max_abs_diff %.6e"
             % (j, bad, d.size, float(d.max())))
+    # Relative-L2 guard, same rule as scale_check() in verify_port.py.
+    rms = float(np.sqrt(np.mean(exp * exp))) if exp.size else 0.0
+    if om["dtype"].startswith(("float", "bfloat")):
+      if rms > 0.0 and ATOL > {swamp_ratio!r} * rms:
+        rel = float(np.linalg.norm(act - exp) / np.linalg.norm(exp))
+        lim = max(RTOL, {rel_l2_limit!r})
+        print("SCALE_WARNING out%d: atol is %.1fx the output RMS %.3e; "
+              "relative L2 %.3e vs limit %g" % (j, ATOL / rms, rms, rel, lim))
+        if rel > lim:
+          ok = False
+          print("MISMATCH out%d: relative L2 error %.3e > %g" % (j, rel, lim))
 print("PORT_CORRECTNESS: %s" % ok)
 """
 
@@ -364,6 +439,8 @@ def build_tpu_script(base_path, golden_npz, golden_meta, atol, rtol):
     blob=blob,
     atol=atol,
     rtol=rtol,
+    swamp_ratio=SWAMP_RATIO,
+    rel_l2_limit=REL_L2_LIMIT,
     base_src=Path(base_path).read_text(),
   )
   return script, len(blob)
@@ -570,6 +647,8 @@ def main():
     Path(args.out).write_text(json.dumps(report, indent=2) + "\n")
   if warning:
     print(f"WARNING: {warning}\n", file=sys.stderr)
+  for w in report["scale_warnings"]:
+    print(f"WARNING: {w}", file=sys.stderr)
 
   if report["port_verified"]:
     n = sum(len(c["outputs"]) for c in report["configs"])
@@ -586,6 +665,14 @@ def main():
         continue
       if "reason" in r:
         print(f"  config {cr['index']} output {r['index']}: {r['reason']}")
+      elif r["failing_elements"] == 0 and r.get("scale_check"):
+        sc = r["scale_check"]
+        print(
+          f"  config {cr['index']} output {r['index']}: all elements within "
+          f"atol, but relative L2 error {sc['rel_l2_error']:.3e} > "
+          f"{sc['rel_l2_limit']:g} (atol is {sc['atol_over_rms']:.1f}x the "
+          "output RMS)"
+        )
       else:
         print(
           f"  config {cr['index']} output {r['index']}: "

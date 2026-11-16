@@ -166,8 +166,12 @@ information. Use those results to guide your fixes.
     -   **Consider the progression of errors** - if the same type of error
         persists, try a different approach.
 3.  **Maintain Structure:**
-    -   Keep the two-level structure: `kernel` function and `computation`
-        function. When `base.py` defines `training_step`, also keep
+    -   Keep the two-level structure: the kernel function(s) and the
+        `computation` function. A file with one `pallas_call` has a single
+        `kernel`; a multi-kernel file has one `<stage>_kernel` per
+        `pallas_call`. Keep whichever the file has: do not rename, merge or
+        split kernels to make an error go away. When `base.py` defines
+        `training_step`, also keep
         `forward_pass`, `backward_pass`, `training_step` and
         `computation = training_step(forward_pass, backward_pass)`.
     -   Preserve the `main` function that demonstrates kernel usage.
@@ -194,8 +198,9 @@ Use the `write_to_file` tool to overwrite `<run_dir>/iter<N>/optimized.py`.
 The fixed kernel MUST include:
 
 -   All necessary imports.
--   The `kernel` function with correct Pallas syntax.
--   The `computation` function that calls `pl.pallas_call`.
+-   The kernel function(s) with correct Pallas syntax: `kernel`, or each
+    `<stage>_kernel` of a multi-kernel file.
+-   The `computation` function that calls `pl.pallas_call` (once per kernel).
 -   A `main` function that:
     -   Creates sample input arrays.
     -   Calls the computation function.

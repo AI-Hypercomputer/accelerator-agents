@@ -38,18 +38,24 @@ def moe_ffn(x, w_router, w_gate, w_up, w_down, top_k):
   # x:[T,H]  w_router:[H,E]  w_gate,w_up:[E,H,I]  w_down:[E,I,H]
   T, E = x.shape[0], w_router.shape[1]
   probs = jax.nn.softmax((x @ w_router).astype(jnp.float32), axis=-1)
-  topk_w, topk_e = jax.lax.top_k(probs, top_k)             # [T,K], [T,K]
-  flat_e = topk_e.reshape(-1)                               # [M]
-  order = jnp.argsort(flat_e, stable=True)                  # expert-contiguous
-  tok = order // top_k                                      # source token per sorted row
+  topk_w, topk_e = jax.lax.top_k(probs, top_k)  # [T,K], [T,K]
+  flat_e = topk_e.reshape(-1)  # [M]
+  order = jnp.argsort(flat_e, stable=True)  # expert-contiguous
+  tok = order // top_k  # source token per sorted row
   group_sizes = jnp.bincount(flat_e, length=E).astype(jnp.int32)
-  xs = x[tok]                                               # [M,H] gathered copy
-  g = jax.lax.ragged_dot(xs, w_gate, group_sizes, preferred_element_type=jnp.float32)
-  u = jax.lax.ragged_dot(xs, w_up, group_sizes, preferred_element_type=jnp.float32)
-  h = (jax.nn.silu(g) * u).astype(x.dtype)                  # [M,I]
-  y = jax.lax.ragged_dot(h, w_down, group_sizes, preferred_element_type=jnp.float32)
-  y = y * topk_w.reshape(-1)[order][:, None]                # router weight per row
-  out = jax.ops.segment_sum(y, tok, num_segments=T)         # or zeros.at[tok].add(y)
+  xs = x[tok]  # [M,H] gathered copy
+  g = jax.lax.ragged_dot(
+    xs, w_gate, group_sizes, preferred_element_type=jnp.float32
+  )
+  u = jax.lax.ragged_dot(
+    xs, w_up, group_sizes, preferred_element_type=jnp.float32
+  )
+  h = (jax.nn.silu(g) * u).astype(x.dtype)  # [M,I]
+  y = jax.lax.ragged_dot(
+    h, w_down, group_sizes, preferred_element_type=jnp.float32
+  )
+  y = y * topk_w.reshape(-1)[order][:, None]  # router weight per row
+  out = jax.ops.segment_sum(y, tok, num_segments=T)  # or zeros.at[tok].add(y)
   return out.astype(x.dtype)
 ```
 

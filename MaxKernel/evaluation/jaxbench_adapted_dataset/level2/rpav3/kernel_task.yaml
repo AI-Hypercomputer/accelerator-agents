@@ -1,0 +1,263 @@
+task_id: rpav3_Ragged_Paged_Attention
+description: >-
+  Ragged paged attention v3 (tpu-inference) for a Meta-Llama-3 8B-class
+  attention layer on TPU v6e-1, sized for continuous-batching inference. The
+  eight configurations are the serving sweep from the RPA v3 config table:
+  four (input_len, output_len, num_requests, max_num_batched_tokens,
+  max_num_seqs) points, each run twice -- once with a bfloat16 KV cache and
+  once with a float8_e4m3fn KV cache. Queries are bfloat16 throughout.
+
+  Each point is turned into a single kernel invocation whose sequence mix is
+  the steady state that scheduler config produces: the token budget
+  (max_num_batched_tokens) is spent on decodes, on chunked-prefill chunks, or
+  on a mix of both, and `distribution` marks the split. Sequences [0:i) are
+  decode-only, [i:j) are chunked-prefill-only, [j:k) are mixed; k is the
+  number of active sequences, and kv_lens / cu_q_lens / page_indices are
+  padded out to max_num_seqs beyond that.
+
+  computation() receives, in order:
+    queries      bf16[max_num_batched_tokens, 32, 128]
+    keys         kv_dtype[max_num_batched_tokens, 8, 128]
+    values       kv_dtype[max_num_batched_tokens, 8, 128]
+    kv_cache     kv_dtype[total_num_pages, page_size,
+                          num_kv_heads_x2 // kv_packing, kv_packing, 128]
+    kv_lens      i32[max_num_seqs]
+    page_indices i32[max_num_seqs * pages_per_seq]
+    cu_q_lens    i32[max_num_seqs + 1]
+    distribution i32[3]
+  followed by the static values sm_scale, use_causal_mask, q_scale, k_scale
+  and v_scale. It returns (output, updated_kv_cache), matching
+  ref_ragged_paged_attention in kernel.py.
+
+  Assumptions worth knowing: the model row reads "Meta-Llama-3-4B/8B", so the
+  8B GQA geometry is used (32 query heads, 8 KV heads, head_dim 128, 32
+  layers -- multiply per-call latency by 32 for the layer budget). page_size
+  is 128, the tpu-inference default. The fp8 cases carry per-tensor
+  q/k/v scales of 1/8, which keeps q/q_scale inside the float8_e4m3fn range
+  for unit-normal inputs; the scale value only rescales the result, so any
+  positive value exercises the same code path. total_num_pages is sized to
+  exactly cover the active sequences rather than max_num_seqs * pages_per_seq,
+  because the latter would put multiple GB of KV cache on the chip for the
+  512-sequence configs and all eight cases are materialised at once.
+input_gen_code: |-
+  def get_inputs():
+      import math
+
+      import jax
+      import jax.numpy as jnp
+      import numpy as np
+
+      # -------------------------------------------------------------------
+      # Meta-Llama-3 8B attention geometry (GQA).
+      # -------------------------------------------------------------------
+      H_Q = 32
+      H_KV = 8
+      D = 128
+      PAGE_SIZE = 128
+      SM_SCALE = 1.0 / math.sqrt(D)
+
+      Q_DTYPE = jnp.bfloat16
+      FP8 = jnp.float8_e4m3fn
+      # Per-tensor scale for the fp8 KV-cache configs. q / q_scale must stay
+      # inside the float8_e4m3fn range (+/-448); with unit-normal q, 1/8
+      # leaves ~50x of headroom.
+      FP8_SCALE = 0.125
+
+      def packing(dtype):
+          # 32 // bitwidth, matching util.get_dtype_packing.
+          return 32 // (jnp.dtype(dtype).itemsize * 8)
+
+      def align_to(x, a):
+          return -(-x // a) * a
+
+      def cdiv(a, b):
+          return -(-a // b)
+
+      def build_case(
+          max_num_tokens,
+          max_num_seqs,
+          q_lens,
+          kv_lens,
+          num_decode,
+          num_prefill,
+          kv_dtype,
+          seed,
+      ):
+          num_seqs = len(q_lens)
+          assert len(kv_lens) == num_seqs
+          assert num_decode + num_prefill == num_seqs
+          # The kernel requires 0 < q_len <= kv_len for every active sequence.
+          assert all(0 < q <= k for q, k in zip(q_lens, kv_lens))
+          assert sum(q_lens) <= max_num_tokens
+          assert num_seqs <= max_num_seqs
+
+          keys_rng = jax.random.split(jax.random.key(seed), 4)
+
+          pages_per_seq = max(cdiv(max(kv_lens), PAGE_SIZE), 1)
+          # One distinct block of pages per active sequence: the reference
+          # writes the new KV back into the cache, so sequences must not
+          # share pages.
+          total_num_pages = num_seqs * pages_per_seq
+
+          kv_packing = packing(kv_dtype)
+          num_kv_heads_x2 = align_to(H_KV * 2, kv_packing)
+          head_dim = align_to(D, 128)
+          assert PAGE_SIZE % kv_packing == 0
+
+          queries = jax.random.normal(
+              keys_rng[0], (max_num_tokens, H_Q, D), jnp.float32
+          ).astype(Q_DTYPE)
+          keys = jax.random.normal(
+              keys_rng[1], (max_num_tokens, H_KV, D), jnp.float32
+          ).astype(kv_dtype)
+          values = jax.random.normal(
+              keys_rng[2], (max_num_tokens, H_KV, D), jnp.float32
+          ).astype(kv_dtype)
+          kv_cache = jax.random.normal(
+              keys_rng[3],
+              (
+                  total_num_pages,
+                  PAGE_SIZE,
+                  num_kv_heads_x2 // kv_packing,
+                  kv_packing,
+                  head_dim,
+              ),
+              jnp.float32,
+          ).astype(kv_dtype)
+
+          # kv_lens / cu_q_lens are only valid up to num_seqs; pad the rest.
+          kv_lens_arr = np.zeros(max_num_seqs, np.int32)
+          kv_lens_arr[:num_seqs] = np.asarray(kv_lens, np.int32)
+
+          cu = np.zeros(max_num_seqs + 1, np.int32)
+          cu[1 : num_seqs + 1] = np.cumsum(np.asarray(q_lens, np.int32))
+          cu[num_seqs + 1 :] = cu[num_seqs]
+
+          # Shuffle the page pool so the lookup table is not contiguous, the
+          # way a real block manager hands out pages.
+          perm = np.random.default_rng(seed).permutation(total_num_pages)
+          page_indices = np.zeros(max_num_seqs * pages_per_seq, np.int32)
+          for i in range(num_seqs):
+              lo = i * pages_per_seq
+              page_indices[lo : lo + pages_per_seq] = perm[
+                  lo : lo + pages_per_seq
+              ]
+
+          # [decode_end, prefill_end, num_seqs]: no mixed-mode sequences in
+          # this suite, so the last two entries coincide.
+          distribution = np.asarray(
+              [num_decode, num_seqs, num_seqs], np.int32
+          )
+
+          is_fp8 = jnp.dtype(kv_dtype) == jnp.dtype(FP8)
+          scale = FP8_SCALE if is_fp8 else None
+
+          dynamic_args = [
+              queries,
+              keys,
+              values,
+              kv_cache,
+              jnp.asarray(kv_lens_arr),
+              jnp.asarray(page_indices),
+              jnp.asarray(cu),
+              jnp.asarray(distribution),
+          ]
+          static_args = [SM_SCALE, True, scale, scale, scale]
+          return dynamic_args, static_args
+
+      # -------------------------------------------------------------------
+      # The four scheduler points from the config table. Each becomes one
+      # batch composition; the kv dtype is swapped for cases 4-7.
+      # -------------------------------------------------------------------
+      def case_0(kv_dtype, seed):
+          # in=20 out=20 reqs=20 max_tokens=16 max_seqs=16.
+          # The 16-token budget is exactly 16 concurrent decodes.
+          n = 16
+          return build_case(
+              max_num_tokens=16,
+              max_num_seqs=16,
+              q_lens=[1] * n,
+              kv_lens=[20 + i for i in range(n)],
+              num_decode=n,
+              num_prefill=0,
+              kv_dtype=kv_dtype,
+              seed=seed,
+          )
+
+      def case_1(kv_dtype, seed):
+          # in=30 out=30 reqs=1000 max_tokens=128 max_seqs=128.
+          # Prompts are shorter than the budget, so prefills are admitted
+          # whole alongside decodes: 38 decodes + 3 x 30-token prefills.
+          n_dec, n_pre = 38, 3
+          return build_case(
+              max_num_tokens=128,
+              max_num_seqs=128,
+              q_lens=[1] * n_dec + [30] * n_pre,
+              kv_lens=[31 + i for i in range(n_dec)] + [30] * n_pre,
+              num_decode=n_dec,
+              num_prefill=n_pre,
+              kv_dtype=kv_dtype,
+              seed=seed,
+          )
+
+      def case_2(kv_dtype, seed):
+          # in=1800 out=128 reqs=1000 max_tokens=512 max_seqs=512.
+          # Prefill-bound: a 1800-token prompt is four 512-token chunks, and
+          # one chunk fills the budget on its own. This is the third chunk,
+          # so 1024 tokens of context are already cached.
+          return build_case(
+              max_num_tokens=512,
+              max_num_seqs=512,
+              q_lens=[512],
+              kv_lens=[1536],
+              num_decode=0,
+              num_prefill=1,
+              kv_dtype=kv_dtype,
+              seed=seed,
+          )
+
+      def case_3(kv_dtype, seed):
+          # in=1000 out=1000 reqs=1000 max_tokens=512 max_seqs=512.
+          # Long-context steady state. KV capacity, not max_num_seqs, caps
+          # concurrency here, so the batch is 64 long-context decodes plus
+          # one 448-token prefill chunk -- 512 tokens total.
+          n_dec = 64
+          return build_case(
+              max_num_tokens=512,
+              max_num_seqs=512,
+              q_lens=[1] * n_dec + [448],
+              kv_lens=[1000 + 15 * i for i in range(n_dec)] + [448],
+              num_decode=n_dec,
+              num_prefill=1,
+              kv_dtype=kv_dtype,
+              seed=seed,
+          )
+
+      builders = [case_0, case_1, case_2, case_3]
+      cases = []
+      # 0-3: bfloat16 KV cache. 4-7: float8_e4m3fn KV cache.
+      for kv_dtype in (jnp.bfloat16, FP8):
+          for i, builder in enumerate(builders):
+              cases.append(builder(kv_dtype, seed=100 + i))
+      return cases
+
+# Cases 0-3 run a bf16 KV cache; 4-7 run float8_e4m3fn, where the fp8
+# accumulation order costs about an extra half decimal digit.
+rtol:
+  - 0.01
+  - 0.01
+  - 0.01
+  - 0.01
+  - 0.05
+  - 0.05
+  - 0.05
+  - 0.05
+atol:
+  - 0.01
+  - 0.01
+  - 0.01
+  - 0.01
+  - 0.05
+  - 0.05
+  - 0.05
+  - 0.05

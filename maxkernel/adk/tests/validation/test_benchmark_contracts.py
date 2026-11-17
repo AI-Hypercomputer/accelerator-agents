@@ -6,7 +6,7 @@ from typing import List
 
 import pytest
 
-EVALUATION_DIR = Path(__file__).resolve().parents[2] / "evaluation"
+EVALUATION_DIR = Path(__file__).resolve().parents[3] / "evaluation"
 DATASET_DIR = EVALUATION_DIR / "jaxbench_adapted_dataset"
 
 

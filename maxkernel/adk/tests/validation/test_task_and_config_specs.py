@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 ADK_DIR = Path(__file__).resolve().parents[2]
-EVALUATION_DIR = ADK_DIR / "evaluation"
+EVALUATION_DIR = ADK_DIR.parent / "evaluation"
 
 DEFAULT_MIN_VMEM_LIMIT_BYTES = (
   67_108_864  # 64 MiB for complex attention kernels

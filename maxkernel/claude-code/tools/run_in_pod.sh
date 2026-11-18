@@ -202,12 +202,12 @@ fi
 # 3. Start local TPU daemon if not already healthy
 if [ "$DRY_RUN" = "true" ]; then
   echo "[dry-run] Checking TPU server health on 127.0.0.1:${TPU_PORT}/health"
-  echo "[dry-run] Starting TPU daemon if unhealthy: python3 ${MK_ROOT}/server/tpu_server.py --port=${TPU_PORT} &"
+  echo "[dry-run] Starting TPU daemon if unhealthy: python3 ${MK_ROOT}/server/tpu_server.py --host=127.0.0.1 --port=${TPU_PORT} &"
   echo "[dry-run] Polling 127.0.0.1:${TPU_PORT}/health until healthy (up to 30s)"
 else
   if ! check_tpu_health; then
     echo "Starting TPU server on port ${TPU_PORT}..."
-    python3 "${MK_ROOT}/server/tpu_server.py" --port="${TPU_PORT}" &
+    python3 "${MK_ROOT}/server/tpu_server.py" --host=127.0.0.1 --port="${TPU_PORT}" &
     TPU_SERVER_PID=$!
 
     healthy=0

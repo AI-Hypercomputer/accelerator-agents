@@ -86,7 +86,8 @@ class TestRunInPod(unittest.TestCase):
       "[dry-run] Checking TPU server health on 127.0.0.1:5555/health", output
     )
     self.assertIn("tpu_server.py --host=127.0.0.1 --port=5555", output)
-    self.assertIn("install.py --with-guard", output)
+    self.assertIn("install.py", output)
+    self.assertNotIn("--with-guard", output)
     self.assertIn("Pointing tpu_config.json at 127.0.0.1:5555", output)
     self.assertIn("claude -p", output)
     self.assertIn("--model claude-3-opus", output)

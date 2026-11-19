@@ -237,9 +237,9 @@ if [ ! -f "${VENV_DIR}/bin/python" ]; then
   ln -sf "$(command -v python3)" "${VENV_DIR}/bin/python3" 2>/dev/null || true
 fi
 if [ "$DRY_RUN" = "true" ]; then
-  echo "[dry-run] Running installer: python3 ${MK_ROOT}/install.py --with-guard"
+  echo "[dry-run] Running installer: python3 ${MK_ROOT}/install.py"
 else
-  python3 "${MK_ROOT}/install.py" --with-guard
+  python3 "${MK_ROOT}/install.py"
 fi
 
 # 5. Point tpu_config.json at 127.0.0.1:${TPU_PORT}

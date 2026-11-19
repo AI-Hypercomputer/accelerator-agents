@@ -66,7 +66,9 @@ if result.error_trace:
 ### CLI Usage
 
 > [!NOTE]
-> All CLI commands should be run from the project root directory (`MaxKernel`).
+> All CLI commands should be run from the `maxkernel/` directory, with
+> `maxkernel/adk` on `PYTHONPATH` (the code adapter imports `hitl_agent`
+> from there), e.g. `PYTHONPATH=adk python3 -m evaluation.benchmark ...`.
 
 You can also use `jax_kernel_evaluator.py` directly from the command line to evaluate a single kernel without setting up a dataset.
 
@@ -162,7 +164,9 @@ harness, because inner-jit donation is dropped when traced under another jit.
 ### CLI Usage Examples
 
 > [!NOTE]
-> All CLI commands should be run from the project root directory (`MaxKernel`).
+> All CLI commands should be run from the `maxkernel/` directory, with
+> `maxkernel/adk` on `PYTHONPATH` (the code adapter imports `hitl_agent`
+> from there), e.g. `PYTHONPATH=adk python3 -m evaluation.benchmark ...`.
 
 **Run benchmark on a remote TPU:**
 

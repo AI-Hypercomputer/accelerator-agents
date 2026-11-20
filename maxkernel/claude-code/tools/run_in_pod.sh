@@ -10,7 +10,9 @@ OUTPUT_DIR="${OUTPUT_DIR:-${MK_ROOT}/workspace/_pod_run}"
 export ANTHROPIC_HEADLESS=1
 export IS_SANDBOX=1
 export CLAUDE_CODE_USE_VERTEX="${CLAUDE_CODE_USE_VERTEX:-1}"
-export ANTHROPIC_VERTEX_PROJECT_ID="${ANTHROPIC_VERTEX_PROJECT_ID:-${GOOGLE_CLOUD_PROJECT:-tpu-kernel-assist-sandbox}}"
+if [ -z "${ANTHROPIC_VERTEX_PROJECT_ID:-}" ] && [ -n "${GOOGLE_CLOUD_PROJECT:-}" ]; then
+  export ANTHROPIC_VERTEX_PROJECT_ID="${GOOGLE_CLOUD_PROJECT}"
+fi
 export CLOUD_ML_REGION="${CLOUD_ML_REGION:-us-east5}"
 
 DRY_RUN=false
@@ -197,6 +199,10 @@ fi
 # 2. Detect if Vertex AI env vars are set
 if [ "${CLAUDE_CODE_USE_VERTEX:-0}" = "1" ] || [ "${CLAUDE_CODE_USE_VERTEX:-}" = "true" ]; then
   echo "Detected Vertex AI configuration (CLAUDE_CODE_USE_VERTEX=${CLAUDE_CODE_USE_VERTEX})"
+  if [ "$DRY_RUN" != "true" ] && [ -z "${ANTHROPIC_VERTEX_PROJECT_ID:-}" ]; then
+    echo "Error: ANTHROPIC_VERTEX_PROJECT_ID (or GOOGLE_CLOUD_PROJECT) must be set when CLAUDE_CODE_USE_VERTEX is enabled." >&2
+    exit 1
+  fi
 fi
 
 # 3. Start local TPU daemon if not already healthy

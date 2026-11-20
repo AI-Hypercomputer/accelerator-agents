@@ -26,10 +26,16 @@ class TestRunInPod(unittest.TestCase):
   def tearDown(self):
     shutil.rmtree(self.test_dir, ignore_errors=True)
 
-  def run_script(self, args: list[str], env: dict[str, str] | None = None):
+  def run_script(
+    self, args: list[str], env: dict[str, str | None] | None = None
+  ):
     run_env = os.environ.copy()
     if env:
-      run_env.update(env)
+      for k, v in env.items():
+        if v is None:
+          run_env.pop(k, None)
+        else:
+          run_env[k] = v
     return subprocess.run(
       [SCRIPT_PATH] + args,
       capture_output=True,
@@ -114,6 +120,35 @@ class TestRunInPod(unittest.TestCase):
     )
     self.assertEqual(res.returncode, 0, msg=res.stderr)
     self.assertNotIn("Detected Vertex AI configuration", res.stdout)
+
+  def test_vertex_ai_requires_project_id(self):
+    bin_dir = os.path.join(self.test_dir, "bin")
+    os.makedirs(bin_dir, exist_ok=True)
+    for tool_name in ("node", "claude"):
+      shim_path = os.path.join(bin_dir, tool_name)
+      with open(shim_path, "w", encoding="utf-8") as f:
+        f.write("#!/usr/bin/env bash\nexit 0\n")
+      os.chmod(shim_path, 0o755)
+
+    res = self.run_script(
+      ["--problem-dir", self.problem_dir],
+      env={
+        "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}",
+        "CLAUDE_CODE_USE_VERTEX": "1",
+        "ANTHROPIC_VERTEX_PROJECT_ID": None,
+        "GOOGLE_CLOUD_PROJECT": None,
+      },
+    )
+    self.assertNotEqual(res.returncode, 0)
+    self.assertIn("ANTHROPIC_VERTEX_PROJECT_ID", res.stderr)
+
+  def test_dockerfile_does_not_hardcode_vertex_project_id(self):
+    dockerfile_path = os.path.join(
+      os.path.dirname(TOOLS_DIR), "Dockerfile"
+    )
+    with open(dockerfile_path, "r", encoding="utf-8") as f:
+      content = f.read()
+    self.assertNotIn("ANTHROPIC_VERTEX_PROJECT_ID", content)
 
 
 if __name__ == "__main__":

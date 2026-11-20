@@ -143,9 +143,7 @@ class TestRunInPod(unittest.TestCase):
     self.assertIn("ANTHROPIC_VERTEX_PROJECT_ID", res.stderr)
 
   def test_dockerfile_does_not_hardcode_vertex_project_id(self):
-    dockerfile_path = os.path.join(
-      os.path.dirname(TOOLS_DIR), "Dockerfile"
-    )
+    dockerfile_path = os.path.join(os.path.dirname(TOOLS_DIR), "Dockerfile")
     with open(dockerfile_path, "r", encoding="utf-8") as f:
       content = f.read()
     self.assertNotIn("ANTHROPIC_VERTEX_PROJECT_ID", content)

@@ -1,12 +1,13 @@
 # JAXBench
 
-**JAXBench** is a benchmark suite of 50 curated JAX/TPU kernel workloads with a
+**JAXBench** is a benchmark suite of curated JAX/TPU kernel workloads with a
 production-ready evaluation harness. It is designed for benchmarking and
 evaluating AI-generated TPU kernel optimizations.
 
 ## Workloads
 
-The suite contains 50 workloads organized into two tiers:
+The suite is organized into two levels. **Level 1** (the default) contains
+50 workloads:
 
 - **17 Priority Kernels** (`1p`–`17p`): Production operators from models like
   Llama-3.1, DeepSeek-V3, Mixtral-8x7B, Mamba-2, RetNet, and AlphaFold2.
@@ -17,6 +18,11 @@ The suite contains 50 workloads organized into two tiers:
   [KernelBench](https://github.com/ScalingIntelligence/KernelBench) Level 2,
   covering matmul+activation chains, convolutions with normalization, and
   multi-op fusions.
+
+**Level 2** contains 23 additional workload implementations, including TPU
+Pallas kernels and DeepSeek-V4 operators. Some names occur in both levels;
+use `--level level2` to select the level 2 implementation explicitly. All
+commands and Python APIs default to `level1`.
 
 Each workload follows a consistent interface:
 
@@ -32,14 +38,20 @@ def get_flops(): ...                        # Optional: manual FLOP count
 From the repository root (`accelerator-agents/`):
 
 ```bash
-# List all workloads
+# List level 1 workloads (default)
 python -m JAXBench list
+
+# List level 2 workloads
+python -m JAXBench list --level level2
 
 # Run a single workload on TPU (baseline + optimized if present)
 python -m JAXBench run --workload 8p_GEMM --tpu v6e
 
 # Run all 50 workloads
 python -m JAXBench run --all --tpu v6e
+
+# Run the level 2 implementation of GEMM
+python -m JAXBench run --workload 8p_GEMM --level level2 --tpu v6e
 
 # Evaluate a candidate kernel against a workload
 python -m JAXBench evaluate --workload 1p_Flash_Attention --kernel path/to/my_kernel.py --json
@@ -99,8 +111,10 @@ Reproduce benchmark numbers for all workloads:
 python -m JAXBench run --all --tpu v6e
 ```
 
-This runs all 50 baselines and 8 optimized variants, producing
-`results.json` and `results.csv` with timing, TFLOPS, and MXU utilization.
+This runs the 50 level 1 baselines and 8 optimized variants, producing
+`results.json` and `results.csv` in `JAXBench/benchmark/` with timing, TFLOPS,
+and MXU utilization. Select `--level level2` to run that level instead. The
+results record the selected level so same-named workloads can be distinguished.
 
 ### Python API
 
@@ -115,6 +129,9 @@ result = run_workload("8p_GEMM", variant="baseline", tpu="v6e")
 
 # Run all workloads
 results = run_all(tpu="v6e")
+
+# Select a level explicitly (also supported by evaluate_kernel and run_all)
+result = run_workload("8p_GEMM", tpu="v6e", level="level2")
 ```
 
 ## Writing a Kernel for JAXBench
@@ -163,17 +180,17 @@ JAXBench/
 ├── __init__.py
 ├── __main__.py              # CLI entry point
 ├── README.md
-├── benchmark/               # 50 workloads
+├── benchmark/
 │   ├── __init__.py          # Workload discovery
-│   ├── 1p_Flash_Attention/
-│   │   ├── baseline.py      # Reference JAX implementation
-│   │   └── optimized.py     # Hand-tuned Pallas kernel
-│   ├── 8p_GEMM/
-│   │   ├── baseline.py
-│   │   └── optimized.py
-│   ├── 19k_Matmul_.../
-│   │   └── baseline.py      # No optimized variant yet
-│   └── ...
+│   ├── level1/              # 50 workloads, 8 with optimized.py variants
+│   │   ├── 1p_Flash_Attention/
+│   │   │   ├── baseline.py  # Reference JAX implementation
+│   │   │   └── optimized.py # Hand-tuned Pallas kernel
+│   │   └── ...
+│   └── level2/              # 23 workload implementations
+│       ├── 8p_GEMM/
+│       │   └── baseline.py  # Level 2 Pallas implementation
+│       └── ...
 └── harness/
     ├── __init__.py
     ├── correctness.py       # Output comparison (atol=1e-2, rtol=1e-2)
@@ -183,3 +200,13 @@ JAXBench/
     ├── runner.py            # Benchmark runner
     └── tpu_specs.py         # TPU hardware specs
 ```
+
+## Discovery Tests
+
+Run the discovery and CLI regression tests from the repository root:
+
+```bash
+python -m unittest discover -s JAXBench/tests -v
+```
+
+These tests use only the Python standard library and do not require JAX or a TPU.

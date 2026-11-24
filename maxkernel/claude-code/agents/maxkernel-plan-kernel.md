@@ -47,7 +47,6 @@ All artifacts for this task are strictly confined within `<run_dir>`:
 If iteration `N > 1`:
 *   Previous plan: `<run_dir>/iter<N-1>/kernel_plan.md`
 *   Previous optimized kernel: `<run_dir>/iter<N-1>/optimized.py`
-*   Previous autotune summary: `<run_dir>/iter<N-1>/autotune_summary.md` (if present)
 *   Previous profile summary: `<run_dir>/iter<N-1>/profile_summary.md` (if present)
 
 
@@ -190,7 +189,7 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
 
 **For REVISIONS / NEXT ITERATION Plans:**
 
-1.  **Read previous artifacts:** Use `Read` to read `<run_dir>/iter<N-1>/kernel_plan.md`, `<run_dir>/iter<N-1>/optimized.py`, `<run_dir>/iter<N-1>/autotune_summary.md` (if exists), and `<run_dir>/iter<N-1>/profile_summary.md` (if exists). If the **Decide Optimization Base** step (item 4 below) reverts to an earlier iteration `iter<k>` (`k < N-1`) instead of building on `iter<N-1>`, also `Read` `<run_dir>/iter<k>/optimized.py` and `<run_dir>/iter<k>/kernel_plan.md`.
+1.  **Read previous artifacts:** Use `Read` to read `<run_dir>/iter<N-1>/kernel_plan.md`, `<run_dir>/iter<N-1>/optimized.py`, and `<run_dir>/iter<N-1>/profile_summary.md` (if exists). If the **Decide Optimization Base** step (item 4 below) reverts to an earlier iteration `iter<k>` (`k < N-1`) instead of building on `iter<N-1>`, also `Read` `<run_dir>/iter<k>/optimized.py` and `<run_dir>/iter<k>/kernel_plan.md`.
 2.  **Review execution results & compare target vs. actual performance:**
     - Analyze status entries in `<run_dir>/state.json` to identify what failed or what performance bottlenecks remain.
     - **Compare Expected Target vs. Actual Performance**:
@@ -284,7 +283,7 @@ Identify whether you are creating a **NEW plan** (Iteration 1) or performing a *
         existed before it.
     *   Compare the values as read from `state.json`. Do NOT re-derive a speedup
         from `base_time_ms` / `optimized_time_ms`, and do NOT read one out of the
-        prose in `profile_summary.md` or `autotune_summary.md` — summaries round,
+        prose in `profile_summary.md` — summaries round,
         restate and omit. `state.json` is the only authority.
     *   This rule fixes the **starting code** only; it does not constrain your
         strategy. When row 1 or row 3 reverts you to `iter<k>` (or `base.py` if

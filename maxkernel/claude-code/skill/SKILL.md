@@ -1,6 +1,6 @@
 ---
 name: maxkernel
-description: Orchestrates Pallas TPU kernel development and optimization. Converts JAX, PyTorch or GPU kernel code (CUDA, Triton, cuTile, CuTe DSL) into a Pallas TPU kernel and runs a self-refinement loop (plan -> implement -> compile -> test -> autotune -> profile) by dispatching the maxkernel-worker subagent once per iteration. Accepts an optional reference kernel (a GPU implementation of the same computation, in any of those languages or another) that the planner mines for design ideas. Use this skill whenever asked to write, optimize, autotune, or profile a Pallas/JAX TPU kernel, or to speed up code by turning it into a Pallas kernel.
+description: Orchestrates Pallas TPU kernel development and optimization. Converts JAX, PyTorch or GPU kernel code (CUDA, Triton, cuTile, CuTe DSL) into a Pallas TPU kernel and runs a self-refinement loop (plan -> implement -> compile -> test -> profile) by dispatching the maxkernel-worker subagent once per iteration. Accepts an optional reference kernel (a GPU implementation of the same computation, in any of those languages or another) that the planner mines for design ideas. Use this skill whenever asked to write, optimize, autotune, or profile a Pallas/JAX TPU kernel, or to speed up code by turning it into a Pallas kernel.
 ---
 
 # MaxKernel
@@ -20,11 +20,11 @@ Workspace root: `$MK/workspace`.
 1.  **The state of the kernel optimization task, including the input language, the TPU version, iteration count
     and artifact paths, lives in `<run_dir>/state.json` (where `<run_dir>` is a unique run directory under `$MK/workspace/<run_id>/`), not in your memory.**
     You re-read that file at every decision point, and you branch on what you just read — never on what you remember reading earlier.
-2.  **Absolute Paths in `state.json`**: `<run_dir>/state.json` stores full **absolute paths** for `run_dir`, `source_path`, `source_context_path`, `best_code_path`, and all history entries (`kernel_plan`, `optimized_kernel`, `profile_summary`, `autotune_summary`) to eliminate any path ambiguity across agents and tool calls.
+2.  **Absolute Paths in `state.json`**: `<run_dir>/state.json` stores full **absolute paths** for `run_dir`, `source_path`, `source_context_path`, `best_code_path`, and all history entries (`kernel_plan`, `optimized_kernel`, `profile_summary`) to eliminate any path ambiguity across agents and tool calls.
 3.  **Each iteration's heavy work runs in an isolated worker agent**. Your own context
     only ever holds one state read + one worker dispatch + one short return
     summary per iteration — not five iterations' worth of
-    plan/implement/compile/test/autotune/profile transcripts.
+    plan/implement/compile/test/profile transcripts.
 4.  **Strict Run Isolation**: Every optimization run is isolated inside its own directory `$MK/workspace/<run_id>/`. Each conversation operates strictly inside its assigned `run_dir` and does NOT read or modify other experiment directories.
 
 ## Project File & Tool Location Rules
@@ -106,8 +106,7 @@ The other registered subagents (`maxkernel-extract-source`,
 `maxkernel-implement-kernel`, `maxkernel-fix-kernel-compilation`,
 `maxkernel-compilation-summary`, `maxkernel-generate-test-file`,
 `maxkernel-fix-test-script`, `maxkernel-test-script-validation-summary`,
-`maxkernel-summarize-test-results`, `maxkernel-autotune-planner`,
-`maxkernel-autotune-summary`, `maxkernel-generate-profile-script`,
+`maxkernel-summarize-test-results`, `maxkernel-generate-profile-script`,
 `maxkernel-summarize-profile`) are dispatched **by the worker**, not by you.
 You only ever dispatch `maxkernel-worker`.
 
@@ -162,7 +161,7 @@ Every run walks the same path. Knowing its shape is what lets you read
                             ▼
               iter<n>/optimized.py   ◀── PALLAS
                             │
-              Phase 2-5  compile → test → autotune → profile
+              Phase 2-4  compile → test → profile
                             │
                             ▼
                     state.best_code_path
@@ -562,7 +561,7 @@ mean nothing, which is why a failed gate stops the run instead of degrading it.
         `best_speedup` and `base_time_ms` start as `null`, meaning "not yet
         measured". Do NOT write the string `"Infinity"` — it cannot be compared
         numerically and silently breaks every `<` test downstream. The worker
-        fills `base_time_ms` in its Phase 0.9 and the other two in its Phase 6.
+        fills `base_time_ms` in its Phase 0.9 and the other two in its Phase 5.
     -   `primary.language` is one of `"pytorch"`, `"jax"`, `"cuda"`,
         `"triton"`, `"cutile"`, `"cutedsl"`, `"gpu"` — the
         verdict from step 3, written once and never revised mid-run. Every

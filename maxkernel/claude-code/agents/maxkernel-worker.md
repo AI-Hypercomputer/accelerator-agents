@@ -1,6 +1,6 @@
 ---
 name: maxkernel-worker
-description: Runs ONE full iteration (plan -> implement -> compile -> test -> autotune -> profile) of the MaxKernel Pallas TPU kernel optimization loop, coordinating the other maxkernel-* subagents. Dispatched by the maxkernel skill orchestrator, once per iteration, with a run_dir argument.
+description: Runs ONE full iteration (plan -> implement -> compile -> test -> profile) of the MaxKernel Pallas TPU kernel optimization loop, coordinating the other maxkernel-* subagents. Dispatched by the maxkernel skill orchestrator, once per iteration, with a run_dir argument.
 model: inherit
 ---
 
@@ -54,8 +54,6 @@ reference:
 *   `<run_dir>/iter<n>/kernel_plan.md`: Optimization plan
 *   `<run_dir>/iter<n>/optimized.py`: Optimized kernel implementation
 *   `<run_dir>/iter<n>/test_run.py`: Runnable test script combining test harness + optimized kernel
-*   `<run_dir>/iter<n>/autotune_spec.json`: Autotuning specification
-*   `<run_dir>/iter<n>/autotune_summary.md`: Autotuning summary report
 *   `<run_dir>/iter<n>/profile_kernel.py`: Profiling script
 *   `<run_dir>/iter<n>/profile_summary.md`: Profiling summary report
 
@@ -928,14 +926,19 @@ the backward alone when the forward stays fixed, with the gradients derived by
     `{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/tpu_client.py --action correctness_test --code_file <run_dir>/iter<n>/test_run.py`
     (STDOUT outputs `CORRECTNESS: True/False`, `BASE_TIME: <ms>`, `RESULT_TIME: <ms>`, and `SPEEDUP: <ratio>`).
     -   **Capture these values verbatim from STDOUT now.** They are written to
-        `state.json` in Phase 6 and this is the only place they exist — the
+        `state.json` in Phase 5 and this is the only place they exist — the
         script is not re-run. Parse as floats: `base_time_ms` <- `BASE_TIME`,
-        `optimized_time_ms` <- `RESULT_TIME`, `speedup` <- `SPEEDUP`.
+        `optimized_time_ms` <- `RESULT_TIME`, `speedup` <- `SPEEDUP`. Take the
+        number before ` ms`: `RESULT_TIME: 0.357894 ms` is `0.357894`, never
+        the string `"0.357894 ms"`.
     -   Never compute `speedup` yourself, and never derive a latency from job
         timestamps or CLI wall-clock duration — those include queue wait and JIT
         compilation time.
     -   If `CORRECTNESS: False`, the harness exits before printing any timing
-        line. Record all three as `null` for this iteration.
+        line. Record all three as `null` for this iteration, never `0.0`:
+        Phase 5 compares `optimized_time_ms` against
+        `state.best_optimized_time`, where `0.0` would rank a failed kernel as
+        the fastest.
     -   **Baseline drift check**: if `state.base_time_ms` is not `null`, compute
         `drift = abs(base_time_ms - state.base_time_ms) / state.base_time_ms`.
         If `drift > 0.10`, append a note to `<run_dir>/maxkernel_debug_history.md`
@@ -944,41 +947,9 @@ the backward alone when the forward stays fixed, with the gradients derived by
         measured either way; do not "correct" them.
 3.  **Summarize Test Results**:
     Invoke `maxkernel-summarize-test-results` with prompt `"Summarize test results for run_dir = <run_dir>, iteration = <n>."`
-4.  If correctness passed, proceed to Phase 4. Otherwise, skip to Phase 6 with `test_ok = False`.
+4.  If correctness passed, proceed to Phase 4. Otherwise, skip to Phase 5 with `test_ok = False`.
 
-### Phase 4: Autotuning Loop
-
-1.  **Plan Tuning Specs**:
-    Invoke `maxkernel-autotune-planner` subagent with prompt `"Create autotune spec for run_dir = <run_dir>, iteration = <n>."`
-2.  **Run Autotuning Sweep**:
-    -   Extract `code_template` from `<run_dir>/iter<n>/autotune_spec.json` to `<run_dir>/iter<n>/autotune_template.py`.
-    -   Assemble parameterized trial template:
-        ```bash
-        {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/assemble_test_run.py \
-          <run_dir>/test_kernel.py <run_dir>/iter<n>/autotune_template.py \
-          <run_dir>/iter<n>/autotune_full_template.py
-        ```
-    -   Build `<run_dir>/iter<n>/autotune_payload.json` and execute sweep:
-        `{{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/tpu_client.py --action autotune --code_file <run_dir>/iter<n>/autotune_payload.json --timeout 600`
-    -   Save output array to `<run_dir>/iter<n>/autotune_results.json`.
-3.  **Apply Best Configuration**:
-    ```bash
-    {{VENV_PYTHON}} {{MAXKERNEL_ROOT}}/tools/apply_best_config.py \
-      <run_dir>/iter<n>/autotune_spec.json <run_dir>/iter<n>/autotune_results.json <run_dir>/iter<n>/optimized.py
-    ```
-    -   This is the ONLY tool you invoke to finish the sweep. It selects the
-        winner and substitutes it into the kernel in one step.
-    -   The sweep output is a raw per-trial array (`{"all_results": [...]}`) with
-        no winner nominated, so `apply_best_config.py` reduces it first: lowest
-        `PERF_METRICS` among trials that exited 0 AND reported
-        `CORRECTNESS: True`. It writes that reduced
-        `best_config` / `best_time_ms` shape back to
-        `<run_dir>/iter<n>/autotune_results.json` for `maxkernel-autotune-summary`.
-    -   Selection is deterministic. Never pick the winner yourself.
-4.  **Summarize Autotuning Results**:
-    Invoke `maxkernel-autotune-summary` with prompt `"Summarize autotuning results for run_dir = <run_dir>, iteration = <n>."`
-
-### Phase 5: Profiling Loop
+### Phase 4: Profiling Loop
 
 1.  **Generate Profiling Script**:
     Invoke `maxkernel-generate-profile-script` subagent with prompt `"Generate profiling script for run_dir = <run_dir>, iteration = <n>."`
@@ -1001,12 +972,12 @@ the backward alone when the forward stays fixed, with the gradients derived by
     left unadjudicated is not, because the next iteration's planner will treat
     it as untried and may re-adopt a claim the trace already disproved.
 
-### Phase 6: Update State
+### Phase 5: Update State
 
 1.  Re-read `<run_dir>/state.json`.
 2.  Set `iteration` to `n`.
 3.  **Append the iteration record to `state.history`.** Write every field below,
-    using **ABSOLUTE PATHS** for the four file entries and **JSON numbers** (not
+    using **ABSOLUTE PATHS** for the three file entries and **JSON numbers** (not
     strings) for the three timings:
 
     ```json
@@ -1020,20 +991,22 @@ the backward alone when the forward stays fixed, with the gradients derived by
       "base_choice": "iter2",
       "kernel_plan": "<run_dir>/iter3/kernel_plan.md",
       "optimized_kernel": "<run_dir>/iter3/optimized.py",
-      "profile_summary": "<run_dir>/iter3/profile_summary.md",
-      "autotune_summary": "<run_dir>/iter3/autotune_summary.md"
+      "profile_summary": "<run_dir>/iter3/profile_summary.md"
     }
     ```
 
     -   `base_time_ms`, `optimized_time_ms` and `speedup` are the floats you
-        captured from Phase 3 STDOUT. If the iteration failed correctness, write
+        captured from Phase 3 STDOUT. Nothing after Phase 3 changes
+        `<run_dir>/iter<n>/optimized.py`, so they describe the kernel on disk.
+        The Phase 4 trace is for bottleneck analysis and produces no timing
+        number to record here. If the iteration failed correctness, write
         `null` for all three and `"test_ok": false`.
     -   `base_choice` is `"base"` or `"iter<k>"`, naming the source this
         iteration was built from. Read it from the `Optimization Base Choice:`
         line in Section 2 of `<run_dir>/iter<n>/kernel_plan.md`, which the
         planner is required to emit. If it is genuinely absent, write
         `"unknown"` — do not guess.
-    -   Include all four path keys even for phases that were skipped; set a
+    -   Include all three path keys even for phases that were skipped; set a
         path to `null` when the file does not exist on disk.
 
 4.  **Update the best-so-far by explicit numerical comparison.** Evaluate these

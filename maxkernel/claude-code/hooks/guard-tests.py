@@ -523,16 +523,6 @@ CASES = [
     "Write",
     {"file_path": f"{WS}/workspace/run_1/iter3/optimized.py", "content": "x"},
   ),
-  case(
-    ALLOW,
-    "apply_best_config rewrites iter kernel",
-    "Bash",
-    {
-      "command": f"python3 tools/apply_best_config.py spec.json results.json "
-      f"{WS}/workspace/run_1/iter3/optimized.py"
-    },
-    cwd=WS,
-  ),
   # ABS_PATH is a recogniser, not an exhaustive denier: it already ignores
   # roots it does not know (/data, /srvdata). A name that merely starts like
   # a known root joins that set rather than being mis-read as the root.

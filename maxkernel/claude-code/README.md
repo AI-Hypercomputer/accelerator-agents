@@ -5,7 +5,7 @@ TPU kernels, packaged for [Claude Code](https://claude.com/claude-code).
 
 You point it at a kernel — JAX, CUDA or PyTorch — and a TPU; it runs a closed
 self-refinement loop —
-**plan → implement → compile → test → autotune → profile** — for five iterations,
+**plan → implement → compile → test → profile** — for five iterations,
 keeping the fastest numerically-correct kernel it found. Every iteration is
 grounded in real hardware: kernels compile on an actual TPU VM, correctness is
 checked against the baseline, and the next plan is written from an XProf trace of
@@ -28,8 +28,8 @@ Read the **[User Guide](user_guide.md)** — a short walkthrough of how to use M
 | --- | --- |
 | `skill/SKILL.md` | The `maxkernel` skill — the orchestrator. It only reads state and dispatches the worker; it never writes kernel code itself. |
 | `skill/general_rules.md` | The invariants every subagent loads before doing anything. |
-| `agents/maxkernel-*.md` | 19 subagent prompts: one worker plus eighteen single-phase specialists. |
-| `tools/` | The agent's CLI surface: TPU client, input classification, golden capture and port verification, GPU kernel fact extraction (CUDA, Triton, cuTile), the ideas ledger, test-harness assembly, autotune config selection, XProf trace analysis, HLO dumps, RAG retrieval. |
+| `agents/maxkernel-*.md` | 20 subagent prompts: one worker plus nineteen single-phase specialists. |
+| `tools/` | The agent's CLI surface: TPU client, input classification, golden capture and port verification, GPU kernel fact extraction (CUDA, Triton, cuTile), the ideas ledger, test-harness assembly, XProf trace analysis, HLO dumps, RAG retrieval. |
 | `server/tpu_server.py` | The job-queue daemon that runs on (or beside) the TPU VM. |
 | `hooks/` | Optional `PreToolUse` guard — see [Workspace guard](#workspace-guard-optional). |
 | `reference/` | The TPU knowledge base the planner and implementer read by explicit path: `tpu_memory_overlapping.md`, `tpu_mxu_and_register_optimization.md`, `tpu_profiling_and_diagnostics.md`, `pallas_xla_interaction.md`. |
@@ -80,7 +80,6 @@ you ──▶ maxkernel skill (orchestrator)
              │            generate-test-file / fix-test-script
              │            test-script-validation-summary
              │            summarize-test-results
-             │            autotune-planner / autotune-summary
              └──────────  generate-profile-script / summarize-profile
                               └ adjudicates each adopted ledger idea
                                 against the trace: confirmed | refuted
@@ -298,8 +297,8 @@ Then ask for a kernel:
 The skill also triggers on any request to write, autotune, or profile a
 Pallas/JAX TPU kernel, and you can invoke it explicitly with `/maxkernel`.
 
-Results land in `workspace/<run_id>/`: a plan, an implementation, a profile
-summary and an autotune summary per iteration. When the loop finishes, the
+Results land in `workspace/<run_id>/`: a plan, an implementation and a profile
+summary per iteration. When the loop finishes, the
 best kernel across all iterations is copied to `workspace/<run_id>/optimized.py`.
 
 ---

@@ -145,7 +145,7 @@ Use True if there is significant room for improvement, and False otherwise.
 
 You **must** use the `write_to_file` tool to write your full analysis and profile summary report (including the summary of profiling results, deep trace analysis, actionable recommendations, and the `DECISION: NEEDS_IMPROVEMENT` section) to the exact path provided in `{profile_summary_path}`.
 
-PHASE 5 COMPLETE. NEXT REQUIRED STEP: report your status to the maxkernel-worker agent and request it to update the state.
+PHASE 4 COMPLETE. NEXT REQUIRED STEP: report your status to the maxkernel-worker agent and request it to update the state.
 
 --------------------------------------------------------------------------------
 

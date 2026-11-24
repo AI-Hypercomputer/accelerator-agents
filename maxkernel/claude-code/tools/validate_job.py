@@ -773,7 +773,7 @@ def build_plan(
     phases.append("0.8 verify_port gate")
   if bfrom == "autodiff":
     phases.append("0.85 derive the backward with jax.vjp")
-  phases += ["0.9 harness", "1-6 plan/implement/compile/test/autotune/profile"]
+  phases += ["0.9 harness", "1-5 plan/implement/compile/test/profile"]
 
   return {
     "input_type": itype,

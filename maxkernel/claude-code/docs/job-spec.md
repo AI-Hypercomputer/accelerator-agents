@@ -337,7 +337,7 @@ JOB VALID: rmsnorm-torch
   external eval: True
   phases       : 0 read state -> 0.2 oracle -> 0.3 jaxpr + HLO export
                  -> 0.7 write jnp reference + jaxpr_compare gate -> 0.9 harness
-                 -> 1-6 plan/implement/compile/test/autotune/profile
+                 -> 1-5 plan/implement/compile/test/profile
 ```
 
 Exit `0` valid · `1` invalid · `2` valid but a declared path does not exist.

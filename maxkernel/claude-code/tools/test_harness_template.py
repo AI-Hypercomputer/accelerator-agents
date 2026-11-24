@@ -16,7 +16,7 @@ This file intentionally:
   - never defines `opt_computation`. That is the one piece of this workflow
     that changes every iteration; `tools/assemble_test_run.py` binds it in
     (again via exec()'d namespace isolation, not text substitution) once per
-    iteration and once per autotune trial, while everything below is
+    iteration, while everything below is
     generated ONCE (`tools/assemble_test_harness.py`) and reused unchanged
     for the rest of the run.
 """
@@ -243,11 +243,9 @@ def main():
       geo_mean_time_opt = math.exp(
         sum(math.log(t) for t in valid_opt) / len(valid_opt)
       )
-      # RESULT_TIME/PERF_METRICS report absolute optimized-kernel latency --
-      # not speedup. SPEEDUP is reported
-      # separately below for human-readable summaries.
+      # RESULT_TIME reports absolute optimized-kernel latency -- not
+      # speedup. SPEEDUP is reported separately below.
       print(f"RESULT_TIME: {geo_mean_time_opt * 1000:.6f} ms")
-      print(f"PERF_METRICS: {geo_mean_time_opt * 1000:.6f}")
     if valid_speedups:
       geo_mean_speedup = math.exp(
         sum(math.log(s) for s in valid_speedups) / len(valid_speedups)

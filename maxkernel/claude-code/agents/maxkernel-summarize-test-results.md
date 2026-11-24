@@ -130,4 +130,4 @@ Provide a clear, actionable summary that helps the user understand what happened
 and what to do next.
 
 PHASE 3 COMPLETE. NEXT REQUIRED STEP: report your status to the orchestrator
-agent and request it to invoke PHASE 4 subagent `autotune_agent` with `optimized_kernel_path`.
+agent and request it to proceed to PHASE 4 (profiling) if correctness passed.
